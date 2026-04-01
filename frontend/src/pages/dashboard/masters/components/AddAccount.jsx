@@ -9,6 +9,7 @@ import {
   HelpCircle,
   Trash2,
   Plus,
+  Info,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import accountService from "../../../../services/accountService";
@@ -1000,45 +1001,28 @@ const AddAccount = ({
                       }
                     />
                     <div
-                      className={`absolute right-0 bottom-full mb-3 w-[260px] p-4 bg-white text-[#4B5563] text-[11px] rounded-[10px] shadow-xl z-[500] leading-loose pointer-events-none transition-all duration-300 border border-[#E5E7EB] ${formData.panNo ? "opacity-0 invisible" : showPanTooltip ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-2 invisible group-hover/pan:opacity-100 group-hover/pan:translate-y-0 group-hover/pan:visible"}`}
+                      className={`absolute right-0 bottom-full mb-3 w-[260px] p-4 bg-white text-[#4B5563] text-[11px] rounded-[12px] shadow-2xl z-[500] leading-relaxed pointer-events-none transition-all duration-300 border border-[#E5F0ED] ${formData.panNo ? "opacity-0 invisible" : showPanTooltip ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-2 invisible group-hover/pan:opacity-100 group-hover/pan:translate-y-0 group-hover/pan:visible"}`}
                     >
-                      <div className="font-bold border-b border-gray-100 pb-1 mb-2 uppercase tracking-wide text-[#111827]">
+                      <div className="flex items-center gap-2 font-bold mb-3 border-b border-[#E5E7EB] pb-2 uppercase tracking-widest text-[#014A36]">
+                        <Info size={14} className="text-[#014A36]" />
                         {t("modules:pan_info", "Verification Guide")}
                       </div>
-                      <ul className="space-y-1.5 ml-0 list-none font-medium">
-                        <li className="flex gap-2">
-                          <span>•</span>{" "}
-                          <span>Must be exactly 10 characters</span>
-                        </li>
-                        <li className="flex gap-2">
-                          <span>•</span>{" "}
-                          <span>
-                            Format:{" "}
-                            <span className="text-amber-600 font-bold tracking-widest">
-                              AAAAA 9999 A
-                            </span>
-                          </span>
-                        </li>
-                        <li className="pl-4 opacity-75">
-                          - 1st to 5th: Alphabets (A-Z)
-                        </li>
-                        <li className="pl-4 opacity-75">
-                          - 6th to 9th: Numbers (0-9)
-                        </li>
-                        <li className="pl-4 opacity-75">
-                          - 10th: Alphabet (A-Z)
-                        </li>
-                        <li className="mt-2 text-[#111827] font-bold border-t border-gray-50 pt-2">
-                          4th Character (Holder Type):
-                        </li>
-                        <li className="pl-4">
-                          P → Individual / Sole Proprietor
-                        </li>
-                        <li className="pl-4">C → Company</li>
-                        <li className="pl-4">F → Firm</li>
-                      </ul>
+                      <div className="space-y-3">
+                        <div className="flex gap-2.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#014A36] mt-1.5 shrink-0" />
+                          <p className="font-medium text-[#374151] leading-normal text-[11px]">
+                            If you have a <span className="text-[#014A36] font-bold">Company/ Firm</span> pan card please provide the Company's/ Firm's PAN card number.
+                          </p>
+                        </div>
+                        <div className="flex gap-2.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-gray-300 mt-1.5 shrink-0" />
+                          <p className="text-[#6B7280] font-medium leading-normal text-[11.5px]">
+                            Otherwise, kindly provide your <span className="text-[#111827] font-bold underline decoration-amber-500/30 underline-offset-2">personal PAN</span> card number.
+                          </p>
+                        </div>
+                      </div>
                       {/* Tooltip Arrow */}
-                      <div className="absolute top-full right-4 -mt-1 border-[6px] border-transparent border-t-white drop-shadow-[0_1px_0_rgba(229,231,235,1)]"></div>
+                      <div className="absolute top-full right-4 -mt-1 border-[6px] border-transparent border-t-white shadow-sm"></div>
                     </div>
                   </div>
                   {errors.panNo && (

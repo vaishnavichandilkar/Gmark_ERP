@@ -299,5 +299,6 @@
     "export": "Export",
     "order": "Purchase Order",
     "add": "Add PO",
-    "customer_type": "Customer Type"
+    "customer_type": "Customer Type",
+    "pan_info_content": "If you have a Company/ Firm pan card please provide the Company's/ Firm's PAN card number; otherwise, kindly provide your personal PAN card number."
 }
