@@ -428,7 +428,7 @@ const CategoryMaster = () => {
                 <input
                   type="text"
                   placeholder={t(
-                    "common:search_placeholder",
+                    "common:search_by_anything",
                     "Search By Anything...",
                   )}
                   value={searchQuery}

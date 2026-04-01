@@ -869,7 +869,7 @@ const AddAccount = ({
                 {isLoading ? (
                   <Loader2 size={18} className="animate-spin" />
                 ) : (
-                  "Save Account"
+                  t("modules:save", "Save Account")
                 )}
               </button>
             )}
@@ -1698,7 +1698,7 @@ const AddAccount = ({
                 {isLoading ? (
                   <Loader2 size={16} className="animate-spin mr-2" />
                 ) : null}
-                {t("Save Account")}
+                {t("modules:save", "Save Account")}
               </button>
               <button
                 onClick={onBack}

@@ -226,24 +226,24 @@ const ProductForm = ({
     let error = "";
     if (field === "productName") {
       if (!value?.trim() || value.trim().length < 3) {
-        error = "Enter valid product name (e.g., ABC Product)";
+        error = t('modules:enter_valid_product_name', 'Enter valid product name (e.g., ABC Product)');
       }
     } else if (field === "description") {
       if (!value?.trim() || value.trim().length < 3) {
-        error = "Enter valid product description";
+        error = t('modules:enter_valid_product_desc', 'Enter valid product description');
       }
     } else if (field === "hsnCode") {
       if (!value || !/^\d{4,}$/.test(value.trim())) {
-        error = "Enter valid HSN Code (min 4 digits)";
+        error = t('modules:enter_valid_hsn_code', 'Enter valid HSN Code (min 4 digits)');
       }
     } else if (field === "uom") {
-      if (!value) error = "Please select UOM";
+      if (!value) error = t('modules:select_uom', 'Please select UOM');
     } else if (field === "productType") {
-      if (!value) error = "Please select Product Type";
+      if (!value) error = t('modules:select_product_type', 'Please select Product Type');
     } else if (field === "category") {
-      if (!value) error = "Please select Category";
+      if (!value) error = t('modules:select_category', 'Please select Category');
     } else if (field === "subcategory") {
-      if (!value) error = "Please select Sub Category";
+      if (!value) error = t('modules:select_sub_category', 'Please select Sub Category');
     }
 
     setErrors((prev) => {
@@ -366,7 +366,7 @@ const ProductForm = ({
 
   const handleSubmit = async () => {
     if (mode === "edit" && !isDirty) {
-      toast.error("Please make changes to save");
+      toast.error(t("common:please_make_changes_to_save", "Please make changes to save"));
       return;
     }
     if (!validateAll()) return;
@@ -539,7 +539,7 @@ const ProductForm = ({
           onClick={() => onEdit && onEdit(initialData)}
           className="px-8 h-[46px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center min-w-[140px]"
         >
-          Save Product
+          {t('modules:save')}
         </button>
       </div>
     </div>
@@ -557,10 +557,10 @@ const ProductForm = ({
           <div>
             <h2 className="text-[20px] font-bold text-[#111827] tracking-tight">
               {mode === "add"
-                ? "Add New Product"
+                ? t("modules:add_new_product", "Add New Product")
                 : mode === "edit"
-                  ? "Edit Product"
-                  : "View Product"}
+                  ? t("modules:edit_product", "Edit Product")
+                  : t("modules:view_product", "View Product")}
             </h2>
           </div>
 
@@ -583,7 +583,7 @@ const ProductForm = ({
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : 'Save Product'}
+                ) : t('modules:save')}
               </button>
             ) : null}
             <button
@@ -707,7 +707,7 @@ const ProductForm = ({
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : 'Save Product'}
+              ) : t('modules:save')}
             </button>
             <button
               type="button"

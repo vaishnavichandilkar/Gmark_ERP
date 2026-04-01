@@ -140,7 +140,7 @@ const CategoryForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onS
                                 {isLoading ? (
                                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                                 ) : (
-                                    type === 'Category' ? 'Save Category' : 'Save SubCategory'
+                                    type === 'Category' ? t('modules:save_category', 'Save Category') : t('modules:save_sub_category', 'Save SubCategory')
                                 )}
                             </button>
                         )}
@@ -299,7 +299,7 @@ const CategoryForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onS
                                 disabled={isLoading}
                                 className={`px-10 h-[46px] text-white rounded-[10px] text-[14px] font-bold transition-all shadow-md flex items-center justify-center min-w-[160px] ${isLoading ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#073318] hover:bg-[#04200f]'}`}
                             >
-                                {isLoading ? <Loader2 size={18} className="animate-spin" /> : type === 'Category' ? 'Save Category' : 'Save SubCategory'}
+                                {isLoading ? <Loader2 size={18} className="animate-spin" /> : type === 'Category' ? t('modules:save_category', 'Save Category') : t('modules:save_sub_category', 'Save SubCategory')}
                             </button>
                         )}
                         <button

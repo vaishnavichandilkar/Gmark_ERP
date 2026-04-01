@@ -10,11 +10,15 @@ i18n
     ))
     .use(initReactI18next)
     .init({
-        fallbackLng: 'hi',
+        fallbackLng: 'en',
         supportedLngs: ['en', 'hi', 'mr'],
         debug: false,
         ns: ['common', 'auth', 'dashboard', 'modules', 'terms'],
         defaultNS: 'common',
+        saveMissing: true,
+        missingKeyHandler: (lngs, namespace, key, res) => {
+            console.warn(`Missing translation key: [${namespace}] ${key} in languages: ${lngs}`);
+        },
 
         interpolation: {
             escapeValue: false,
