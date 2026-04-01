@@ -46,7 +46,7 @@ export class PurchaseOrderService {
     };
   }
 
-  private calculateItemValues(item: any) {
+  public calculateItemValues(item: any) {
     const qty = Number(item.quantity) || 0;
     const rate = Number(item.rate) || 0;
     const baseTotal = qty * rate;

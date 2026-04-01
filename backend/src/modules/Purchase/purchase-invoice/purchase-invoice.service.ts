@@ -2,12 +2,16 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CreatePurchaseInvoiceDto, UpdatePurchaseInvoiceDto } from './dto/purchase-invoice.dto';
 import { Prisma, PIStatus } from '@prisma/client';
+import { PurchaseOrderService } from '../purchase-order/purchase-order.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 
 @Injectable()
 export class PurchaseInvoiceService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private poService: PurchaseOrderService
+  ) {}
 
   async getSuppliers(userId: number) {
     return this.prisma.accountMaster.findMany({
@@ -63,16 +67,12 @@ export class PurchaseInvoiceService {
   async create(createDto: CreatePurchaseInvoiceDto, userId: number, uploadedFilePath?: string) {
     const invoiceNumber = createDto.invoiceNumber || (await this.generateInvoiceNumber());
 
-    // Check if system-gen internal invoice number already exists
     const existing = await this.prisma.purchaseInvoice.findUnique({
       where: { invoiceNumber },
     });
     if (existing) throw new BadRequestException(`Internal Invoice number ${invoiceNumber} already exists`);
 
-    // Business Logic: Autocomplete challanNumber if missing
     const challanNumber = createDto.challanNumber || createDto.supplierInvoiceNumber;
-
-    // Default bookingDate to today
     const bookingDate = createDto.bookingDate ? new Date(createDto.bookingDate) : new Date();
 
     // Calculations
@@ -91,7 +91,6 @@ export class PurchaseInvoiceService {
     const sgstAmount = (taxableAmount * 9) / 100;
     const grandTotal = taxableAmount + cgstAmount + sgstAmount;
 
-    // Running Balance (Cumulative Balance) per supplier
     const lastInvoice = await this.prisma.purchaseInvoice.findFirst({
       where: { userId, supplierName: createDto.supplierName },
       orderBy: { createdAt: 'desc' },
@@ -102,6 +101,74 @@ export class PurchaseInvoiceService {
     const cumulativeBalance = previousBalance + grandTotal;
 
     return this.prisma.$transaction(async (tx) => {
+      let finalPoId = createDto.poId;
+      let finalPoNumber = createDto.poNumber;
+
+      // REQUIREMENT: Automatically create PO if not selected
+      if (!finalPoId) {
+        // Find supplier details for PO
+        const supplier = await tx.accountMaster.findFirst({
+          where: { accountName: createDto.supplierName, userId }
+        });
+
+        if (!supplier) {
+          throw new BadRequestException(`Supplier '${createDto.supplierName}' not found in Account Master. Action cancelled.`);
+        }
+
+        const poNumber = await this.poService.generatePONumber();
+        const expiryDate = new Date(bookingDate);
+        expiryDate.setDate(expiryDate.getDate() + (createDto.creditDays || 30));
+
+        // Use the PO calculation logic (defaults to 18% tax from PI logic: 9+9)
+        const poItems = createDto.items.map(item => this.poService.calculateItemValues({
+          ...item,
+          taxPercent: 18,
+          discountPercent: 0,
+          discountAmount: 0,
+        }));
+
+        const po = await tx.purchaseOrder.create({
+          data: {
+            poNumber,
+            supplierName: supplier.accountName,
+            address: createDto.address || supplier.addressLine1,
+            creditDays: createDto.creditDays,
+            poCreationDate: bookingDate,
+            expiryDate: expiryDate,
+            gstNumber: supplier.gstNo,
+            panNumber: supplier.panNo,
+            totalAmount: taxableAmount,
+            taxAmount: cgstAmount + sgstAmount,
+            grandTotal: grandTotal,
+            userId,
+            status: 'INVOICE_GENERATED', // Immediately marked as completed
+            items: {
+              create: poItems.map(item => ({
+                productCode: item.productCode,
+                productName: item.productName,
+                hsnCode: '', 
+                quantity: item.quantity,
+                rate: item.rate,
+                uom: item.uom,
+                discountPercent: 0,
+                discountAmount: 0,
+                taxPercent: 18,
+                taxAmount: item.taxAmount,
+                totalAmount: item.totalAmount,
+              })),
+            },
+          },
+        });
+        finalPoId = po.id;
+        finalPoNumber = po.poNumber;
+      } else {
+        // Switch existing PO status
+        await tx.purchaseOrder.update({
+          where: { id: finalPoId },
+          data: { status: 'INVOICE_GENERATED' }
+        });
+      }
+
       const invoice = await tx.purchaseInvoice.create({
         data: {
           invoiceNumber,
@@ -111,7 +178,7 @@ export class PurchaseInvoiceService {
           bookingDate,
           supplierName: createDto.supplierName,
           address: createDto.address,
-          poNumber: createDto.poNumber,
+          poNumber: finalPoNumber,
           challanNumber,
           creditDays: createDto.creditDays,
           status: PIStatus.GENERATED,
@@ -123,7 +190,7 @@ export class PurchaseInvoiceService {
           grandTotal: grandTotal,
           cumulativeBalance: cumulativeBalance,
           userId,
-          poId: createDto.poId || null,
+          poId: finalPoId,
           items: {
             create: createDto.items.map(item => ({
               productCode: item.productCode,
@@ -136,14 +203,6 @@ export class PurchaseInvoiceService {
         },
         include: { items: true },
       });
-
-      // If created from a PO, update status
-      if (createDto.poId) {
-        await tx.purchaseOrder.update({
-          where: { id: createDto.poId },
-          data: { status: 'INVOICE_GENERATED' }
-        });
-      }
 
       return invoice;
     });
@@ -174,7 +233,6 @@ export class PurchaseInvoiceService {
 
     if (!existing) throw new NotFoundException(`Invoice ID ${id} not found`);
 
-    // Calculations if items are provided
     let totalQuantity = existing.totalQuantity;
     let taxableAmount = existing.taxableAmount;
     let cgstAmount = existing.cgstAmount;
@@ -196,34 +254,26 @@ export class PurchaseInvoiceService {
       grandTotal = taxableAmount + cgstAmount + sgstAmount;
     }
 
-    // Handle Cumulative Balance update if grandTotal changed
     let cumulativeBalance = existing.cumulativeBalance;
     if (updateDto.items) {
       const difference = grandTotal - existing.grandTotal;
       cumulativeBalance = existing.cumulativeBalance + difference;
-      
-      // Note: In a real system, we might need to update all FUTURE invoices' cumulative balances too.
-      // For now, we update this one's snapshot.
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Delete existing items if new ones are provided
       if (updateDto.items) {
         await tx.purchaseInvoiceItem.deleteMany({
           where: { purchaseInvoiceId: id },
         });
       }
 
-      // 2. Update status of PO if the PO link is changed
       if (updateDto.poId !== undefined && updateDto.poId !== existing.poId) {
-        // Unlink old PO if any (Reverting its status might be complex, maybe set back to PENDING)
         if (existing.poId) {
           await tx.purchaseOrder.update({
             where: { id: existing.poId },
             data: { status: 'PENDING' }
           });
         }
-        // Link new PO
         if (updateDto.poId) {
           await tx.purchaseOrder.update({
             where: { id: updateDto.poId },
@@ -232,7 +282,6 @@ export class PurchaseInvoiceService {
         }
       }
 
-      // 3. Update main invoice
       const updated = await tx.purchaseInvoice.update({
         where: { id },
         data: {
@@ -358,7 +407,6 @@ export class PurchaseInvoiceService {
         mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       };
     } else {
-      // PDF Export
       return new Promise<any>((resolve) => {
         const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
         const buffers: Buffer[] = [];
@@ -421,7 +469,7 @@ export class PurchaseInvoiceService {
           poNumber: String(row.getCell(8).value || '').trim(),
           items: [{
             productCode: String(row.getCell(9).value || '').trim(),
-            productName: 'Imported Item', // Basic fallback
+            productName: 'Imported Item',
             quantity: parseFloat(String(row.getCell(10).value || 0)),
             rate: parseFloat(String(row.getCell(11).value || 0)),
             uom: String(row.getCell(12).value || 'NOS').trim(),
@@ -465,7 +513,6 @@ export class PurchaseInvoiceService {
       doc.fontSize(12).font('Helvetica-Bold').text('PURCHASE INVOICE', 20, y, { align: 'center', width: pageWidth });
       y += 30;
 
-      // Inv Info
       doc.fontSize(9).text(`Inv No: ${inv.invoiceNumber}`, 30, y);
       doc.text(`Booking Date: ${inv.bookingDate.toLocaleDateString()}`, 300, y);
       y += 20;
@@ -473,7 +520,6 @@ export class PurchaseInvoiceService {
       doc.text(`Inv Date: ${inv.supplierInvoiceDate.toLocaleDateString()}`, 300, y);
       y += 40;
 
-      // Table
       const colX = [30, 200, 300, 400, 480];
       doc.font('Helvetica-Bold').text('Item', colX[0], y);
       doc.text('Qty', colX[1], y);
