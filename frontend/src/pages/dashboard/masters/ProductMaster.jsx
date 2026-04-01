@@ -63,6 +63,7 @@ const ProductMaster = () => {
     }
   }, [searchParams]);
 
+
   const [tableData, setTableData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [totalItems, setTotalItems] = useState(0);
