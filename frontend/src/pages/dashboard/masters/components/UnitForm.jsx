@@ -136,7 +136,7 @@ const CustomSelect = ({ label, options, value, onChange, placeholder, isSearchab
                                             {t('common:cancel')}
                                         </button>
                                     </div>
-                                    {subError && <span className="text-red-500 text-[11px] font-medium ml-1">Value is required</span>}
+                                    {subError && <span className="text-red-500 text-[11px] font-medium ml-1">{t('common:value_required', 'Value is required')}</span>}
                                 </div>
                             ) : (
                                 <button
@@ -302,14 +302,14 @@ const UnitForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onEdit 
 
     const handleSubmit = async () => {
         if (mode === 'edit' && !isDirty) {
-            toast.error("Please make changes to save");
+            toast.error(t("common:please_make_changes_to_save", "Please make changes to save"));
             return;
         }
 
         const newErrors = {};
-        if (!formData.unit_name) newErrors.unit_name = 'Unit Name is required';
-        if (!formData.gst_uom) newErrors.gst_uom = 'GST UOM is required';
-        if (!formData.full_name_of_measurement) newErrors.full_name_of_measurement = 'Measurement Name is required';
+        if (!formData.unit_name) newErrors.unit_name = t('modules:unit_name_required', 'Unit Name is required');
+        if (!formData.gst_uom) newErrors.gst_uom = t('modules:gst_uom_required', 'GST UOM is required');
+        if (!formData.full_name_of_measurement) newErrors.full_name_of_measurement = t('modules:measurement_name_required', 'Measurement Name is required');
 
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
@@ -475,7 +475,7 @@ const UnitForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onEdit 
                         >
                             {loading ? (
                                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            ) : 'Save Unit'}
+                            ) : t('modules:save')}
                         </button>
                         <button
                             type="button"

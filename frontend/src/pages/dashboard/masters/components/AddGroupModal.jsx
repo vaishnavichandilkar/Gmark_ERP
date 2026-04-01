@@ -219,7 +219,7 @@ const AddGroupModal = ({ isOpen, onClose, onSuccess }) => {
                                                 );
                                             })
                                         ) : (
-                                            <div className="px-4 py-6 text-[13px] text-gray-400 text-center">No groups found</div>
+                                            <div className="px-4 py-6 text-[13px] text-gray-400 text-center">{t('common:no_options_found')}</div>
                                         )}
                                     </div>
                                 </div>
