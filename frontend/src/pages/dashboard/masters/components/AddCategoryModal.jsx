@@ -5,10 +5,18 @@ import { toast } from 'react-hot-toast';
 import categoryService from '../../../../services/masters/categoryService';
 import { translateDynamic } from '../../../../utils/i18nUtils';
 
-const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
+const AddCategoryModal = ({ 
+    isOpen, 
+    onClose, 
+    onSuccess, 
+    onShowToast,
+    initialStep = 1,
+    initialType = '',
+    lockType = false
+}) => {
     const { t } = useTranslation(['common', 'modules']);
-    const [step, setStep] = useState(1);
-    const [type, setType] = useState('');
+    const [step, setStep] = useState(initialStep);
+    const [type, setType] = useState(initialType);
     const [categoryName, setCategoryName] = useState('');
     const [parentCategory, setParentCategory] = useState(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -20,8 +28,8 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
 
     useEffect(() => {
         if (isOpen) {
-            setStep(1);
-            setType('');
+            setStep(initialStep);
+            setType(initialType);
             setCategoryName('');
             setParentCategory(null);
             fetchDropdownData();
@@ -123,8 +131,8 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
                     <div className="space-y-2 relative" ref={dropdownRef}>
                         <label className="text-[13px] font-semibold text-[#4B5563]">{t('common:type')}</label>
                         <div
-                            className={`w-full h-[46px] border rounded-[10px] flex items-center justify-between px-4 cursor-pointer transition-all ${isDropdownOpen ? 'border-[#073318] ring-4 ring-[#073318]/5' : 'border-[#E5E7EB] hover:border-gray-300 bg-white'}`}
-                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                            className={`w-full h-[46px] border rounded-[10px] flex items-center justify-between px-4 ${lockType ? 'cursor-default border-[#E5E7EB] bg-white' : 'cursor-pointer hover:border-gray-300 bg-white'} transition-all ${isDropdownOpen && !lockType ? 'border-[#073318] ring-4 ring-[#073318]/5' : ''}`}
+                            onClick={() => !lockType && setIsDropdownOpen(!isDropdownOpen)}
                         >
                             <span className={`text-[14px] ${type ? 'text-[#111827] font-medium' : 'text-gray-400'}`}>
                                 {type ? (type === 'Category' ? t('modules:category') : t('modules:sub_category')) : t('modules:select_type')}

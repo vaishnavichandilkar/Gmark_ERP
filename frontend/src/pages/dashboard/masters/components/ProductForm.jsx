@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import { translateDynamic } from "../../../../utils/i18nUtils";
 import productService from "../../../../services/productService";
 import toast from "react-hot-toast";
+import UnitForm from "./UnitForm";
+import AddCategoryModal from "./AddCategoryModal";
 
 const CustomSelect = ({
   label,
@@ -170,6 +172,9 @@ const ProductForm = ({
   const [suggestions, setSuggestions] = useState([]);
   const [nameError, setNameError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isUomModalOpen, setIsUomModalOpen] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isSubCategoryModalOpen, setIsSubCategoryModalOpen] = useState(false);
   const suggestionsRef = useRef(null);
 
   useEffect(() => {
@@ -625,7 +630,7 @@ const ProductForm = ({
               showAsterisk={true}
               disabled={isView}
               footerLabel="+ Add UOM"
-              onFooterClick={() => navigate("/seller/masters/unit-master")}
+              onFooterClick={() => setIsUomModalOpen(true)}
               error={errors.uom}
             />
 
@@ -650,7 +655,7 @@ const ProductForm = ({
               showAsterisk={true}
               disabled={isView}
               footerLabel="+ Add Category"
-              onFooterClick={() => navigate("/seller/masters/category")}
+              onFooterClick={() => setIsCategoryModalOpen(true)}
               error={errors.category}
             />
 
@@ -664,7 +669,7 @@ const ProductForm = ({
               showAsterisk={true}
               disabled={isView || !formData.category}
               footerLabel="+ Add Sub Category"
-              onFooterClick={() => navigate("/seller/masters/category")}
+              onFooterClick={() => setIsSubCategoryModalOpen(true)}
               error={errors.subcategory}
             />
 
@@ -720,6 +725,108 @@ const ProductForm = ({
           </div>
         )}
       </div>
+
+      {isUomModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-300"
+            onClick={() => setIsUomModalOpen(false)}
+          />
+          <div className="relative w-full max-w-[800px] h-auto overflow-visible transform transition-all duration-300 ease-in-out animate-in zoom-in-95 bg-transparent">
+            <UnitForm
+              mode="add"
+              onBack={() => setIsUomModalOpen(false)}
+              onSuccess={async () => {
+                setIsUomModalOpen(false);
+                try {
+                  const newUoms = await productService.getUomsDropdown();
+                  setUomList(newUoms);
+                  // Auto-select the newly added UOM
+                  if (newUoms.length > uomList.length) {
+                    const addedUom = newUoms.find(
+                      (uom) => !uomList.some((oldUom) => oldUom.id === uom.id)
+                    );
+                    if (addedUom) {
+                      handleInputChange("uom", addedUom);
+                    }
+                  } else {
+                    // Fallback to select the last added if same length (shouldn't happen on add though)
+                    const latestUom = newUoms[newUoms.length - 1];
+                    if (latestUom) {
+                      handleInputChange("uom", latestUom);
+                    }
+                  }
+                } catch (error) {
+                  console.error("Error fetching UOMs:", error);
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      <AddCategoryModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        initialStep={2}
+        initialType="Category"
+        lockType={true}
+        onSuccess={async () => {
+          try {
+            const newCategories = await productService.getCategoriesDropdown();
+            setCategories(newCategories);
+            if (newCategories.length > categories.length) {
+              const addedCat = newCategories.find(
+                (c) => !categories.some((oldC) => oldC.id === c.id)
+              );
+              if (addedCat) {
+                handleCategoryChange(addedCat);
+              }
+            } else {
+              const latestCat = newCategories[newCategories.length - 1];
+              if (latestCat) {
+                handleCategoryChange(latestCat);
+              }
+            }
+          } catch (error) {
+            console.error("Error refreshing categories:", error);
+          }
+        }}
+      />
+
+      <AddCategoryModal
+        isOpen={isSubCategoryModalOpen}
+        onClose={() => setIsSubCategoryModalOpen(false)}
+        initialStep={2}
+        initialType="Sub Category"
+        lockType={true}
+        onSuccess={async () => {
+          try {
+            const newCategories = await productService.getCategoriesDropdown();
+            setCategories(newCategories);
+            
+            if (formData.category?.id) {
+              const newSubCategories = await productService.getSubCategoriesDropdown(formData.category.id);
+              setSubCategories(newSubCategories);
+              if (newSubCategories.length > subCategories.length) {
+                const addedSubCat = newSubCategories.find(
+                  (c) => !subCategories.some((oldC) => oldC.id === c.id)
+                );
+                if (addedSubCat) {
+                  handleInputChange("subcategory", addedSubCat);
+                }
+              } else {
+                const latestSubCat = newSubCategories[newSubCategories.length - 1];
+                if (latestSubCat) {
+                  handleInputChange("subcategory", latestSubCat);
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Error refreshing subcategories:", error);
+          }
+        }}
+      />
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {
