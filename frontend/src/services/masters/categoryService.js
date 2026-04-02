@@ -34,6 +34,10 @@ const categoryService = {
         const response = await axiosInstance.post('/category-master/sub-category', data);
         return response.data;
     },
+    createSubSubCategory: async (data) => {
+        const response = await axiosInstance.post('/category-master/sub-sub-category', data);
+        return response.data;
+    },
     updateCategory: async (id, data) => {
         const response = await axiosInstance.patch(`/category-master/category/${id}`, data);
         return response.data;
@@ -42,12 +46,28 @@ const categoryService = {
         const response = await axiosInstance.patch(`/category-master/sub-category/${id}`, data);
         return response.data;
     },
+    updateSubSubCategory: async (id, data) => {
+        const response = await axiosInstance.patch(`/category-master/sub-sub-category/${id}`, data);
+        return response.data;
+    },
     toggleCategoryStatus: async (id, status) => {
         const response = await axiosInstance.patch(`/category-master/category/${id}/status`, { status });
         return response.data;
     },
     toggleSubCategoryStatus: async (id, status) => {
         const response = await axiosInstance.patch(`/category-master/sub-category/${id}/status`, { status });
+        return response.data;
+    },
+    toggleSubSubCategoryStatus: async (id, status) => {
+        const response = await axiosInstance.patch(`/category-master/sub-sub-category/${id}/status`, { status });
+        return response.data;
+    },
+    getSubCategoriesDropdown: async (categoryId) => {
+        const response = await axiosInstance.get(`/category-master/sub-categories/dropdown?categoryId=${categoryId}`);
+        return response.data;
+    },
+    getSubSubCategoriesDropdown: async (subCategoryId) => {
+        const response = await axiosInstance.get(`/category-master/sub-sub-categories/dropdown?subCategoryId=${subCategoryId}`);
         return response.data;
     },
     promoteSubCategory: async (id) => {

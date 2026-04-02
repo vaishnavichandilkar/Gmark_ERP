@@ -3,7 +3,7 @@ import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CategoryMasterService } from '../services/category-master.service';
-import { CreateCategoryDto, CreateSubCategoryDto, ToggleStatusDto, UpdateCategoryDto, UpdateSubCategoryDto } from '../dto/category.dto';
+import { CreateCategoryDto, CreateSubCategoryDto, CreateSubSubCategoryDto, ToggleStatusDto, UpdateCategoryDto, UpdateSubCategoryDto, UpdateSubSubCategoryDto } from '../dto/category.dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 
 @ApiTags('Category Master')
@@ -27,6 +27,13 @@ export class CategoryMasterController {
         return this.service.createSubCategory(dto, req.user.userId);
     }
 
+    @Post('sub-sub-category')
+    @ApiOperation({ summary: 'Create a new Sub Sub Category' })
+    @ApiResponse({ status: 201, description: 'Sub Sub Category created' })
+    async createSubSubCategory(@Request() req, @Body() dto: CreateSubSubCategoryDto) {
+        return this.service.createSubSubCategory(dto, req.user.userId);
+    }
+
     @Get('categories/dropdown')
     @ApiOperation({ summary: 'Get Categories for dropdown' })
     @ApiResponse({ status: 200, description: 'List of Categories' })
@@ -40,13 +47,31 @@ export class CategoryMasterController {
         );
     }
 
+    @Get('sub-categories/dropdown')
+    @ApiOperation({ summary: 'Get Sub Categories for dropdown' })
+    async getSubDropdown(
+        @Request() req,
+        @Query('categoryId', ParseIntPipe) categoryId: number,
+    ) {
+        return this.service.getSubCategoriesForDropdown(req.user.userId, categoryId);
+    }
+
+    @Get('sub-sub-categories/dropdown')
+    @ApiOperation({ summary: 'Get Sub Sub Categories for dropdown' })
+    async getSubSubDropdown(
+        @Request() req,
+        @Query('subCategoryId', ParseIntPipe) subCategoryId: number,
+    ) {
+        return this.service.getSubSubCategoriesForDropdown(req.user.userId, subCategoryId);
+    }
+
     @Get()
     @ApiOperation({ summary: 'Get Category with Sub Categories listing' })
     @ApiResponse({ status: 200, description: 'Nested Category list' })
     async getListing(@Request() req) {
         return this.service.getCategoryListing(req.user.userId);
     }
-    
+
     @Get('export')
     @ApiOperation({ summary: 'Export categories list to XLSX or PDF format' })
     async exportCategories(
@@ -87,6 +112,17 @@ export class CategoryMasterController {
         return this.service.toggleSubCategoryStatus(id, dto, req.user.userId);
     }
 
+    @Patch('sub-sub-category/:id/status')
+    @ApiOperation({ summary: 'Toggle Sub Sub Category status' })
+    @ApiResponse({ status: 200, description: 'Sub Sub Category status updated' })
+    async toggleSubSubCategoryStatus(
+        @Request() req,
+        @Param('id', ParseIntPipe) id: number,
+        @Body() dto: ToggleStatusDto,
+    ) {
+        return this.service.toggleSubSubCategoryStatus(id, dto, req.user.userId);
+    }
+
     @Patch('category/:id')
     @ApiOperation({ summary: 'Update Category name' })
     @ApiResponse({ status: 200, description: 'Category updated' })
@@ -107,6 +143,17 @@ export class CategoryMasterController {
         @Body() dto: UpdateSubCategoryDto,
     ) {
         return this.service.updateSubCategory(id, dto, req.user.userId);
+    }
+
+    @Patch('sub-sub-category/:id')
+    @ApiOperation({ summary: 'Update Sub Sub Category name' })
+    @ApiResponse({ status: 200, description: 'Sub Sub Category updated' })
+    async updateSubSubCategory(
+        @Request() req,
+        @Param('id', ParseIntPipe) id: number,
+        @Body() dto: UpdateSubSubCategoryDto,
+    ) {
+        return this.service.updateSubSubCategory(id, dto, req.user.userId);
     }
 
     @Get('sample-excel')

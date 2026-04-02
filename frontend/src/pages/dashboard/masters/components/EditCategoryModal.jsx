@@ -7,16 +7,22 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
     const { t } = useTranslation(['common', 'modules']);
     const [categoryName, setCategoryName] = useState('');
     const [parentCategory, setParentCategory] = useState(null);
+    const [subCategory, setSubCategory] = useState(null);
     const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
+    const [isSubDropdownOpen, setIsSubDropdownOpen] = useState(false);
     const [dropdownCategories, setDropdownCategories] = useState([]);
+    const [dropdownSubCategories, setDropdownSubCategories] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isPromotingToCategory, setIsPromotingToCategory] = useState(false);
     const [isDemotingToSubCategory, setIsDemotingToSubCategory] = useState(false);
     const parentDropdownRef = useRef(null);
+    const subDropdownRef = useRef(null);
 
     const isSubCategory = data?.type === 'sub_category';
-    const hasSubCategories = !isSubCategory && data?.sub_categories?.length > 0;
+    const isSubSubCategory = data?.type === 'sub_sub_category';
+    const hasSubCategories = !isSubCategory && !isSubSubCategory && data?.items?.length > 0;
+    const hasSubSubCategories = isSubCategory && data?.items?.length > 0;
 
     useEffect(() => {
         if (isOpen && data) {
@@ -24,6 +30,8 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
             setIsPromotingToCategory(false);
             setIsDemotingToSubCategory(false);
             setParentCategory(null);
+            setSubCategory(null);
+            setDropdownSubCategories([]);
             fetchDropdownData();
         }
     }, [isOpen, data]);
@@ -31,13 +39,29 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
     const fetchDropdownData = async () => {
         try {
             // excludeId is current category id to prevent self-parent selection
-            const dropdownData = await categoryService.getCategoriesDropdown(isSubCategory ? null : data.id);
+            const dropdownData = await categoryService.getCategoriesDropdown(data.type === 'category' ? data.id : null);
             setDropdownCategories(dropdownData || []);
 
-            const pId = data.category_id || data.parent_id || data.parentId;
-            if (isSubCategory && pId) {
-                const parent = dropdownData?.find(c => Number(c.id) === Number(pId));
-                if (parent) setParentCategory(parent);
+            if (isSubCategory) {
+                const pId = data.category_id || data.parent_id || data.parentId;
+                if (pId) {
+                    const parent = dropdownData?.find(c => Number(c.id) === Number(pId));
+                    if (parent) setParentCategory(parent);
+                }
+            } else if (isSubSubCategory) {
+                const gpId = data.grandParentId;
+                const pId = data.sub_category_id || data.parentId;
+
+                if (gpId) {
+                    const grandParent = dropdownData?.find(c => Number(c.id) === Number(gpId));
+                    if (grandParent) {
+                        setParentCategory(grandParent);
+                        const subs = await categoryService.getSubCategoriesDropdown(gpId);
+                        setDropdownSubCategories(subs || []);
+                        const parent = subs?.find(s => Number(s.id) === Number(pId));
+                        if (parent) setSubCategory(parent);
+                    }
+                }
             }
         } catch (err) {
             console.error('Error fetching categories:', err);
@@ -48,7 +72,9 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
         const handleClickOutside = (event) => {
             if (parentDropdownRef.current && !parentDropdownRef.current.contains(event.target)) {
                 setIsParentDropdownOpen(false);
-                setSearchTerm('');
+            }
+            if (subDropdownRef.current && !subDropdownRef.current.contains(event.target)) {
+                setIsSubDropdownOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -70,6 +96,11 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
             return;
         }
 
+        if (isSubSubCategory && (!parentCategory || !subCategory)) {
+            onShowToast && onShowToast(t('modules:parent_sub_category_required', 'Please select a parent sub category'), 'error');
+            return;
+        }
+
         if (isDemotingToSubCategory && !parentCategory) {
             onShowToast && onShowToast(t('modules:please_select_parent_category', 'Please select a parent category'), 'error');
             return;
@@ -88,6 +119,12 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
                     });
                     onShowToast && onShowToast(t('modules:sub_category_updated_successfully'));
                 }
+            } else if (isSubSubCategory) {
+                await categoryService.updateSubSubCategory(data.id, {
+                    name: categoryName,
+                    sub_category_id: subCategory.id
+                });
+                onShowToast && onShowToast(t('modules:sub_sub_category_updated_successfully', 'Sub Sub Category updated successfully'));
             } else {
                 if (isDemotingToSubCategory) {
                     await categoryService.demoteCategory(data.id, parentCategory.id);
@@ -122,7 +159,9 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
                 {/* Header */}
                 <div className="flex items-center justify-between px-8 py-5 border-b border-[#04200f] bg-emerald-900 rounded-t-[20px]">
                     <h2 className="text-[18px] font-bold text-white tracking-tight">
-                        {isSubCategory ? t('modules:edit_sub_category', 'Edit Sub Category') : t('modules:edit_category', 'Edit Category')}
+                        {isSubCategory ? t('modules:edit_sub_category', 'Edit Sub Category') :
+                            isSubSubCategory ? t('modules:edit_sub_sub_category', 'Edit Sub Sub Category') :
+                                t('modules:edit_category', 'Edit Category')}
                     </h2>
                     <button
                         onClick={onClose}
@@ -137,102 +176,139 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
                     {/* Name Input */}
                     <div className="space-y-2">
                         <label className="text-[13px] font-semibold text-[#4B5563]">
-                            {isSubCategory ? t('modules:sub_category_name') : t('modules:category_name')}
+                            {isSubCategory ? t('modules:sub_category_name') :
+                                isSubSubCategory ? t('modules:sub_sub_category_name', 'Sub Sub Category Name') :
+                                    t('modules:category_name')}
                         </label>
                         <input
                             type="text"
                             value={categoryName}
                             onChange={(e) => setCategoryName(e.target.value)}
                             disabled={isPromotingToCategory || isDemotingToSubCategory}
-                            placeholder={isSubCategory ? t('modules:enter_sub_category_name') : t('modules:enter_category_name')}
+                            placeholder={isSubCategory ? t('modules:enter_sub_category_name') :
+                                isSubSubCategory ? t('modules:enter_sub_sub_category_name', 'Enter Sub Sub Category Name') :
+                                    t('modules:enter_category_name')}
                             className={`w-full h-[46px] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-medium outline-none transition-all placeholder:text-gray-400 ${isPromotingToCategory || isDemotingToSubCategory ? 'bg-gray-50 text-gray-400' : 'focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5'}`}
                         />
                     </div>
 
-                    {isSubCategory && (
+                    {(isSubCategory || isSubSubCategory) && (
                         <>
-                            {/* Parent Selection (Only for Sub Categories) */}
+                            {/* Parent Selection */}
                             <div className={`space-y-2 relative transition-all duration-300 ${isPromotingToCategory ? 'opacity-30 pointer-events-none grayscale' : ''}`} ref={parentDropdownRef}>
                                 <label className="text-[13px] font-semibold text-[#4B5563]">{t('modules:category_under')}</label>
                                 <div
                                     className={`w-full h-[46px] border rounded-[10px] flex items-center justify-between px-4 cursor-pointer transition-all ${isParentDropdownOpen ? 'border-[#073318] ring-4 ring-[#073318]/5' : 'border-[#E5E7EB] hover:border-gray-300 bg-white'}`}
                                     onClick={() => !isPromotingToCategory && setIsParentDropdownOpen(!isParentDropdownOpen)}
                                 >
-                                    {isParentDropdownOpen ? (
-                                        <input
-                                            type="text"
-                                            autoFocus
-                                            placeholder={parentCategory?.name || t('modules:select_category')}
-                                            className="w-full bg-transparent outline-none text-[14px] font-medium"
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            onClick={(e) => e.stopPropagation()}
-                                        />
-                                    ) : (
-                                        <span className={`text-[14px] ${parentCategory ? 'text-[#111827] font-medium' : 'text-gray-400 italic'}`}>
-                                            {parentCategory ? parentCategory.name : t('modules:select_category')}
-                                        </span>
-                                    )}
+                                    <span className={`text-[14px] ${parentCategory ? 'text-[#111827] font-medium' : 'text-gray-400 italic'}`}>
+                                        {parentCategory ? parentCategory.name : t('modules:select_category')}
+                                    </span>
                                     <ChevronDown size={18} className={`text-gray-400 transition-transform duration-200 ${isParentDropdownOpen ? 'rotate-180' : ''}`} />
                                 </div>
 
                                 {isParentDropdownOpen && (
-                                    <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[12px] shadow-xl z-[110] py-2 max-h-[224px] overflow-y-auto dropdown-scrollbar animate-in fade-in slide-in-from-top-2 duration-200">
-                                        {filteredCategories.length > 0 ? (
-                                            filteredCategories.map((cat) => (
-                                                <div
-                                                    key={cat.id}
-                                                    className={`px-4 py-3 text-[14px] cursor-pointer transition-colors ${parentCategory?.id === cat.id ? 'bg-[#F9FAFB] text-[#073318] font-bold' : 'text-[#4B5563] hover:bg-gray-50'}`}
-                                                    onClick={() => {
-                                                        setParentCategory(cat);
-                                                        setIsParentDropdownOpen(false);
-                                                        setSearchTerm('');
-                                                    }}
-                                                >
-                                                    {cat.name}
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="px-4 py-3 text-[12px] text-gray-400 text-center italic">
-                                                {t('common:no_results_found')}
+                                    <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[12px] shadow-xl z-[110] py-2 max-h-[160px] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                                        {dropdownCategories.map((cat) => (
+                                            <div
+                                                key={cat.id}
+                                                className={`px-4 py-3 text-[14px] cursor-pointer transition-colors ${parentCategory?.id === cat.id ? 'bg-[#F9FAFB] text-[#073318] font-bold' : 'text-[#4B5563] hover:bg-gray-50'}`}
+                                                onClick={async () => {
+                                                    setParentCategory(cat);
+                                                    setSubCategory(null);
+                                                    setIsParentDropdownOpen(false);
+                                                    if (isSubSubCategory) {
+                                                        const subs = await categoryService.getSubCategoriesDropdown(cat.id);
+                                                        setDropdownSubCategories(subs || []);
+                                                    }
+                                                }}
+                                            >
+                                                {cat.name}
                                             </div>
-                                        )}
+                                        ))}
                                     </div>
                                 )}
                             </div>
 
-                            {/* Promotion Checkbox */}
-                            <div className="pt-2">
-                                <label className={`flex items-center gap-3 cursor-pointer group p-3 rounded-[12px] border transition-all ${isPromotingToCategory ? 'bg-[#073318]/5 border-[#073318]/20 ring-4 ring-[#073318]/5' : 'border-[#E5E7EB] hover:border-gray-300'}`}>
-                                    <div className="relative flex items-center">
-                                        <input
-                                            type="checkbox"
-                                            className="peer sr-only"
-                                            checked={isPromotingToCategory}
-                                            onChange={(e) => setIsPromotingToCategory(e.target.checked)}
-                                        />
-                                        <div className={`w-5 h-5 border-2 rounded-md transition-all flex items-center justify-center ${isPromotingToCategory ? 'bg-[#073318] border-[#073318]' : 'border-gray-200 group-hover:border-gray-300 bg-white'}`}>
-                                            <Check size={14} className={`text-white transition-opacity ${isPromotingToCategory ? 'opacity-100' : 'opacity-0'}`} />
+                            {isSubSubCategory && (
+                                <div className="space-y-2 relative" ref={subDropdownRef}>
+                                    <label className="text-[13px] font-semibold text-[#4B5563]">{t('modules:sub_category_under', 'Sub Category Under')}</label>
+                                    <div
+                                        className={`w-full h-[46px] border rounded-[10px] flex items-center justify-between px-4 transition-all ${!parentCategory ? 'bg-gray-50 cursor-not-allowed border-[#E5E7EB]' : 'cursor-pointer hover:border-gray-300 bg-white'} ${isSubDropdownOpen ? 'border-[#073318] ring-4 ring-[#073318]/5' : 'border-[#E5E7EB]'}`}
+                                        onClick={() => parentCategory && setIsSubDropdownOpen(!isSubDropdownOpen)}
+                                    >
+                                        <span className={`text-[14px] ${subCategory ? 'text-[#111827] font-medium' : 'text-gray-400'}`}>
+                                            {subCategory ? subCategory.name : t('modules:select_sub_category', 'Select Sub Category')}
+                                        </span>
+                                        <ChevronDown size={18} className={`text-gray-400 transition-transform duration-200 ${isSubDropdownOpen ? 'rotate-180' : ''}`} />
+                                    </div>
+
+                                    {isSubDropdownOpen && (
+                                        <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[12px] shadow-xl z-[110] py-2 max-h-[160px] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                                            {dropdownSubCategories.length > 0 ? (
+                                                dropdownSubCategories.map((sub) => (
+                                                    <div
+                                                        key={sub.id}
+                                                        className={`px-4 py-3 text-[14px] cursor-pointer transition-colors ${subCategory?.id === sub.id ? 'bg-[#F9FAFB] text-[#073318] font-bold' : 'text-[#4B5563] hover:bg-gray-50'}`}
+                                                        onClick={() => {
+                                                            setSubCategory(sub);
+                                                            setIsSubDropdownOpen(false);
+                                                        }}
+                                                    >
+                                                        {sub.name}
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="px-4 py-3 text-[13px] text-gray-400 italic">No sub categories found</div>
+                                            )}
                                         </div>
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className={`text-[13px] font-bold transition-colors ${isPromotingToCategory ? 'text-[#073318]' : 'text-gray-700'}`}>
-                                            {t('modules:do_you_want_to_move_to_category', 'Do you want to move to Category')}
-                                        </span>
-                                        <span className="text-[11px] text-gray-400 font-medium">
-                                            {isPromotingToCategory ? t('modules:promotion_warning', 'This will convert this sub-category into a main category.') : t('modules:promotion_hint', 'Check to promote to top-level category')}
-                                        </span>
-                                    </div>
-                                </label>
-                            </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {isSubCategory && (
+                                <div className="pt-2">
+                                    <label
+                                        className={`flex items-center gap-3 cursor-pointer group p-3 rounded-[12px] border transition-all ${hasSubSubCategories ? 'bg-red-50/50 border-red-100' : isPromotingToCategory ? 'bg-[#073318]/5 border-[#073318]/20 ring-4 ring-[#073318]/5' : 'border-[#E5E7EB] hover:border-gray-300'}`}
+                                        onClick={() => {
+                                            if (hasSubSubCategories) {
+                                                onShowToast && onShowToast(`${data.name} has sub-sub-categories.`, 'error');
+                                            }
+                                        }}
+                                    >
+                                        <div className="relative flex items-center">
+                                            <input
+                                                type="checkbox"
+                                                className="peer sr-only"
+                                                checked={isPromotingToCategory}
+                                                disabled={hasSubSubCategories}
+                                                onChange={(e) => setIsPromotingToCategory(e.target.checked)}
+                                            />
+                                            <div className={`w-5 h-5 border-2 rounded-md transition-all flex items-center justify-center ${isPromotingToCategory ? 'bg-[#073318] border-[#073318]' : 'border-gray-200 group-hover:border-gray-300 bg-white'}`}>
+                                                <Check size={14} className={`text-white transition-opacity ${isPromotingToCategory ? 'opacity-100' : 'opacity-0'}`} />
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className={`text-[13px] font-bold transition-colors ${isPromotingToCategory ? 'text-[#073318]' : 'text-gray-700'}`}>
+                                                {t('modules:do_you_want_to_move_to_category', 'Do you want to move to Category')}
+                                            </span>
+                                            <span className={`text-[11px] font-medium ${hasSubSubCategories ? 'text-red-500' : 'text-gray-400'}`}>
+                                                {hasSubSubCategories
+                                                    ? t('modules:cannot_promote_because_subsubcats_exist', 'This sub-category cannot be moved to category because it already contains sub-sub-categories.')
+                                                    : isPromotingToCategory ? t('modules:promotion_warning', 'This will convert this sub-category into a main category.') : t('modules:promotion_hint', 'Check to promote to top-level category')}
+                                            </span>
+                                        </div>
+                                    </label>
+                                </div>
+                            )}
                         </>
                     )}
 
-                    {!isSubCategory && (
+                    {!isSubCategory && !isSubSubCategory && (
                         <>
                             {/* Move to Sub-Category Checkbox */}
                             <div className="pt-2">
-                                <label 
+                                <label
                                     className={`flex items-center gap-3 cursor-pointer group p-3 rounded-[12px] border transition-all ${hasSubCategories ? 'bg-red-50/50 border-red-100' : isDemotingToSubCategory ? 'bg-[#073318]/5 border-[#073318]/20 ring-4 ring-[#073318]/5' : 'border-[#E5E7EB] hover:border-gray-300'}`}
                                     onClick={() => {
                                         if (hasSubCategories) {
@@ -257,9 +333,9 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
                                             {t('modules:move_to_sub_category', 'Move to Sub-Category')}
                                         </span>
                                         <span className={`text-[11px] font-medium ${hasSubCategories ? 'text-red-500' : 'text-gray-400'}`}>
-                                            {hasSubCategories 
-                                              ? t('modules:cannot_demote_because_subcats_exist', 'This category cannot be moved to sub-category because it already contains sub-categories.')
-                                              : t('modules:demotion_hint', 'Move this category under another category')
+                                            {hasSubCategories
+                                                ? t('modules:cannot_demote_because_subcats_exist', 'This category cannot be moved to sub-category because it already contains sub-categories.')
+                                                : t('modules:demotion_hint', 'Move this category under another category')
                                             }
                                         </span>
                                     </div>

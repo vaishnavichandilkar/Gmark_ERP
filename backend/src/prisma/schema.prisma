@@ -39,6 +39,7 @@ model User {
   units                 UnitMaster[]
   categories            Category[]
   sub_categories        SubCategory[]
+  sub_sub_categories    SubSubCategory[]
   products              Product[]
   accounts              AccountMaster[]
   purchaseOrders       PurchaseOrder[]
@@ -487,9 +488,26 @@ model SubCategory {
   category    Category     @relation(fields: [category_id], references: [id], onDelete: Cascade)
   user        User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
   products    Product[]
+  sub_sub_categories SubSubCategory[]
 
   @@unique([name, category_id, user_id])
   @@map("sub_categories")
+}
+
+model SubSubCategory {
+  id              Int          @id @default(autoincrement())
+  name            String
+  sub_category_id Int
+  user_id         Int
+  status          MasterStatus @default(ACTIVE)
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  sub_category    SubCategory  @relation(fields: [sub_category_id], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([name, sub_category_id, user_id])
+  @@map("sub_sub_categories")
 }
 
 model HsnMaster {

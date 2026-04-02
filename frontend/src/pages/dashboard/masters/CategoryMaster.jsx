@@ -43,6 +43,7 @@ const CategoryMaster = () => {
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [expandedSubGroups, setExpandedSubGroups] = useState({});
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -85,7 +86,10 @@ const CategoryMaster = () => {
         id: cat.id,
         name: cat.name,
         status: cat.status || "ACTIVE",
-        items: cat.sub_categories || [],
+        items: (cat.sub_categories || []).map((sub) => ({
+          ...sub,
+          items: sub.sub_sub_categories || []
+        })),
       }));
       setMasterData(mappedData);
       setSelectedItems([]);
@@ -135,6 +139,13 @@ const CategoryMaster = () => {
     }));
   };
 
+  const toggleSubGroup = (id) => {
+    setExpandedSubGroups((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
   const isAllExpanded =
     masterData.length > 0 &&
     Object.keys(expandedGroups).length === masterData.length &&
@@ -143,10 +154,20 @@ const CategoryMaster = () => {
   const toggleExpandAll = () => {
     if (isAllExpanded) {
       setExpandedGroups({});
+      setExpandedSubGroups({});
     } else {
       const newExpanded = {};
-      masterData.forEach((section) => (newExpanded[section.id] = true));
+      const newSubExpanded = {};
+      masterData.forEach((section) => {
+        newExpanded[section.id] = true;
+        section.items.forEach(sub => {
+          if (sub.items && sub.items.length > 0) {
+            newSubExpanded[sub.id] = true;
+          }
+        });
+      });
       setExpandedGroups(newExpanded);
+      setExpandedSubGroups(newSubExpanded);
     }
   };
 
@@ -182,11 +203,13 @@ const CategoryMaster = () => {
     try {
       if (type === "category") {
         await categoryService.toggleCategoryStatus(id, newStatus);
-      } else {
+      } else if (type === "sub_category") {
         await categoryService.toggleSubCategoryStatus(id, newStatus);
+      } else if (type === "sub_sub_category") {
+        await categoryService.toggleSubSubCategoryStatus(id, newStatus);
       }
       showToast(
-        `${type === "category" ? "Category" : "Sub Category"} ${newStatus === "ACTIVE" ? "activated" : "inactivated"} successfully`,
+        `${type.replace('_', ' ')} ${newStatus === "ACTIVE" ? "activated" : "inactivated"} successfully`,
       );
       fetchCategories(); // Final sync from DB
     } catch (error) {
@@ -325,7 +348,7 @@ const CategoryMaster = () => {
       toast.dismiss(loadingToast);
       toast.error(
         error?.response?.data?.message ||
-          t("common:import_failed", "Failed to import data"),
+        t("common:import_failed", "Failed to import data"),
       );
       return Promise.reject(error);
     }
@@ -759,109 +782,206 @@ const CategoryMaster = () => {
                     <div className="flex flex-col bg-gray-50/30 border-t border-[#E5E7EB]/50">
                       {section.items.map((item, itemIdx) => {
                         const dropdownId = `${section.id}-item-${itemIdx}`;
+                        const hasSubSubs = item.items && item.items.length > 0;
+                        const isSubExpanded = expandedSubGroups[item.id] || searchQuery;
+
                         return (
-                          <div
-                            key={itemIdx}
-                            className={`relative flex items-center justify-between py-3.5 pl-[52px] text-[13px] border-b border-[#E5E7EB]/50 last:border-b-0 ${activeRowDropdown === dropdownId ? "z-[50]" : "z-0"}`}
-                          >
-                            <div className="absolute inset-y-0 left-[52px] flex items-center">
-                              <span className="font-medium text-[#4B5563]">
-                                {itemIdx + 1}. {item.name}
-                              </span>
-                            </div>
-
-                            <div className="flex items-stretch shrink-0 invisible">
-                              {/* Placeholder to maintain height and structure */}
-                              <div className="w-[110px] md:w-[120px] h-10"></div>
-                              <div className="w-16 md:w-20 h-10"></div>
-                            </div>
-
-                            <div className="flex items-stretch shrink-0">
-                              {/* Status Column */}
-                              <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4">
-                                <div
-                                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${item.status === "INACTIVE" ? "bg-[#FEF2F2] text-[#DC2626]" : "bg-[#ECFDF5] text-[#059669]"}`}
-                                >
-                                  <span
-                                    className={`w-1.5 h-1.5 rounded-full ${item.status === "INACTIVE" ? "bg-[#DC2626]" : "bg-[#059669]"}`}
-                                  ></span>
-                                  {item.status === "INACTIVE"
-                                    ? t("common:inactive")
-                                    : t("common:active")}
+                          <div key={item.id} className="flex flex-col border-b border-[#E5E7EB]/50 last:border-b-0">
+                            <div
+                              className={`relative flex items-center justify-between py-3.5 pl-[52px] text-[13px] hover:bg-gray-50 transition-colors ${activeRowDropdown === dropdownId ? "z-[50]" : "z-0"}`}
+                            >
+                              <div
+                                className="flex items-center flex-1 cursor-pointer select-none gap-3"
+                                onClick={() => hasSubSubs && toggleSubGroup(item.id)}
+                              >
+                                <div className="flex items-center justify-center w-4 h-4">
+                                  {hasSubSubs ? (
+                                    isSubExpanded ? (
+                                      <Minus size={12} className="text-[#4B5563] stroke-[3px]" />
+                                    ) : (
+                                      <Plus size={12} className="text-[#4B5563] stroke-[3px]" />
+                                    )
+                                  ) : null}
                                 </div>
+                                <span className="font-bold text-[#4B5563]">
+                                  {itemIdx + 1}. {item.name}
+                                </span>
                               </div>
 
-                              {/* Action Column */}
-                              <div className="w-16 md:w-20 flex items-center justify-center px-2 md:px-4 relative">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveRowDropdown(
-                                      activeRowDropdown === dropdownId
-                                        ? null
-                                        : dropdownId,
-                                    );
-                                  }}
-                                  className={`p-1.5 rounded-md transition-all duration-200 dropdown-trigger
-                                                                        ${activeRowDropdown === dropdownId ? "bg-gray-100 text-[#111827]" : "text-gray-400 hover:text-[#073318] hover:bg-white border border-transparent"}`}
-                                >
-                                  <MoreVertical size={16} />
-                                </button>
-
-                                {activeRowDropdown === dropdownId && (
+                              <div className="flex items-stretch shrink-0">
+                                {/* Status Column */}
+                                <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4">
                                   <div
-                                    className={`absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in zoom-in-95 duration-200 dropdown-menu text-left
-                                                                            ${itemIdx >= section.items.length - 1 && section.items.length > 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${item.status === "INACTIVE" ? "bg-[#FEF2F2] text-[#DC2626]" : "bg-[#ECFDF5] text-[#059669]"}`}
                                   >
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedCategoryData({
-                                          ...item,
-                                          type: "sub_category",
-                                          parentId: section.id,
-                                        });
-                                        setIsEditModalOpen(true);
-                                        setActiveRowDropdown(null);
-                                      }}
-                                      className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap dropdown-item"
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full ${item.status === "INACTIVE" ? "bg-[#DC2626]" : "bg-[#059669]"}`}
+                                    ></span>
+                                    {item.status === "INACTIVE"
+                                      ? t("common:inactive")
+                                      : t("common:active")}
+                                  </div>
+                                </div>
+
+                                {/* Action Column */}
+                                <div className="w-16 md:w-20 flex items-center justify-center px-2 md:px-4 relative">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveRowDropdown(
+                                        activeRowDropdown === dropdownId
+                                          ? null
+                                          : dropdownId,
+                                      );
+                                    }}
+                                    className={`p-1.5 rounded-md transition-all duration-200 dropdown-trigger
+                                                                          ${activeRowDropdown === dropdownId ? "bg-gray-100 text-[#111827]" : "text-gray-400 hover:text-[#073318] hover:bg-white border border-transparent"}`}
+                                  >
+                                    <MoreVertical size={16} />
+                                  </button>
+
+                                  {activeRowDropdown === dropdownId && (
+                                    <div
+                                      className={`absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in zoom-in-95 duration-200 dropdown-menu text-left
+                                                                              ${itemIdx >= section.items.length - 1 && section.items.length > 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
                                     >
-                                      <Edit
-                                        size={18}
-                                        className="text-[#073318]"
-                                      />
-                                      {t("modules:view_and_edit_category")}
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleToggleStatus(
-                                          item.id,
-                                          item.status,
-                                          "sub_category",
-                                        );
-                                      }}
-                                      className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap dropdown-item"
-                                    >
-                                      {item.status === "INACTIVE" ? (
-                                        <CheckCircle2
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedCategoryData({
+                                            ...item,
+                                            type: "sub_category",
+                                            parentId: section.id,
+                                          });
+                                          setIsEditModalOpen(true);
+                                          setActiveRowDropdown(null);
+                                        }}
+                                        className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap dropdown-item"
+                                      >
+                                        <Edit
                                           size={18}
                                           className="text-[#073318]"
                                         />
-                                      ) : (
-                                        <XCircle
-                                          size={18}
-                                          className="text-gray-400 -mt-0.5"
-                                        />
-                                      )}
-                                      {item.status === "INACTIVE"
-                                        ? t("common:active")
-                                        : t("common:inactive")}
-                                    </button>
-                                  </div>
-                                )}
+                                        {t("modules:view_and_edit_category")}
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleToggleStatus(
+                                            item.id,
+                                            item.status,
+                                            "sub_category",
+                                          );
+                                        }}
+                                        className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap dropdown-item"
+                                      >
+                                        {item.status === "INACTIVE" ? (
+                                          <CheckCircle2
+                                            size={18}
+                                            className="text-[#073318]"
+                                          />
+                                        ) : (
+                                          <XCircle
+                                            size={18}
+                                            className="text-gray-400 -mt-0.5"
+                                          />
+                                        )}
+                                        {item.status === "INACTIVE"
+                                          ? t("common:active")
+                                          : t("common:inactive")}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
+
+                            {/* Third Level - SubSubCategories */}
+                            {hasSubSubs && isSubExpanded && (
+                              <div className="flex flex-col bg-gray-100/40">
+                                {item.items.map((subSub, subSubIdx) => {
+                                  const subSubDropdownId = `subsub-${subSub.id}`;
+                                  return (
+                                    <div key={subSub.id} className="flex items-center justify-between py-2.5 pl-[90px] text-[12px] border-b border-[#E5E7EB]/30 last:border-b-0 hover:bg-gray-100/60 transition-colors">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
+                                        <span className="font-medium text-[#6B7280]">
+                                          {subSub.name}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-stretch shrink-0">
+                                        {/* Status Column */}
+                                        <div className="w-[110px] md:w-[120px] flex items-center justify-center px-4">
+                                          <div
+                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${subSub.status === "INACTIVE" ? "bg-[#FEF2F2] text-[#DC2626]" : "bg-[#ECFDF5] text-[#059669]"}`}
+                                          >
+                                            {subSub.status === "INACTIVE"
+                                              ? t("common:inactive")
+                                              : t("common:active")}
+                                          </div>
+                                        </div>
+
+                                        {/* Action Column */}
+                                        <div className="w-16 md:w-20 flex items-center justify-center px-4 relative">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setActiveRowDropdown(
+                                                activeRowDropdown === subSubDropdownId
+                                                  ? null
+                                                  : subSubDropdownId,
+                                              );
+                                            }}
+                                            className={`p-1 rounded-md transition-all duration-200 dropdown-trigger
+                                                                                  ${activeRowDropdown === subSubDropdownId ? "bg-gray-200 text-[#111827]" : "text-gray-400 hover:text-[#073318]"}`}
+                                          >
+                                            <MoreVertical size={14} />
+                                          </button>
+
+                                          {activeRowDropdown === subSubDropdownId && (
+                                            <div
+                                              className="absolute right-[80%] top-0 mt-2 w-max min-w-[180px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-[120] py-1.5 animate-in zoom-in-95 duration-200 text-left"
+                                            >
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedCategoryData({
+                                                    ...subSub,
+                                                    type: "sub_sub_category",
+                                                    parentId: item.id,
+                                                    grandParentId: section.id
+                                                  });
+                                                  setIsEditModalOpen(true);
+                                                  setActiveRowDropdown(null);
+                                                }}
+                                                className="w-full px-4 py-2 flex items-center gap-3 text-[13px] font-semibold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
+                                              >
+                                                <Edit size={16} className="text-[#073318]" />
+                                                {t("modules:view_and_edit_category")}
+                                              </button>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleToggleStatus(
+                                                    subSub.id,
+                                                    subSub.status,
+                                                    "sub_sub_category",
+                                                  );
+                                                }}
+                                                className="w-full px-4 py-2 flex items-center gap-3 text-[13px] font-semibold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
+                                              >
+                                                {subSub.status === "INACTIVE" ? t("common:active") : t("common:inactive")}
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -930,11 +1050,10 @@ const CategoryMaster = () => {
                     key={index}
                     onClick={() => setCurrentPage(page)}
                     className={`min-w-[36px] sm:min-w-[40px] h-[36px] sm:h-[40px] rounded-[10px] flex items-center justify-center transition-all text-[13px] sm:text-[14px] font-bold
-                                            ${
-                                              currentPage === page
-                                                ? "bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100"
-                                                : "text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]"
-                                            }`}
+                                            ${currentPage === page
+                        ? "bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100"
+                        : "text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]"
+                      }`}
                   >
                     {page}
                   </button>

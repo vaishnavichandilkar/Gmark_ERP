@@ -5,10 +5,10 @@ import { toast } from 'react-hot-toast';
 import categoryService from '../../../../services/masters/categoryService';
 import { translateDynamic } from '../../../../utils/i18nUtils';
 
-const AddCategoryModal = ({ 
-    isOpen, 
-    onClose, 
-    onSuccess, 
+const AddCategoryModal = ({
+    isOpen,
+    onClose,
+    onSuccess,
     onShowToast,
     initialStep = 1,
     initialType = '',
@@ -19,9 +19,12 @@ const AddCategoryModal = ({
     const [type, setType] = useState(initialType);
     const [categoryName, setCategoryName] = useState('');
     const [parentCategory, setParentCategory] = useState(null);
+    const [subCategory, setSubCategory] = useState(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [dropdownCategories, setDropdownCategories] = useState([]);
+    const [dropdownSubCategories, setDropdownSubCategories] = useState([]);
     const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
+    const [isSubDropdownOpen, setIsSubDropdownOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const dropdownRef = useRef(null);
     const parentDropdownRef = useRef(null);
@@ -32,6 +35,8 @@ const AddCategoryModal = ({
             setType(initialType);
             setCategoryName('');
             setParentCategory(null);
+            setSubCategory(null);
+            setDropdownSubCategories([]);
             fetchDropdownData();
             document.body.style.overflow = 'hidden';
         } else {
@@ -81,17 +86,28 @@ const AddCategoryModal = ({
             return;
         }
 
+        if (type === 'Sub Sub Category' && (!parentCategory || !subCategory)) {
+            toast.error(t('modules:parent_sub_category_required', 'Parent sub category is required'));
+            return;
+        }
+
         setIsLoading(true);
         try {
             if (type === 'Category') {
                 await categoryService.createCategory({ name: categoryName });
                 onShowToast && onShowToast(t('modules:category_added_successfully'));
-            } else {
+            } else if (type === 'Sub Category') {
                 await categoryService.createSubCategory({
                     name: categoryName,
                     category_id: parentCategory.id
                 });
                 onShowToast && onShowToast(t('modules:sub_category_added_successfully'));
+            } else if (type === 'Sub Sub Category') {
+                await categoryService.createSubSubCategory({
+                    name: categoryName,
+                    sub_category_id: subCategory.id
+                });
+                onShowToast && onShowToast(t('modules:sub_sub_category_added_successfully', 'Sub Sub Category added successfully'));
             }
             onSuccess();
             onClose();
@@ -135,15 +151,19 @@ const AddCategoryModal = ({
                             onClick={() => !lockType && setIsDropdownOpen(!isDropdownOpen)}
                         >
                             <span className={`text-[14px] ${type ? 'text-[#111827] font-medium' : 'text-gray-400'}`}>
-                                {type ? (type === 'Category' ? t('modules:category') : t('modules:sub_category')) : t('modules:select_type')}
+                                {type ? (
+                                    type === 'Category' ? t('modules:category') :
+                                        type === 'Sub Category' ? t('modules:sub_category') :
+                                            t('modules:sub_sub_category', 'Sub Sub Category')
+                                ) : t('modules:select_type')}
                             </span>
                             <ChevronDown size={18} className={`text-gray-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
                         </div>
 
                         {isDropdownOpen && (
                             <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[12px] shadow-xl z-[110] py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                                {['Category', 'Sub Category'].map((opt) => {
-                                    const isDisabled = opt === 'Sub Category' && dropdownCategories.length === 0;
+                                {['Category', 'Sub Category', 'Sub Sub Category'].map((opt) => {
+                                    const isDisabled = (opt === 'Sub Category' || opt === 'Sub Sub Category') && dropdownCategories.length === 0;
                                     return (
                                         <div
                                             key={opt}
@@ -156,11 +176,16 @@ const AddCategoryModal = ({
                                             onClick={() => {
                                                 if (!isDisabled) {
                                                     setType(opt);
+                                                    setParentCategory(null);
+                                                    setSubCategory(null);
+                                                    setDropdownSubCategories([]);
                                                     setIsDropdownOpen(false);
                                                 }
                                             }}
                                         >
-                                            {opt === 'Category' ? t('modules:category') : t('modules:sub_category')}
+                                            {opt === 'Category' ? t('modules:category') :
+                                                opt === 'Sub Category' ? t('modules:sub_category') :
+                                                    t('modules:sub_sub_category', 'Sub Sub Category')}
                                         </div>
                                     );
                                 })}
@@ -172,18 +197,22 @@ const AddCategoryModal = ({
                     <div className={`space-y-6 transition-all duration-500 ease-in-out ${step === 2 ? 'max-height-expanded opacity-100 mb-6 overflow-visible' : 'max-h-0 opacity-0 invisible -mt-6 overflow-hidden'}`}>
                         <div className="space-y-2">
                             <label className="text-[13px] font-semibold text-[#4B5563]">
-                                {type === 'Category' ? t('modules:category_name') : t('modules:sub_category_name')}
+                                {type === 'Category' ? t('modules:category_name') :
+                                    type === 'Sub Category' ? t('modules:sub_category_name') :
+                                        t('modules:sub_sub_category_name', 'Sub Sub Category Name')}
                             </label>
                             <input
                                 type="text"
                                 value={categoryName}
                                 onChange={(e) => setCategoryName(e.target.value)}
-                                placeholder={type === 'Category' ? t('modules:enter_category_name') : t('modules:enter_sub_category_name')}
+                                placeholder={type === 'Category' ? t('modules:enter_category_name') :
+                                    type === 'Sub Category' ? t('modules:enter_sub_category_name') :
+                                        t('modules:enter_sub_sub_category_name', 'Enter Sub Sub Category Name')}
                                 className="w-full h-[46px] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-medium outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all placeholder:text-gray-400"
                             />
                         </div>
 
-                        {type === 'Sub Category' && (
+                        {(type === 'Sub Category' || type === 'Sub Sub Category') && (
                             <div className="space-y-2 relative" ref={parentDropdownRef}>
                                 <label className="text-[13px] font-semibold text-[#4B5563]">{t('modules:category_under')}</label>
                                 <div
@@ -202,14 +231,55 @@ const AddCategoryModal = ({
                                             <div
                                                 key={cat.id}
                                                 className={`px-4 py-3 text-[14px] cursor-pointer transition-colors ${parentCategory?.id === cat.id ? 'bg-[#F9FAFB] text-[#073318] font-bold' : 'text-[#4B5563] hover:bg-gray-50'}`}
-                                                onClick={() => {
+                                                onClick={async () => {
                                                     setParentCategory(cat);
+                                                    setSubCategory(null);
                                                     setIsParentDropdownOpen(false);
+                                                    if (type === 'Sub Sub Category') {
+                                                        const subs = await categoryService.getSubCategoriesDropdown(cat.id);
+                                                        setDropdownSubCategories(subs || []);
+                                                    }
                                                 }}
                                             >
                                                 {cat.name}
                                             </div>
                                         ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {type === 'Sub Sub Category' && (
+                            <div className="space-y-2 relative">
+                                <label className="text-[13px] font-semibold text-[#4B5563]">{t('modules:sub_category_under', 'Sub Category Under')}</label>
+                                <div
+                                    className={`w-full h-[46px] border rounded-[10px] flex items-center justify-between px-4 transition-all ${!parentCategory ? 'bg-gray-50 cursor-not-allowed border-[#E5E7EB]' : 'cursor-pointer hover:border-gray-300 bg-white'} ${isSubDropdownOpen ? 'border-[#073318] ring-4 ring-[#073318]/5' : 'border-[#E5E7EB]'}`}
+                                    onClick={() => parentCategory && setIsSubDropdownOpen(!isSubDropdownOpen)}
+                                >
+                                    <span className={`text-[14px] ${subCategory ? 'text-[#111827] font-medium' : 'text-gray-400'}`}>
+                                        {subCategory ? subCategory.name : t('modules:select_sub_category', 'Select Sub Category')}
+                                    </span>
+                                    <ChevronDown size={18} className={`text-gray-400 transition-transform duration-200 ${isSubDropdownOpen ? 'rotate-180' : ''}`} />
+                                </div>
+
+                                {isSubDropdownOpen && (
+                                    <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[12px] shadow-xl z-[110] py-2 max-h-[160px] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                                        {dropdownSubCategories.length > 0 ? (
+                                            dropdownSubCategories.map((sub) => (
+                                                <div
+                                                    key={sub.id}
+                                                    className={`px-4 py-3 text-[14px] cursor-pointer transition-colors ${subCategory?.id === sub.id ? 'bg-[#F9FAFB] text-[#073318] font-bold' : 'text-[#4B5563] hover:bg-gray-50'}`}
+                                                    onClick={() => {
+                                                        setSubCategory(sub);
+                                                        setIsSubDropdownOpen(false);
+                                                    }}
+                                                >
+                                                    {sub.name}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="px-4 py-3 text-[13px] text-gray-400 italic">No sub categories found</div>
+                                        )}
                                     </div>
                                 )}
                             </div>

@@ -23,6 +23,17 @@ export class CategoryMasterRepository {
         });
     }
 
+    async createSubSubCategory(data: { name: string; sub_category_id: number; user_id: number; status?: MasterStatus }) {
+        return this.prisma.subSubCategory.create({
+            data: {
+                name: data.name,
+                user_id: data.user_id,
+                sub_category_id: data.sub_category_id,
+                status: data.status
+            },
+        });
+    }
+
     async findCategoryByName(name: string, userId: number) {
         return this.prisma.category.findUnique({
             where: {
@@ -46,6 +57,18 @@ export class CategoryMasterRepository {
         });
     }
 
+    async findSubSubCategoryByName(name: string, subCategoryId: number, userId: number) {
+        return this.prisma.subSubCategory.findUnique({
+            where: {
+                name_sub_category_id_user_id: {
+                    name,
+                    sub_category_id: subCategoryId,
+                    user_id: userId
+                }
+            },
+        });
+    }
+
     async findCategoryById(id: number) {
         return this.prisma.category.findUnique({
             where: { id },
@@ -56,7 +79,14 @@ export class CategoryMasterRepository {
     async findSubCategoryById(id: number) {
         return this.prisma.subCategory.findUnique({
             where: { id },
-            include: { category: true }
+            include: { category: true, sub_sub_categories: true }
+        });
+    }
+
+    async findSubSubCategoryById(id: number) {
+        return this.prisma.subSubCategory.findUnique({
+            where: { id },
+            include: { sub_category: { include: { category: true } } }
         });
     }
 
@@ -76,12 +106,47 @@ export class CategoryMasterRepository {
         });
     }
 
+    async getSubCategoriesForDropdown(userId: number, categoryId: number) {
+        return this.prisma.subCategory.findMany({
+            where: {
+                user_id: userId,
+                category_id: categoryId,
+                status: 'ACTIVE',
+            },
+            select: {
+                id: true,
+                name: true,
+            },
+            orderBy: { name: 'asc' },
+        });
+    }
+
+    async getSubSubCategoriesForDropdown(userId: number, subCategoryId: number) {
+        return this.prisma.subSubCategory.findMany({
+            where: {
+                user_id: userId,
+                sub_category_id: subCategoryId,
+                status: 'ACTIVE',
+            },
+            select: {
+                id: true,
+                name: true,
+            },
+            orderBy: { name: 'asc' },
+        });
+    }
+
     async getCategoryWithSubCategories(userId: number) {
         return this.prisma.category.findMany({
             where: { user_id: userId },
             include: {
                 sub_categories: {
-                    orderBy: { name: 'asc' }
+                    orderBy: { name: 'asc' },
+                    include: {
+                        sub_sub_categories: {
+                            orderBy: { name: 'asc' }
+                        }
+                    }
                 }
             },
             orderBy: { name: 'asc' },
@@ -102,9 +167,37 @@ export class CategoryMasterRepository {
         });
     }
 
+    async toggleSubSubCategoryStatus(id: number, status: MasterStatus) {
+        return this.prisma.subSubCategory.update({
+            where: { id },
+            data: { status },
+        });
+    }
+
     async updateSubCategoriesStatusByCategory(categoryId: number, status: MasterStatus) {
         return this.prisma.subCategory.updateMany({
             where: { category_id: categoryId },
+            data: { status },
+        });
+    }
+
+    async updateSubSubCategoriesStatusBySubCategory(subCategoryId: number, status: MasterStatus) {
+        return this.prisma.subSubCategory.updateMany({
+            where: { sub_category_id: subCategoryId },
+            data: { status },
+        });
+    }
+
+    async updateSubSubCategoriesStatusByCategory(categoryId: number, status: MasterStatus) {
+        // Find all sub-categories of this category first
+        const subs = await this.prisma.subCategory.findMany({
+            where: { category_id: categoryId },
+            select: { id: true }
+        });
+        const subIds = subs.map(s => s.id);
+
+        return this.prisma.subSubCategory.updateMany({
+            where: { sub_category_id: { in: subIds } },
             data: { status },
         });
     }
@@ -133,15 +226,33 @@ export class CategoryMasterRepository {
         });
     }
 
+    async updateSubSubCategoryContent(id: number, name: string, sub_category_id?: number) {
+        return this.prisma.subSubCategory.update({
+            where: { id },
+            data: {
+                name,
+                ...(sub_category_id !== undefined && { sub_category_id })
+            }
+        });
+    }
+
     async promoteSubCategory(subCategoryId: number, userId: number) {
         return this.prisma.$transaction(async (tx) => {
             const subCategory = await tx.subCategory.findUnique({
                 where: { id: subCategoryId },
-                include: { products: true },
+                include: {
+                    products: true,
+                    sub_sub_categories: true
+                },
             });
 
             if (!subCategory || subCategory.user_id !== userId) {
                 throw new Error('Sub-category not found.');
+            }
+
+            // NEW RULE: Cannot promote if has sub-sub-categories
+            if (subCategory.sub_sub_categories && subCategory.sub_sub_categories.length > 0) {
+                throw new Error('SubCategory cannot be moved because it has SubSubCategories');
             }
 
             // Check if name already exists as a major Category
@@ -247,5 +358,17 @@ export class CategoryMasterRepository {
 
             return newSubCategory;
         });
+    }
+
+    async hasChildren(id: number, type: 'category' | 'sub_category' | 'sub_sub_category'): Promise<boolean> {
+        if (type === 'category') {
+            const count = await this.prisma.subCategory.count({ where: { category_id: id } });
+            return count > 0;
+        }
+        if (type === 'sub_category') {
+            const count = await this.prisma.subSubCategory.count({ where: { sub_category_id: id } });
+            return count > 0;
+        }
+        return false; // SubSubCategory has no children
     }
 }
