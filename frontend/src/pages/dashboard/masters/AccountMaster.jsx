@@ -114,11 +114,17 @@ const AccountMaster = () => {
 
     useEffect(() => {
         const handleClickOutside = (event) => {
+            // Check if click was outside both desktop and mobile export triggers/menus
+            const isOutsideExport = 
+                (!exportRef.current || !exportRef.current.contains(event.target)) &&
+                !event.target.closest('.mobile-export-trigger');
+            
+            if (isOutsideExport) {
+                setIsExportOpen(false);
+            }
+            
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
                 setDropdownIndex(null);
-            }
-            if (exportRef.current && !exportRef.current.contains(event.target)) {
-                setIsExportOpen(false);
             }
         };
         const handleEsc = (event) => {
@@ -199,51 +205,40 @@ const AccountMaster = () => {
         showToast("Data refreshed successfully");
     };
 
-     const handleExportPDF = () => {
+    const handleExportPDF = async () => {
         setIsExportOpen(false);
-        const doc = new jsPDF('landscape');
-        const tableColumn = ["Customer Code", "Supplier Code", "Account", "Type", "Credit Days", "GST No", "PAN No", "Balance", "Status"];
-        const tableRows = paginatedData.map(acc => [
-            acc.customerCode || '-',
-            acc.supplierCode || '-',
-            acc.accountName,
-            acc.groupName?.includes('SUNDRY_DEBTORS') ? 'Customer' : 'Supplier',
-            acc.customerCreditDays || 0,
-            acc.gstNo || '-',
-            acc.panNo || '-',
-            acc.customerOpeningBalance || 0,
-            acc.status
-        ]);
-
-        doc.autoTable({
-            head: [tableColumn],
-            body: tableRows,
-            startY: 20,
-            theme: 'grid',
-            headStyles: { fillColor: [7, 51, 24] },
-        });
-        doc.text("Account Master Report", 14, 15);
-        doc.save("account-master.pdf");
+        try {
+            const response = await accountService.exportAccounts({ format: 'pdf', search: searchQuery, ...appliedFilters });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `account_master_export_${Date.now()}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            showToast('PDF Exported Successfully');
+        } catch (e) {
+            console.error('Export failed', e);
+            showToast('Failed to export PDF', 'error');
+        }
     };
 
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
         setIsExportOpen(false);
-        const dataToExport = paginatedData.map(acc => ({
-            "Customer Code": acc.customerCode || '',
-            "Supplier Code": acc.supplierCode || '',
-            "Account Name": acc.accountName,
-            "Account Type": acc.groupName || '',
-            "GST Number": acc.gstNo || '',
-            "PAN Number": acc.panNo || '',
-            "Credit Days": acc.customerCreditDays || 0,
-            "Opening Balance": acc.customerOpeningBalance || 0,
-            "Status": acc.status
-        }));
-
-        const ws = XLSX.utils.json_to_sheet(dataToExport);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Accounts");
-        XLSX.writeFile(wb, "account-master.xlsx");
+        try {
+            const response = await accountService.exportAccounts({ format: 'xlsx', search: searchQuery, ...appliedFilters });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `account_master_export_${Date.now()}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            showToast('Excel Exported Successfully');
+        } catch (e) {
+            console.error('Export failed', e);
+            showToast('Failed to export Excel', 'error');
+        }
     };
 
     const handleImportExcel = async (formData) => {
@@ -334,112 +329,155 @@ const AccountMaster = () => {
 
     return (
         <div className="flex flex-col font-['Plus_Jakarta_Sans'] w-full animate-in fade-in duration-500">
-            <div className="flex flex-col gap-1 mb-8">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('modules:account_master')}</h1>
+            <div className="flex flex-col gap-1 mb-4 md:mb-8">
+                {/* Desktop Header */}
+                <div className="hidden md:flex flex-row items-center justify-between gap-4">
+                    <div className="flex flex-col gap-1">
+                        <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('modules:account_master')}</h1>
+                        <p className="text-[#6B7280] text-[15px] font-medium leading-relaxed max-w-[600px]">{t('modules:account_master_desc', 'View, search, and manage all accounts in your system')}</p>
+                    </div>
                     <button 
                         onClick={() => { setPreviousView(null); setCurrentView('add'); }}
-                        className="flex items-center gap-2 bg-[#073318] hover:bg-[#04200f] text-white px-6 h-[44px] rounded-[10px] text-[15px] font-semibold transition-all shadow-sm active:scale-[0.98]"
+                        className="flex flex-row items-center justify-center gap-2 bg-[#073318] hover:bg-[#04200f] text-white px-6 h-[44px] rounded-[10px] text-[15px] font-bold transition-all shadow-sm active:scale-[0.98] shrink-0 whitespace-nowrap"
                     >
+                        <Plus size={18} />
                         {t('modules:add_account')}
                     </button>
                 </div>
-                <p className="text-[#6B7280] text-[15px]">{t('modules:account_master_desc', 'View, search, and manage all accounts in your system')}</p>
+
+                {/* Mobile Header - Stacked Layout */}
+                <div className="md:hidden flex flex-col gap-3">
+                    <div className="flex flex-col gap-1">
+                        <h1 className="text-[24px] font-bold text-[#111827] tracking-tight">{t('modules:account_master')}</h1>
+                        <p className="text-[#6B7280] text-[14px] font-medium leading-relaxed">{t('modules:account_master_desc', 'View, search, and manage all accounts in your system')}</p>
+                    </div>
+                    <button
+                        onClick={() => { setPreviousView(null); setCurrentView('add'); }}
+                        className="flex flex-row items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-fit self-end whitespace-nowrap"
+                    >
+                        <Plus size={18} strokeWidth={3} />
+                        <span className="whitespace-nowrap">{t('modules:add_account')}</span>
+                    </button>
+                </div>
             </div>
 
-            <div className="master-table-container">
-                <div className="flex flex-col sm:flex-row items-center justify-between p-6 border-b border-[#F3F4F6] gap-4">
-                    <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                        <div className="relative w-full sm:w-[320px]">
+            {/* Content Container - Mobile Optimized */}
+            <div className={`master-table-container !bg-transparent !shadow-none !border-none md:!bg-white md:!shadow-[0_4px_20px_rgba(0,0,0,0.03)] md:!border md:!border-[#E5E7EB] mb-8 ${typeof activeRowDropdown !== 'undefined' && activeRowDropdown ? '!overflow-visible' : ''}`}>
+                {/* Desktop Action Bar */}
+                <div className="hidden md:flex items-center justify-between p-6 border-b border-[#F3F4F6] bg-white gap-4 rounded-t-[16px]">
+                    <div className="flex items-center gap-3 flex-1">
+                        <div className="relative flex-1 max-w-[320px]">
                             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                             <input
                                 type="text"
                                 placeholder={t('common:search_by_anything')}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all placeholder:text-gray-400 shadow-sm"
+                                className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none focus:border-[#073318] transition-all placeholder:text-gray-400 shadow-sm"
                             />
                             {searchQuery && (
-                                <button 
-                                    onClick={() => setSearchQuery('')}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                                >
+                                <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <X size={16} />
                                 </button>
                             )}
                         </div>
-                        <button 
-                            onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)} 
-                            className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all shadow-sm
-                                ${isFilterApplied 
-                                    ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' 
-                                    : 'bg-white border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
-                        >
+                        <button onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)} className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all shadow-sm ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-white border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}>
                             <Filter size={18} className={isFilterApplied ? "text-red-500" : "text-gray-400"} />
                             {isFilterApplied ? t('common:clear', 'Clear') : t('common:filter', 'Filter')}
                         </button>
-                        <button
-                            onClick={handleRefresh}
-                            className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] hover:bg-gray-50 transition-colors bg-white shadow-sm"
-                            title="Refresh Data"
-                        >
+                        <button onClick={handleRefresh} className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] hover:bg-gray-50 bg-white">
                             <RefreshCw size={18} className="text-gray-400" />
                         </button>
                     </div>
-
-                    <div className="relative flex items-center gap-3" ref={exportRef}>
-                        <button
-                            onClick={() => setIsImportModalOpen(true)}
-                            className="flex items-center justify-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all duration-200 bg-white shadow-sm"
-                        >
+                    <div className="flex items-center gap-3" ref={exportRef}>
+                        <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all duration-200 bg-white">
                             <Upload size={18} className="text-gray-400" />
-                            {t('common:import', 'Import')}
+                            {t('common:import')}
                         </button>
-                        <ImportModal
-                            isOpen={isImportModalOpen}
-                            onClose={() => setIsImportModalOpen(false)}
-                            onImport={handleImportExcel}
-                            onDownloadSample={async () => {
-                                const response = await accountService.downloadSample();
-                                const url = window.URL.createObjectURL(new Blob([response.data]));
-                                const link = document.createElement('a');
-                                link.href = url;
-                                link.setAttribute('download', 'Account_Master_Sample.xlsx');
-                                document.body.appendChild(link);
-                                link.click();
-                                link.parentNode.removeChild(link);
-                            }}
-                            sampleFileName="Account_Master_Sample.xlsx"
-                            sampleHeaders={['Account Name*', 'Group Name*', 'GST NO', 'PAN NO*', 'Address1*', 'Address2', 'Pincode*', 'Area', 'Sub District', 'District', 'State', 'Country', 'Supplier Credit Days', 'Supplier Opening Balance', 'Customer Credit Days', 'Customer Opening Balance', 'Customer Type', 'MSME Enabled', 'MSME ID', 'Reg.Under', 'Reg.Type', 'Status']}
-                        />
+                        <div className="relative">
+                            <button onClick={() => setIsExportOpen(!isExportOpen)} className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563]'}`}>
+                                <Download size={18} />
+                                {t('common:export')}
+                            </button>
+                            {isExportOpen && (
+                                <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-50 py-2">
+                                    <button onClick={handleExportPDF} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
+                                        <FileText size={18} className="text-red-500" /> PDF
+                                    </button>
+                                    <button onClick={handleExportExcel} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
+                                        <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
 
-                        <button 
-                            onClick={() => setIsExportOpen(!isExportOpen)}
-                            className={`flex items-center justify-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all duration-200 bg-white
-                                ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
-                        >
-                            <Download size={18} className={isExportOpen ? 'text-[#073318]' : 'text-gray-400'} />
-                            {t('common:export')}
-                        </button>
+                {/* Mobile Action Bar - Optimized One-line Layout */}
+                <div className="md:hidden mt-2 p-0 w-full mb-3">
+                    <div className="flex items-center gap-1.5 h-[48px]">
+                        {/* Compact Search */}
+                        <div className="flex-1 relative h-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                            <input
+                                type="text"
+                                placeholder={t('common:search')}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full h-full bg-white border border-[#E5E7EB] rounded-[12px] pl-8 pr-8 text-[14px] outline-none shadow-sm placeholder:text-gray-400 font-medium"
+                            />
+                            {searchQuery && (
+                                <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400">
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
 
-                        {isExportOpen && (
-                            <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-[50] py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {/* Control Buttons Group */}
+                        <div className="flex items-center gap-1 h-full">
+                            <button
+                                onClick={handleRefresh}
+                                className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-400"
+                                title={t('common:refresh')}
+                            >
+                                <RefreshCw size={18} />
+                            </button>
+
+                            <button
+                                onClick={() => setIsImportModalOpen(true)}
+                                className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-400"
+                                title={t('common:import')}
+                            >
+                                <Upload size={18} />
+                            </button>
+
+                            <div className="relative mobile-export-trigger">
                                 <button
-                                    onClick={handleExportPDF}
-                                    className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors"
+                                    onClick={() => setIsExportOpen(!isExportOpen)}
+                                    className={`w-[44px] h-[44px] flex items-center justify-center border rounded-[12px] shadow-sm transition-all active:scale-95 ${isExportOpen ? "bg-[#073318] border-[#073318] text-white" : "bg-white border-[#E5E7EB] text-gray-400"}`}
                                 >
-                                    <FileText size={18} className="text-red-500" />
-                                    {t('common:pdf')}
+                                    <Download size={18} />
                                 </button>
-                                <button
-                                    onClick={handleExportExcel}
-                                    className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors"
-                                >
-                                    <FileSpreadsheet size={18} className="text-green-600" />
-                                    {t('common:excel')}
-                                </button>
+                                {isExportOpen && (
+                                    <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-2xl z-[100] py-1 overflow-hidden">
+                                        <button onClick={handleExportPDF} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50">
+                                            <FileText size={16} className="text-red-500" /> PDF
+                                        </button>
+                                        <button onClick={handleExportExcel} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50 border-t border-gray-50">
+                                            <FileSpreadsheet size={16} className="text-green-600" /> Excel
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-                        )}
+
+                            <button
+                                onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
+                                className={`w-[44px] h-[44px] flex items-center justify-center border rounded-[12px] shadow-sm transition-all active:scale-95 ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-[#E5E7EB] text-gray-400'}`}
+                                title={isFilterApplied ? t('common:clear') : t('common:filter')}
+                            >
+                                <Filter size={18} />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -447,85 +485,85 @@ const AccountMaster = () => {
                     <table className="master-table min-w-[1200px]">
                         <thead>
                             <tr>
-                                <th className="border-r border-white/10 uppercase tracking-tight">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
                                     <div className="flex items-center gap-2">
                                         {t('modules:customer_code')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="border-r border-white/10 uppercase tracking-tight">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
                                     <div className="flex items-center gap-2">
                                         {t('modules:supplier_code')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="border-r border-white/10">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                                     <div className="flex items-center gap-2 uppercase tracking-tight text-left">
                                         {t('modules:account')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="border-r border-white/10 uppercase tracking-tight">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
                                     <div className="flex items-center gap-2">
                                         {t('modules:account_type')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="border-r border-white/10 uppercase tracking-tight">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
                                     <div className="flex items-center gap-2">
                                         {t('modules:customer_type', 'Customer Type')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="border-r border-white/10 uppercase tracking-tight">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
                                     <div className="flex items-center gap-2">
                                         {t('modules:customer_credit_days')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="border-r border-white/10 uppercase tracking-tight">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
                                     <div className="flex items-center gap-2">
                                         {t('modules:supplier_credit_days')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="border-r border-white/10">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                                     <div className="flex items-center gap-2 uppercase tracking-tight">
                                         {t('modules:gst_no')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="border-r border-white/10">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                                     <div className="flex items-center gap-2 uppercase tracking-tight">
                                         {t('modules:pan_no')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="border-r border-white/10 uppercase tracking-tight">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
                                     <div className="flex items-center gap-2">
                                         {t('modules:customer_op_balance')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="border-r border-white/10 uppercase tracking-tight">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
                                     <div className="flex items-center gap-2">
                                         {t('modules:supplier_op_balance')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="border-r border-white/10">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                                     <div className="flex items-center gap-2 uppercase tracking-tight">
                                         {t('common:address')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="border-r border-white/10">
+                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                                     <div className="flex items-center gap-2 uppercase tracking-tight">
                                         {t('common:status')}
                                         <ChevronsUpDown size={14} className="text-gray-300" />
                                     </div>
                                 </th>
-                                <th className="text-center uppercase tracking-tight">{t('common:action')}</th>
+                                <th className="px-3 md:px-6 py-3 md:py-4 text-center uppercase tracking-tight">{t('common:action')}</th>
                             </tr>
                         </thead>
                         <tbody className="text-[14px] text-[#111827]">
@@ -540,37 +578,37 @@ const AccountMaster = () => {
                                 </tr>
                             ) : paginatedData.length > 0 ? paginatedData.map((row, index) => (
                                 <tr key={index} className="border-b border-[#F3F4F6] last:border-b-0 hover:bg-[#F9FAFB] transition-all group">
-                                    <td className="px-6 py-5 text-gray-500 font-medium border-r border-[#F3F4F6]">{row.customerCode || '-'}</td>
-                                    <td className="px-6 py-5 text-gray-500 font-medium border-r border-[#F3F4F6]">{row.supplierCode || '-'}</td>
-                                    <td className="px-6 py-5 font-bold text-[#111827] border-r border-[#F3F4F6]">{row.accountName}</td>
-                                    <td className="px-6 py-5 border-r border-[#F3F4F6]">
+                                    <td className="px-3 md:px-6 py-3 md:py-4 text-gray-500 font-medium border-r border-[#F3F4F6]">{row.customerCode || '-'}</td>
+                                    <td className="px-3 md:px-6 py-3 md:py-4 text-gray-500 font-medium border-r border-[#F3F4F6]">{row.supplierCode || '-'}</td>
+                                    <td className="px-3 md:px-6 py-3 md:py-4 font-bold text-[#111827] border-r border-[#F3F4F6]">{row.accountName}</td>
+                                    <td className="px-3 md:px-6 py-3 md:py-4 border-r border-[#F3F4F6]">
                                         <div className="flex gap-1.5 flex-wrap">
                                             {row.groupName?.includes('SUNDRY_DEBTORS') && <span className="px-2 py-0.5 bg-[#073318]/10 text-[#073318] rounded text-[11px] font-bold uppercase tracking-wider">{t('modules:customer')}</span>}
                                             {row.groupName?.includes('SUNDRY_CREDITORS') && <span className="px-2 py-0.5 bg-[#4B5563]/10 text-[#4B5563] rounded text-[11px] font-bold uppercase tracking-wider">{t('modules:sundry_creditors')}</span>}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-5 text-[#4B5563] font-medium border-r border-[#F3F4F6] capitalize">
+                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6] capitalize">
                                         {row.customerType ? row.customerType.toLowerCase() : '-'}
                                     </td>
-                                    <td className="px-6 py-5 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.customerCreditDays || 0}</td>
-                                    <td className="px-6 py-5 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.supplierCreditDays || 0}</td>
-                                    <td className="px-6 py-5 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.gstNo || '-'}</td>
-                                    <td className="px-6 py-5 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.panNo || '-'}</td>
-                                    <td className="px-6 py-5 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.customerOpeningBalance || 0}</td>
-                                    <td className="px-6 py-5 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.supplierOpeningBalance || 0}</td>
-                                    <td className="px-6 py-5 text-[#6B7280] max-w-[200px] truncate border-r border-[#F3F4F6]" title={row.addressLine1}>{row.addressLine1 || '-'}</td>
-                                    <td className="px-6 py-5 border-r border-[#F3F4F6]">
+                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.customerCreditDays || 0}</td>
+                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.supplierCreditDays || 0}</td>
+                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.gstNo || '-'}</td>
+                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.panNo || '-'}</td>
+                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.customerOpeningBalance || 0}</td>
+                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.supplierOpeningBalance || 0}</td>
+                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#6B7280] max-w-[200px] truncate border-r border-[#F3F4F6]" title={row.addressLine1}>{row.addressLine1 || '-'}</td>
+                                    <td className="px-3 md:px-6 py-3 md:py-4 border-r border-[#F3F4F6]">
                                         <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${row.status === 'ACTIVE' ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
                                             <span className={`w-1.5 h-1.5 rounded-full ${row.status === 'ACTIVE' ? 'bg-[#059669]' : 'bg-[#DC2626]'}`}></span>
                                             {row.status === 'ACTIVE' ? t('common:active') : t('common:inactive')}
                                         </div>
                                     </td>
-                                    <td className={`px-6 py-5 text-center relative ${dropdownIndex === index ? 'z-[100]' : ''}`} ref={dropdownIndex === index ? dropdownRef : null}>
+                                    <td className={`px-3 md:px-6 py-3 md:py-4 text-center relative ${dropdownIndex === index ? 'z-[100]' : ''}`} ref={dropdownIndex === index ? dropdownRef : null}>
                                         <button
                                             onClick={(e) => toggleDropdown(index, e)}
                                             className={`p-2 rounded-lg transition-all ${dropdownIndex === index ? 'bg-gray-100 text-[#111827]' : 'text-gray-400 hover:bg-gray-100 hover:text-[#111827]'}`}
                                         >
-                                            < MoreVertical size={20} />
+                                            <MoreVertical size={20} />
                                         </button>
 
                                         {dropdownIndex === index && (
@@ -616,48 +654,53 @@ const AccountMaster = () => {
                     </table>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center justify-between px-8 py-6 border-t border-[#F3F4F6] bg-white gap-4">
-                    <div className="flex items-center gap-3 text-[14px] text-[#6B7280] font-medium">
-                        <span>{t('common:show')}</span>
-                        <div className="relative group">
-                            <select 
-                                value={rowsPerPage}
-                                onChange={(e) => {
-                                    setRowsPerPage(Number(e.target.value));
-                                    setCurrentPage(1);
-                                }}
-                                className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#073318] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
-                            >
-                                <option value={5}>5</option>
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                                <option value={50}>50</option>
-                            </select>
-                            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]" />
+                <div className="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-5 sm:py-6 border-t border-[#F3F4F6] bg-white gap-6">
+                    <div className="flex items-center justify-between w-full sm:w-auto gap-3 text-[14px] text-[#6B7280] font-medium order-2 sm:order-1 border-t sm:border-0 pt-4 sm:pt-0">
+                        <div className="flex items-center gap-2">
+                            <span>{t('common:show')}</span>
+                            <div className="relative group">
+                                <select 
+                                    value={rowsPerPage}
+                                    onChange={(e) => {
+                                        setRowsPerPage(Number(e.target.value));
+                                        setCurrentPage(1);
+                                    }}
+                                    className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#073318] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
+                                >
+                                    <option value={5}>5</option>
+                                    <option value={10}>10</option>
+                                    <option value={20}>20</option>
+                                    <option value={50}>50</option>
+                                </select>
+                                <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]" />
+                            </div>
+                            <span>{t('common:per_page')}</span>
                         </div>
-                        <span>{t('common:per_page')}</span>
+                        <span className="sm:hidden text-gray-400">
+                             {totalItems > 0 ? `${startIndex + 1}-${endIndex} / ${totalItems}` : `0-0 / 0`}
+                        </span>
                     </div>
 
-                    <div className="flex items-center gap-6">
-                        <span className="text-[#6B7280] text-[14px] font-medium">
+                    <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full sm:w-auto order-1 sm:order-2">
+                        <span className="hidden sm:inline text-[#6B7280] text-[14px] font-medium">
                             {totalItems > 0 ? `${startIndex + 1}-${endIndex} of ${totalItems}` : `0-0 of 0`}
                         </span>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1.5 w-full sm:w-auto">
                             <button 
                                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                                 disabled={currentPage === 1}
-                                className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px]"
+                                className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
                             >
-                                <ArrowLeft size={20} />
+                                <ArrowLeft size={18} />
                             </button>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-[180px] sm:max-w-none px-1">
                                 {getVisiblePages().map((page, index) => (
                                     <button 
                                         key={index}
                                         onClick={() => setCurrentPage(page)}
-                                        className={`w-10 h-10 rounded-[10px] flex items-center justify-center transition-all text-[14px] font-bold
+                                        className={`min-w-[36px] sm:min-w-[40px] h-[36px] sm:h-[40px] rounded-[10px] flex items-center justify-center transition-all text-[13px] sm:text-[14px] font-bold
                                             ${currentPage === page
-                                                ? 'bg-[#F9FAFB] text-[#111827] shadow-sm'
+                                                ? 'bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100'
                                                 : 'text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]'
                                             }`}
                                     >
@@ -668,9 +711,9 @@ const AccountMaster = () => {
                             <button 
                                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                 disabled={currentPage === totalPages || totalPages === 0}
-                                className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px]"
+                                className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
                             >
-                                <ArrowRight size={20} />
+                                <ArrowRight size={18} />
                             </button>
                         </div>
                     </div>
@@ -810,6 +853,25 @@ const AccountMaster = () => {
                     message={toastMessage.message} 
                     type={toastMessage.type}
                     onClose={() => setToastMessage({ ...toastMessage, show: false })} 
+                />
+            )}
+            {isImportModalOpen && (
+                <ImportModal
+                    isOpen={isImportModalOpen}
+                    onClose={() => setIsImportModalOpen(false)}
+                    onImport={handleImportExcel}
+                    onDownloadSample={async () => {
+                        const response = await accountService.downloadSample();
+                        const url = window.URL.createObjectURL(new Blob([response.data]));
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.setAttribute('download', 'Account_Master_Sample.xlsx');
+                        document.body.appendChild(link);
+                        link.click();
+                        link.parentNode.removeChild(link);
+                    }}
+                    sampleFileName="Account_Master_Sample.xlsx"
+                    sampleHeaders={['Account Name*', 'Group Name*', 'GST NO', 'PAN NO*', 'Address1*', 'Address2', 'Pincode*', 'Area', 'Sub District', 'District', 'State', 'Country', 'Supplier Credit Days', 'Supplier Opening Balance', 'Customer Credit Days', 'Customer Opening Balance', 'Customer Type', 'MSME Enabled', 'MSME ID', 'Reg.Under', 'Reg.Type', 'Status']}
                 />
             )}
         </div>

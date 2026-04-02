@@ -1,8 +1,9 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import html2pdf from "html2pdf.js";
 import { toast } from 'react-hot-toast';
+import axiosInstance from '../../../services/axiosInstance';
 
 const POPrintPreview = () => {
     const location = useLocation();
@@ -10,6 +11,29 @@ const POPrintPreview = () => {
     const poData = location.state?.poData;
     const printRef = useRef(null);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [sellerInfo, setSellerInfo] = useState(null);
+
+    useEffect(() => {
+        const fetchSellerInfo = async () => {
+            try {
+                const response = await axiosInstance.get('/business/profile');
+                if (response.data) {
+                    const { shopDetail, phone, email } = response.data;
+                    setSellerInfo({
+                        shopName: shopDetail?.shopName || "ARDHYA AGRO SERVICE",
+                        address: shopDetail ? `${shopDetail.address}, ${shopDetail.village || ''}, ${shopDetail.district}, ${shopDetail.state} - ${shopDetail.pinCode}` : "Near Mahalaxmi Temple, Hitani",
+                        phone: phone || "+91 2855943035",
+                        email: email || "ardhya123@gmail.com",
+                        website: "ardhyaagro.in", // Default since not in current schema but requested
+                        gstNumber: shopDetail?.gstNumber || "27ABCDE1234F1Z5"
+                    });
+                }
+            } catch (error) {
+                console.error("Error fetching seller profile:", error);
+            }
+        };
+        fetchSellerInfo();
+    }, []);
 
     if (!poData) {
         return (
@@ -24,6 +48,20 @@ const POPrintPreview = () => {
             </div>
         );
     }
+
+    const formatDate = (dateStr) => {
+        if (!dateStr || dateStr === "N/A") return "-";
+        try {
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return dateStr;
+            const d = String(date.getDate()).padStart(2, '0');
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const y = date.getFullYear();
+            return `${d}-${m}-${y}`;
+        } catch (e) {
+            return dateStr;
+        }
+    };
 
     const {
         po_number: po_no = "N/A",
@@ -109,7 +147,6 @@ const POPrintPreview = () => {
                 }
             };
 
-            // Use html2pdf to capture the exact UI
             await html2pdf().set(opt).from(element).save();
 
             toast.success('PDF Downloaded successfully!', { id: loadToastId });
@@ -219,13 +256,13 @@ const POPrintPreview = () => {
                     <div className="w-full border-black border flex flex-col">
                         <div className="border-b border-black p-4 py-3 flex items-center justify-center relative min-h-[85px]">
                             <div className="absolute left-6 w-14 h-14 bg-[#014A36] rounded-full"></div>
-                            <h1 className="text-[26px] font-black uppercase">ARDHYA AGRO SERVICE</h1>
+                            <h1 className="text-[26px] font-black uppercase text-center">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</h1>
                         </div>
                         <div className="border-b border-black py-2.5 text-center text-[12.5px] font-semibold">
-                            Near Mahalaxmi Temple, Hitani
+                            {sellerInfo?.address || "Near Mahalaxmi Temple, Hitani"}
                         </div>
                         <div className="border-b border-black py-2.5 text-center text-[11px] font-semibold tracking-wide">
-                            Phone No.: +91 2855943035 &nbsp; Email Id: ardhya123@gmail.com &nbsp; Website: ardhyaagro.in
+                            Phone No.: {sellerInfo?.phone || "+91 2855943035"} &nbsp; Email Id: {sellerInfo?.email || "ardhya123@gmail.com"} &nbsp; Website: {sellerInfo?.website || "ardhyaagro.in"}
                         </div>
                         <div className="border-b border-black py-3 text-center font-black text-[15px] uppercase tracking-[3px]" style={{ backgroundColor: 'rgba(249, 250, 251, 0.1)' }}>
                             PURCHASE ORDER
@@ -233,12 +270,12 @@ const POPrintPreview = () => {
 
                         {/* GST Row */}
                         <div className="flex border-b border-black text-[12px] font-black">
-                            <div className="w-[38%] py-3 px-4">GSTIN : 27ABCDE1234F1Z5</div>
+                            <div className="w-[38%] py-3 px-4">GSTIN : {sellerInfo?.gstNumber || "27ABCDE1234F1Z5"}</div>
                             <div className="w-[30%] py-3 px-4 text-center">State Code : 27 Maharashtra</div>
                             <div className="flex-1 py-3 px-4 text-right pr-6 uppercase whitespace-nowrap">PAN No : ABCDE1235F</div>
                         </div>
 
-                        <div className="flex border-b border-black min-h-[132px]">
+                        <div className="flex border-b border-black min-h-[160px]">
                             {/* Left Half: Supplier */}
                             <div className="w-1/2 flex flex-col border-r border-black">
                                 <div className="border-b border-black flex items-center px-4 h-[44px] gap-4">
@@ -259,11 +296,11 @@ const POPrintPreview = () => {
                                 <div className="flex border-b border-black h-[44px]">
                                     <div className="w-[40%] flex items-center px-4 gap-4">
                                         <span className="font-black text-[11px] whitespace-nowrap">PO No. :</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{po_no || "PO000004"}</span>
+                                        <span className="font-semibold text-[11px] whitespace-nowrap">{po_no}</span>
                                     </div>
                                     <div className="flex-1 flex items-center px-4 gap-4 border-l" style={{ borderColor: 'rgba(0, 0, 0, 0.1)' }}>
                                         <span className="font-black text-[11px] whitespace-nowrap">PO Creation Date :</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{po_creation_date || "04-03-2026"}</span>
+                                        <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(po_creation_date)}</span>
                                     </div>
                                 </div>
                                 <div className="flex-1 border-b border-black flex items-center px-4 py-2.5 gap-4">
@@ -272,7 +309,7 @@ const POPrintPreview = () => {
                                 </div>
                                 <div className="flex items-center px-4 h-[44px] gap-4">
                                     <span className="font-black text-[12px] min-w-[80px]">Expiry Date:</span>
-                                    <span className="font-semibold text-[12px]">{expiry_date}</span>
+                                    <span className="font-semibold text-[12px]">{formatDate(expiry_date)}</span>
                                 </div>
                             </div>
                         </div>
@@ -295,7 +332,7 @@ const POPrintPreview = () => {
                                 </thead>
                                 <tbody>
                                     {items.map((item, idx) => (
-                                        <tr key={item.id} className="text-[12px] font-semibold h-[40px]">
+                                        <tr key={item.id || idx} className="text-[12px] font-semibold h-[40px]">
                                             <td className="border-b border-r border-black text-center">{idx + 1}</td>
                                             <td className="border-b border-r border-black px-4 font-black">{item.productName || item.product_name}</td>
                                             <td className="border-b border-r border-black text-center">{item.hsnCode || item.hsn}</td>
@@ -347,7 +384,7 @@ const POPrintPreview = () => {
                         {/* Signature Section */}
                         <div className="w-full border-t border-black p-6 flex flex-col justify-between min-h-[160px] bg-white">
                             <div className="text-right pr-4">
-                                <p className="font-black text-[12px]">For <span className="uppercase italic tracking-[2px]">ARDHYA AGRO SERVICE</span></p>
+                                <p className="font-black text-[12px]">For <span className="uppercase italic tracking-[2px]">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</span></p>
                             </div>
                             <div className="text-right pr-4">
                                 <p className="font-black text-[11px] uppercase tracking-widest underline underline-offset-8" style={{ textDecorationColor: '#d1d5db' }}>authorised Signatory</p>
@@ -355,7 +392,7 @@ const POPrintPreview = () => {
                         </div>
 
                         <div className="w-full border-t py-5 text-center text-[10px] font-bold bg-white" style={{ borderColor: 'rgba(0, 0, 0, 0.1)', color: '#9ca3af' }}>
-                            <p className="mb-0.5">Ardhya Agro Service Purchase Order #{po_no}</p>
+                            <p className="mb-0.5">{sellerInfo?.shopName || "Ardhya Agro Service"} Purchase Order #{po_no}</p>
                             <p>Page 1 of 1</p>
                         </div>
                     </div>

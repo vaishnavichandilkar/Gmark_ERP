@@ -46,6 +46,24 @@ export class CategoryMasterController {
     async getListing(@Request() req) {
         return this.service.getCategoryListing(req.user.userId);
     }
+    
+    @Get('export')
+    @ApiOperation({ summary: 'Export categories list to XLSX or PDF format' })
+    async exportCategories(
+        @Request() req,
+        @Res() res: Response,
+        @Query('format') format: string,
+    ) {
+        const file = await this.service.exportCategories(format.toLowerCase(), req.user.userId);
+
+        res.set({
+            'Content-Type': file.mimetype,
+            'Content-Disposition': `attachment; filename="${file.filename}"`,
+            'Content-Length': file.buffer.length,
+        });
+
+        res.send(file.buffer);
+    }
 
     @Patch('category/:id/status')
     @ApiOperation({ summary: 'Toggle Category status' })

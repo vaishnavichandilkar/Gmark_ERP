@@ -148,14 +148,25 @@ const ViewPO = () => {
 
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
                 {/* Card Header Section */}
-                <div className="flex items-center justify-between px-8 py-6 border-b border-[#F3F4F6]">
-                    <h2 className="text-[20px] font-bold text-[#111827]">View PO {isLoading ? '' : `- ${formData.po_number}`}</h2>
-                    <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-[#F3F4F6] gap-4">
+                    <h2 className="text-[18px] md:text-[20px] font-bold text-[#111827]">View PO {isLoading ? '' : `- ${formData.po_number}`}</h2>
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                        {(formData.status === 'PENDING' || formData.status === 'Approved') && (
+                            <button 
+                                onClick={() => navigate(ROUTES.PURCHASE_ORDER_EDIT.replace(':id', id))}
+                                className="flex-1 sm:flex-none px-6 md:px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] md:text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-md flex items-center justify-center gap-2"
+                            >
+                                <Edit3 size={18} />
+                                Edit PO
+                            </button>
+                        )}
                         <button 
                             onClick={() => navigate(-1)}
-                            className="flex items-center gap-2 px-6 h-[40px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all font-outfit"
+                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[44px] border border-[#E5E7EB] rounded-[10px] text-[14px] md:text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all font-outfit"
                         >
-                            <ArrowLeft size={18} /> Back
+                            <ArrowLeft size={18} /> 
+                            <span className="hidden sm:inline">Back</span>
+                            <span className="sm:hidden text-gray-500">Back</span>
                         </button>
                         {(() => {
                             if (isLoading || formData.status !== 'PENDING') return null;
@@ -345,12 +356,13 @@ const ViewPO = () => {
                 </div>
 
                 {/* Card Footer Actions */}
-                <div className="flex items-center justify-end gap-4 px-8 py-6 border-t border-[#F3F4F6] bg-gray-50/10">
+                <div className="flex flex-col sm:flex-row items-center justify-end gap-3 sm:gap-4 px-4 sm:px-8 py-6 border-t border-[#F3F4F6] bg-gray-50/10">
                     <button 
                         onClick={handlePrintPreview}
-                        className="px-8 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all shadow-md"
+                        className="w-full sm:w-auto px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all shadow-md flex items-center justify-center gap-2"
                     >
-                        preview and print
+                        <Printer size={18} />
+                        Preview & Print
                     </button>
                 </div>
             </div>

@@ -61,6 +61,25 @@ export class UnitMasterController {
         return this.service.getUnitsList(req.user.userId, query);
     }
 
+    @Get('export')
+    @ApiOperation({ summary: 'Export units list to XLSX or PDF format' })
+    async exportUnits(
+        @Request() req,
+        @Res() res: Response,
+        @Query('format') format: string,
+        @Query() query: UnitQueryDto,
+    ) {
+        const file = await this.service.exportUnits(format.toLowerCase(), req.user.userId, query);
+
+        res.set({
+            'Content-Type': file.mimetype,
+            'Content-Disposition': `attachment; filename="${file.filename}"`,
+            'Content-Length': file.buffer.length,
+        });
+
+        res.send(file.buffer);
+    }
+
     @Get('unit/sample-excel')
     @ApiOperation({ summary: 'Download sample Excel for unit import' })
     async downloadSample(@Request() req, @Res() res: Response) {

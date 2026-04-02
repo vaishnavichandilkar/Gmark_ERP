@@ -81,68 +81,84 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
         }
 
         return (
-            <div className="flex items-center text-[#111827] text-[14px] lg:text-[16px] font-semibold tracking-tight">
-                {breadcrumbElements}
+            <div className="flex items-center text-[#111827] text-[14px] lg:text-[16px] font-semibold tracking-tight overflow-hidden">
+                <div className="hidden md:flex items-center">
+                    {breadcrumbElements}
+                </div>
+                <div className="md:hidden truncate">
+                    {pathSegments.length > 0 ? (
+                        <span className="font-bold text-[#111827]">
+                            {t(`modules:${pathSegments[pathSegments.length - 1].replace(/-/g, '_')}`, { defaultValue: '' }) || 
+                             t(`common:${pathSegments[pathSegments.length - 1].replace(/-/g, '_')}`, { defaultValue: '' }) || 
+                             pathSegments[pathSegments.length - 1]}
+                        </span>
+                    ) : (
+                        <span className="font-bold text-[#111827]">{t('terms:dashboard')}</span>
+                    )}
+                </div>
             </div>
         );
     };
 
     return (
-        <header className="h-[64px] lg:h-[72px] bg-white border-b border-[#E5E7EB] px-3 lg:px-6 flex items-center justify-between shrink-0">
+        <header className="h-[64px] lg:h-[72px] bg-white border-b border-[#E5E7EB] px-3 md:px-6 flex items-center justify-between shrink-0">
             {/* Left Box: Menu button + Title/Logo */}
-            <div className="flex items-center gap-2 lg:gap-4">
+            <div className="flex items-center gap-1.5 md:gap-4 overflow-hidden flex-1">
                 <button
                     onClick={() => setSidebarOpen(prev => !prev)}
-                    className="p-1 px-2 text-[#4B5563] hover:text-[#111827] focus:outline-none hover:bg-gray-100/50 rounded-md transition-all active:scale-95"
+                    className="p-2 text-[#4B5563] hover:text-[#111827] focus:outline-none hover:bg-gray-100/80 rounded-lg transition-all active:scale-95 shrink-0"
                 >
-                    <Menu size={22} strokeWidth={2.5} />
+                    <Menu className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.5} />
                 </button>
-                <div className="flex items-center gap-2">
-                    {renderBreadcrumbs()}
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <img 
+                        src={logo} 
+                        alt="Logo" 
+                        className="h-8 w-auto lg:hidden shrink-0" 
+                        onError={(e) => { e.target.style.display = 'none' }}
+                    />
+                    <div className="flex items-center min-w-0">
+                        {renderBreadcrumbs()}
+                    </div>
                 </div>
             </div>
 
             {/* Right Box: Setup icons */}
-            <div className="flex items-center gap-2 lg:gap-5">
+            <div className="flex items-center gap-2 md:gap-4 shrink-0">
 
                 {/* Rightmost Action icons */}
-                <div className="flex items-center gap-3 lg:gap-4 relative">
-                    <LanguageSwitcher />
+                <div className="flex items-center gap-2 md:gap-4 relative">
+                    <div className="hidden sm:block">
+                        <LanguageSwitcher />
+                    </div>
 
                     {/* Globe specifically shown on mobile */}
                     <button
                         onClick={() => setActivePopupType(activePopupType === 'status' ? null : 'status')}
                         data-status-trigger="true"
-                        className={`lg:hidden flex items-center transition-colors p-1.5 rounded-full
+                        className={`sm:hidden flex items-center transition-colors p-2 rounded-full
                             ${activePopupType === 'status'
-                                ? 'text-[#166534] bg-[#166534]/10 z-[60] relative shadow-[0_0_15px_rgba(22,101,52,0.4)]'
+                                ? 'text-[#166534] bg-[#166534]/10 z-[60] relative'
                                 : 'text-[#4B5563] hover:text-[#111827] relative z-10'
                             }`}
                     >
                         <Globe size={18} strokeWidth={1.5} />
-                        {activePopupType === 'status' ? (
-                            <ChevronDown size={14} strokeWidth={1.5} className="ml-0.5 rotate-180 transition-transform duration-200" />
-                        ) : (
-                            <ChevronDown size={14} strokeWidth={1.5} className="ml-0.5 transition-transform duration-200" />
-                        )}
+                        <ChevronDown size={12} strokeWidth={1.5} className={`ml-0.5 transition-transform duration-200 ${activePopupType === 'status' ? 'rotate-180' : ''}`} />
                     </button>
 
                     <button
                         onClick={() => setActivePopupType(activePopupType === 'profile' ? null : 'profile')}
                         data-profile-trigger="true"
-                        className={`bg-[#65A30D] text-white w-[28px] h-[28px] lg:w-[38px] lg:h-[38px] rounded-full flex items-center justify-center font-semibold border border-white transition-all duration-200 ease-in-out overflow-hidden
+                        className={`bg-[#65A30D] text-white w-[32px] h-[32px] md:w-[38px] md:h-[38px] rounded-full flex items-center justify-center font-semibold border-2 border-white transition-all duration-200 ease-in-out overflow-hidden
                             ${activePopupType === 'profile'
-                                ? 'scale-110 shadow-[0_0_15px_rgba(22,101,52,0.6)] z-[60] relative'
-                                : 'shadow-sm hover:bg-[#4D7C0F] hover:scale-110 hover:shadow-[0_0_15px_rgba(22,101,52,0.4)] relative z-10'
+                                ? 'scale-105 shadow-[0_0_15px_rgba(22,101,52,0.4)] z-[60] relative'
+                                : 'shadow-sm hover:scale-105 relative z-10'
                             }`}
                     >
                         {userData?.profileImage ? (
                             <img src={`http://localhost:3000/${userData.profileImage}`} alt="Avatar" className="w-full h-full object-cover" />
                         ) : (
-                            <>
-                                <User size={18} className="mt-1 lg:hidden" strokeWidth={1.5} />
-                                <User size={22} className="mt-1 hidden lg:block" strokeWidth={1.5} />
-                            </>
+                            <User size={18} md:size={22} className="mt-0.5" strokeWidth={1.5} />
                         )}
                     </button>
                 </div>

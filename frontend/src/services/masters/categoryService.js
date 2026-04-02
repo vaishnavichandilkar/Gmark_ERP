@@ -69,6 +69,13 @@ const categoryService = {
         document.body.appendChild(link);
         link.click();
         link.remove();
+    },
+    exportCategories: async (format) => {
+        const response = await axiosInstance.get('/category-master/export', {
+            params: { format },
+            responseType: 'blob'
+        });
+        return response;
     }
 };
 

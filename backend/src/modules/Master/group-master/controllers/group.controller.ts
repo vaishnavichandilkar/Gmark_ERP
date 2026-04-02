@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, ParseIntPipe, UseGuards, Request, UploadedFile, UseInterceptors, BadRequestException, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, ParseIntPipe, UseGuards, Request, UploadedFile, UseInterceptors, BadRequestException, Res, Query } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -18,6 +18,24 @@ export class GroupMasterController {
     @ApiResponse({ status: 200, description: 'Hierarchical list of groups' })
     async getAllGroups(@Request() req) {
         return this.groupService.getAllGroups(req.user.userId);
+    }
+
+    @Get('export')
+    @ApiOperation({ summary: 'Export groups list to XLSX or PDF format' })
+    async exportGroups(
+        @Request() req,
+        @Res() res: Response,
+        @Query('format') format: string,
+    ) {
+        const file = await this.groupService.exportGroups(format.toLowerCase(), req.user.userId);
+
+        res.set({
+            'Content-Type': file.mimetype,
+            'Content-Disposition': `attachment; filename="${file.filename}"`,
+            'Content-Length': file.buffer.length,
+        });
+
+        res.send(file.buffer);
     }
 
     @Get('dropdown')

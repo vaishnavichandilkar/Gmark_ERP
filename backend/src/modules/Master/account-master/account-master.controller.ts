@@ -200,7 +200,7 @@ export class AccountMasterController {
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page' })
-  findAll(
+  async findAll(
     @Query('groupName') groupName?: string,
     @Query('gstNo') gstNo?: string,
     @Query('panNo') panNo?: string,
@@ -226,14 +226,6 @@ export class AccountMasterController {
 
   @Get('export')
   @ApiOperation({ summary: 'Export accounts list to XLSX or PDF format' })
-  @ApiQuery({ name: 'format', required: true, enum: ['xlsx', 'pdf'], description: 'Export format' })
-  @ApiQuery({ name: 'groupName', required: false, type: String })
-  @ApiQuery({ name: 'gstNo', required: false, type: String })
-  @ApiQuery({ name: 'panNo', required: false, type: String })
-  @ApiQuery({ name: 'customerCreditDays', required: false, type: Number })
-  @ApiQuery({ name: 'supplierCreditDays', required: false, type: Number })
-  @ApiQuery({ name: 'status', required: false, enum: MasterStatus })
-  @ApiQuery({ name: 'search', required: false, type: String })
   async exportAccounts(
     @Res() res: Response,
     @Query('format') format: string,

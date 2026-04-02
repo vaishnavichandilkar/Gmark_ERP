@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronUp, ArrowLeft, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, ArrowLeft, Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { translateDynamic } from "../../../../utils/i18nUtils";
 import productService from "../../../../services/productService";
@@ -483,10 +483,12 @@ const ProductForm = ({
         </h2>
         <button
           onClick={onBack}
-          className="flex items-center gap-2 px-6 h-[44px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
+          className="group flex items-center justify-center w-10 h-10 md:w-auto md:h-[44px] md:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[12px] md:rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
+          title={t("common:back")}
         >
-          <ArrowLeft size={18} />
-          {t("common:back")}
+          <X size={22} className="md:hidden text-gray-500" />
+          <ArrowLeft size={18} className="hidden md:block" />
+          <span className="hidden md:inline ml-2">{t("common:back")}</span>
         </button>
       </div>
 
@@ -537,7 +539,7 @@ const ProductForm = ({
         </button>
         <button
           onClick={() => onEdit && onEdit(initialData)}
-          className="px-8 h-[46px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center min-w-[140px]"
+          className="px-8 h-[46px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center min-w-[140px] whitespace-nowrap"
         >
           {t('modules:save')}
         </button>
@@ -557,10 +559,10 @@ const ProductForm = ({
           <div>
             <h2 className="text-[20px] font-bold text-[#111827] tracking-tight">
               {mode === "add"
-                ? t("modules:add_new_product", "Add New Product")
+                ? t("modules:add_product")
                 : mode === "edit"
-                  ? t("modules:edit_product", "Edit Product")
-                  : t("modules:view_product", "View Product")}
+                  ? t("modules:edit_product")
+                  : t("modules:view_product")}
             </h2>
           </div>
 
@@ -579,7 +581,7 @@ const ProductForm = ({
                 type="button"
                 onClick={handleSubmit}
                 disabled={loading}
-                className={`px-6 h-[40px] text-white rounded-[8px] text-[14px] font-bold transition-all shadow-sm flex items-center justify-center min-w-[140px] ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-[#073318] hover:bg-[#04200f]"}`}
+                className={`px-6 h-[40px] text-white rounded-[8px] text-[14px] font-bold transition-all shadow-sm flex items-center justify-center min-w-[140px] whitespace-nowrap ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-[#073318] hover:bg-[#04200f]"}`}
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -590,10 +592,12 @@ const ProductForm = ({
               type="button"
               onClick={onBack}
               disabled={loading}
-              className="px-6 h-[40px] bg-white border border-[#E5E7EB] text-[#4B5563] rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2"
+              className="group flex items-center justify-center w-10 h-10 md:w-auto md:h-[40px] md:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[10px] md:rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
+              title={t("common:back")}
             >
-              <ArrowLeft size={16} />
-              {t("common:back")}
+              <X size={22} className="md:hidden text-gray-500" />
+              <ArrowLeft size={16} className="hidden md:block" />
+              <span className="hidden md:inline ml-2">{t("common:back")}</span>
             </button>
           </div>
         </div>
@@ -703,7 +707,7 @@ const ProductForm = ({
               type="button"
               onClick={handleSubmit}
               disabled={loading}
-              className={`px-10 h-[46px] text-white rounded-[10px] text-[14px] font-bold transition-all shadow-md flex items-center justify-center min-w-[160px] ${loading ? "bg-gray-400 cursor-not-allowed shadow-none" : "bg-[#073318] hover:bg-[#04200f]"}`}
+              className={`px-10 h-[46px] text-white rounded-[10px] text-[14px] font-bold transition-all shadow-md flex items-center justify-center min-w-[160px] whitespace-nowrap ${loading ? "bg-gray-400 cursor-not-allowed shadow-none" : "bg-[#073318] hover:bg-[#04200f]"}`}
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>

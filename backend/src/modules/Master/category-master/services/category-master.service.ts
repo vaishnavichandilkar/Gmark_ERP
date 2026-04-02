@@ -3,6 +3,9 @@ import { MasterStatus } from '@prisma/client';
 import { CategoryMasterRepository } from '../repositories/category-master.repository';
 import { CreateCategoryDto, CreateSubCategoryDto, ToggleStatusDto, UpdateCategoryDto, UpdateSubCategoryDto } from '../dto/category.dto';
 import * as ExcelJS from 'exceljs';
+import * as PDFDocument from 'pdfkit';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class CategoryMasterService {
@@ -299,5 +302,138 @@ export class CategoryMasterService {
 
         const buffer = await workbook.xlsx.writeBuffer();
         return buffer;
+    }
+
+    async exportCategories(format: string, userId: number) {
+        const categories = await this.repository.getCategoryWithSubCategories(userId);
+
+        if (categories.length === 0) {
+            throw new BadRequestException('No data available to export');
+        }
+
+        const now = new Date();
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const timestamp = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}, ${pad(now.getHours() % 12 || 12)}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${now.getHours() >= 12 ? 'pm' : 'am'}`;
+
+        if (format === 'xlsx') {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Categories');
+
+            worksheet.columns = [
+                { header: 'Category Name', key: 'categoryName', width: 30 },
+                { header: 'Sub Category Name', key: 'subCategoryName', width: 30 },
+                { header: 'Status', key: 'status', width: 15 },
+            ];
+
+            categories.forEach(cat => {
+                // Add the main category row
+                worksheet.addRow({
+                    categoryName: cat.name,
+                    subCategoryName: '-',
+                    status: cat.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive',
+                });
+
+                // Add rows for subcategories
+                if (cat.sub_categories && cat.sub_categories.length > 0) {
+                    cat.sub_categories.forEach((sub: any) => {
+                        worksheet.addRow({
+                            categoryName: '',
+                            subCategoryName: sub.name,
+                            status: sub.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive',
+                        });
+                    });
+                }
+            });
+
+            // Styling and headers (similar to Account Master)
+            worksheet.spliceRows(1, 0, [], [], [], []);
+            worksheet.mergeCells('A1:C1');
+            const titleCell = worksheet.getCell('A1');
+            titleCell.value = 'ERP';
+            titleCell.font = { size: 18, bold: true };
+            titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+            worksheet.mergeCells('A2:C2');
+            const subtitleCell = worksheet.getCell('A2');
+            subtitleCell.value = 'Category Master Report';
+            subtitleCell.font = { size: 14 };
+            subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+            worksheet.mergeCells('A3:C3');
+            const timestampCell = worksheet.getCell('A3');
+            timestampCell.value = `Exported on: ${timestamp}`;
+            timestampCell.font = { size: 10 };
+            timestampCell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+            const headerRow = worksheet.getRow(5);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+            headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            return {
+                buffer: Buffer.from(buffer),
+                filename: `categories_export_${Date.now()}.xlsx`,
+                mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            };
+        }
+
+        if (format === 'pdf') {
+            return new Promise<any>((resolve, reject) => {
+                const doc = new PDFDocument({ margin: 20, size: 'A4' });
+                const buffers: Buffer[] = [];
+                doc.on('data', buffers.push.bind(buffers));
+                doc.on('end', () => {
+                    resolve({
+                        buffer: Buffer.concat(buffers),
+                        filename: `categories_export_${Date.now()}.pdf`,
+                        mimetype: 'application/pdf',
+                    });
+                });
+
+                doc.fontSize(18).font('Helvetica-Bold').text('ERP', { align: 'center' });
+                doc.fontSize(14).font('Helvetica').text('Category Master Report', { align: 'center' });
+                doc.moveDown(0.5);
+                doc.fontSize(10).text(`Exported on: ${timestamp}`, { align: 'right' });
+                doc.moveDown();
+
+                const tableTop = 100;
+                const colX = [30, 230, 450];
+                const headers = ['Category Name', 'Sub Category Name', 'Status'];
+
+                doc.rect(20, tableTop - 5, 555, 20).fill('#4472C4');
+                doc.fontSize(10).font('Helvetica-Bold').fillColor('#FFFFFF');
+                headers.forEach((header, i) => doc.text(header, colX[i], tableTop));
+
+                let y = tableTop + 20;
+                doc.fillColor('#000000').font('Helvetica');
+
+                categories.forEach((cat, index) => {
+                    if (y > 750) { doc.addPage(); y = 40; }
+                    
+                    // Main category row
+                    doc.fontSize(9).font('Helvetica-Bold').text(cat.name, colX[0], y);
+                    doc.text('-', colX[1], y);
+                    doc.text(cat.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[2], y);
+                    y += 15;
+
+                    // Subcategory rows
+                    if (cat.sub_categories && cat.sub_categories.length > 0) {
+                        cat.sub_categories.forEach((sub: any) => {
+                            if (y > 750) { doc.addPage(); y = 40; }
+                            doc.fontSize(9).font('Helvetica').text('', colX[0], y);
+                            doc.text(sub.name, colX[1], y);
+                            doc.text(sub.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[2], y);
+                            y += 15;
+                        });
+                    }
+                    y += 10; // Extra space between categories
+                });
+
+                doc.end();
+            });
+        }
+
+        throw new BadRequestException('Invalid format. Use xlsx or pdf.');
     }
 }

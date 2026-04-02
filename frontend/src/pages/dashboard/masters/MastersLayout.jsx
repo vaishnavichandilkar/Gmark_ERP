@@ -38,25 +38,21 @@ const MastersLayout = () => {
             </div>
 
             {/* Tab Navigation */}
-            <div className="border-b border-[#E5E7EB] mb-6 overflow-x-auto scrollbar-hide">
-                <div className="flex gap-8 md:gap-12 min-w-max">
+            <div className="border-b border-[#E5E7EB] mb-6 overflow-x-auto no-scrollbar scroll-smooth">
+                <div className="flex items-center gap-2 md:gap-4 min-w-max pb-1">
                     {tabs.map((tab) => (
                         <NavLink
                             key={tab.path}
                             to={tab.path}
                             className={({ isActive }) =>
-                                `relative text-[14px] md:text-[16px] font-semibold transition-all duration-300 ease-in-out whitespace-nowrap
+                                `relative text-[14px] md:text-[16px] font-bold transition-all duration-300 ease-in-out whitespace-nowrap px-4 py-2.5 rounded-[12px]
                                 ${isActive
-                                    ? 'text-[#073318] bg-[#073318]/5 border border-[#073318] px-4 py-2 rounded-lg'
-                                    : 'text-[#6B7280] hover:text-[#111827] px-4 py-2'
+                                    ? 'text-[#073318] bg-[#073318]/5 border-2 border-[#073318] shadow-sm shadow-[#073318]/10'
+                                    : 'text-[#6B7280] hover:text-[#111827] hover:bg-gray-50'
                                 }`
                             }
                         >
-                            {() => (
-                                <>
-                                    {tab.name}
-                                </>
-                            )}
+                            {tab.name}
                         </NavLink>
                     ))}
                 </div>

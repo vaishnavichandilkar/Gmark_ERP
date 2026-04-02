@@ -3,6 +3,9 @@ import { MasterStatus } from '@prisma/client';
 import { GroupMasterRepository } from '../repositories/group.repository';
 import { CreateGroupDto, UpdateGroupDto, UpdateGroupStatusDto } from '../dto/group-master.dto';
 import * as ExcelJS from 'exceljs';
+import * as PDFDocument from 'pdfkit';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class GroupMasterService {
@@ -231,7 +234,7 @@ export class GroupMasterService {
             try {
                 const status = (statusStr === 'inactive') ? MasterStatus.INACTIVE : MasterStatus.ACTIVE;
 
-                if (!underName || underName.toLowerCase() === 'primary') {
+                if (!underName || underName.toLowerCase() === 'primary' || underName === '1') {
                     // Create Level 1 Group
                     const existing = await prisma.group.findFirst({
                         where: { group_name: groupName, OR: [{ userId: null, is_header: true }, { userId }] }
@@ -311,5 +314,127 @@ export class GroupMasterService {
 
     private async repositoryHelper(model: any, data: any) {
         return model.create({ data });
+    }
+
+    async exportGroups(format: string, userId: number) {
+        const groups = await this.groupRepository.findAllGroups(userId);
+
+        if (groups.length === 0) {
+            throw new BadRequestException('No data available to export');
+        }
+
+        const now = new Date();
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const timestamp = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}, ${pad(now.getHours() % 12 || 12)}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${now.getHours() >= 12 ? 'pm' : 'am'}`;
+
+        if (format === 'xlsx') {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Groups');
+
+            worksheet.columns = [
+                { header: 'Group Name', key: 'groupName', width: 40 },
+                { header: 'Level', key: 'level', width: 10 },
+                { header: 'Status', key: 'status', width: 15 },
+            ];
+
+            const addGroupToSheet = (group: any, level: number) => {
+                worksheet.addRow({
+                    groupName: '  '.repeat(level - 1) + (group.group_name),
+                    level: level,
+                    status: group.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive',
+                });
+
+                if (group.children && group.children.length > 0) {
+                    group.children.forEach((child: any) => addGroupToSheet(child, level + 1));
+                }
+            };
+
+            groups.forEach(group => addGroupToSheet(group, 1));
+
+            worksheet.spliceRows(1, 0, [], [], [], []);
+            worksheet.mergeCells('A1:C1');
+            const titleCell = worksheet.getCell('A1');
+            titleCell.value = 'ERP';
+            titleCell.font = { size: 18, bold: true };
+            titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+            worksheet.mergeCells('A2:C2');
+            const subtitleCell = worksheet.getCell('A2');
+            subtitleCell.value = 'Group Master Report';
+            subtitleCell.font = { size: 14 };
+            subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+            worksheet.mergeCells('A3:C3');
+            const timestampCell = worksheet.getCell('A3');
+            timestampCell.value = `Exported on: ${timestamp}`;
+            timestampCell.font = { size: 10 };
+            timestampCell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+            const headerRow = worksheet.getRow(5);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+            headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            return {
+                buffer: Buffer.from(buffer),
+                filename: `groups_export_${Date.now()}.xlsx`,
+                mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            };
+        }
+
+        if (format === 'pdf') {
+            return new Promise<any>((resolve, reject) => {
+                const doc = new PDFDocument({ margin: 20, size: 'A4' });
+                const buffers: Buffer[] = [];
+                doc.on('data', buffers.push.bind(buffers));
+                doc.on('end', () => {
+                    resolve({
+                        buffer: Buffer.concat(buffers),
+                        filename: `groups_export_${Date.now()}.pdf`,
+                        mimetype: 'application/pdf',
+                    });
+                });
+
+                doc.fontSize(18).font('Helvetica-Bold').text('ERP', { align: 'center' });
+                doc.fontSize(14).font('Helvetica').text('Group Master Report', { align: 'center' });
+                doc.moveDown(0.5);
+                doc.fontSize(10).text(`Exported on: ${timestamp}`, { align: 'right' });
+                doc.moveDown();
+
+                const tableTop = 100;
+                const colX = [30, 400, 480];
+                const headers = ['Group Name', 'Level', 'Status'];
+
+                doc.rect(20, tableTop - 5, 555, 20).fill('#4472C4');
+                doc.fontSize(10).font('Helvetica-Bold').fillColor('#FFFFFF');
+                headers.forEach((header, i) => doc.text(header, colX[i], tableTop));
+
+                let y = tableTop + 20;
+                doc.fillColor('#000000').font('Helvetica');
+
+                const addGroupToPdf = (group: any, level: number) => {
+                    if (y > 750) { doc.addPage(); y = 40; }
+                    doc.fontSize(9);
+                    if (level === 1) doc.font('Helvetica-Bold');
+                    else doc.font('Helvetica');
+
+                    doc.text('  '.repeat(level - 1) + (group.group_name), colX[0], y);
+                    doc.font('Helvetica').text(String(level), colX[1], y);
+                    doc.text(group.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[2], y);
+                    y += 15;
+
+                    if (group.children && group.children.length > 0) {
+                        group.children.forEach((child: any) => addGroupToPdf(child, level + 1));
+                    }
+                };
+
+                groups.forEach(group => addGroupToPdf(group, 1));
+
+                doc.end();
+            });
+        }
+
+        throw new BadRequestException('Invalid format. Use xlsx or pdf.');
     }
 }

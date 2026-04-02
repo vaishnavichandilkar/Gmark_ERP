@@ -3,6 +3,9 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CreateUnitDto, UpdateUnitDto, UnitQueryDto, UpdateUnitStatusDto } from './dto/unit-master.dto';
 import { UnitSource, UnitStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
+import * as PDFDocument from 'pdfkit';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class UnitMasterService {
@@ -382,5 +385,135 @@ export class UnitMasterService {
 
         const buffer = await workbook.xlsx.writeBuffer();
         return buffer;
+    }
+
+    async exportUnits(format: string, userId: number, query: UnitQueryDto) {
+        // reuse existing list logic but without pagination
+        const where: any = { user_id: userId };
+        if (query.search) {
+            where.OR = [
+                { unit_name: { contains: query.search, mode: 'insensitive' } },
+                { full_name_of_measurement: { contains: query.search, mode: 'insensitive' } },
+                { gst_uom: { contains: query.search, mode: 'insensitive' } }
+            ];
+        }
+        if (query.gst_uom) where.gst_uom = query.gst_uom;
+        if (query.unit_name) where.unit_name = query.unit_name;
+        if (query.full_name_of_measurement) where.full_name_of_measurement = { contains: query.full_name_of_measurement, mode: 'insensitive' };
+        if (query.status) where.status = query.status;
+
+        const units = await this.prisma.unitMaster.findMany({
+            where,
+            orderBy: { created_at: 'desc' }
+        });
+
+        if (units.length === 0) {
+            throw new BadRequestException('No data available to export');
+        }
+
+        const now = new Date();
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const timestamp = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}, ${pad(now.getHours() % 12 || 12)}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${now.getHours() >= 12 ? 'pm' : 'am'}`;
+
+        if (format === 'xlsx') {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Units');
+
+            worksheet.columns = [
+                { header: 'Unit Name', key: 'unitName', width: 25 },
+                { header: 'GST UOM', key: 'gstUom', width: 20 },
+                { header: 'Full Name', key: 'fullName', width: 40 },
+                { header: 'Source', key: 'source', width: 15 },
+                { header: 'Status', key: 'status', width: 15 },
+            ];
+
+            units.forEach(unit => {
+                worksheet.addRow({
+                    unitName: unit.unit_name,
+                    gstUom: unit.gst_uom,
+                    fullName: unit.full_name_of_measurement || '-',
+                    source: unit.source,
+                    status: unit.status === UnitStatus.ACTIVE ? 'Active' : 'Inactive',
+                });
+            });
+
+            worksheet.spliceRows(1, 0, [], [], [], []);
+            worksheet.mergeCells('A1:E1');
+            const titleCell = worksheet.getCell('A1');
+            titleCell.value = 'ERP';
+            titleCell.font = { size: 18, bold: true };
+            titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+            worksheet.mergeCells('A2:E2');
+            const subtitleCell = worksheet.getCell('A2');
+            subtitleCell.value = 'Unit Master Report';
+            subtitleCell.font = { size: 14 };
+            subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+            worksheet.mergeCells('A3:E3');
+            const timestampCell = worksheet.getCell('A3');
+            timestampCell.value = `Exported on: ${timestamp}`;
+            timestampCell.font = { size: 10 };
+            timestampCell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+            const headerRow = worksheet.getRow(5);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+            headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            return {
+                buffer: Buffer.from(buffer),
+                filename: `units_export_${Date.now()}.xlsx`,
+                mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            };
+        }
+
+        if (format === 'pdf') {
+            return new Promise<any>((resolve, reject) => {
+                const doc = new PDFDocument({ margin: 20, size: 'A4' });
+                const buffers: Buffer[] = [];
+                doc.on('data', buffers.push.bind(buffers));
+                doc.on('end', () => {
+                    resolve({
+                        buffer: Buffer.concat(buffers),
+                        filename: `units_export_${Date.now()}.pdf`,
+                        mimetype: 'application/pdf',
+                    });
+                });
+
+                doc.fontSize(18).font('Helvetica-Bold').text('ERP', { align: 'center' });
+                doc.fontSize(14).font('Helvetica').text('Unit Master Report', { align: 'center' });
+                doc.moveDown(0.5);
+                doc.fontSize(10).text(`Exported on: ${timestamp}`, { align: 'right' });
+                doc.moveDown();
+
+                const tableTop = 100;
+                const colX = [30, 130, 230, 430, 500];
+                const headers = ['Unit Name', 'GST UOM', 'Full Measurement Name', 'Source', 'Status'];
+
+                doc.rect(20, tableTop - 5, 555, 20).fill('#4472C4');
+                doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+                headers.forEach((header, i) => doc.text(header, colX[i], tableTop));
+
+                let y = tableTop + 20;
+                doc.fillColor('#000000').font('Helvetica');
+
+                units.forEach((unit, index) => {
+                    if (y > 750) { doc.addPage(); y = 40; }
+                    doc.fontSize(8);
+                    doc.text(unit.unit_name, colX[0], y);
+                    doc.text(unit.gst_uom, colX[1], y);
+                    doc.text((unit.full_name_of_measurement || '-').substring(0, 45), colX[2], y);
+                    doc.text(unit.source, colX[3], y);
+                    doc.text(unit.status === UnitStatus.ACTIVE ? 'Active' : 'Inactive', colX[4], y);
+                    y += 15;
+                });
+
+                doc.end();
+            });
+        }
+
+        throw new BadRequestException('Invalid format. Use xlsx or pdf.');
     }
 }

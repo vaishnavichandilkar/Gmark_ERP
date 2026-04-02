@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronUp, ArrowLeft, Plus, FileEdit } from 'lucide-react';
+import { ChevronDown, ChevronUp, ArrowLeft, Plus, FileEdit, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import unitService from '../../../../services/masters/unitService';
 import toast from 'react-hot-toast';
@@ -350,10 +350,12 @@ const UnitForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onEdit 
                 </div>
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 h-[44px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
+                    className="group flex items-center justify-center w-10 h-10 md:w-auto md:h-[44px] md:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[12px] md:rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
+                    title={t('common:back')}
                 >
-                    <ArrowLeft size={18} />
-                    {t('common:back')}
+                    <X size={22} className="md:hidden text-gray-500" />
+                    <ArrowLeft size={18} className="hidden md:block" />
+                    <span className="hidden md:inline ml-2">{t('common:back')}</span>
                 </button>
             </div>
 
@@ -411,10 +413,12 @@ const UnitForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onEdit 
                     </div>
                     <button
                         onClick={onBack}
-                        className="flex items-center gap-2 px-6 h-[44px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
+                        className="group flex items-center justify-center w-10 h-10 md:w-auto md:h-[44px] md:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[12px] md:rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
+                        title={t('common:back')}
                     >
-                        <ArrowLeft size={18} />
-                        {t('common:back')}
+                        <X size={22} className="md:hidden text-gray-500" />
+                        <ArrowLeft size={18} className="hidden md:block" />
+                        <span className="hidden md:inline ml-2">{t('common:back')}</span>
                     </button>
                 </div>
 

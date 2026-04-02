@@ -52,9 +52,15 @@ const GroupMaster = () => {
     // Handle click outside for export dropdown
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (exportRef.current && !exportRef.current.contains(event.target)) {
+            // Check if click was outside both desktop and mobile export triggers/menus
+            const isOutsideExport = 
+                (!exportRef.current || !exportRef.current.contains(event.target)) &&
+                !event.target.closest('.mobile-export-trigger');
+            
+            if (isOutsideExport) {
                 setIsExportOpen(false);
             }
+            
             if (!event.target.closest('.dropdown-trigger') && !event.target.closest('.dropdown-menu')) {
                 setActiveRowDropdown(null);
             }
@@ -152,12 +158,14 @@ const GroupMaster = () => {
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', 'group-master.pdf');
+            link.setAttribute('download', `group_master_export_${Date.now()}.pdf`);
             document.body.appendChild(link);
             link.click();
             link.parentNode.removeChild(link);
+            showToast('PDF Exported Successfully');
         } catch (e) {
             console.error('Export failed', e);
+            showToast('Failed to export PDF', 'error');
         }
     };
 
@@ -168,12 +176,14 @@ const GroupMaster = () => {
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', 'group-master.xlsx');
+            link.setAttribute('download', `group_master_export_${Date.now()}.xlsx`);
             document.body.appendChild(link);
             link.click();
             link.parentNode.removeChild(link);
+            showToast('Excel Exported Successfully');
         } catch (e) {
             console.error('Export failed', e);
+            showToast('Failed to export Excel', 'error');
         }
     };
 
@@ -181,9 +191,16 @@ const GroupMaster = () => {
         const loadingToast = toast.loading(t('common:importing', 'Importing data...'), { id: 'import-toast' });
         
         try {
-            await masterService.importGroups(formData);
+            const response = await masterService.importGroups(formData);
             toast.dismiss('import-toast');
+            
+            // Show static success message as requested by user
             showToast(t('common:import_success', 'Data imported successfully'), 'success');
+            
+            if (response.errors && response.errors.length > 0) {
+                console.warn('Import had some errors:', response.errors);
+            }
+            
             fetchGroups();
             return Promise.resolve();
         } catch (error) {
@@ -202,13 +219,13 @@ const GroupMaster = () => {
         return (
             <React.Fragment key={group.id}>
                 <div
-                    className={`flex items-center justify-between py-4 border-b border-[#F3F4F6] transition-all duration-200 group-row
+                    className={`flex items-center justify-between py-2 md:py-4 border-b border-[#F3F4F6] transition-all duration-200 group-row
                         ${depth === 0 ? 'bg-[#F9FAFB]/50' : 'bg-white'}
                         hover:bg-gray-50`}
                 >
                     <div
                         className="flex items-center flex-1 cursor-pointer select-none gap-3"
-                        style={{ paddingLeft: `${depth === 0 ? 36 : 36 + depth * 28}px` }}
+                        style={{ paddingLeft: `${depth === 0 ? 12 : 12 + depth * 20}px` }}
                         onClick={() => hasChildren && toggleGroup(group.id)}
                     >
                         {/* Plus/Minus Toggle - Darker & bolder */}
@@ -245,7 +262,7 @@ const GroupMaster = () => {
                     {/* Properly Aligned Actions Area - Matching Header Structure */}
                     <div className="flex items-stretch shrink-0">
                         {/* Status Column */}
-                        <div className="w-[120px] flex items-center justify-center px-4">
+                        <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4">
                             <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${group.status === 'ACTIVE' ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${group.status === 'ACTIVE' ? 'bg-[#059669]' : 'bg-[#DC2626]'}`}></span>
                                 {group.status === 'ACTIVE' ? t('common:active') : t('common:inactive')}
@@ -253,7 +270,7 @@ const GroupMaster = () => {
                         </div>
 
                         {/* Action Column */}
-                        <div className="w-20 flex items-center justify-center px-4 relative">
+                        <div className="w-16 md:w-20 flex items-center justify-center px-4 relative">
                             {(!group.is_header || group.level !== 1) && (
                                 <>
                                     <button
@@ -324,122 +341,187 @@ const GroupMaster = () => {
                 />
             )}
 
-            <div className="flex flex-col gap-1 mb-8">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('group_master')}</h1>
+            <div className="flex flex-col gap-1 mb-4 md:mb-8">
+                {/* Desktop Header */}
+                <div className="hidden md:flex flex-row items-center justify-between gap-4">
+                    <div className="flex flex-col gap-1">
+                        <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('group_master')}</h1>
+                        <p className="text-[#6B7280] text-[15px] font-medium leading-relaxed max-w-[600px]">{t('group_master_desc')}</p>
+                    </div>
                     <button
                         onClick={() => setCurrentView({ type: 'add', data: null })}
-                        className="px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center"
+                        className="px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 shrink-0"
                     >
+                        <Plus size={18} />
                         {t('add_group')}
                     </button>
                 </div>
-                <p className="text-[#6B7280] text-[15px]">{t('group_master_desc')}</p>
+
+                {/* Mobile Header - Stacked Layout */}
+                <div className="md:hidden flex flex-col gap-3">
+                    <div className="flex flex-col gap-1">
+                        <h1 className="text-[24px] font-bold text-[#111827] tracking-tight">{t('group_master')}</h1>
+                        <p className="text-[#6B7280] text-[14px] font-medium leading-relaxed">{t('group_master_desc')}</p>
+                    </div>
+                    <button
+                        onClick={() => setCurrentView({ type: 'add', data: null })}
+                        className="flex items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-fit self-end"
+                    >
+                        <Plus size={18} strokeWidth={3} />
+                        {t('add_group')}
+                    </button>
+                </div>
             </div>
 
-            {/* Content Container */}
-            <div className={`master-table-container ${activeRowDropdown ? '!overflow-visible' : ''}`}>
-                {/* Action Bar */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 border-b border-[#F3F4F6] bg-white text-[#111827]">
-                    <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                        <div className="relative w-full sm:w-[320px]">
+            {/* Action Bar - Mobile Optimized */}
+            <div className="master-table-container !bg-transparent !shadow-none !border-none md:!bg-white md:!shadow-[0_4px_20px_rgba(0,0,0,0.03)] md:!border md:!border-[#E5E7EB] mb-8">
+                {/* Desktop Action Bar */}
+                <div className="hidden md:flex items-center justify-between p-6 border-b border-[#F3F4F6] bg-white gap-4 rounded-t-[16px]">
+                    <div className="flex items-center gap-3 flex-1">
+                        <div className="relative flex-1 max-w-[320px]">
                             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                             <input
                                 type="text"
                                 placeholder={t('common:search_by_anything')}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all placeholder:text-gray-400 shadow-sm"
+                                className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none focus:border-[#073318] transition-all placeholder:text-gray-400"
                             />
                             {searchQuery && (
-                                <button 
-                                    onClick={() => setSearchQuery('')}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                                >
+                                <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <X size={16} />
                                 </button>
                             )}
                         </div>
-                        <button
-                            onClick={toggleExpandAll}
-                            className="flex items-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all bg-white shadow-sm"
-                        >
-                            {isAllExpanded ? <Minimize2 size={16} className="text-gray-400" /> : <Maximize2 size={16} className="text-gray-400" />}
+                        <button onClick={toggleExpandAll} className="flex items-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all bg-white">
+                            {isAllExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                             {isAllExpanded ? t('common:collapse_all') : t('common:expand_all')}
                         </button>
-                        <button
-                            onClick={() => {
-                                fetchGroups();
-                                setSearchQuery('');
-                                handleClearFilter();
-                                showToast("Data refreshed successfully");
-                            }}
-                            className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] hover:bg-gray-50 transition-colors bg-white shadow-sm"
-                            title="Refresh Data"
-                        >
+                        <button onClick={() => fetchGroups()} className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] hover:bg-gray-50 bg-white">
                             <RefreshCw size={18} className="text-gray-400" />
                         </button>
                     </div>
-
-                    <div className="relative flex items-center gap-3" ref={exportRef}>
-                        <button
-                            onClick={() => setIsImportModalOpen(true)}
-                            className="flex items-center justify-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all duration-200 bg-white shadow-sm"
-                        >
+                    <div className="flex items-center gap-3" ref={exportRef}>
+                        <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 bg-white">
                             <Upload size={18} className="text-gray-400" />
-                            {t('common:import', 'Import')}
-                        </button>
-                        <ImportModal
-                            isOpen={isImportModalOpen}
-                            onClose={() => setIsImportModalOpen(false)}
-                            onImport={handleImportExcel}
-                            onDownloadSample={() => masterService.downloadGroupSampleExcel()}
-                            sampleFileName="group_master_sample.xlsx"
-                        />
-
-                        <button
-                            onClick={() => setIsExportOpen(!isExportOpen)}
-                            className={`flex items-center justify-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all duration-200 bg-white
-                                ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
-                        >
-                            <Download size={18} className={isExportOpen ? 'text-[#073318]' : 'text-gray-400'} />
-                            {t('common:export')}
+                            {t('common:import')}
                         </button>
 
-                        {/* Export Dropdown */}
-                        {isExportOpen && (
-                            <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-[50] py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                                <button
-                                    onClick={handleExportPDF}
-                                    className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors"
-                                >
-                                    <FileText size={18} className="text-red-500" />
-                                    {t('common:pdf')}
-                                </button>
-                                <button
-                                    onClick={handleExportExcel}
-                                    className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors"
-                                >
-                                    <FileSpreadsheet size={18} className="text-green-600" />
-                                    {t('common:excel')}
-                                </button>
-                            </div>
-                        )}
+                        <div className="relative flex items-center gap-3">
+                            <button
+                                onClick={() => setIsExportOpen(!isExportOpen)}
+                                className={`flex items-center justify-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all duration-200 bg-white
+                                    ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
+                            >
+                                <Download size={18} className={isExportOpen ? 'text-[#073318]' : 'text-gray-400'} />
+                                {t('common:export')}
+                            </button>
+
+                            {/* Export Dropdown */}
+                            {isExportOpen && (
+                                <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-[50] py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <button
+                                        onClick={handleExportPDF}
+                                        className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors"
+                                    >
+                                        <FileText size={18} className="text-red-500" />
+                                        {t('common:pdf')}
+                                    </button>
+                                    <button
+                                        onClick={handleExportExcel}
+                                        className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors"
+                                    >
+                                        <FileSpreadsheet size={18} className="text-green-600" />
+                                        {t('common:excel')}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                <div className="min-w-full overflow-x-auto overflow-y-hidden">
+                {/* Mobile Action Bar - Optimized One-line Layout */}
+                <div className="md:hidden mt-2">
+                    <div className="flex items-center gap-2 h-[48px]">
+                        {/* Compact Search */}
+                        <div className="flex-1 relative h-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                            <input
+                                type="text"
+                                placeholder={t('common:search')}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full h-full bg-white border border-[#E5E7EB] rounded-[12px] pl-9 pr-8 text-[14px] outline-none shadow-sm placeholder:text-gray-400"
+                            />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Control Buttons Group */}
+                        <div className="flex items-center gap-1.5 h-full">
+                            <button
+                                onClick={() => fetchGroups()}
+                                className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-500"
+                                title={t('common:refresh')}
+                            >
+                                <RefreshCw size={18} />
+                            </button>
+
+                            <button
+                                onClick={() => setIsImportModalOpen(true)}
+                                className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-500"
+                            >
+                                <Upload size={18} />
+                            </button>
+
+                            <div className="relative mobile-export-trigger">
+                                <button
+                                    onClick={() => setIsExportOpen(!isExportOpen)}
+                                    className={`w-[44px] h-[44px] flex items-center justify-center border rounded-[12px] shadow-sm transition-all active:scale-95 ${isExportOpen ? 'bg-[#073318] border-[#073318] text-white' : 'bg-white border-[#E5E7EB] text-gray-500'}`}
+                                >
+                                    <Download size={18} />
+                                </button>
+                                {isExportOpen && (
+                                    <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-2xl z-[100] py-1 border-t border-gray-50 overflow-hidden">
+                                        <button onClick={handleExportPDF} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50">
+                                            <FileText size={16} className="text-red-500" /> PDF
+                                        </button>
+                                        <button onClick={handleExportExcel} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50 border-t border-gray-50">
+                                            <FileSpreadsheet size={16} className="text-green-600" /> Excel
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            <button
+                                onClick={toggleExpandAll}
+                                className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-500"
+                            >
+                                {isAllExpanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="w-full overflow-x-auto no-scrollbar">
+                    <div className="min-w-[800px]">
                     <div className="flex items-stretch justify-between bg-emerald-900 border-b border-emerald-950 text-[14px] font-bold text-white uppercase tracking-tight">
-                        <div className="flex-1 border-r border-white/50 pr-6 py-5 pl-9 flex items-center gap-2">
+                        <div className="flex-1 border-r border-white/50 pr-4 md:pr-6 py-3 md:py-5 pl-6 md:pl-9 flex items-center gap-2">
                             {t('modules:group_master')}
                             <ChevronsUpDown size={14} className="text-gray-300" />
                         </div>
                         <div className="flex items-stretch shrink-0">
-                            <div className="w-[120px] border-r border-white/50 flex items-center justify-center px-4 gap-2">
+                            <div className="w-[110px] md:w-[120px] border-r border-white/50 flex items-center justify-center px-4 gap-2">
                                 {t('common:status')}
                                 <ChevronsUpDown size={14} className="text-gray-300" />
                             </div>
-                            <div className="w-20 flex items-center justify-center px-4 py-5">{t('common:action')}</div>
+                            <div className="w-16 md:w-20 flex items-center justify-center px-4 py-3 md:py-5">{t('common:action')}</div>
                         </div>
                     </div>
                     <div className="flex flex-col divide-y divide-[#F3F4F6]">
@@ -461,10 +543,20 @@ const GroupMaster = () => {
                     </div>
                 </div>
             </div>
-
-            {/* Removed Filter Sidebar */}
         </div>
-    );
+
+        {isImportModalOpen && (
+            <ImportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onImport={handleImportExcel}
+                onDownloadSample={() => masterService.downloadGroupSampleExcel()}
+                sampleFileName="group_master_sample.xlsx"
+                sampleHeaders={['Group Name', 'Group Under', 'Status']}
+            />
+        )}
+    </div>
+  );
 };
 
 export default GroupMaster;

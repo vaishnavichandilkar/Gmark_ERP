@@ -43,6 +43,8 @@ const AddPO = () => {
         pan_number: ''
     });
 
+    const [errors, setErrors] = useState({});
+
     const [items, setItems] = useState([
         { 
             id: Date.now(), 
@@ -273,16 +275,47 @@ const AddPO = () => {
         setItems(newItems);
     };
 
-    // Save functionality
-    const handleSave = async () => {
-        // Validation
-        if (!formData.supplier_name || !formData.address || !formData.credit_days) {
-            toast.error("Please fill all required supplier details");
-            return;
+    // Validation Function
+    const validateForm = () => {
+        const newErrors = {};
+        
+        if (!formData.supplier_name) newErrors.supplier_name = "Supplier name is required";
+        if (!formData.address) newErrors.address = "Address is required";
+        if (!formData.credit_days && formData.credit_days !== 0) newErrors.credit_days = "Credit days are required";
+        if (!formData.creation_date) newErrors.creation_date = "Creation date is required";
+        if (!formData.po_number) newErrors.po_number = "PO number is required";
+        if (!formData.expiry_date) newErrors.expiry_date = "Expiry date is required";
+        if (!formData.gst_number) newErrors.gst_number = "GST number is required";
+        if (!formData.pan_number) newErrors.pan_number = "PAN number is required";
+
+        // Validate items
+        const validItems = items.filter(item => item.product_name);
+        if (validItems.length === 0) {
+            newErrors.items = true;
+        } else {
+            const itemErrors = [];
+            items.forEach((item, index) => {
+                if (item.product_name) {
+                    if (!item.quantity || item.quantity <= 0) {
+                        if (!itemErrors[index]) itemErrors[index] = {};
+                        itemErrors[index].quantity = "Required";
+                    }
+                    if (!item.rate || item.rate <= 0) {
+                        if (!itemErrors[index]) itemErrors[index] = {};
+                        itemErrors[index].rate = "Required";
+                    }
+                }
+            });
+            if (itemErrors.length > 0) newErrors.itemErrors = itemErrors;
         }
 
-        if (items.length === 0 || !items[0].product_name) {
-            toast.error("Please add at least one product");
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    // Save functionality
+    const handleSave = async () => {
+        if (!validateForm()) {
             return;
         }
 
@@ -381,19 +414,24 @@ const AddPO = () => {
             {/* Main Integrated Form Card */}
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
                 {/* Header Section */}
-                <div className="flex items-center justify-between px-8 py-6 border-b border-[#F3F4F6]">
-                    <h2 className="text-[20px] font-bold text-[#111827]">{isEditMode ? 'Edit PO' : 'Add PO'}</h2>
+                <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-[#F3F4F6] bg-white flex items-center justify-between">
+                    <div>
+                        <h2 className="text-[18px] md:text-[20px] font-bold text-[#111827]">{isEditMode ? 'Edit PO' : 'Add PO'}</h2>
+                    </div>
+                    
                     <button 
                         onClick={() => navigate(ROUTES.PURCHASE_ORDER)}
-                        className="flex items-center gap-2 px-6 h-[40px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all font-outfit"
+                        className="group flex items-center justify-center w-10 h-10 sm:w-auto sm:h-[40px] sm:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[10px] sm:rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
                     >
-                        <ArrowLeft size={18} /> Back
+                        <X size={22} className="sm:hidden text-gray-500" />
+                        <ArrowLeft size={16} className="hidden sm:block" />
+                        <span className="hidden sm:inline ml-2">Back</span>
                     </button>
                 </div>
 
                 {/* Form Fields Section */}
-                <div className="p-8 border-b border-[#F3F4F6]">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                <div className="p-4 sm:p-8 border-b border-[#F3F4F6]">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Row 1 */}
                         <div className="space-y-2 relative">
                             <label className="text-[14px] font-semibold text-[#374151] font-outfit">Supplier Name <span className="text-red-500">*</span></label>
@@ -407,9 +445,10 @@ const AddPO = () => {
                                         setSupplierSearch(e.target.value);
                                         setIsSupplierDropdownOpen(true);
                                     }}
-                                    className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] transition-all"
+                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none transition-all ${errors.supplier_name ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                                 />
                                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+                                {errors.supplier_name && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.supplier_name}</p>}
                                 
                                 {isSupplierDropdownOpen && (
                                     <>
@@ -454,9 +493,10 @@ const AddPO = () => {
                                 type="number"
                                 placeholder="Enter credit days"
                                 value={formData.credit_days}
-                                readOnly // Requirement 2: Read Only
-                                className="w-full h-[48px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed"
+                                readOnly
+                                className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.credit_days ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                             />
+                            {errors.credit_days && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.credit_days}</p>}
                         </div>
 
                         {/* Row 2 */}
@@ -466,9 +506,10 @@ const AddPO = () => {
                                 type="text"
                                 placeholder="Enter address"
                                 value={formData.address}
-                                readOnly // Requirement 2: Read Only
-                                className="w-full h-[48px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed"
+                                readOnly
+                                className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.address ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                             />
+                            {errors.address && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.address}</p>}
                         </div>
 
                         <div className="space-y-2 font-outfit">
@@ -477,9 +518,10 @@ const AddPO = () => {
                                 type="date"
                                 placeholder="Enter Date"
                                 value={formData.creation_date}
-                                readOnly // Requirement 3: Auto Fill + Read Only (Typical)
-                                className="w-full h-[48px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed"
+                                readOnly
+                                className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.creation_date ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                             />
+                            {errors.creation_date && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.creation_date}</p>}
                         </div>
 
                         {/* Row 3 */}
@@ -490,8 +532,9 @@ const AddPO = () => {
                                 placeholder="Purchase order will be autogenerated here"
                                 value={formData.po_number}
                                 readOnly
-                                className="w-full h-[48px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-[#6B7280] outline-none cursor-not-allowed"
+                                className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] text-[#6B7280] outline-none cursor-not-allowed ${errors.po_number ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                             />
+                            {errors.po_number && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.po_number}</p>}
                         </div>
 
                         <div className="space-y-2 font-outfit">
@@ -501,8 +544,9 @@ const AddPO = () => {
                                 placeholder="Enter expire date"
                                 value={formData.expiry_date}
                                 onChange={(e) => setFormData({ ...formData, expiry_date: e.target.value })}
-                                className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] transition-all"
+                                className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none transition-all ${errors.expiry_date ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                             />
+                            {errors.expiry_date && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.expiry_date}</p>}
                         </div>
 
                         {/* Row 4 */}
@@ -512,9 +556,10 @@ const AddPO = () => {
                                 type="text"
                                 placeholder="Enter GST number"
                                 value={formData.gst_number}
-                                readOnly // Requirement 2: Read Only
-                                className="w-full h-[48px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed"
+                                readOnly
+                                className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.gst_number ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                             />
+                            {errors.gst_number && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.gst_number}</p>}
                         </div>
 
                         <div className="space-y-2 font-outfit">
@@ -523,17 +568,18 @@ const AddPO = () => {
                                 type="text"
                                 placeholder="Enter PAN number"
                                 value={formData.pan_number}
-                                readOnly // Requirement 2: Read Only
-                                className="w-full h-[48px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed"
+                                readOnly
+                                className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.pan_number ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                             />
+                            {errors.pan_number && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.pan_number}</p>}
                         </div>
                     </div>
                 </div>
 
                 {/* Table Section */}
-                <div className="p-4 border-b border-[#F3F4F6] flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 flex-1">
-                        <div className="relative w-full max-w-[320px]">
+                <div className="p-4 sm:p-6 md:p-8 border-b border-[#F3F4F6] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1">
+                        <div className="relative flex-1 max-w-full md:max-w-[320px]">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" size={18} />
                             <input
                                 type="text"
@@ -544,13 +590,14 @@ const AddPO = () => {
                                     setTableSearch(e.target.value);
                                     setIsProductSearchOpen(true);
                                 }}
-                                className="w-full h-[44px] bg-white border border-[#E5E7EB] rounded-[12px] pl-11 pr-4 text-[14px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all placeholder:text-[#9CA3AF] shadow-sm font-outfit"
+                                className={`w-full h-[44px] bg-white border rounded-[12px] pl-11 pr-4 text-[14px] outline-none focus:ring-1 transition-all placeholder:text-[#9CA3AF] shadow-sm font-outfit ${errors.items ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
                             />
+                            {errors.items && <p className="text-red-500 text-[12px] mt-1 font-medium italic font-outfit">*Please add at least one product</p>}
                             
                             {/* Product Search Suggestions Dropdown */}
                             {isProductSearchOpen && filteredProducts.length > 0 && (
-                                <div className="absolute top-full left-0 w-[500px] mt-2 bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] z-[60] overflow-hidden py-1">
-                                    <div className="p-2 bg-gray-50 border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider flex justify-between">
+                                <div className="absolute top-full left-0 w-full sm:w-[500px] mt-2 bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] z-[60] overflow-hidden py-1">
+                                    <div className="hidden sm:flex p-2 bg-gray-50 border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider justify-between">
                                         <span>Product Details</span>
                                         <span>Category</span>
                                     </div>
@@ -561,20 +608,20 @@ const AddPO = () => {
                                                 onClick={() => handleQuickAddProduct(p)}
                                                 className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#073318]/5 transition-all outline-none border-b border-gray-50 last:border-0"
                                             >
-                                                <div className="flex flex-col items-start gap-0.5">
+                                                <div className="flex flex-col items-start gap-0.5 text-left">
                                                     <div className="flex items-center gap-2">
                                                         <span className="font-bold text-[#111827] text-[14px]">{p.product_name}</span>
                                                         <span className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] font-bold text-gray-500 uppercase">{p.product_code}</span>
                                                     </div>
-                                                    <div className="flex items-center gap-3 text-[12px] text-gray-400">
-                                                        <span>HSN: <span className="text-gray-600 font-medium">{p.hsn_code}</span></span>
-                                                        <span>Tax: <span className="text-gray-600 font-medium">{p.tax_rate}%</span></span>
-                                                        <span>Rate: <span className="text-[#073318] font-bold">₹{p.rate || 0}</span></span>
+                                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-gray-400">
+                                                        <span>HSN: <span className="text-gray-600 font-medium">{p.hsn_code || p.hsn}</span></span>
+                                                        <span>Tax: <span className="text-gray-600 font-medium">{p.tax_rate || p.tax}%</span></span>
+                                                        <span>Rate: <span className="text-[#073318] font-bold">₹{p.purchaseRate || p.rate || 0}</span></span>
                                                     </div>
                                                 </div>
-                                                <div className="text-right">
-                                                    <span className="text-[12px] font-semibold text-[#6B7280]">{p.category?.name}</span>
-                                                    <div className="text-[10px] text-gray-400 font-medium">{p.sub_category?.name}</div>
+                                                <div className="text-right shrink-0 hidden sm:block">
+                                                    <span className="text-[12px] font-semibold text-[#6B7280]">{p.category?.name || p.category}</span>
+                                                    <div className="text-[10px] text-gray-400 font-medium">{p.sub_category?.name || p.sub_category}</div>
                                                 </div>
                                             </button>
                                         ))}
@@ -589,8 +636,9 @@ const AddPO = () => {
                         </div>
                         <button
                             onClick={() => navigate(`/seller/masters/product-master?mode=add&redirect=${ROUTES.PURCHASE_ORDER_ADD}`)}
-                            className="bg-[#073318] hover:bg-[#04200f] text-white px-8 h-[44px] rounded-[10px] text-[14px] font-semibold transition-all shadow-sm active:scale-[0.98] font-outfit whitespace-nowrap"
+                            className="bg-[#073318] hover:bg-[#04200f] text-white px-8 h-[44px] rounded-[10px] text-[14px] font-semibold transition-all shadow-sm active:scale-[0.98] font-outfit whitespace-nowrap flex items-center justify-center gap-2"
                         >
+                            <Plus size={18} />
                             Add Product
                         </button>
                     </div>
@@ -666,7 +714,7 @@ const AddPO = () => {
                                             type="number" 
                                             value={item.quantity || ''}
                                             onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                            className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 text-right transition-all shadow-sm"
+                                            className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] outline-none focus:ring-1 text-right transition-all shadow-sm ${errors.itemErrors?.[index]?.quantity ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
                                         />
                                     </td>
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
@@ -674,7 +722,7 @@ const AddPO = () => {
                                             type="number" 
                                             value={item.rate || ''}
                                             onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
-                                            className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 text-right transition-all shadow-sm"
+                                            className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] outline-none focus:ring-1 text-right transition-all shadow-sm ${errors.itemErrors?.[index]?.rate ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
                                         />
                                     </td>
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
@@ -797,23 +845,24 @@ const AddPO = () => {
                     </table>
                 </div>
 
-                {/* Action buttons moved inside the main card */}
-                <div className="flex items-center justify-end gap-4 mt-8 px-6 pb-6">
+                {/* Card Footer Actions */}
+                <div className="flex flex-col sm:flex-row items-center justify-end gap-3 sm:gap-4 px-4 sm:px-8 py-6 border-t border-[#F3F4F6] bg-gray-50/10">
                     <button 
                         onClick={handlePrintPreview}
-                        className="px-8 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all shadow-md"
+                        className="w-full sm:w-auto px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all shadow-md flex items-center justify-center gap-2"
                     >
-                        preview and print
+                        <Printer size={18} />
+                        Preview & Print
                     </button>
                     <button 
                         onClick={handleSave}
-                        className="flex items-center justify-center gap-2 px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-md"
+                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 md:px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-md"
                     >
-                        Save PO
+                        {isEditMode ? 'Update PO' : 'Save PO'}
                     </button>
                     <button 
                         onClick={() => navigate(-1)}
-                        className="flex items-center justify-center gap-2 px-10 h-[48px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all shadow-sm"
+                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 md:px-10 h-[48px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all shadow-sm order-3"
                     >
                         Cancel
                     </button>

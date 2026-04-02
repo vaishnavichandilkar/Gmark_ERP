@@ -115,6 +115,13 @@ const masterService = {
         link.click();
         link.remove();
     },
+    exportGroups: async (params) => {
+        const response = await axiosInstance.get('/group-master/export', {
+            params,
+            responseType: 'blob'
+        });
+        return response;
+    },
 };
 
 export default masterService;

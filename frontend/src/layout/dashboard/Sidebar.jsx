@@ -37,18 +37,34 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
             )}
 
             {/* Sidebar Container */}
-            <aside className={`fixed lg:relative inset-y-0 left-0 z-50 bg-[#073318] border-r border-[#031d0d] transform transition-all duration-300 ease-in-out flex flex-col shrink-0 ${isOpen ? 'w-[260px] translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0 lg:w-[80px]'}`}>
+            <aside 
+                className={`fixed lg:relative inset-y-0 left-0 z-50 bg-[#073318] border-r border-[#031d0d] transform transition-all duration-300 ease-in-out flex flex-col shrink-0 overflow-hidden lg:overflow-visible
+                    ${isOpen 
+                        ? 'w-[280px] translate-x-0 shadow-2xl' 
+                        : '-translate-x-full lg:translate-x-0 w-[280px] lg:w-[80px]'
+                    }`}
+            >
                 {/* Fixed width container to prevent squashing during transition */}
-                <div className={`${isOpen ? 'w-[260px]' : 'lg:w-[80px] w-[260px]'} flex flex-col h-full overflow-hidden transition-all duration-300`}>
+                <div className={`${isOpen ? 'w-[280px]' : 'lg:w-[80px] w-[280px]'} flex flex-col h-full transition-all duration-300`}>
                     {/* Logo Area */}
                     <div className={`h-[72px] flex items-center border-b border-[#031d0d] shrink-0 transition-all duration-300 ${isOpen ? 'px-6 justify-between' : 'lg:px-0 lg:justify-center px-6 justify-between'}`}>
-                        <img
-                            src={logo}
-                            alt="WeighPro Logo"
-                            className={`transition-all duration-300 ${isOpen ? 'h-[50px]' : 'lg:h-[30px] lg:scale-125 h-[50px]'}`}
-                            onError={(e) => { e.target.style.display = 'none' }}
-                        />
-                        <button onClick={() => setIsOpen(false)} className="lg:hidden text-white/70 hover:text-white">
+                        <div className={`flex items-center gap-3 ${!isOpen && 'lg:hidden'}`}>
+                             <img
+                                src={logo}
+                                alt="WeighPro Logo"
+                                className="h-[40px] md:h-[46px] object-contain"
+                                onError={(e) => { e.target.style.display = 'none' }}
+                            />
+                        </div>
+                        {!isOpen && (
+                             <img
+                                src={logo}
+                                alt="WeighPro Logo"
+                                className="hidden lg:block h-[30px] w-[30px] object-contain scale-125"
+                                onError={(e) => { e.target.style.display = 'none' }}
+                            />
+                        )}
+                        <button onClick={() => setIsOpen(false)} className="lg:hidden p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
                             <X size={20} />
                         </button>
                     </div>

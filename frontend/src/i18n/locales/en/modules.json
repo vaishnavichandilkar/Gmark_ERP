@@ -217,7 +217,7 @@
     "add_full_name_of_measurement": "Add Full Name of Measurement",
     "unit_master_desc": "View, verify, and manage all units used for product measurements across the platform",
     "manage_master_units": "Manage Master Units",
-    "add_new_unit": "Add New Measurement Unit",
+    "add_new_unit": "Add Unit",
     "save_unit": "Save Unit",
     "update_unit": "Edit Unit",
     "edit_unit_details": "Edit Unit Details",

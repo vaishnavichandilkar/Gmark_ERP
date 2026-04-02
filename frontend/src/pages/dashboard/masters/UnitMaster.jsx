@@ -77,9 +77,15 @@ const UnitMaster = () => {
 
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (exportRef.current && !exportRef.current.contains(event.target)) {
+            // Check if click was outside both desktop and mobile export triggers/menus
+            const isOutsideExport = 
+                (!exportRef.current || !exportRef.current.contains(event.target)) &&
+                !event.target.closest('.mobile-export-trigger');
+            
+            if (isOutsideExport) {
                 setIsExportOpen(false);
             }
+            
             if (dropdownRef.current && !dropdownRef.current.contains(event.target) && !event.target.closest('[data-dropdown-btn="true"]')) {
                 setActiveDropdown(null);
             }
@@ -171,7 +177,7 @@ const UnitMaster = () => {
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `unit-master_${Date.now()}.pdf`);
+            link.setAttribute('download', `unit_master_export_${Date.now()}.pdf`);
             document.body.appendChild(link);
             link.click();
             link.parentNode.removeChild(link);
@@ -206,7 +212,7 @@ const UnitMaster = () => {
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `unit-master_${Date.now()}.xlsx`);
+            link.setAttribute('download', `unit_master_export_${Date.now()}.xlsx`);
             document.body.appendChild(link);
             link.click();
             link.parentNode.removeChild(link);
@@ -254,103 +260,161 @@ const UnitMaster = () => {
 
             {currentView.type === 'list' ? (
                 <>
-                    <div className="flex flex-col gap-1 mb-8">
-                        <div className="flex items-center justify-between">
-                            <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('unit_master')}</h1>
-                            <button
+                    <div className="flex flex-col gap-1 mb-4 md:mb-8">
+                        {/* Desktop Header */}
+                        <div className="hidden md:flex flex-row items-center justify-between gap-4">
+                            <div className="flex flex-col gap-1">
+                                <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('modules:unit_master')}</h1>
+                                <p className="text-[#6B7280] text-[15px] font-medium leading-relaxed max-w-[600px]">{t('modules:unit_master_desc', 'Manage measurement units for your products')}</p>
+                            </div>
+                            <button 
                                 onClick={() => setCurrentView({ type: 'add', data: null })}
-                                className="px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center"
+                                className="flex items-center gap-2 bg-[#073318] hover:bg-[#04200f] text-white px-6 h-[44px] rounded-[10px] text-[15px] font-bold transition-all shadow-sm active:scale-[0.98] shrink-0"
                             >
-                                {t('add_unit')}
+                                <Plus size={18} />
+                                {t('modules:add_unit')}
                             </button>
                         </div>
-                        <p className="text-[#6B7280] text-[15px]">{t('unit_master_desc')}</p>
+
+                        {/* Mobile Header - Stacked Layout */}
+                        <div className="md:hidden flex flex-col gap-3">
+                            <div className="flex flex-col gap-1">
+                                <h1 className="text-[24px] font-bold text-[#111827] tracking-tight">{t('modules:unit_master')}</h1>
+                                <p className="text-[#6B7280] text-[14px] font-medium leading-relaxed">{t('modules:unit_master_desc', 'Manage measurement units for your products')}</p>
+                            </div>
+                            <button
+                                onClick={() => setCurrentView({ type: 'add', data: null })}
+                                className="flex items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-fit self-end"
+                            >
+                                <Plus size={18} strokeWidth={3} />
+                                {t('modules:add_unit')}
+                            </button>
+                        </div>
                     </div>
 
-                    <div className="master-table-container">
-                        {/* Table Header Section */}
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 border-b border-[#F3F4F6]">
-                            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                                <div className="relative w-full sm:w-[320px]">
+                    <div className={`master-table-container !bg-transparent !shadow-none !border-none md:!bg-white md:!shadow-[0_4px_20px_rgba(0,0,0,0.03)] md:!border md:!border-[#E5E7EB] mb-8 ${activeDropdown ? '!overflow-visible' : ''}`}>
+                        {/* Desktop Action Bar */}
+                        <div className="hidden md:flex items-center justify-between p-6 border-b border-[#F3F4F6] bg-white gap-4 rounded-t-[16px]">
+                            <div className="flex items-center gap-3 flex-1">
+                                <div className="relative flex-1 max-w-[320px]">
                                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                     <input
                                         type="text"
-                                        placeholder={t('common:search_by_anything')}
+                                        placeholder={t('common:search_placeholder', 'Search By Anything...')}
                                         value={searchQuery}
                                         onChange={(e) => {
                                             setSearchQuery(e.target.value);
                                             setCurrentPage(1);
                                         }}
-                                        className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all placeholder:text-gray-400 shadow-sm"
+                                        className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none focus:border-[#073318] transition-all placeholder:text-gray-400 shadow-sm"
                                     />
                                     {searchQuery && (
-                                        <button
-                                            onClick={() => {
-                                                setSearchQuery('');
-                                                setCurrentPage(1);
-                                            }}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                                        >
+                                        <button onClick={() => { setSearchQuery(''); setCurrentPage(1); }} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                             <X size={16} />
                                         </button>
                                     )}
                                 </div>
-                                <button
-                                    onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
-                                    className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-semibold transition-all shadow-sm
-                                                ${isFilterApplied
-                                            ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
-                                            : 'bg-white border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
-                                >
+                                <button onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)} className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all shadow-sm ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-white border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}>
                                     <Filter size={18} className={isFilterApplied ? "text-red-500" : "text-gray-400"} />
-                                    {isFilterApplied ? t('common:clear') : t('common:filter')}
+                                    {isFilterApplied ? t('common:clear', 'Clear') : t('common:filter', 'Filter')}
                                 </button>
-                                <button
-                                    onClick={handleRefresh}
-                                    className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] hover:bg-gray-50 transition-colors bg-white shadow-sm"
-                                    title="Refresh Data"
-                                >
+                                <button onClick={fetchUnits} className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] hover:bg-gray-50 bg-white">
                                     <RefreshCw size={18} className="text-gray-400" />
                                 </button>
                             </div>
-
-                            <div className="relative flex items-center gap-3" ref={exportRef}>
-                                <button
-                                    onClick={() => setIsImportModalOpen(true)}
-                                    className="flex items-center justify-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all duration-200 bg-white shadow-sm"
-                                >
+                            <div className="flex items-center gap-3" ref={exportRef}>
+                                <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all duration-200 bg-white">
                                     <Upload size={18} className="text-gray-400" />
                                     {t('common:import')}
                                 </button>
-                                <ImportModal
-                                    isOpen={isImportModalOpen}
-                                    onClose={() => setIsImportModalOpen(false)}
-                                    onImport={handleImportExcel}
-                                    onDownloadSample={() => unitService.downloadUnitSampleExcel()}
-                                    sampleFileName="unit_master_sample.xlsx"
-                                />
+                                <div className="relative">
+                                    <button onClick={() => setIsExportOpen(!isExportOpen)} className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563]'}`}>
+                                        <Download size={18} />
+                                        {t('common:export')}
+                                    </button>
+                                    {isExportOpen && (
+                                        <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <button onClick={handleExportPDF} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
+                                                <FileText size={18} className="text-red-500" /> PDF
+                                            </button>
+                                            <button onClick={handleExportExcel} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
+                                                <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
 
-                                <button
-                                    onClick={() => setIsExportOpen(!isExportOpen)}
-                                    className={`flex items-center justify-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-semibold transition-all duration-200 bg-white
-                                                        ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
-                                >
-                                    <Download size={18} className={isExportOpen ? 'text-[#073318]' : 'text-gray-400'} />
-                                    {t('common:export')}
-                                </button>
+                        {/* Mobile Action Bar - Consolidated Layout */}
+                        {/* Mobile Action Bar - Optimized One-line Layout */}
+                        <div className="md:hidden mt-2 p-0 w-full mb-2">
+                            <div className="flex items-center gap-1.5 h-[48px]">
+                                {/* Compact Search */}
+                                <div className="flex-1 relative h-full">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                    <input
+                                        type="text"
+                                        placeholder={t('common:search')}
+                                        value={searchQuery}
+                                        onChange={(e) => {
+                                            setSearchQuery(e.target.value);
+                                            setCurrentPage(1);
+                                        }}
+                                        className="w-full h-full bg-white border border-[#E5E7EB] rounded-[12px] pl-8 pr-8 text-[14px] outline-none shadow-sm placeholder:text-gray-400 font-medium"
+                                    />
+                                    {searchQuery && (
+                                        <button onClick={() => { setSearchQuery(''); setCurrentPage(1); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400">
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                </div>
 
-                                {isExportOpen && (
-                                    <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-[50] py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <button onClick={handleExportPDF} className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors">
-                                            <FileText size={18} className="text-red-500" />
-                                            {t('common:pdf')}
+                                {/* Control Buttons Group */}
+                                <div className="flex items-center gap-1 h-full">
+                                    <button
+                                        onClick={fetchUnits}
+                                        className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-400"
+                                        title={t('common:refresh')}
+                                    >
+                                        <RefreshCw size={18} />
+                                    </button>
+
+                                    <button
+                                        onClick={() => setIsImportModalOpen(true)}
+                                        className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-400"
+                                        title={t('common:import')}
+                                    >
+                                        <Upload size={18} />
+                                    </button>
+
+                                    <div className="relative mobile-export-trigger">
+                                        <button
+                                            onClick={() => setIsExportOpen(!isExportOpen)}
+                                            className={`w-[44px] h-[44px] flex items-center justify-center border rounded-[12px] shadow-sm transition-all active:scale-95 ${isExportOpen ? "bg-[#073318] border-[#073318] text-white" : "bg-white border-[#E5E7EB] text-gray-400"}`}
+                                        >
+                                            <Download size={18} />
                                         </button>
-                                        <button onClick={handleExportExcel} className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors">
-                                            <FileSpreadsheet size={18} className="text-green-600" />
-                                            {t('common:excel')}
-                                        </button>
+                                        {isExportOpen && (
+                                            <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-2xl z-[100] py-1 overflow-hidden">
+                                                <button onClick={handleExportPDF} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50">
+                                                    <FileText size={16} className="text-red-500" /> PDF
+                                                </button>
+                                                <button onClick={handleExportExcel} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50 border-t border-gray-100">
+                                                    <FileSpreadsheet size={16} className="text-green-600" /> Excel
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+
+                                    <button
+                                        onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
+                                        className={`w-[44px] h-[44px] flex items-center justify-center border rounded-[12px] shadow-sm transition-all active:scale-95 ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-[#E5E7EB] text-gray-400'}`}
+                                        title={isFilterApplied ? t('common:clear') : t('common:filter')}
+                                    >
+                                        <Filter size={18} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -358,37 +422,37 @@ const UnitMaster = () => {
                             <table className="master-table min-w-[1000px]">
                                 <thead>
                                     <tr>
-                                        <th className="border-r border-white/10">
-                                            <div className="flex items-center gap-2 uppercase tracking-tight">
+                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
+                                            <div className="flex items-center gap-2">
                                                 {t('common:sr_no')}
                                                 <ChevronsUpDown size={14} className="text-gray-300" />
                                             </div>
                                         </th>
-                                        <th className="border-r border-white/10">
-                                            <div className="flex items-center gap-2 uppercase tracking-tight">
+                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
+                                            <div className="flex items-center gap-2">
                                                 {t('modules:unit_name')}
                                                 <ChevronsUpDown size={14} className="text-gray-300" />
                                             </div>
                                         </th>
-                                        <th className="border-r border-white/10">
-                                            <div className="flex items-center gap-2 uppercase tracking-tight">
+                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
+                                            <div className="flex items-center gap-2">
                                                 {t('modules:gst_uom')}
                                                 <ChevronsUpDown size={14} className="text-gray-300" />
                                             </div>
                                         </th>
-                                        <th className="border-r border-white/10 uppercase tracking-tight">
+                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
                                             <div className="flex items-center gap-2">
                                                 {t('modules:full_name_of_measurement')}
                                                 <ChevronsUpDown size={14} className="text-gray-300" />
                                             </div>
                                         </th>
-                                        <th className="border-r border-white/10 uppercase tracking-tight">
+                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
                                             <div className="flex items-center gap-2">
                                                 {t('common:status')}
                                                 <ChevronsUpDown size={14} className="text-gray-300" />
                                             </div>
                                         </th>
-                                        <th className="text-center uppercase tracking-tight">{t('common:action')}</th>
+                                        <th className="px-3 md:px-6 py-3 md:py-4 text-center uppercase tracking-tight">{t('common:action')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="text-[14px] text-[#111827]">
@@ -403,17 +467,17 @@ const UnitMaster = () => {
                                         </tr>
                                     ) : tableData.length > 0 ? tableData.map((row, index) => (
                                         <tr key={row.id} className="border-b border-[#F3F4F6] last:border-b-0 hover:bg-[#F9FAFB] transition-all group">
-                                            <td className="px-6 py-5 text-gray-500 font-medium border-r border-[#F3F4F6]">{startIndex + index + 1}</td>
-                                            <td className="px-6 py-5 font-bold text-[#111827] border-r border-[#F3F4F6]">{row.unit_name}</td>
-                                            <td className="px-6 py-5 text-[#6B7280] max-w-[300px] truncate border-r border-[#F3F4F6]">{row.full_name_of_measurement || '-'}</td>
-                                            <td className="px-6 py-5 font-medium text-[#4B5563] border-r border-[#F3F4F6]">{row.gst_uom}</td>
-                                            <td className="px-6 py-5 border-r border-[#F3F4F6]">
+                                            <td className="px-3 md:px-6 py-3 md:py-5 text-gray-500 font-medium border-r border-[#F3F4F6]">{startIndex + index + 1}</td>
+                                            <td className="px-3 md:px-6 py-3 md:py-5 font-bold text-[#111827] border-r border-[#F3F4F6]">{row.unit_name}</td>
+                                            <td className="px-3 md:px-6 py-3 md:py-5 text-[#6B7280] max-w-[300px] truncate border-r border-[#F3F4F6]">{row.full_name_of_measurement || '-'}</td>
+                                            <td className="px-3 md:px-6 py-3 md:py-5 font-medium text-[#4B5563] border-r border-[#F3F4F6]">{row.gst_uom}</td>
+                                            <td className="px-3 md:px-6 py-3 md:py-5 border-r border-[#F3F4F6]">
                                                 <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${row.status === 'ACTIVE' ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
                                                     <span className={`w-1.5 h-1.5 rounded-full ${row.status === 'ACTIVE' ? 'bg-[#059669]' : 'bg-[#DC2626]'}`}></span>
                                                     {row.status === 'ACTIVE' ? t('common:active') : t('common:inactive')}
                                                 </div>
                                             </td>
-                                            <td className={`px-6 py-5 text-center relative ${activeDropdown === row.id ? 'z-[100]' : ''}`} ref={activeDropdown === row.id ? dropdownRef : null}>
+                                            <td className={`px-3 md:px-6 py-3 md:py-5 text-center relative ${activeDropdown === row.id ? 'z-[100]' : ''}`} ref={activeDropdown === row.id ? dropdownRef : null}>
                                                 <button
                                                     onClick={(e) => toggleDropdown(row.id, e)}
                                                     data-dropdown-btn="true"
@@ -468,48 +532,53 @@ const UnitMaster = () => {
                             </table>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row items-center justify-between px-8 py-6 border-t border-[#F3F4F6] bg-white gap-4">
-                            <div className="flex items-center gap-3 text-[14px] text-[#6B7280] font-medium">
-                                <span>{t('common:show')}</span>
-                                <div className="relative group">
-                                    <select
-                                        value={itemsPerPage}
-                                        onChange={(e) => {
-                                            setItemsPerPage(Number(e.target.value));
-                                            setCurrentPage(1);
-                                        }}
-                                        className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#0A3622] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
-                                    >
-                                        <option value={5}>5</option>
-                                        <option value={10}>10</option>
-                                        <option value={20}>20</option>
-                                        <option value={50}>50</option>
-                                    </select>
-                                    <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#0A3622]" />
+                        <div className="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-5 sm:py-6 border-t border-[#F3F4F6] bg-white gap-6">
+                            <div className="flex items-center justify-between w-full sm:w-auto gap-3 text-[14px] text-[#6B7280] font-medium order-2 sm:order-1 border-t sm:border-0 pt-4 sm:pt-0">
+                                <div className="flex items-center gap-2">
+                                    <span>{t('common:show')}</span>
+                                    <div className="relative group">
+                                        <select
+                                            value={itemsPerPage}
+                                            onChange={(e) => {
+                                                setItemsPerPage(Number(e.target.value));
+                                                setCurrentPage(1);
+                                            }}
+                                            className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#0A3622] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
+                                        >
+                                            <option value={5}>5</option>
+                                            <option value={10}>10</option>
+                                            <option value={20}>20</option>
+                                            <option value={50}>50</option>
+                                        </select>
+                                        <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#0A3622]" />
+                                    </div>
+                                    <span>{t('common:per_page')}</span>
                                 </div>
-                                <span>{t('common:per_page')}</span>
+                                <span className="sm:hidden text-gray-400">
+                                    {totalItems > 0 ? `${startIndex + 1}-${endIndex} / ${totalItems}` : `0-0 / 0`}
+                                </span>
                             </div>
 
-                            <div className="flex items-center gap-6">
-                                <span className="text-[#6B7280] text-[14px] font-medium">
+                            <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full sm:w-auto order-1 sm:order-2">
+                                <span className="hidden sm:inline text-[#6B7280] text-[14px] font-medium">
                                     {totalItems > 0 ? `${startIndex + 1}-${endIndex} of ${totalItems}` : `0-0 of 0`}
                                 </span>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center justify-center gap-1.5 w-full sm:w-auto">
                                     <button
                                         onClick={() => handlePageChange(currentPage - 1)}
                                         disabled={currentPage === 1}
-                                        className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px]"
+                                        className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
                                     >
-                                        <ArrowLeft size={20} />
+                                        <ArrowLeft size={18} />
                                     </button>
-                                    <div className="flex items-center gap-1.5">
+                                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-[180px] sm:max-w-none px-1">
                                         {getVisiblePages().map((page, index) => (
                                             <button
                                                 key={index}
                                                 onClick={() => handlePageChange(page)}
-                                                className={`w-10 h-10 rounded-[10px] flex items-center justify-center transition-all text-[14px] font-bold
+                                                className={`min-w-[36px] sm:min-w-[40px] h-[36px] sm:h-[40px] rounded-[10px] flex items-center justify-center transition-all text-[13px] sm:text-[14px] font-bold
                                                                     ${currentPage === page
-                                                        ? 'bg-[#F9FAFB] text-[#111827] shadow-sm'
+                                                        ? 'bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100'
                                                         : 'text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]'
                                                     }`}
                                             >
@@ -520,9 +589,9 @@ const UnitMaster = () => {
                                     <button
                                         onClick={() => handlePageChange(currentPage + 1)}
                                         disabled={currentPage === totalPages || totalPages === 0}
-                                        className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px]"
+                                        className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
                                     >
-                                        <ArrowRight size={20} />
+                                        <ArrowRight size={18} />
                                     </button>
                                 </div>
                             </div>
@@ -622,6 +691,16 @@ const UnitMaster = () => {
                         showToast(message);
                         fetchUnits();
                     }}
+                />
+            )}
+            {isImportModalOpen && (
+                <ImportModal
+                    isOpen={isImportModalOpen}
+                    onClose={() => setIsImportModalOpen(false)}
+                    onImport={handleImportExcel}
+                    onDownloadSample={() => unitService.downloadUnitSampleExcel()}
+                    sampleFileName="Unit_Master_Sample.xlsx"
+                    sampleHeaders={['Unit Name', 'GST UOM', 'Full Name Of Measurement', 'Status']}
                 />
             )}
         </div>

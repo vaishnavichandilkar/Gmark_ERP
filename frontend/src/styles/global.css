@@ -63,4 +63,59 @@ body {
 
 .master-table th:last-child {
     border-right: none;
-}
+}
+
+/* Responsive Utilities */
+@media (max-width: 1024px) {
+    .master-table-container {
+        border-radius: 12px;
+        margin-bottom: 1.5rem;
+    }
+}
+
+@media (max-width: 640px) {
+    .master-table-container {
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        margin-left: -1rem;
+        margin-right: -1rem;
+        margin-bottom: 1rem;
+    }
+
+    .master-table th, .master-table td {
+        padding: 1rem 0.75rem;
+    }
+    
+    .master-table-wrapper {
+        min-height: 300px;
+    }
+}
+
+/* Standard Form Layout Utilities */
+.form-grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 1024px) {
+    .form-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Scrollbar Hide Utility */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}

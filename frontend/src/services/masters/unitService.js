@@ -87,6 +87,13 @@ const unitService = {
         link.click();
         link.remove();
     },
+    exportUnits: async (params) => {
+        const response = await axiosInstance.get('/master/export', {
+            params,
+            responseType: 'blob'
+        });
+        return response;
+    }
 };
 
 export default unitService;

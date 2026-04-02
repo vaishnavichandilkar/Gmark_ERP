@@ -10,6 +10,7 @@ import {
   Trash2,
   Plus,
   Info,
+  X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import accountService from "../../../../services/accountService";
@@ -876,18 +877,20 @@ const AddAccount = ({
             )}
             <button
               onClick={onBack}
-              className="flex items-center gap-2 px-6 h-[40px] border border-[#E5E7EB] text-[#4B5563] rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
+              className="group flex items-center justify-center w-10 h-10 md:w-auto md:h-[40px] md:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[10px] md:rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
+              title={t("common:back")}
             >
-              <ArrowLeft size={16} />
-              {t("common:back")}
+              <X size={22} className="md:hidden text-gray-500" />
+              <ArrowLeft size={16} className="hidden md:block" />
+              <span className="hidden md:inline ml-2">{t("common:back")}</span>
             </button>
           </div>
         </div>
-        <div className="p-6 md:p-8">
-          <div className="flex flex-col gap-10">
-            {/* 1. Basic Details */}
-            <div className="flex flex-col gap-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+        <div className="p-4 sm:p-6 md:p-8">
+            <div className="flex flex-col gap-8 md:gap-10">
+              {/* 1. Basic Details */}
+              <div className="flex flex-col gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 {/* Account Name */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[13px] font-semibold text-[#4B5563]">
@@ -1031,9 +1034,13 @@ const AddAccount = ({
                     </p>
                   )}
                 </div>
+                </div>
+              </div>
 
-                {/* Address */}
-                <div className="flex flex-col gap-1.5 col-span-1 md:col-span-2">
+              {/* Address Details Flow */}
+              <div className="form-grid">
+                  {/* Address */}
+                  <div className="flex flex-col gap-1.5 col-span-full">
                   <label className="text-[13px] font-semibold text-[#4B5563]">
                     {t("modules:address_1")}{" "}
                     <span className="text-red-500">*</span>
@@ -1053,8 +1060,8 @@ const AddAccount = ({
                       {errors.address1}
                     </p>
                   )}
-                </div>
-                <div className="flex flex-col gap-1.5 col-span-1 md:col-span-2">
+                  </div>
+                  <div className="flex flex-col gap-1.5 col-span-full">
                   <label className="text-[13px] font-semibold text-[#4B5563]">
                     {t("modules:address_2")} ({t("common:optional")})
                   </label>
@@ -1152,104 +1159,103 @@ const AddAccount = ({
                   <label className="text-[13px] font-semibold text-[#4B5563]">
                     {t("modules:country")} ({t("common:optional")})
                   </label>
-                  <input
-                    type="text"
-                    readOnly
-                    placeholder={`${t("modules:country")} ${t("modules:fetched_automatically")}`}
-                    className="w-full h-[44px] border border-[#E5E7EB] bg-gray-50 text-gray-500 rounded-[8px] px-4 text-[14px] outline-none cursor-not-allowed"
-                    value={formData.country}
+                    <input
+                      type="text"
+                      readOnly
+                      placeholder={`${t("modules:country")} ${t("modules:fetched_automatically")}`}
+                      className="w-full h-[44px] border border-[#E5E7EB] bg-gray-50 text-gray-500 rounded-[8px] px-4 text-[14px] outline-none cursor-not-allowed"
+                      value={formData.country}
+                    />
+                  </div>
+                </div>
+              {/* 2. Contact Person Details */}
+              <div className="flex flex-col gap-6 pt-10 border-t border-[#E5E7EB]">
+                <h3 className="text-[16px] font-bold text-[#111827]">
+                  {t("modules:contact_person_details")}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                  <CustomSelect
+                    label={t("modules:prefix")}
+                    required={true}
+                    placeholder={t("modules:select_prefix")}
+                    options={PREFIX_OPTIONS}
+                    value={formData.prefix}
+                    onChange={(val) => handleInputChange("prefix", val)}
+                    onBlur={() => validateField("prefix", formData.prefix)}
+                    error={errors.prefix}
                   />
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[13px] font-semibold text-[#4B5563]">
+                      {t("modules:contact_person_name")}{" "}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={t("modules:enter_person_name")}
+                      className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.contactPersonName ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
+                      value={formData.contactPersonName}
+                      onChange={(e) =>
+                        handleInputChange("contactPersonName", e.target.value)
+                      }
+                      onBlur={() =>
+                        validateField(
+                          "contactPersonName",
+                          formData.contactPersonName,
+                        )
+                      }
+                    />
+                    {errors.contactPersonName && (
+                      <p className="text-[12px] text-red-500 mt-0.5">
+                        {errors.contactPersonName}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[13px] font-semibold text-[#4B5563]">
+                      {t("modules:email_id")} ({t("common:optional")})
+                    </label>
+                    <input
+                      type="email"
+                      placeholder={t("modules:enter_email_id")}
+                      className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.emailId ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
+                      value={formData.emailId}
+                      onChange={(e) =>
+                        handleInputChange("emailId", e.target.value)
+                      }
+                      onBlur={() => validateField("emailId", formData.emailId)}
+                    />
+                    {errors.emailId && (
+                      <p className="text-[12px] text-red-500 mt-0.5">
+                        {errors.emailId}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[13px] font-semibold text-[#4B5563]">
+                      {t("modules:mobile_no")}{" "}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={10}
+                      placeholder={t("modules:enter_mobile_number")}
+                      className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.mobileNo ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
+                      value={formData.mobileNo}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "");
+                        if (val.length <= 10) handleInputChange("mobileNo", val);
+                      }}
+                      onBlur={() => validateField("mobileNo", formData.mobileNo)}
+                    />
+                    {errors.mobileNo && (
+                      <p className="text-[12px] text-red-500 mt-0.5">
+                        {errors.mobileNo}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* 2. Contact Person Details */}
-            <div className="flex flex-col gap-6">
-              <h3 className="text-[16px] font-bold text-[#111827] border-b pb-2">
-                {t("modules:contact_person_details")}
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                <CustomSelect
-                  label={t("modules:prefix")}
-                  required={true}
-                  placeholder={t("modules:select_prefix")}
-                  options={PREFIX_OPTIONS}
-                  value={formData.prefix}
-                  onChange={(val) => handleInputChange("prefix", val)}
-                  onBlur={() => validateField("prefix", formData.prefix)}
-                  error={errors.prefix}
-                />
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-semibold text-[#4B5563]">
-                    {t("modules:contact_person_name")}{" "}
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={t("modules:enter_person_name")}
-                    className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.contactPersonName ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
-                    value={formData.contactPersonName}
-                    onChange={(e) =>
-                      handleInputChange("contactPersonName", e.target.value)
-                    }
-                    onBlur={() =>
-                      validateField(
-                        "contactPersonName",
-                        formData.contactPersonName,
-                      )
-                    }
-                  />
-                  {errors.contactPersonName && (
-                    <p className="text-[12px] text-red-500 mt-0.5">
-                      {errors.contactPersonName}
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-semibold text-[#4B5563]">
-                    {t("modules:email_id")} ({t("common:optional")})
-                  </label>
-                  <input
-                    type="email"
-                    placeholder={t("modules:enter_email_id")}
-                    className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.emailId ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
-                    value={formData.emailId}
-                    onChange={(e) =>
-                      handleInputChange("emailId", e.target.value)
-                    }
-                    onBlur={() => validateField("emailId", formData.emailId)}
-                  />
-                  {errors.emailId && (
-                    <p className="text-[12px] text-red-500 mt-0.5">
-                      {errors.emailId}
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-semibold text-[#4B5563]">
-                    {t("modules:mobile_no")}{" "}
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={10}
-                    placeholder={t("modules:enter_mobile_number")}
-                    className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.mobileNo ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
-                    value={formData.mobileNo}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, "");
-                      if (val.length <= 10) handleInputChange("mobileNo", val);
-                    }}
-                    onBlur={() => validateField("mobileNo", formData.mobileNo)}
-                  />
-                  {errors.mobileNo && (
-                    <p className="text-[12px] text-red-500 mt-0.5">
-                      {errors.mobileNo}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
 
             {/* 3. Ledger Details */}
             <div className="flex flex-col gap-6">
@@ -1280,7 +1286,7 @@ const AddAccount = ({
                       className="w-full h-[44px] border border-[#E5E7EB] bg-gray-50 text-gray-500 rounded-[8px] px-4 text-[14px] outline-none cursor-not-allowed"
                     />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
+                  <div className="form-grid">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[13px] font-semibold text-[#4B5563]">
                         {t("modules:credit_days")}
@@ -1574,7 +1580,7 @@ const AddAccount = ({
 
             {/* 5. MSME Details */}
             <div className="flex flex-col gap-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 items-start">
+              <div className="form-grid items-start">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[13px] font-semibold text-[#4B5563]">
                     {t("modules:msme")} ({t("common:optional")})
@@ -1669,11 +1675,11 @@ const AddAccount = ({
           </div>
 
           {!isEditMode && (
-            <div className="mt-10 flex justify-end gap-4 py-4 border-t">
+            <div className="mt-10 flex flex-col sm:flex-row justify-end gap-3 md:gap-4 py-6 border-t border-[#E5E7EB]">
               <button
                 onClick={handleSave}
                 disabled={isLoading}
-                className={`px-8 h-[40px] rounded-[8px] text-[14px] font-semibold transition-colors flex items-center justify-center min-w-[160px] ${
+                className={`w-full sm:w-auto px-10 h-[48px] rounded-[10px] text-[15px] font-bold transition-all flex items-center justify-center min-w-[180px] order-1 sm:order-2 ${
                   !isLoading
                     ? "bg-[#073318] hover:bg-[#04200f] text-white shadow-md"
                     : "bg-gray-400 text-white cursor-wait"
@@ -1686,7 +1692,7 @@ const AddAccount = ({
               </button>
               <button
                 onClick={onBack}
-                className="px-8 h-[40px] bg-white border border-[#E5E7EB] text-[#4B5563] rounded-[8px] text-[14px] font-semibold hover:bg-gray-50 transition-colors flex items-center justify-center"
+                className="w-full sm:w-auto px-10 h-[48px] bg-white border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[15px] font-bold hover:bg-gray-50 hover:text-[#111827] transition-all flex items-center justify-center order-2 sm:order-1 shadow-sm"
               >
                 {t("common:cancel")}
               </button>

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
+  Plus,
   Search,
   Download,
   Filter,
@@ -76,9 +77,15 @@ const ProductMaster = () => {
   // Handle click outside for export and action dropdowns
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (exportRef.current && !exportRef.current.contains(event.target)) {
-        setIsExportOpen(false);
+      // Check if click was outside both desktop and mobile export triggers/menus
+      const isOutsideExport = 
+          (!exportRef.current || !exportRef.current.contains(event.target)) &&
+          !event.target.closest('.mobile-export-trigger');
+      
+      if (isOutsideExport) {
+          setIsExportOpen(false);
       }
+      
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setActiveDropdown(null);
       }
@@ -284,10 +291,11 @@ const ProductMaster = () => {
       );
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", "product-master.pdf");
+      link.setAttribute("download", `product_master_export_${Date.now()}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
+      showToast("PDF Exported Successfully");
     } catch (e) {
       console.error("Export failed", e);
       if (e.response && e.response.data instanceof Blob) {
@@ -325,10 +333,11 @@ const ProductMaster = () => {
       );
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", "product-master.xlsx");
+      link.setAttribute("download", `product_master_export_${Date.now()}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
+      showToast("Excel Exported Successfully");
     } catch (e) {
       console.error("Export failed", e);
       if (e.response && e.response.data instanceof Blob) {
@@ -358,78 +367,76 @@ const ProductMaster = () => {
       {/* Conditional Content: Table or Form */}
       {currentView.type === "list" ? (
         <>
-          <div className="flex flex-col gap-1 mb-8">
-            <div className="flex items-center justify-between">
-              <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">
-                {t("modules:product_master")}
-              </h1>
+          <div className="flex flex-col gap-1 mb-4 md:mb-8">
+            {/* Desktop Header */}
+            <div className="hidden md:flex flex-row items-center justify-between gap-4">
+              <div className="flex flex-col gap-1">
+                <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t("modules:product_master")}</h1>
+                <p className="text-[#6B7280] text-[15px] font-medium leading-relaxed max-w-[600px]">{t("modules:product_master_desc", "Manage products and their technical details")}</p>
+              </div>
               <button
                 onClick={() => setCurrentView({ type: "add", data: null })}
-                className="w-full sm:w-auto px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center"
+                className="flex flex-row items-center justify-center gap-2 bg-[#073318] hover:bg-[#04200f] text-white px-6 h-[44px] rounded-[10px] text-[15px] font-bold transition-all shadow-sm active:scale-[0.98] shrink-0 whitespace-nowrap"
               >
+                <Plus size={18} />
                 {t("modules:add_product")}
               </button>
             </div>
-            <p className="text-[#6B7280] text-[15px]">
-              {t("modules:product_master_desc")}
-            </p>
+
+            {/* Mobile Header - Stacked Layout */}
+            <div className="md:hidden flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <h1 className="text-[24px] font-bold text-[#111827] tracking-tight">{t("modules:product_master")}</h1>
+                <p className="text-[#6B7280] text-[14px] font-medium leading-relaxed">{t("modules:product_master_desc", "Manage products and their technical details")}</p>
+              </div>
+              <button
+                onClick={() => setCurrentView({ type: "add", data: null })}
+                className="flex flex-row items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-fit self-end whitespace-nowrap"
+              >
+                <Plus size={18} strokeWidth={3} />
+                <span className="whitespace-nowrap">{t("modules:add_product")}</span>
+              </button>
+            </div>
           </div>
 
-          {/* Table Area */}
-          <div className="master-table-container">
-            {/* Table Header Section */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 border-b border-[#F3F4F6]">
-              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                <div className="relative w-full sm:w-[320px]">
+          <div 
+            className={`master-table-container !bg-transparent !shadow-none !border-none md:!bg-white md:!shadow-[0_4px_20px_rgba(0,0,0,0.03)] md:!border md:!border-[#E5E7EB] mb-8 ${
+              activeDropdown ? "!overflow-visible" : ""
+            }`}
+          >
+            {/* Desktop Action Bar */}
+            <div className="hidden md:flex items-center justify-between p-6 border-b border-[#F3F4F6] bg-white gap-4 rounded-t-[16px]">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="relative flex-1 max-w-[320px]">
                   <Search
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold"
                     size={18}
                   />
                   <input
                     type="text"
-                    placeholder={t('common:search_by_anything')}
+                    placeholder={t('common:search_placeholder', 'Search By Anything...')}
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
                       setCurrentPage(1);
                     }}
-                    className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all placeholder:text-gray-400 shadow-sm"
+                    className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] transition-all placeholder:text-gray-400 shadow-sm"
                   />
                   {searchQuery && (
-                    <button
-                      onClick={() => {
-                        setSearchQuery("");
-                        setCurrentPage(1);
-                      }}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                    >
+                    <button onClick={() => { setSearchQuery(""); setCurrentPage(1); }} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                       <X size={16} />
                     </button>
                   )}
                 </div>
                 <button
-                  onClick={() =>
-                    isFilterApplied
-                      ? handleClearFilter()
-                      : setIsFilterOpen(true)
-                  }
-                  className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all shadow-sm
-                                        ${
-                                          isFilterApplied
-                                            ? "bg-red-50 border-red-200 text-red-600 hover:bg-red-100"
-                                            : "bg-white border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50"
-                                        }`}
+                  onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
+                  className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all shadow-sm ${isFilterApplied ? "bg-red-50 border-red-200 text-red-600 hover:bg-red-100" : "bg-white border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50"}`}
                 >
-                  <Filter
-                    size={18}
-                    className={
-                      isFilterApplied ? "text-red-500" : "text-gray-400"
-                    }
-                  />
+                  <Filter size={18} className={isFilterApplied ? "text-red-500" : "text-gray-400"} />
                   {isFilterApplied ? t("common:clear") : t("common:filter")}
                 </button>
                 <button
-                  className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] hover:bg-gray-50 transition-colors bg-white shadow-sm"
+                  className="flex-shrink-0 flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] hover:bg-gray-50 transition-colors bg-white shadow-sm"
                   title="Refresh Data"
                   onClick={handleRefresh}
                 >
@@ -437,64 +444,98 @@ const ProductMaster = () => {
                 </button>
               </div>
 
-              <div className="relative flex items-center gap-3" ref={exportRef}>
-                <button
-                  onClick={() => setIsImportModalOpen(true)}
-                  className="flex items-center justify-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all duration-200 bg-white shadow-sm"
-                >
+              <div className="flex items-center gap-3" ref={exportRef}>
+                <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all duration-200 bg-white shadow-sm">
                   <Upload size={18} className="text-gray-400" />
-                  {t('common:import', 'Import')}
+                  {t('common:import')}
                 </button>
-                <ImportModal
-                  isOpen={isImportModalOpen}
-                  onClose={() => setIsImportModalOpen(false)}
-                  onImport={handleImportExcel}
-                  onDownloadSample={async () => {
-                    const response = await productService.downloadSample();
-                    const url = window.URL.createObjectURL(new Blob([response.data]));
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.setAttribute('download', 'Product_Master_Sample.xlsx');
-                    document.body.appendChild(link);
-                    link.click();
-                    link.parentNode.removeChild(link);
-                  }}
-                  sampleFileName="Product_Master_Sample.xlsx"
-                  sampleHeaders={['Product Name*', 'UOM*', 'Product Type*', 'Category*', 'Sub Category*', 'HSN Code*', 'Product Description', 'Status']}
-                />
+                <div className="relative">
+                  <button onClick={() => setIsExportOpen(!isExportOpen)} className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isExportOpen ? "border-[#073318] text-[#073318]" : "border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50"}`}>
+                    <Download size={18} />
+                    {t("common:export")}
+                  </button>
+                  {isExportOpen && (
+                    <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <button onClick={handleExportPDF} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
+                        <FileText size={18} className="text-red-500" /> PDF
+                      </button>
+                      <button onClick={handleExportExcel} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
+                        <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
 
-                <button
-                  onClick={() => setIsExportOpen(!isExportOpen)}
-                  className={`flex items-center justify-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all duration-200 bg-white
-                                                        ${isExportOpen ? "border-[#073318] text-[#073318]" : "border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50"}`}
-                >
-                  <Download
-                    size={18}
-                    className={
-                      isExportOpen ? "text-[#073318]" : "text-gray-400"
-                    }
+            {/* Mobile Action Bar - Optimized One-line Layout */}
+            <div className="md:hidden mt-2 p-0 w-full mb-3">
+              <div className="flex items-center gap-1.5 h-[48px]">
+                {/* Compact Search */}
+                <div className="flex-1 relative h-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder={t('common:search')}
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full h-full bg-white border border-[#E5E7EB] rounded-[12px] pl-8 pr-8 text-[14px] outline-none shadow-sm placeholder:text-gray-400 font-medium"
                   />
-                  {t("common:export")}
-                </button>
+                  {searchQuery && (
+                    <button onClick={() => { setSearchQuery(""); setCurrentPage(1); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400">
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
 
-                {isExportOpen && (
-                  <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-[50] py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                {/* Control Buttons Group */}
+                <div className="flex items-center gap-1 h-full">
+                  <button
+                    onClick={handleRefresh}
+                    className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-400"
+                    title={t('common:refresh')}
+                  >
+                    <RefreshCw size={18} />
+                  </button>
+
+                  <button
+                    onClick={() => setIsImportModalOpen(true)}
+                    className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-400"
+                    title={t('common:import')}
+                  >
+                    <Upload size={18} />
+                  </button>
+
+                  <div className="relative mobile-export-trigger">
                     <button
-                      onClick={handleExportPDF}
-                      className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors"
+                      onClick={() => setIsExportOpen(!isExportOpen)}
+                      className={`w-[44px] h-[44px] flex items-center justify-center border rounded-[12px] shadow-sm transition-all active:scale-95 ${isExportOpen ? "bg-[#073318] border-[#073318] text-white" : "bg-white border-[#E5E7EB] text-gray-400"}`}
                     >
-                      <FileText size={18} className="text-red-500" />
-                      {t("common:pdf")}
+                      <Download size={18} />
                     </button>
-                    <button
-                      onClick={handleExportExcel}
-                      className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors"
-                    >
-                      <FileSpreadsheet size={18} className="text-green-600" />
-                      {t("common:excel")}
-                    </button>
+                    {isExportOpen && (
+                      <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-2xl z-[100] py-1 overflow-hidden">
+                        <button onClick={handleExportPDF} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50">
+                          <FileText size={16} className="text-red-500" /> PDF
+                        </button>
+                        <button onClick={handleExportExcel} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50 border-t border-gray-50">
+                          <FileSpreadsheet size={16} className="text-green-600" /> Excel
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
+
+                  <button
+                    onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
+                    className={`w-[44px] h-[44px] flex items-center justify-center border rounded-[12px] shadow-sm transition-all active:scale-95 ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-[#E5E7EB] text-gray-400'}`}
+                    title={isFilterApplied ? t('common:clear') : t('common:filter')}
+                  >
+                    <Filter size={18} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -502,61 +543,61 @@ const ProductMaster = () => {
               <table className="master-table min-w-[1200px]">
                 <thead>
                   <tr>
-                    <th className="border-r border-white/10">
+                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                       <div className="flex items-center gap-2 uppercase tracking-tight">
                         {t("product_code")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
-                    <th className="border-r border-white/10">
+                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                       <div className="flex items-center gap-2 uppercase tracking-tight">
                         {t("product_name")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
-                    <th className="border-r border-white/10">
+                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                       <div className="flex items-center gap-2 uppercase tracking-tight">
                         {t("modules:gst_uom", "GST UOM")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
-                    <th className="border-r border-white/10">
+                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                       <div className="flex items-center gap-2 uppercase tracking-tight">
                         {t("product_type")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
-                    <th className="border-r border-white/10">
+                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                       <div className="flex items-center gap-2 uppercase tracking-tight">
                         {t("category")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
-                    <th className="border-r border-white/10">
+                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                       <div className="flex items-center gap-2 uppercase tracking-tight">
                         {t("sub_category")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
-                    <th className="border-r border-white/10">
+                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                       <div className="flex items-center gap-2 uppercase tracking-tight">
                         {t("hsn_code")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
-                    <th className="border-r border-white/10">
+                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                       <div className="flex items-center gap-2 uppercase tracking-tight">
                         {t("tax_percent")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
-                    <th className="border-r border-white/10">
+                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                       <div className="flex items-center gap-2 uppercase tracking-tight">
                         {t("common:status")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
-                    <th className="text-center uppercase tracking-tight">
+                    <th className="px-3 md:px-6 py-3 md:py-4 text-center uppercase tracking-tight">
                       {t("common:action")}
                     </th>
                   </tr>
@@ -579,31 +620,31 @@ const ProductMaster = () => {
                         key={row.id}
                         className="border-b border-[#F3F4F6] last:border-b-0 hover:bg-[#F9FAFB] transition-all group"
                       >
-                        <td className="px-6 py-5 font-bold text-[#111827] border-r border-[#F3F4F6]">
+                        <td className="px-3 md:px-6 py-3 md:py-4 font-bold text-[#111827] border-r border-[#F3F4F6]">
                           {row.product_code}
                         </td>
-                        <td className="px-6 py-5 font-bold text-[#111827] border-r border-[#F3F4F6]">
+                        <td className="px-3 md:px-6 py-3 md:py-4 font-bold text-[#111827] border-r border-[#F3F4F6]">
                           {translateDynamic(row.product_name, t)}
                         </td>
-                        <td className="px-6 py-5 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
+                        <td className="px-3 md:px-6 py-3 md:py-4 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
                           {translateDynamic(row.uom?.gst_uom, t)}
                         </td>
-                        <td className="px-6 py-5 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
+                        <td className="px-3 md:px-6 py-3 md:py-4 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
                           {translateDynamic(row.product_type, t)}
                         </td>
-                        <td className="px-6 py-5 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
+                        <td className="px-3 md:px-6 py-3 md:py-4 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
                           {translateDynamic(row.category?.name, t)}
                         </td>
-                        <td className="px-6 py-5 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
+                        <td className="px-3 md:px-6 py-3 md:py-4 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
                           {translateDynamic(row.sub_category?.name, t)}
                         </td>
-                        <td className="px-6 py-5 text-[#6B7280] border-r border-[#F3F4F6]">
+                        <td className="px-3 md:px-6 py-3 md:py-4 text-[#6B7280] border-r border-[#F3F4F6]">
                           {row.hsn_code}
                         </td>
-                        <td className="px-6 py-5 text-[#6B7280] border-r border-[#F3F4F6]">
+                        <td className="px-3 md:px-6 py-3 md:py-4 text-[#6B7280] border-r border-[#F3F4F6]">
                           {row.tax_rate}%
                         </td>
-                        <td className="px-6 py-5 border-r border-[#F3F4F6]">
+                        <td className="px-3 md:px-6 py-3 md:py-4 border-r border-[#F3F4F6]">
                           <div
                             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${row.status.toUpperCase() === "ACTIVE" ? "bg-[#ECFDF5] text-[#059669]" : "bg-[#FEF2F2] text-[#DC2626]"}`}
                           >
@@ -616,7 +657,7 @@ const ProductMaster = () => {
                           </div>
                         </td>
                         <td
-                          className={`px-6 py-5 text-center relative ${activeDropdown === row.id ? "z-[100]" : ""}`}
+                          className={`px-3 md:px-6 py-3 md:py-4 text-center relative ${activeDropdown === row.id ? "z-[100]" : ""}`}
                           ref={activeDropdown === row.id ? dropdownRef : null}
                         >
                           <button
@@ -697,8 +738,8 @@ const ProductMaster = () => {
             </div>
 
             {/* Pagination */}
-            <div className="flex flex-col sm:flex-row items-center justify-between px-8 py-6 border-t border-[#F3F4F6] bg-white gap-4">
-              <div className="flex items-center gap-3 text-[14px] text-[#6B7280] font-medium">
+            <div className="flex flex-col md:flex-row items-center justify-between px-4 md:px-8 py-6 border-t border-[#F3F4F6] bg-white gap-6">
+              <div className="flex items-center justify-center md:justify-start gap-3 text-[14px] text-[#6B7280] font-medium w-full md:w-auto">
                 <span>{t("common:show")}</span>
                 <div className="relative group">
                   <select
@@ -722,7 +763,7 @@ const ProductMaster = () => {
                 <span>{t("common:per_page")}</span>
               </div>
 
-              <div className="flex items-center gap-6">
+              <div className="flex flex-col xs:flex-row items-center justify-center md:justify-end gap-4 md:gap-6 w-full md:w-auto text-center md:text-left transition-all">
                 <span className="text-[#6B7280] text-[14px] font-medium">
                   {totalItems > 0
                     ? `${startIndex + 1}–${endIndex} of ${totalItems}`
@@ -732,9 +773,9 @@ const ProductMaster = () => {
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px]"
+                    className="w-[38px] h-[38px] md:w-10 md:h-10 flex items-center justify-center text-[#6B7280] border border-[#E5E7EB] md:border-none hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px]"
                   >
-                    <ArrowLeft size={20} />
+                    <ArrowLeft size={18} />
                   </button>
                   <div className="flex items-center gap-1.5">
                     {getVisiblePages().map((page, index) => (
@@ -745,11 +786,11 @@ const ProductMaster = () => {
                             ? handlePageChange(page)
                             : null
                         }
-                        className={`w-10 h-10 rounded-[10px] flex items-center justify-center transition-all text-[14px] font-bold
+                        className={`w-[38px] h-[38px] md:w-10 md:h-10 rounded-[10px] flex items-center justify-center transition-all text-[14px] font-bold
                                                     ${
                                                       currentPage === page
-                                                        ? "bg-[#F9FAFB] text-[#111827] shadow-sm"
-                                                        : "text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]"
+                                                        ? "bg-[#073318] text-white shadow-md"
+                                                        : "text-[#6B7280] border border-transparent hover:border-[#E5E7EB] hover:bg-gray-50 hover:text-[#111827]"
                                                     }`}
                       >
                         {page}
@@ -759,9 +800,9 @@ const ProductMaster = () => {
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages || totalPages === 0}
-                    className="w-10 h-10 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px]"
+                    className="w-[38px] h-[38px] md:w-10 md:h-10 flex items-center justify-center text-[#6B7280] border border-[#E5E7EB] md:border-none hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px]"
                   >
-                    <ArrowRight size={20} />
+                    <ArrowRight size={18} />
                   </button>
                 </div>
               </div>
@@ -933,6 +974,25 @@ const ProductMaster = () => {
               fetchProducts();
             }
           }}
+        />
+      )}
+      {isImportModalOpen && (
+        <ImportModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          onImport={handleImportExcel}
+          onDownloadSample={async () => {
+             const response = await productService.downloadSample();
+             const url = window.URL.createObjectURL(new Blob([response.data]));
+             const link = document.createElement('a');
+             link.href = url;
+             link.setAttribute('download', 'Product_Master_Sample.xlsx');
+             document.body.appendChild(link);
+             link.click();
+             link.parentNode.removeChild(link);
+          }}
+          sampleFileName="Product_Master_Sample.xlsx"
+          sampleHeaders={['Product Name*', 'UOM*', 'Product Type*', 'Category*', 'Sub Category*', 'HSN Code*', 'Product Description', 'Status']}
         />
       )}
     </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronDown, Search, ArrowLeft, ChevronUp } from 'lucide-react';
+import { ChevronDown, Search, ArrowLeft, ChevronUp, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import masterService from '../../../../services/masterService';
 import { translateDynamic } from '../../../../utils/i18nUtils';
@@ -111,10 +111,12 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
                     </div>
                     <button
                         onClick={onBack}
-                        className="flex items-center gap-2 px-6 h-[44px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
+                        className="group flex items-center justify-center w-10 h-10 md:w-auto md:h-[44px] md:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[12px] md:rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
+                        title={t('common:back')}
                     >
-                        <ArrowLeft size={18} />
-                        {t('common:back')}
+                        <X size={22} className="md:hidden text-gray-500" />
+                        <ArrowLeft size={18} className="hidden md:block" />
+                        <span className="hidden md:inline ml-2">{t('common:back')}</span>
                     </button>
                 </div>
 
@@ -237,12 +239,12 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
                 {/* Footer Buttons */}
                 <div className="px-8 py-6 bg-[#F9FAFB]/50 flex items-center justify-end gap-3 border-t border-[#F3F4F6]">
                     <button
-                        className="px-10 h-[46px] bg-[#073318] text-white font-bold rounded-[10px] hover:bg-[#04200f] transition-all text-[14px] disabled:opacity-50 shadow-md shadow-[#073318]/10 min-w-[140px]"
+                        className="px-10 h-[46px] bg-[#073318] text-white font-bold rounded-[10px] hover:bg-[#04200f] transition-all text-[14px] disabled:opacity-50 shadow-md shadow-[#073318]/10 min-w-[140px] whitespace-nowrap"
                         onClick={handleSave}
                         disabled={isLoading}
                     >
                         {isLoading ? (
-                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto"></div>
                         ) : t('modules:save')}
                     </button>
                     <button
