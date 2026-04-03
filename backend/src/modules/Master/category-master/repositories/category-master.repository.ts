@@ -136,6 +136,18 @@ export class CategoryMasterRepository {
         });
     }
 
+    async getHierarchyStats(userId: number) {
+        const [categoryCount, subCategoryCount] = await Promise.all([
+            this.prisma.category.count({ where: { user_id: userId } }),
+            this.prisma.subCategory.count({ where: { user_id: userId } }),
+        ]);
+
+        return {
+            hasCategories: categoryCount > 0,
+            hasSubCategories: subCategoryCount > 0,
+        };
+    }
+
     async getCategoryWithSubCategories(userId: number) {
         return this.prisma.category.findMany({
             where: { user_id: userId },
@@ -303,6 +315,81 @@ export class CategoryMasterRepository {
         });
     }
 
+    async promoteSubSubToSubCategory(subSubCategoryId: number, userId: number, newCategoryId: number) {
+        return this.prisma.$transaction(async (tx) => {
+            const subSub = await tx.subSubCategory.findUnique({
+                where: { id: subSubCategoryId },
+            });
+
+            if (!subSub || subSub.user_id !== userId) {
+                throw new Error('Sub-sub-category not found.');
+            }
+
+            // Check if name already exists as a SubCategory under the target Category
+            const existingSub = await tx.subCategory.findFirst({
+                where: { name: subSub.name, category_id: newCategoryId, user_id: userId }
+            });
+
+            if (existingSub) {
+                throw new Error(`Sub-category with name "${subSub.name}" already exists in the target category.`);
+            }
+
+            // 1. Create the new SubCategory
+            const newSub = await tx.subCategory.create({
+                data: {
+                    name: subSub.name,
+                    category_id: newCategoryId,
+                    user_id: userId,
+                    status: subSub.status,
+                },
+            });
+
+            // 2. Delete old SubSubCategory
+            await tx.subSubCategory.delete({
+                where: { id: subSubCategoryId },
+            });
+
+            return newSub;
+        });
+    }
+
+    async promoteSubSubToCategory(subSubCategoryId: number, userId: number) {
+        return this.prisma.$transaction(async (tx) => {
+            const subSub = await tx.subSubCategory.findUnique({
+                where: { id: subSubCategoryId },
+            });
+
+            if (!subSub || subSub.user_id !== userId) {
+                throw new Error('Sub-sub-category not found.');
+            }
+
+            // Check if name already exists as a main Category
+            const existingCategory = await tx.category.findFirst({
+                where: { name: subSub.name, user_id: userId }
+            });
+
+            if (existingCategory) {
+                throw new Error(`Category with name "${subSub.name}" already exists.`);
+            }
+
+            // 1. Create the new Category
+            const newCategory = await tx.category.create({
+                data: {
+                    name: subSub.name,
+                    user_id: userId,
+                    status: subSub.status,
+                },
+            });
+
+            // 2. Delete old SubSubCategory
+            await tx.subSubCategory.delete({
+                where: { id: subSubCategoryId },
+            });
+
+            return newCategory;
+        });
+    }
+
     async demoteCategoryToSubCategory(categoryId: number, newParentCategoryId: number, userId: number) {
         return this.prisma.$transaction(async (tx) => {
             const category = await tx.category.findUnique({
@@ -318,9 +405,9 @@ export class CategoryMasterRepository {
                 throw new Error('A category cannot be moved under itself.');
             }
 
-            // BUSINESS RULE: A category can move to sub-category only if it has no sub-categories under it.
+            // [VALIDATION] A category can move to sub-category only if it has no sub-categories under it.
             if (category.sub_categories && category.sub_categories.length > 0) {
-                throw new Error(`${category.name} has sub-categories. Cannot move to sub-category.`);
+                throw new Error('Category cannot be moved because it has SubCategories');
             }
 
             // Check if sub-category name already exists under new parent
@@ -357,6 +444,69 @@ export class CategoryMasterRepository {
             });
 
             return newSubCategory;
+        });
+    }
+
+    async demoteCategoryToSubSubCategory(categoryId: number, newParentSubCategoryId: number, userId: number) {
+        return this.prisma.$transaction(async (tx) => {
+            const category = await tx.category.findUnique({
+                where: { id: categoryId },
+                include: { sub_categories: true },
+            });
+
+            if (!category || category.user_id !== userId) {
+                throw new Error('Category not found.');
+            }
+
+            // [VALIDATION] A Category CANNOT be moved if it has SubCategories
+            if (category.sub_categories && category.sub_categories.length > 0) {
+                throw new Error('Category cannot be moved because it has SubCategories');
+            }
+
+            // Get target parent sub-category info
+            const parentSub = await tx.subCategory.findUnique({
+                where: { id: newParentSubCategoryId },
+                select: { category_id: true }
+            });
+
+            if (!parentSub) {
+                throw new Error('Target parent sub-category not found.');
+            }
+
+            // Check if sub-sub-category name already exists under new parent
+            const existingSubSub = await tx.subSubCategory.findFirst({
+                where: { name: category.name, sub_category_id: newParentSubCategoryId, user_id: userId },
+            });
+
+            if (existingSubSub) {
+                throw new Error(`${category.name} sub-sub-category already exists in target sub-category.`);
+            }
+
+            // 1. Create new SubSubCategory
+            const newSubSub = await tx.subSubCategory.create({
+                data: {
+                    name: category.name,
+                    sub_category_id: newParentSubCategoryId,
+                    user_id: userId,
+                    status: category.status,
+                },
+            });
+
+            // 2. Re-link Products (move to GrandParent Category and Parent SubCategory)
+            await tx.product.updateMany({
+                where: { category_id: categoryId },
+                data: {
+                    category_id: parentSub.category_id,
+                    sub_category_id: newParentSubCategoryId
+                }
+            });
+
+            // 3. Delete old Category
+            await tx.category.delete({
+                where: { id: categoryId },
+            });
+
+            return newSubSub;
         });
     }
 

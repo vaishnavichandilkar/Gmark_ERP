@@ -26,6 +26,8 @@ const AddCategoryModal = ({
     const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
     const [isSubDropdownOpen, setIsSubDropdownOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [hierarchyStats, setHierarchyStats] = useState({ hasCategories: false, hasSubCategories: false });
+    const [tooltip, setTooltip] = useState({ show: false, content: '', x: 0, y: 0 });
     const dropdownRef = useRef(null);
     const parentDropdownRef = useRef(null);
 
@@ -38,6 +40,7 @@ const AddCategoryModal = ({
             setSubCategory(null);
             setDropdownSubCategories([]);
             fetchDropdownData();
+            fetchHierarchyStats();
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = '';
@@ -53,6 +56,14 @@ const AddCategoryModal = ({
             setDropdownCategories(data || []);
         } catch (err) {
             console.error('Error fetching categories:', err);
+        }
+    };
+    const fetchHierarchyStats = async () => {
+        try {
+            const stats = await categoryService.getHierarchyStats();
+            setHierarchyStats(stats);
+        } catch (err) {
+            console.error('Error fetching hierarchy stats:', err);
         }
     };
 
@@ -163,18 +174,55 @@ const AddCategoryModal = ({
                         {isDropdownOpen && (
                             <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[12px] shadow-xl z-[110] py-2 animate-in fade-in slide-in-from-top-2 duration-200">
                                 {['Category', 'Sub Category', 'Sub Sub Category'].map((opt) => {
-                                    const isDisabled = (opt === 'Sub Category' || opt === 'Sub Sub Category') && dropdownCategories.length === 0;
+                                    let isDisabled = false;
+                                    let tooltipMsg = '';
+
+                                    if (opt === 'Sub Category') {
+                                        if (!hierarchyStats.hasCategories) {
+                                            isDisabled = true;
+                                            tooltipMsg = t('modules:add_category_first', 'Please add a Category first');
+                                        }
+                                    } else if (opt === 'Sub Sub Category') {
+                                        if (!hierarchyStats.hasCategories) {
+                                            isDisabled = true;
+                                            tooltipMsg = t('modules:add_cat_and_sub_first', 'Please add a Category and SubCategory first');
+                                        } else if (!hierarchyStats.hasSubCategories) {
+                                            isDisabled = true;
+                                            tooltipMsg = t('modules:add_sub_category_first', 'Please add a SubCategory first');
+                                        }
+                                    }
+
                                     return (
                                         <div
                                             key={opt}
-                                            className={`px-4 py-3 text-[14px] transition-colors ${isDisabled
-                                                ? 'text-gray-300 cursor-not-allowed'
+                                            className={`group relative px-4 py-3 text-[14px] transition-colors ${isDisabled
+                                                ? 'text-gray-300 cursor-not-allowed bg-gray-50/50'
                                                 : type === opt
                                                     ? 'bg-[#F9FAFB] text-[#073318] font-bold cursor-pointer'
                                                     : 'text-[#4B5563] hover:bg-gray-50 cursor-pointer'
                                                 }`}
-                                            onClick={() => {
-                                                if (!isDisabled) {
+                                            onMouseEnter={(e) => {
+                                                if (isDisabled) {
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    setTooltip({
+                                                        show: true,
+                                                        content: tooltipMsg,
+                                                        x: rect.left + rect.width / 2,
+                                                        y: rect.top
+                                                    });
+                                                }
+                                            }}
+                                            onMouseLeave={() => setTooltip({ ...tooltip, show: false })}
+                                            onClick={(e) => {
+                                                if (isDisabled) {
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    setTooltip({
+                                                        show: true,
+                                                        content: tooltipMsg,
+                                                        x: rect.left + rect.width / 2,
+                                                        y: rect.top
+                                                    });
+                                                } else {
                                                     setType(opt);
                                                     setParentCategory(null);
                                                     setSubCategory(null);
@@ -183,9 +231,18 @@ const AddCategoryModal = ({
                                                 }
                                             }}
                                         >
-                                            {opt === 'Category' ? t('modules:category') :
-                                                opt === 'Sub Category' ? t('modules:sub_category') :
-                                                    t('modules:sub_sub_category', 'Sub Sub Category')}
+                                            <div className="flex items-center justify-between">
+                                                <span>
+                                                    {opt === 'Category' ? t('modules:category') :
+                                                        opt === 'Sub Category' ? t('modules:sub_category') :
+                                                            t('modules:sub_sub_category', 'Sub Sub Category')}
+                                                </span>
+                                                {isDisabled && (
+                                                    <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
+                                                        {t('common:locked', 'Locked')}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -314,6 +371,18 @@ const AddCategoryModal = ({
                     </div>
                 </div>
             </div>
+
+            {/* Dynamic Tooltip */}
+            {tooltip.show && (
+                <div
+                    className="fixed z-[999] px-3 py-2 bg-slate-900 text-white text-[12px] font-medium rounded-lg shadow-xl pointer-events-none transform -translate-x-1/2 -translate-y-full mb-2 animate-in fade-in zoom-in-95 duration-200"
+                    style={{ left: tooltip.x, top: tooltip.y }}
+                >
+                    {tooltip.content}
+                    {/* Tooltip Arrow */}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-slate-900" />
+                </div>
+            )}
 
             <style jsx>{`
                 .max-height-expanded {

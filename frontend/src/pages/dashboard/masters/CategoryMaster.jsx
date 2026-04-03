@@ -184,17 +184,35 @@ const CategoryMaster = () => {
             updatedCat.items = cat.items.map((sub) => ({
               ...sub,
               status: "INACTIVE",
+              items: (sub.items || []).map(ss => ({ ...ss, status: "INACTIVE" }))
             }));
           }
           return updatedCat;
         } else if (type === "sub_category") {
           return {
             ...cat,
-            items: cat.items.map((sub) =>
-              Number(sub.id) === Number(id)
-                ? { ...sub, status: newStatus }
-                : sub,
-            ),
+            items: cat.items.map((sub) => {
+              if (Number(sub.id) === Number(id)) {
+                const updatedSub = { ...sub, status: newStatus };
+                if (newStatus === "INACTIVE") {
+                  updatedSub.items = (sub.items || []).map(ss => ({ ...ss, status: "INACTIVE" }));
+                }
+                return updatedSub;
+              }
+              return sub;
+            }),
+          };
+        } else if (type === "sub_sub_category") {
+          return {
+            ...cat,
+            items: cat.items.map((sub) => ({
+              ...sub,
+              items: (sub.items || []).map((ss) =>
+                Number(ss.id) === Number(id)
+                  ? { ...ss, status: newStatus }
+                  : ss
+              )
+            })),
           };
         }
         return cat;
@@ -270,10 +288,13 @@ const CategoryMaster = () => {
       const q = searchQuery.toLowerCase();
       data = data.filter((section) => {
         const nameMatch = section.name.toLowerCase().includes(q);
-        const itemsMatch = section.items.some((item) =>
-          (item.name || "").toLowerCase().includes(q),
+        const subMatch = section.items.some((item) =>
+          (item.name || "").toLowerCase().includes(q)
         );
-        return nameMatch || itemsMatch;
+        const subSubMatch = section.items.some((item) =>
+          (item.items || []).some(ss => (ss.name || "").toLowerCase().includes(q))
+        );
+        return nameMatch || subMatch || subSubMatch;
       });
     }
 
@@ -661,7 +682,10 @@ const CategoryMaster = () => {
                 section.items.some((item) =>
                   (item.name || "")
                     .toLowerCase()
-                    .includes(searchQuery.toLowerCase()),
+                    .includes(searchQuery.toLowerCase()) ||
+                  (item.items || []).some(ss =>
+                    (ss.name || "").toLowerCase().includes(searchQuery.toLowerCase())
+                  )
                 );
               const isExpanded =
                 expandedGroups[section.id] || isSearchExpanding;
@@ -785,7 +809,13 @@ const CategoryMaster = () => {
                       {section.items.map((item, itemIdx) => {
                         const dropdownId = `${section.id}-item-${itemIdx}`;
                         const hasSubSubs = item.items && item.items.length > 0;
-                        const isSubExpanded = expandedSubGroups[item.id] || searchQuery;
+                        const isSearchExpandingSub = searchQuery && (
+                          (item.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (item.items || []).some(ss =>
+                            (ss.name || "").toLowerCase().includes(searchQuery.toLowerCase())
+                          )
+                        );
+                        const isSubExpanded = expandedSubGroups[item.id] || isSearchExpandingSub;
 
                         return (
                           <div key={item.id} className="flex flex-col border-b border-[#E5E7EB]/50 last:border-b-0">
@@ -943,7 +973,8 @@ const CategoryMaster = () => {
 
                                           {activeRowDropdown === subSubDropdownId && (
                                             <div
-                                              className="absolute right-[80%] top-0 mt-2 w-max min-w-[180px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-[120] py-1.5 animate-in zoom-in-95 duration-200 text-left"
+                                              className={`absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[120] py-2 animate-in zoom-in-95 duration-200 dropdown-menu text-left
+                                                ${subSubIdx >= item.items.length - 1 && item.items.length > 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
                                             >
                                               <button
                                                 onClick={(e) => {
@@ -957,9 +988,9 @@ const CategoryMaster = () => {
                                                   setIsEditModalOpen(true);
                                                   setActiveRowDropdown(null);
                                                 }}
-                                                className="w-full px-4 py-2 flex items-center gap-3 text-[13px] font-semibold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
+                                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap dropdown-item"
                                               >
-                                                <Edit size={16} className="text-[#073318]" />
+                                                <Edit size={18} className="text-[#073318]" />
                                                 {t("modules:view_and_edit_category")}
                                               </button>
                                               <button
@@ -971,8 +1002,13 @@ const CategoryMaster = () => {
                                                     "sub_sub_category",
                                                   );
                                                 }}
-                                                className="w-full px-4 py-2 flex items-center gap-3 text-[13px] font-semibold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
+                                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap dropdown-item"
                                               >
+                                                {subSub.status === "INACTIVE" ? (
+                                                  <CheckCircle2 size={18} className="text-[#073318]" />
+                                                ) : (
+                                                  <XCircle size={18} className="text-gray-400 -mt-0.5" />
+                                                )}
                                                 {subSub.status === "INACTIVE" ? t("common:active") : t("common:inactive")}
                                               </button>
                                             </div>

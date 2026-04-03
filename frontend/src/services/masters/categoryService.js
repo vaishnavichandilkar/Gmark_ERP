@@ -18,6 +18,10 @@ const categoryService = {
         const response = await axiosInstance.get(url);
         return response.data;
     },
+    getHierarchyStats: async () => {
+        const response = await axiosInstance.get('/category-master/hierarchy-stats');
+        return response.data;
+    },
     importCategories: async (formData) => {
         const response = await axiosInstance.post('/category-master/import', formData, {
             headers: {
@@ -74,8 +78,18 @@ const categoryService = {
         const response = await axiosInstance.post(`/category-master/sub-category/${id}/promote`);
         return response.data;
     },
+    promoteSubSubCategory: async (id, targetLevel, newCategoryId) => {
+        let url = `/category-master/sub-sub-category/${id}/promote?targetLevel=${targetLevel}`;
+        if (newCategoryId) url += `&newCategoryId=${newCategoryId}`;
+        const response = await axiosInstance.patch(url);
+        return response.data;
+    },
     demoteCategory: async (id, newParentId) => {
         const response = await axiosInstance.post(`/category-master/category/${id}/demote?newParentId=${newParentId}`);
+        return response.data;
+    },
+    demoteCategoryToSubSubCategory: async (id, newParentSubId) => {
+        const response = await axiosInstance.post(`/category-master/category/${id}/demote-to-sub-sub?newParentSubId=${newParentSubId}`);
         return response.data;
     },
     downloadCategorySampleExcel: async () => {

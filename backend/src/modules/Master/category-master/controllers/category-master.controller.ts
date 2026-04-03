@@ -64,6 +64,11 @@ export class CategoryMasterController {
     ) {
         return this.service.getSubSubCategoriesForDropdown(req.user.userId, subCategoryId);
     }
+    @Get('hierarchy-stats')
+    @ApiOperation({ summary: 'Get category hierarchy existence status' })
+    async getHierarchyStats(@Request() req) {
+        return this.service.getHierarchyStats(req.user.userId);
+    }
 
     @Get()
     @ApiOperation({ summary: 'Get Category with Sub Categories listing' })
@@ -202,6 +207,22 @@ export class CategoryMasterController {
         return this.service.promoteSubCategory(id, req.user.userId);
     }
 
+    @Patch('sub-sub-category/:id/promote')
+    @ApiOperation({ summary: 'Change Sub Sub Category hierarchy level' })
+    async promoteSubSubCategory(
+        @Request() req,
+        @Param('id', ParseIntPipe) id: number,
+        @Query('targetLevel') targetLevel: 'sub_category' | 'category',
+        @Query('newCategoryId') newCategoryId?: string
+    ) {
+        return this.service.promoteSubSubCategory(
+            id,
+            targetLevel,
+            req.user.userId,
+            newCategoryId ? parseInt(newCategoryId) : undefined
+        );
+    }
+
     @Post('category/:id/demote')
     @ApiOperation({ summary: 'Demote Category to Sub Category' })
     async demoteCategory(
@@ -210,5 +231,15 @@ export class CategoryMasterController {
         @Query('newParentId', ParseIntPipe) newParentId: number,
     ) {
         return this.service.demoteCategory(id, newParentId, req.user.userId);
+    }
+
+    @Post('category/:id/demote-to-sub-sub')
+    @ApiOperation({ summary: 'Demote Category to Sub Sub Category' })
+    async demoteCategoryToSubSubCategory(
+        @Request() req,
+        @Param('id', ParseIntPipe) id: number,
+        @Query('newParentSubId', ParseIntPipe) newParentSubId: number
+    ) {
+        return this.service.demoteCategoryToSubSubCategory(id, newParentSubId, req.user.userId);
     }
 }

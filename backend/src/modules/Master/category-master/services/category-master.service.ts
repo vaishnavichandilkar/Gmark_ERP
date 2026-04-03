@@ -101,6 +101,9 @@ export class CategoryMasterService {
     async getSubSubCategoriesForDropdown(userId: number, subCategoryId: number) {
         return this.repository.getSubSubCategoriesForDropdown(userId, subCategoryId);
     }
+    async getHierarchyStats(userId: number) {
+        return this.repository.getHierarchyStats(userId);
+    }
 
     async getCategoryListing(userId: number) {
         return this.repository.getCategoryWithSubCategories(userId);
@@ -385,9 +388,35 @@ export class CategoryMasterService {
         }
     }
 
+    async promoteSubSubCategory(id: number, targetLevel: 'sub_category' | 'category', userId: number, newCategoryId?: number) {
+        try {
+            if (targetLevel === 'sub_category') {
+                if (!newCategoryId) {
+                    throw new BadRequestException('Target parent category is required');
+                }
+                return await this.repository.promoteSubSubToSubCategory(id, userId, newCategoryId);
+            } else if (targetLevel === 'category') {
+                return await this.repository.promoteSubSubToCategory(id, userId);
+            } else {
+                throw new BadRequestException('Invalid target level');
+            }
+        } catch (error) {
+            if (error instanceof BadRequestException) throw error;
+            throw new BadRequestException(error.message);
+        }
+    }
+
     async demoteCategory(id: number, newParentId: number, userId: number) {
         try {
             return await this.repository.demoteCategoryToSubCategory(id, newParentId, userId);
+        } catch (error) {
+            throw new BadRequestException(error.message);
+        }
+    }
+
+    async demoteCategoryToSubSubCategory(id: number, newParentSubId: number, userId: number) {
+        try {
+            return await this.repository.demoteCategoryToSubSubCategory(id, newParentSubId, userId);
         } catch (error) {
             throw new BadRequestException(error.message);
         }
