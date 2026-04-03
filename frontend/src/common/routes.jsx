@@ -189,23 +189,43 @@ export const router = createBrowserRouter([
                                     },
                                     {
                                         path: 'group-master',
-                                        element: <GroupMaster />
+                                        children: [
+                                            { index: true, element: <GroupMaster /> },
+                                            { path: 'add', element: <GroupMaster /> },
+                                            { path: 'edit/:id', element: <GroupMaster /> }
+                                        ]
                                     },
                                     {
                                         path: 'account-master',
-                                        element: <AccountMaster />
+                                        children: [
+                                            { index: true, element: <AccountMaster /> },
+                                            { path: 'add', element: <AccountMaster /> },
+                                            { path: 'edit/:id', element: <AccountMaster /> }
+                                        ]
                                     },
                                     {
                                         path: 'unit-master',
-                                        element: <UnitMaster />
+                                        children: [
+                                            { index: true, element: <UnitMaster /> },
+                                            { path: 'add', element: <UnitMaster /> },
+                                            { path: 'edit/:id', element: <UnitMaster /> }
+                                        ]
                                     },
                                     {
                                         path: 'category',
-                                        element: <CategoryMaster />
+                                        children: [
+                                            { index: true, element: <CategoryMaster /> },
+                                            { path: 'add', element: <CategoryMaster /> },
+                                            { path: 'edit/:id', element: <CategoryMaster /> }
+                                        ]
                                     },
                                     {
                                         path: 'product-master',
-                                        element: <ProductMaster />
+                                        children: [
+                                            { index: true, element: <ProductMaster /> },
+                                            { path: 'add', element: <ProductMaster /> },
+                                            { path: 'edit/:id', element: <ProductMaster /> }
+                                        ]
                                     }
                                 ]
                             },

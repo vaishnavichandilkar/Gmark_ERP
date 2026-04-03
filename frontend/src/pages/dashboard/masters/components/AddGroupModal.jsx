@@ -210,7 +210,7 @@ const AddGroupModal = ({ isOpen, onClose, onSuccess }) => {
                                                                 </span>
                                                             </div>
                                                             {isHeader && (
-                                                                <span className="text-[9px] bg-gray-100 text-[#6B7280] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider flex-shrink-0 ml-2 border border-gray-200">
+                                                                <span className="text-[9px] bg-gray-100 text-[#6B7280] px-1.5 py-0.5 rounded font-bold tracking-wider flex-shrink-0 ml-2 border border-gray-200">
                                                                     {t('common:header') || 'HEADER'}
                                                                 </span>
                                                             )}

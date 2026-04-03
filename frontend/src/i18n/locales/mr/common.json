@@ -67,5 +67,20 @@
     "search_by_anything": "सर्व शोधा...",
     "search_by_name": "नावाने शोधा...",
     "clear": "क्लिअर करा",
-    "loading": "लोड होत आहे"
+    "loading": "लोड होत आहे",
+    "add_group_master": "ग्रुप जोडा",
+    "edit_group_master": "ग्रुप संपादित करा",
+    "add_account_master": "खाते जोडा",
+    "edit_account_master": "खाते संपादित करा",
+    "add_unit_master": "युनिट जोडा",
+    "edit_unit_master": "युनिट संपादित करा",
+    "add_category": "श्रेणी जोडा",
+    "edit_category": "श्रेणी संपादित करा",
+    "add_product_master": "उत्पादन जोडा",
+    "edit_product_master": "उत्पादन संपादित करा",
+    "add_order": "खरेदी आदेश जोडा",
+    "edit_order": "खरेदी आदेश संपादित करा",
+    "view_order": "खरेदी आदेश पहा",
+    "add_invoice": "खरेदी बीजक जोडा",
+    "edit_invoice": "खरेदी बीजक संपादित करा"
 }

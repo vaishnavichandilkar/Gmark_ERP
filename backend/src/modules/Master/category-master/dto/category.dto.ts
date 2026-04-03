@@ -46,3 +46,27 @@ export class UpdateSubCategoryDto {
     @IsOptional()
     category_id?: number;
 }
+
+export class CreateSubSubCategoryDto {
+    @IsString()
+    @IsNotEmpty()
+    name: string;
+
+    @IsInt()
+    @IsNotEmpty()
+    sub_category_id: number;
+
+    @IsEnum(MasterStatus)
+    @IsOptional()
+    status?: MasterStatus;
+}
+
+export class UpdateSubSubCategoryDto {
+    @IsString()
+    @IsNotEmpty()
+    name: string;
+
+    @IsInt()
+    @IsOptional()
+    sub_category_id?: number;
+}

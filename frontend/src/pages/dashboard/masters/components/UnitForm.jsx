@@ -367,7 +367,7 @@ const UnitForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onEdit 
                 ].map((item, idx) => (
                     <div key={idx} className="flex border-b border-[#F3F4F6] min-h-[56px] last:border-b-0 group">
                         <div className="w-[240px] bg-[#F9FAFB] px-8 py-4 flex items-center border-r border-[#F3F4F6]">
-                            <span className="text-[14px] font-bold text-gray-500 uppercase tracking-tight">{item.label}:</span>
+                            <span className="text-[14px] font-bold text-gray-500 tracking-tight">{item.label}:</span>
                         </div>
                         <div className="flex-1 px-8 py-4 flex items-center bg-white group-hover:bg-[#F9FAFB]/50 transition-colors">
                             <span className="text-[16px] font-bold text-[#111827]">{item.value}</span>

@@ -461,7 +461,7 @@ const AddPO = () => {
                 {/* Header Section */}
                 <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-[#F3F4F6] bg-white flex items-center justify-between">
                     <div>
-                        <h2 className="text-[18px] md:text-[20px] font-bold text-[#111827]">{isEditMode ? 'Edit PO' : 'Add PO'}</h2>
+                        <h2 className="hidden md:block text-[18px] md:text-[20px] font-bold text-[#111827]">{isEditMode ? 'Edit PO' : 'Add PO'}</h2>
                     </div>
                     
                     <button 

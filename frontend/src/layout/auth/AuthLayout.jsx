@@ -9,7 +9,7 @@ const AuthLayout = ({ children, maxWidth = 'max-w-[480px]', hideLeftPanel = fals
             {/* Left Panel - Fixed */}
             <div
                 className={`
-                    ${hideLeftPanel ? 'hidden' : 'flex'} md:flex 
+                    hidden md:flex 
                     w-full md:w-[33.05%] basis-full md:basis-[33.05%] md:max-w-[33.05%] 
                     h-auto md:h-full 
                     flex-col justify-center pt-8 md:pt-8 text-white relative overflow-hidden

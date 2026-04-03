@@ -59,7 +59,26 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
         );
 
         if (pathSegments.length > 0) {
-            const formattedSegments = pathSegments.map(segment => {
+            const formattedSegments = pathSegments.map((segment, index) => {
+                // Special handling for 'add' and 'edit' segments to show verbose labels
+                if (segment === 'add' || segment === 'edit') {
+                    const parent = pathSegments[index - 1];
+                    if (parent) {
+                        let parentKey = parent.replace(/-/g, '_');
+                        if (parentKey === 'category') parentKey = 'category_master';
+                        
+                        const action = segment === 'add' ? 'add' : 'edit';
+                        // Map entity names (e.g., group_master -> group, order -> po/order)
+                        let entity = parentKey.replace('_master', '');
+                        if (entity === 'order') entity = 'po';
+                        if (entity === 'invoice') entity = 'purchase_invoice';
+                        
+                        const verboseKey = `${action}_${entity}`;
+                        const translated = t(`modules:${verboseKey}`, { defaultValue: '' });
+                        if (translated) return translated;
+                    }
+                }
+
                 let key = segment.replace(/-/g, '_');
                 if (key === 'category') key = 'category_master';
                 const translated = t(`modules:${key}`, { defaultValue: '' }) || t(`common:${key}`, { defaultValue: '' });
@@ -128,23 +147,9 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
 
                 {/* Rightmost Action icons */}
                 <div className="flex items-center gap-2 md:gap-4 relative">
-                    <div className="hidden sm:block">
+                    <div>
                         <LanguageSwitcher />
                     </div>
-
-                    {/* Globe specifically shown on mobile */}
-                    <button
-                        onClick={() => setActivePopupType(activePopupType === 'status' ? null : 'status')}
-                        data-status-trigger="true"
-                        className={`sm:hidden flex items-center transition-colors p-2 rounded-full
-                            ${activePopupType === 'status'
-                                ? 'text-[#166534] bg-[#166534]/10 z-[60] relative'
-                                : 'text-[#4B5563] hover:text-[#111827] relative z-10'
-                            }`}
-                    >
-                        <Globe size={18} strokeWidth={1.5} />
-                        <ChevronDown size={12} strokeWidth={1.5} className={`ml-0.5 transition-transform duration-200 ${activePopupType === 'status' ? 'rotate-180' : ''}`} />
-                    </button>
 
                     <button
                         onClick={() => setActivePopupType(activePopupType === 'profile' ? null : 'profile')}

@@ -1006,7 +1006,7 @@ const AddAccount = ({
                     <div
                       className={`absolute right-0 bottom-full mb-3 w-[260px] p-4 bg-white text-[#4B5563] text-[11px] rounded-[12px] shadow-2xl z-[500] leading-relaxed pointer-events-none transition-all duration-300 border border-[#E5F0ED] ${formData.panNo ? "opacity-0 invisible" : showPanTooltip ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-2 invisible group-hover/pan:opacity-100 group-hover/pan:translate-y-0 group-hover/pan:visible"}`}
                     >
-                      <div className="flex items-center gap-2 font-bold mb-3 border-b border-[#E5E7EB] pb-2 uppercase tracking-widest text-[#014A36]">
+                      <div className="flex items-center gap-2 font-bold mb-3 border-b border-[#E5E7EB] pb-2 tracking-widest text-[#014A36]">
                         <Info size={14} className="text-[#014A36]" />
                         {t("modules:pan_info", "Verification Guide")}
                       </div>

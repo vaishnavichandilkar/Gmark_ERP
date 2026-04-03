@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Search, Download, Upload, Plus, Filter, MoreVertical, X, FileText, FileSpreadsheet, Eye, FileEdit, ArrowLeft, ArrowRight, ChevronsUpDown, CheckCircle2, RefreshCw, ChevronDown, Database } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import UnitForm from './components/UnitForm';
@@ -11,10 +12,14 @@ import ImportModal from './components/ImportModal';
 
 const UnitMaster = () => {
     const { t } = useTranslation(['modules', 'common']);
+    const location = useLocation();
+    const navigate = useNavigate();
+    const { id } = useParams();
     const defaultFilters = { gstUom: '', status: '', unitName: '' };
     const [searchQuery, setSearchQuery] = useState('');
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isSearchExpanded, setIsSearchExpanded] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [filterInputs, setFilterInputs] = useState(defaultFilters);
@@ -74,6 +79,25 @@ const UnitMaster = () => {
     useEffect(() => {
         fetchGstUomList();
     }, []);
+
+    // Sync currentView with URL
+    useEffect(() => {
+        if (location.pathname.endsWith('/add')) {
+            setCurrentView({ type: 'add', data: null });
+        } else if (location.pathname.includes('/edit/')) {
+            const unit = tableData.find(u => String(u.id) === String(id));
+            if (unit) {
+                setCurrentView({ type: 'edit', data: unit });
+            }
+        } else if (location.pathname.includes('/view/')) {
+            const unit = tableData.find(u => String(u.id) === String(id));
+            if (unit) {
+                setCurrentView({ type: 'view', data: unit });
+            }
+        } else {
+            setCurrentView({ type: 'list', data: null });
+        }
+    }, [location.pathname, tableData, id]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -263,12 +287,12 @@ const UnitMaster = () => {
                     <div className="flex flex-col gap-1 mb-4 md:mb-8">
                         {/* Desktop Header */}
                         <div className="hidden md:flex flex-row items-center justify-between gap-4">
-                            <div className="flex flex-col gap-1">
-                                <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('modules:unit_master')}</h1>
-                                <p className="text-[#6B7280] text-[15px] font-medium leading-relaxed max-w-[600px]">{t('modules:unit_master_desc', 'Manage measurement units for your products')}</p>
-                            </div>
+                            <h2 className="text-[20px] md:text-[24px] font-bold text-[#111827] tracking-tight">
+                                {t('modules:unit_master')}
+                            </h2>
+
                             <button 
-                                onClick={() => setCurrentView({ type: 'add', data: null })}
+                                onClick={() => navigate('add')}
                                 className="flex items-center gap-2 bg-[#073318] hover:bg-[#04200f] text-white px-6 h-[44px] rounded-[10px] text-[15px] font-bold transition-all shadow-sm active:scale-[0.98] shrink-0"
                             >
                                 <Plus size={18} />
@@ -278,13 +302,9 @@ const UnitMaster = () => {
 
                         {/* Mobile Header - Stacked Layout */}
                         <div className="md:hidden flex flex-col gap-3">
-                            <div className="flex flex-col gap-1">
-                                <h1 className="text-[24px] font-bold text-[#111827] tracking-tight">{t('modules:unit_master')}</h1>
-                                <p className="text-[#6B7280] text-[14px] font-medium leading-relaxed">{t('modules:unit_master_desc', 'Manage measurement units for your products')}</p>
-                            </div>
                             <button
-                                onClick={() => setCurrentView({ type: 'add', data: null })}
-                                className="flex items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-fit self-end"
+                                onClick={() => navigate('add')}
+                                className="flex items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-full max-w-[358px] self-center"
                             >
                                 <Plus size={18} strokeWidth={3} />
                                 {t('modules:add_unit')}
@@ -292,9 +312,9 @@ const UnitMaster = () => {
                         </div>
                     </div>
 
-                    <div className={`master-table-container !bg-transparent !shadow-none !border-none md:!bg-white md:!shadow-[0_4px_20px_rgba(0,0,0,0.03)] md:!border md:!border-[#E5E7EB] mb-8 ${activeDropdown ? '!overflow-visible' : ''}`}>
+                    <div className={`master-table-container bg-white shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-[#E5E7EB] mb-8 rounded-[20px] overflow-hidden ${activeDropdown ? '!overflow-visible' : ''}`}>
                         {/* Desktop Action Bar */}
-                        <div className="hidden md:flex items-center justify-between p-6 border-b border-[#F3F4F6] bg-white gap-4 rounded-t-[16px]">
+                        <div className="hidden md:flex items-center justify-between p-6 border-b border-[#F3F4F6] bg-white gap-4 rounded-t-[20px]">
                             <div className="flex items-center gap-3 flex-1">
                                 <div className="relative flex-1 max-w-[320px]">
                                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -346,75 +366,87 @@ const UnitMaster = () => {
                             </div>
                         </div>
 
-                        {/* Mobile Action Bar - Consolidated Layout */}
                         {/* Mobile Action Bar - Optimized One-line Layout */}
-                        <div className="md:hidden mt-2 p-0 w-full mb-2">
-                            <div className="flex items-center gap-1.5 h-[48px]">
-                                {/* Compact Search */}
-                                <div className="flex-1 relative h-full">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                    <input
-                                        type="text"
-                                        placeholder={t('common:search')}
-                                        value={searchQuery}
-                                        onChange={(e) => {
-                                            setSearchQuery(e.target.value);
-                                            setCurrentPage(1);
-                                        }}
-                                        className="w-full h-full bg-white border border-[#E5E7EB] rounded-[12px] pl-8 pr-8 text-[14px] outline-none shadow-sm placeholder:text-gray-400 font-medium"
-                                    />
-                                    {searchQuery && (
-                                        <button onClick={() => { setSearchQuery(''); setCurrentPage(1); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400">
-                                            <X size={14} />
+                        <div className="md:hidden py-3 px-4 border-b border-[#F3F4F6] rounded-t-[20px]">
+                            <div className="flex items-center gap-2 h-[40px]">
+                                {/* Expandable Search */}
+                                <div className={`relative h-full transition-all duration-300 flex items-center ${isSearchExpanded ? 'flex-1' : 'w-[42px]'}`}>
+                                    {!isSearchExpanded ? (
+                                        <button 
+                                            onClick={() => setIsSearchExpanded(true)}
+                                            className="w-full h-full flex items-center justify-center text-gray-500"
+                                        >
+                                            <Search size={22} />
                                         </button>
+                                    ) : (
+                                        <div className="relative w-full h-full flex items-center animate-in slide-in-from-right-4 duration-300">
+                                            <Search className="absolute left-3 text-gray-400" size={18} />
+                                            <input
+                                                type="text"
+                                                autoFocus
+                                                placeholder={t('common:search')}
+                                                value={searchQuery}
+                                                onChange={(e) => {
+                                                    setSearchQuery(e.target.value);
+                                                    setCurrentPage(1);
+                                                }}
+                                                className="w-full h-full bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none shadow-sm placeholder:text-gray-400 font-medium"
+                                            />
+                                            {searchQuery && (
+                                                <button 
+                                                    onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                                                    className="absolute right-3 text-gray-400"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
 
-                                {/* Control Buttons Group */}
-                                <div className="flex items-center gap-1 h-full">
-                                    <button
-                                        onClick={fetchUnits}
-                                        className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-400"
-                                        title={t('common:refresh')}
-                                    >
-                                        <RefreshCw size={18} />
-                                    </button>
-
-                                    <button
-                                        onClick={() => setIsImportModalOpen(true)}
-                                        className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-400"
-                                        title={t('common:import')}
-                                    >
-                                        <Upload size={18} />
-                                    </button>
-
-                                    <div className="relative mobile-export-trigger">
-                                        <button
-                                            onClick={() => setIsExportOpen(!isExportOpen)}
-                                            className={`w-[44px] h-[44px] flex items-center justify-center border rounded-[12px] shadow-sm transition-all active:scale-95 ${isExportOpen ? "bg-[#073318] border-[#073318] text-white" : "bg-white border-[#E5E7EB] text-gray-400"}`}
-                                        >
-                                            <Download size={18} />
+                                {/* Action Icons - Hidden when search expanded */}
+                                {!isSearchExpanded ? (
+                                    <div className="flex items-center gap-1 ml-auto animate-in fade-in duration-300">
+                                        <button onClick={fetchUnits} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                                            <RefreshCw size={20} />
                                         </button>
-                                        {isExportOpen && (
-                                            <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-2xl z-[100] py-1 overflow-hidden">
-                                                <button onClick={handleExportPDF} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50">
-                                                    <FileText size={16} className="text-red-500" /> PDF
-                                                </button>
-                                                <button onClick={handleExportExcel} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50 border-t border-gray-100">
-                                                    <FileSpreadsheet size={16} className="text-green-600" /> Excel
-                                                </button>
-                                            </div>
-                                        )}
+                                        <button onClick={() => setIsImportModalOpen(true)} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                                            <Upload size={20} />
+                                        </button>
+                                        <div className="relative">
+                                            <button 
+                                                onClick={() => setIsExportOpen(!isExportOpen)} 
+                                                className={`w-10 h-10 flex items-center justify-center transition-colors ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}
+                                            >
+                                                <Download size={20} />
+                                            </button>
+                                            {isExportOpen && (
+                                                <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-[100] py-1 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
+                                                    <button onClick={handleExportPDF} className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50">
+                                                        <FileText size={18} className="text-red-500" /> PDF
+                                                    </button>
+                                                    <button onClick={handleExportExcel} className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50 border-t border-gray-50">
+                                                        <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
+                                            className={`w-10 h-10 flex items-center justify-center ${isFilterApplied ? 'text-red-600' : 'text-gray-500'}`}
+                                            title={isFilterApplied ? t('common:clear') : t('common:filter')}
+                                        >
+                                            <Filter size={20} />
+                                        </button>
                                     </div>
-
-                                    <button
-                                        onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
-                                        className={`w-[44px] h-[44px] flex items-center justify-center border rounded-[12px] shadow-sm transition-all active:scale-95 ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-[#E5E7EB] text-gray-400'}`}
-                                        title={isFilterApplied ? t('common:clear') : t('common:filter')}
+                                ) : (
+                                    <button 
+                                        onClick={() => { setIsSearchExpanded(false); setSearchQuery(''); setCurrentPage(1); }}
+                                        className="text-[14px] font-bold text-[#073318] px-2 animate-in fade-in duration-300"
                                     >
-                                        <Filter size={18} />
+                                        {t('common:cancel')}
                                     </button>
-                                </div>
+                                )}
                             </div>
                         </div>
 
@@ -422,37 +454,37 @@ const UnitMaster = () => {
                             <table className="master-table min-w-[1000px]">
                                 <thead>
                                     <tr>
-                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
+                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
                                             <div className="flex items-center gap-2">
                                                 {t('common:sr_no')}
                                                 <ChevronsUpDown size={14} className="text-gray-300" />
                                             </div>
                                         </th>
-                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
+                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
                                             <div className="flex items-center gap-2">
                                                 {t('modules:unit_name')}
                                                 <ChevronsUpDown size={14} className="text-gray-300" />
                                             </div>
                                         </th>
-                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
+                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
                                             <div className="flex items-center gap-2">
                                                 {t('modules:gst_uom')}
                                                 <ChevronsUpDown size={14} className="text-gray-300" />
                                             </div>
                                         </th>
-                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
+                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
                                             <div className="flex items-center gap-2">
                                                 {t('modules:full_name_of_measurement')}
                                                 <ChevronsUpDown size={14} className="text-gray-300" />
                                             </div>
                                         </th>
-                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 uppercase tracking-tight text-left">
+                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
                                             <div className="flex items-center gap-2">
                                                 {t('common:status')}
                                                 <ChevronsUpDown size={14} className="text-gray-300" />
                                             </div>
                                         </th>
-                                        <th className="px-3 md:px-6 py-3 md:py-4 text-center uppercase tracking-tight">{t('common:action')}</th>
+                                        <th className="px-3 md:px-6 py-3 md:py-4 text-center tracking-tight">{t('common:action')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="text-[14px] text-[#111827]">
@@ -497,7 +529,7 @@ const UnitMaster = () => {
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 setActiveDropdown(null);
-                                                                setCurrentView({ type: 'view', data: row });
+                                                                navigate(`view/${row.id}`);
                                                             }}
                                                             className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors whitespace-nowrap font-bold"
                                                         >
@@ -532,55 +564,50 @@ const UnitMaster = () => {
                             </table>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-5 sm:py-6 border-t border-[#F3F4F6] bg-white gap-6">
-                            <div className="flex items-center justify-between w-full sm:w-auto gap-3 text-[14px] text-[#6B7280] font-medium order-2 sm:order-1 border-t sm:border-0 pt-4 sm:pt-0">
-                                <div className="flex items-center gap-2">
-                                    <span>{t('common:show')}</span>
-                                    <div className="relative group">
-                                        <select
-                                            value={itemsPerPage}
-                                            onChange={(e) => {
-                                                setItemsPerPage(Number(e.target.value));
-                                                setCurrentPage(1);
-                                            }}
-                                            className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#0A3622] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
-                                        >
-                                            <option value={5}>5</option>
-                                            <option value={10}>10</option>
-                                            <option value={20}>20</option>
-                                            <option value={50}>50</option>
-                                        </select>
-                                        <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#0A3622]" />
-                                    </div>
-                                    <span>{t('common:per_page')}</span>
+                        <div className="flex flex-row items-center justify-between px-4 sm:px-6 py-4 border-t border-[#F3F4F6] bg-white gap-4 w-full">
+                            <div className="flex items-center gap-2 text-[13px] text-[#6B7280] font-medium">
+                                <span className="hidden sm:inline">{t('common:show')}</span>
+                                <div className="relative group">
+                                    <select
+                                        value={itemsPerPage}
+                                        onChange={(e) => {
+                                            setItemsPerPage(Number(e.target.value));
+                                            setCurrentPage(1);
+                                        }}
+                                        className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#0A3622] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
+                                    >
+                                        <option value={5}>5</option>
+                                        <option value={10}>10</option>
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                    </select>
+                                    <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#0A3622]" />
                                 </div>
-                                <span className="sm:hidden text-gray-400">
-                                    {totalItems > 0 ? `${startIndex + 1}-${endIndex} / ${totalItems}` : `0-0 / 0`}
-                                </span>
+                                <span className="hidden sm:inline">{t('common:per_page')}</span>
                             </div>
 
-                            <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full sm:w-auto order-1 sm:order-2">
-                                <span className="hidden sm:inline text-[#6B7280] text-[14px] font-medium">
+                            <div className="flex items-center gap-3">
+                                <span className="text-[#6B7280] text-[13px] font-medium whitespace-nowrap">
                                     {totalItems > 0 ? `${startIndex + 1}-${endIndex} of ${totalItems}` : `0-0 of 0`}
                                 </span>
-                                <div className="flex items-center justify-center gap-1.5 w-full sm:w-auto">
+                                <div className="flex items-center gap-1">
                                     <button
                                         onClick={() => handlePageChange(currentPage - 1)}
                                         disabled={currentPage === 1}
-                                        className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
+                                        className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
                                     >
-                                        <ArrowLeft size={18} />
+                                        <ArrowLeft size={16} />
                                     </button>
-                                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-[180px] sm:max-w-none px-1">
+                                    <div className="hidden md:flex items-center gap-1.5 px-1">
                                         {getVisiblePages().map((page, index) => (
                                             <button
                                                 key={index}
                                                 onClick={() => handlePageChange(page)}
-                                                className={`min-w-[36px] sm:min-w-[40px] h-[36px] sm:h-[40px] rounded-[10px] flex items-center justify-center transition-all text-[13px] sm:text-[14px] font-bold
-                                                                    ${currentPage === page
+                                                className={`min-w-[32px] h-[32px] rounded-[8px] flex items-center justify-center transition-all text-[13px] font-bold ${
+                                                    currentPage === page
                                                         ? 'bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100'
                                                         : 'text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]'
-                                                    }`}
+                                                }`}
                                             >
                                                 {page}
                                             </button>
@@ -589,9 +616,9 @@ const UnitMaster = () => {
                                     <button
                                         onClick={() => handlePageChange(currentPage + 1)}
                                         disabled={currentPage === totalPages || totalPages === 0}
-                                        className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
+                                        className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
                                     >
-                                        <ArrowRight size={18} />
+                                        <ArrowRight size={16} />
                                     </button>
                                 </div>
                             </div>
@@ -683,11 +710,11 @@ const UnitMaster = () => {
                 <UnitForm
                     mode={currentView.type}
                     initialData={currentView.data}
-                    onBack={() => setCurrentView({ type: 'list', data: null })}
-                    onEdit={(data) => setCurrentView({ type: 'edit', data })}
+                    onBack={() => navigate('/seller/masters/unit-master')}
+                    onEdit={(data) => navigate(`/seller/masters/unit-master/edit/${data.id}`)}
                     onSuccess={() => {
                         const message = currentView.type === 'add' ? 'Unit added successfully' : 'Unit edited successfully';
-                        setCurrentView({ type: 'list', data: null });
+                        navigate('/seller/masters/unit-master');
                         showToast(message);
                         fetchUnits();
                     }}

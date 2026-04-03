@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation, useParams } from "react-router-dom";
 import {
   Plus,
   Search,
@@ -33,10 +33,13 @@ const ProductMaster = () => {
   const { t } = useTranslation(["modules", "common"]);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { id } = useParams();
   const defaultFilters = { uom: "", status: "", productType: "" };
   const [searchQuery, setSearchQuery] = useState("");
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [filterInputs, setFilterInputs] = useState(defaultFilters);
@@ -57,18 +60,30 @@ const ProductMaster = () => {
     setShowSuccessToast({ show: true, message, type });
   };
 
-  useEffect(() => {
-    const mode = searchParams.get("mode");
-    if (mode === "add") {
-      setCurrentView({ type: "add", data: null });
-    }
-  }, [searchParams]);
-
-
   const [tableData, setTableData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [totalItems, setTotalItems] = useState(0);
   const [uomOptions, setUomOptions] = useState([]);
+
+  // Sync currentView with URL
+  useEffect(() => {
+    if (location.pathname.endsWith('/add')) {
+      setCurrentView({ type: "add", data: null });
+    } else if (location.pathname.includes('/edit/')) {
+      const product = tableData.find(p => String(p.id) === String(id));
+      if (product) {
+        setCurrentView({ type: "edit", data: product });
+      }
+    } else if (location.pathname.includes('/view/')) {
+      const product = tableData.find(p => String(p.id) === String(id));
+      if (product) {
+        setCurrentView({ type: "view", data: product });
+      }
+    } else {
+      setCurrentView({ type: "list", data: null });
+    }
+  }, [location.pathname, tableData, id]);
+
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -370,12 +385,12 @@ const ProductMaster = () => {
           <div className="flex flex-col gap-1 mb-4 md:mb-8">
             {/* Desktop Header */}
             <div className="hidden md:flex flex-row items-center justify-between gap-4">
-              <div className="flex flex-col gap-1">
-                <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t("modules:product_master")}</h1>
-                <p className="text-[#6B7280] text-[15px] font-medium leading-relaxed max-w-[600px]">{t("modules:product_master_desc", "Manage products and their technical details")}</p>
-              </div>
+              <h2 className="text-[20px] md:text-[24px] font-bold text-[#111827] tracking-tight">
+                {t('modules:product_master')}
+              </h2>
+
               <button
-                onClick={() => setCurrentView({ type: "add", data: null })}
+                onClick={() => navigate('add')}
                 className="flex flex-row items-center justify-center gap-2 bg-[#073318] hover:bg-[#04200f] text-white px-6 h-[44px] rounded-[10px] text-[15px] font-bold transition-all shadow-sm active:scale-[0.98] shrink-0 whitespace-nowrap"
               >
                 <Plus size={18} />
@@ -385,13 +400,9 @@ const ProductMaster = () => {
 
             {/* Mobile Header - Stacked Layout */}
             <div className="md:hidden flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <h1 className="text-[24px] font-bold text-[#111827] tracking-tight">{t("modules:product_master")}</h1>
-                <p className="text-[#6B7280] text-[14px] font-medium leading-relaxed">{t("modules:product_master_desc", "Manage products and their technical details")}</p>
-              </div>
               <button
-                onClick={() => setCurrentView({ type: "add", data: null })}
-                className="flex flex-row items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-fit self-end whitespace-nowrap"
+                onClick={() => navigate('add')}
+                className="flex flex-row items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-full max-w-[358px] self-center whitespace-nowrap"
               >
                 <Plus size={18} strokeWidth={3} />
                 <span className="whitespace-nowrap">{t("modules:add_product")}</span>
@@ -400,12 +411,12 @@ const ProductMaster = () => {
           </div>
 
           <div 
-            className={`master-table-container !bg-transparent !shadow-none !border-none md:!bg-white md:!shadow-[0_4px_20px_rgba(0,0,0,0.03)] md:!border md:!border-[#E5E7EB] mb-8 ${
+            className={`master-table-container bg-white shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-[#E5E7EB] mb-8 rounded-[20px] overflow-hidden ${
               activeDropdown ? "!overflow-visible" : ""
             }`}
           >
             {/* Desktop Action Bar */}
-            <div className="hidden md:flex items-center justify-between p-6 border-b border-[#F3F4F6] bg-white gap-4 rounded-t-[16px]">
+            <div className="hidden md:flex items-center justify-between p-6 border-b border-[#F3F4F6] bg-white gap-4 rounded-t-[20px]">
               <div className="flex items-center gap-3 flex-1">
                 <div className="relative flex-1 max-w-[320px]">
                   <Search
@@ -469,73 +480,86 @@ const ProductMaster = () => {
             </div>
 
             {/* Mobile Action Bar - Optimized One-line Layout */}
-            <div className="md:hidden mt-2 p-0 w-full mb-3">
-              <div className="flex items-center gap-1.5 h-[48px]">
-                {/* Compact Search */}
-                <div className="flex-1 relative h-full">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                  <input
-                    type="text"
-                    placeholder={t('common:search')}
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="w-full h-full bg-white border border-[#E5E7EB] rounded-[12px] pl-8 pr-8 text-[14px] outline-none shadow-sm placeholder:text-gray-400 font-medium"
-                  />
-                  {searchQuery && (
-                    <button onClick={() => { setSearchQuery(""); setCurrentPage(1); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400">
-                      <X size={14} />
+            <div className="md:hidden py-3 px-4 border-b border-[#F3F4F6] rounded-t-[20px]">
+              <div className="flex items-center gap-2 h-[40px]">
+                {/* Expandable Search */}
+                <div className={`relative h-full transition-all duration-300 flex items-center ${isSearchExpanded ? 'flex-1' : 'w-[42px]'}`}>
+                  {!isSearchExpanded ? (
+                    <button 
+                      onClick={() => setIsSearchExpanded(true)}
+                      className="w-full h-full flex items-center justify-center text-gray-500"
+                    >
+                      <Search size={22} />
                     </button>
+                  ) : (
+                    <div className="relative w-full h-full flex items-center animate-in slide-in-from-right-4 duration-300">
+                      <Search className="absolute left-3 text-gray-400" size={18} />
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder={t('common:search')}
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className="w-full h-full bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none shadow-sm placeholder:text-gray-400 font-medium"
+                      />
+                      {searchQuery && (
+                        <button 
+                          onClick={() => { setSearchQuery(""); setCurrentPage(1); }}
+                          className="absolute right-3 text-gray-400"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
 
-                {/* Control Buttons Group */}
-                <div className="flex items-center gap-1 h-full">
-                  <button
-                    onClick={handleRefresh}
-                    className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-400"
-                    title={t('common:refresh')}
-                  >
-                    <RefreshCw size={18} />
-                  </button>
-
-                  <button
-                    onClick={() => setIsImportModalOpen(true)}
-                    className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-400"
-                    title={t('common:import')}
-                  >
-                    <Upload size={18} />
-                  </button>
-
-                  <div className="relative mobile-export-trigger">
-                    <button
-                      onClick={() => setIsExportOpen(!isExportOpen)}
-                      className={`w-[44px] h-[44px] flex items-center justify-center border rounded-[12px] shadow-sm transition-all active:scale-95 ${isExportOpen ? "bg-[#073318] border-[#073318] text-white" : "bg-white border-[#E5E7EB] text-gray-400"}`}
-                    >
-                      <Download size={18} />
+                {/* Action Icons - Hidden when search expanded */}
+                {!isSearchExpanded ? (
+                  <div className="flex items-center gap-1 ml-auto animate-in fade-in duration-300">
+                    <button onClick={handleRefresh} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                      <RefreshCw size={20} />
                     </button>
-                    {isExportOpen && (
-                      <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-2xl z-[100] py-1 overflow-hidden">
-                        <button onClick={handleExportPDF} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50">
-                          <FileText size={16} className="text-red-500" /> PDF
-                        </button>
-                        <button onClick={handleExportExcel} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50 border-t border-gray-50">
-                          <FileSpreadsheet size={16} className="text-green-600" /> Excel
-                        </button>
-                      </div>
-                    )}
+                    <button onClick={() => setIsImportModalOpen(true)} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                      <Upload size={20} />
+                    </button>
+                    <div className="relative">
+                      <button 
+                        onClick={() => setIsExportOpen(!isExportOpen)} 
+                        className={`w-10 h-10 flex items-center justify-center transition-colors ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}
+                      >
+                        <Download size={20} />
+                      </button>
+                      {isExportOpen && (
+                        <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-[100] py-1 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
+                          <button onClick={handleExportPDF} className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50">
+                            <FileText size={18} className="text-red-500" /> PDF
+                          </button>
+                          <button onClick={handleExportExcel} className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50 border-t border-gray-50">
+                            <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
+                      className={`w-10 h-10 flex items-center justify-center ${isFilterApplied ? 'text-red-600' : 'text-gray-500'}`}
+                      title={isFilterApplied ? t('common:clear') : t('common:filter')}
+                    >
+                      <Filter size={20} />
+                    </button>
                   </div>
-
-                  <button
-                    onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
-                    className={`w-[44px] h-[44px] flex items-center justify-center border rounded-[12px] shadow-sm transition-all active:scale-95 ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-[#E5E7EB] text-gray-400'}`}
-                    title={isFilterApplied ? t('common:clear') : t('common:filter')}
+                ) : (
+                  <button 
+                    onClick={() => { setIsSearchExpanded(false); setSearchQuery(''); setCurrentPage(1); }}
+                    className="text-[14px] font-bold text-[#073318] px-2 animate-in fade-in duration-300"
                   >
-                    <Filter size={18} />
+                    {t('common:cancel')}
                   </button>
-                </div>
+                )}
               </div>
             </div>
 
@@ -544,60 +568,60 @@ const ProductMaster = () => {
                 <thead>
                   <tr>
                     <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 uppercase tracking-tight">
+                      <div className="flex items-center gap-2 tracking-tight">
                         {t("product_code")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
                     <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 uppercase tracking-tight">
+                      <div className="flex items-center gap-2 tracking-tight">
                         {t("product_name")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
                     <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 uppercase tracking-tight">
+                      <div className="flex items-center gap-2 tracking-tight">
                         {t("modules:gst_uom", "GST UOM")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
                     <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 uppercase tracking-tight">
+                      <div className="flex items-center gap-2 tracking-tight">
                         {t("product_type")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
                     <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 uppercase tracking-tight">
+                      <div className="flex items-center gap-2 tracking-tight">
                         {t("category")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
                     <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 uppercase tracking-tight">
+                      <div className="flex items-center gap-2 tracking-tight">
                         {t("sub_category")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
                     <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 uppercase tracking-tight">
+                      <div className="flex items-center gap-2 tracking-tight">
                         {t("hsn_code")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
                     <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 uppercase tracking-tight">
+                      <div className="flex items-center gap-2 tracking-tight">
                         {t("tax_percent")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
                     <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 uppercase tracking-tight">
+                      <div className="flex items-center gap-2 tracking-tight">
                         {t("common:status")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
-                    <th className="px-3 md:px-6 py-3 md:py-4 text-center uppercase tracking-tight">
+                    <th className="px-3 md:px-6 py-3 md:py-4 text-center tracking-tight">
                       {t("common:action")}
                     </th>
                   </tr>
@@ -677,9 +701,9 @@ const ProductMaster = () => {
                               }`}
                             >
                               <button
-                                onClick={(e) => {
+                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setCurrentView({ type: "view", data: row });
+                                  navigate(`view/${row.id}`);
                                   setActiveDropdown(null);
                                 }}
                                 className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
@@ -738,9 +762,9 @@ const ProductMaster = () => {
             </div>
 
             {/* Pagination */}
-            <div className="flex flex-col md:flex-row items-center justify-between px-4 md:px-8 py-6 border-t border-[#F3F4F6] bg-white gap-6">
-              <div className="flex items-center justify-center md:justify-start gap-3 text-[14px] text-[#6B7280] font-medium w-full md:w-auto">
-                <span>{t("common:show")}</span>
+            <div className="flex flex-row items-center justify-between px-4 sm:px-6 py-4 border-t border-[#F3F4F6] bg-white gap-4 w-full">
+              <div className="flex items-center gap-2 text-[13px] text-[#6B7280] font-medium">
+                <span className="hidden sm:inline">{t("common:show")}</span>
                 <div className="relative group">
                   <select
                     value={itemsPerPage}
@@ -760,38 +784,31 @@ const ProductMaster = () => {
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]"
                   />
                 </div>
-                <span>{t("common:per_page")}</span>
+                <span className="hidden sm:inline">{t("common:per_page")}</span>
               </div>
 
-              <div className="flex flex-col xs:flex-row items-center justify-center md:justify-end gap-4 md:gap-6 w-full md:w-auto text-center md:text-left transition-all">
-                <span className="text-[#6B7280] text-[14px] font-medium">
-                  {totalItems > 0
-                    ? `${startIndex + 1}–${endIndex} of ${totalItems}`
-                    : `0-0 of 0`}
+              <div className="flex items-center gap-3">
+                <span className="text-[#6B7280] text-[13px] font-medium whitespace-nowrap">
+                  {totalItems > 0 ? `${startIndex + 1}–${endIndex} of ${totalItems}` : `0-0 of 0`}
                 </span>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="w-[38px] h-[38px] md:w-10 md:h-10 flex items-center justify-center text-[#6B7280] border border-[#E5E7EB] md:border-none hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px]"
+                    className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
                   >
-                    <ArrowLeft size={18} />
+                    <ArrowLeft size={16} />
                   </button>
-                  <div className="flex items-center gap-1.5">
+                  <div className="hidden md:flex items-center gap-1.5 px-1">
                     {getVisiblePages().map((page, index) => (
                       <button
                         key={index}
-                        onClick={() =>
-                          typeof page === "number"
-                            ? handlePageChange(page)
-                            : null
-                        }
-                        className={`w-[38px] h-[38px] md:w-10 md:h-10 rounded-[10px] flex items-center justify-center transition-all text-[14px] font-bold
-                                                    ${
-                                                      currentPage === page
-                                                        ? "bg-[#073318] text-white shadow-md"
-                                                        : "text-[#6B7280] border border-transparent hover:border-[#E5E7EB] hover:bg-gray-50 hover:text-[#111827]"
-                                                    }`}
+                        onClick={() => typeof page === "number" ? handlePageChange(page) : null}
+                        className={`min-w-[32px] h-[32px] rounded-[8px] flex items-center justify-center transition-all text-[13px] font-bold ${
+                          currentPage === page
+                            ? "bg-[#073318] text-white shadow-md"
+                            : "text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]"
+                        }`}
                       >
                         {page}
                       </button>
@@ -800,9 +817,9 @@ const ProductMaster = () => {
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages || totalPages === 0}
-                    className="w-[38px] h-[38px] md:w-10 md:h-10 flex items-center justify-center text-[#6B7280] border border-[#E5E7EB] md:border-none hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px]"
+                    className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
                   >
-                    <ArrowRight size={18} />
+                    <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
@@ -943,8 +960,8 @@ const ProductMaster = () => {
       ) : currentView.type === "view" ? (
         <ViewProduct
           initialData={currentView.data}
-          onBack={() => setCurrentView({ type: "list", data: null })}
-          onEdit={(data) => setCurrentView({ type: "edit", data })}
+          onBack={() => navigate('/seller/masters/product-master')}
+          onEdit={(data) => navigate(`/seller/masters/product-master/edit/${data.id}`)}
         />
       ) : (
         <ProductForm
@@ -955,10 +972,10 @@ const ProductMaster = () => {
             if (redirect) {
               navigate(redirect);
             } else {
-              setCurrentView({ type: "list", data: null });
+              navigate('/seller/masters/product-master');
             }
           }}
-          onEdit={(data) => setCurrentView({ type: "edit", data })}
+          onEdit={(data) => navigate(`/seller/masters/product-master/edit/${data.id}`)}
           onSuccess={() => {
             const msg =
               currentView.type === "add"
@@ -970,7 +987,7 @@ const ProductMaster = () => {
             if (redirect && currentView.type === "add") {
               setTimeout(() => navigate(redirect), 1500); // Redirect back after toast
             } else {
-              setCurrentView({ type: "list", data: null });
+              navigate('/seller/masters/product-master');
               fetchProducts();
             }
           }}

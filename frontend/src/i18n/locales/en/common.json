@@ -67,5 +67,20 @@
     "search_by_anything": "Search By Anything...",
     "search_by_name": "Search By Name...",
     "clear": "Clear",
-    "loading": "Loading"
+    "loading": "Loading",
+    "add_group_master": "Add Group",
+    "edit_group_master": "Edit Group",
+    "add_account_master": "Add Account",
+    "edit_account_master": "Edit Account",
+    "add_unit_master": "Add Unit",
+    "edit_unit_master": "Edit Unit",
+    "add_category": "Add Category",
+    "edit_category": "Edit Category",
+    "add_product_master": "Add Product",
+    "edit_product_master": "Edit Product",
+    "add_order": "Add Purchase Order",
+    "edit_order": "Edit Purchase Order",
+    "view_order": "View Purchase Order",
+    "add_invoice": "Add Purchase Invoice",
+    "edit_invoice": "Edit Purchase Invoice"
 }
