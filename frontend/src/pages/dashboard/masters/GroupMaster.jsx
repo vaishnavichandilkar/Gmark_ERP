@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Search, Download, Filter, Plus, Minus, FileText, FileSpreadsheet, Maximize2, Minimize2, MoreVertical, CheckCircle2, XCircle, RefreshCw, ChevronDown, X, Eye, ChevronsUpDown, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import GroupForm from './components/GroupForm';
@@ -11,6 +12,9 @@ import SuccessToast from './components/SuccessToast';
 
 const GroupMaster = () => {
     const { t } = useTranslation(['modules', 'common']);
+    const location = useLocation();
+    const navigate = useNavigate();
+    const { id } = useParams();
     const [currentView, setCurrentView] = useState({ type: 'list', data: null });
     const [searchQuery, setSearchQuery] = useState('');
     const [expandedGroups, setExpandedGroups] = useState({});
@@ -49,6 +53,31 @@ const GroupMaster = () => {
     useEffect(() => {
         fetchGroups();
     }, []);
+
+    // Sync currentView with URL
+    useEffect(() => {
+        if (location.pathname.endsWith('/add')) {
+            setCurrentView({ type: 'add', data: null });
+        } else if (location.pathname.includes('/edit/')) {
+            // Find the group in the loaded groups array if possible
+            const findGroup = (groupList, targetId) => {
+                for (const g of groupList) {
+                    if (String(g.id) === String(targetId)) return g;
+                    if (g.children) {
+                        const found = findGroup(g.children, targetId);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+            const group = findGroup(groups, id);
+            if (group) {
+                setCurrentView({ type: 'edit', data: group });
+            }
+        } else {
+            setCurrentView({ type: 'list', data: null });
+        }
+    }, [location.pathname, groups, id]);
 
     // Handle click outside for export dropdown
     useEffect(() => {
@@ -322,10 +351,10 @@ const GroupMaster = () => {
             <GroupForm
                 mode={currentView.type}
                 initialData={currentView.data}
-                onBack={() => setCurrentView({ type: 'list', data: null })}
+                onBack={() => navigate('/seller/masters/group-master')}
                 onSuccess={() => {
                     fetchGroups();
-                    setCurrentView({ type: 'list', data: null });
+                    navigate('/seller/masters/group-master');
                     showToast(currentView.type === 'add' ? 'Group added successfully' : 'Group updated successfully');
                 }}
             />
@@ -333,7 +362,7 @@ const GroupMaster = () => {
     }
 
     return (
-        <div className="flex flex-col animate-in fade-in duration-500 relative font-['Plus_Jakarta_Sans']">
+        <div className="flex flex-col relative font-['Plus_Jakarta_Sans'] w-full">
             {toastState && (
                 <SuccessToast 
                     message={toastState.message} 
@@ -344,10 +373,13 @@ const GroupMaster = () => {
 
             <div className="flex flex-col gap-1 mb-4 md:mb-8">
                 {/* Desktop Header */}
-                <div className="hidden md:flex flex-row items-center justify-end gap-4">
+                <div className="hidden md:flex flex-row items-center justify-between gap-4">
+                    <h2 className="text-[20px] md:text-[24px] font-bold text-[#111827] tracking-tight">
+                        {t('group_master')}
+                    </h2>
 
                     <button
-                        onClick={() => setCurrentView({ type: 'add', data: null })}
+                        onClick={() => navigate('add')}
                         className="px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 shrink-0"
                     >
                         <Plus size={18} />
@@ -357,9 +389,8 @@ const GroupMaster = () => {
 
                 {/* Mobile Header - Stacked Layout */}
                 <div className="md:hidden flex flex-col gap-3">
-
                     <button
-                        onClick={() => setCurrentView({ type: 'add', data: null })}
+                        onClick={() => navigate('add')}
                         className="flex items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-full max-w-[358px] self-center"
                     >
                         <Plus size={18} strokeWidth={3} />

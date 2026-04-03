@@ -34,6 +34,7 @@ const PurchaseOrder = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -234,7 +235,7 @@ const PurchaseOrder = () => {
   const statusTabs = ["All", "Pending", "Expiring soon", "Expired", "Completed", "Deleted"];
 
   return (
-    <div className="flex flex-col gap-1 w-full animate-in fade-in duration-300 relative">
+    <div className="flex flex-col w-full relative">
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
             height: 6px;
@@ -260,28 +261,35 @@ const PurchaseOrder = () => {
       
       {/* Title Section */}
       <div className="flex flex-col gap-4 mb-6 md:mb-8">
-          <div className="flex flex-col gap-1">
-              <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">
-                Purchase Order
-              </h1>
-              <p className="text-[#6B7280] text-[14px] md:text-[15px]">
-                View, verify, and monitor all purchase orders, supplier invoices, and stock procurement activities.
-              </p>
-          </div>
-          
-          <div className="flex justify-end">
+          {/* Desktop Header */}
+          <div className="hidden md:flex flex-row items-center justify-between gap-4 w-full">
+              <h2 className="text-[20px] md:text-[24px] font-bold text-[#111827] tracking-tight">
+                  Purchase Order
+              </h2>
+
               <button 
                 onClick={() => navigate('/seller/purchase/order/add')}
-                className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2"
+                className="md:min-w-[120px] md:px-5 h-[42px] md:h-[38px] bg-[#073318] text-white rounded-[10px] md:rounded-[8px] text-[15px] md:text-[14px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2"
               >
-                <Plus size={18} />
+                <Plus size={16} />
+                Add PO
+              </button>
+          </div>
+
+          {/* Mobile Header - Stacked Layout */}
+          <div className="md:hidden flex flex-col gap-3">
+              <button 
+                onClick={() => navigate('/seller/purchase/order/add')}
+                className="w-full max-w-[358px] h-[42px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold active:scale-[0.98] transition-all shadow-md flex items-center justify-center gap-2 self-center"
+              >
+                <Plus size={16} />
                 Add PO
               </button>
           </div>
       </div>
 
       {/* Sub-Tabs */}
-      <div className="flex gap-8 border-b border-[#E5E7EB] mb-8 overflow-x-auto no-scrollbar scrollbar-hide">
+      <div className="flex gap-8 border-b border-[#E5E7EB] mb-8 overflow-x-auto no-scrollbar scrollbar-hide md:justify-center">
         {statusTabs.map((tab) => (
           <button
             key={tab}
@@ -371,54 +379,80 @@ const PurchaseOrder = () => {
                 </div>
             </div>
 
-            {/* Mobile View Action Bar (Standardized 2-Row Layout) */}
+            {/* Mobile View Action Bar (Standardized Layout) */}
             <div className="flex md:hidden flex-col gap-3">
-                {/* Row 1: Search, Refresh, Export */}
-                <div className="flex items-center gap-3">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                {/* Single Row: Search and Quick Actions */}
+                <div className="flex items-center gap-2">
+                    <div className={`relative transition-all duration-300 ease-in-out ${isSearchFocused || searchQuery ? 'flex-1' : 'w-[42px]'}`}>
+                        <Search className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${isSearchFocused || searchQuery ? 'text-[#073318]' : 'text-gray-500'}`} size={22} />
                         <input
                             type="text"
-                            placeholder="Search orders..."
+                            placeholder={isSearchFocused || searchQuery ? "Search orders..." : ""}
                             value={searchQuery}
+                            onFocus={() => setIsSearchFocused(true)}
                             onChange={(e) => {setSearchQuery(e.target.value); setCurrentPage(1);}}
-                            className="w-full h-[46px] bg-white border border-[#E5E7EB] rounded-[12px] pl-9 pr-8 text-[14px] outline-none focus:border-[#073318]"
+                            className={`w-full h-[42px] bg-[#F9FAFB] rounded-[10px] pl-10 pr-8 text-[14px] outline-none transition-all duration-300
+                                ${isSearchFocused || searchQuery ? 'border border-[#073318]/20 ring-1 ring-[#073318]/5' : 'border-none bg-transparent cursor-pointer'}`}
                         />
-                    </div>
-                    <button 
-                        onClick={handleRefresh}
-                        className="w-[46px] h-[46px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50"
-                    >
-                        <RefreshCw size={18} className={`text-gray-400 ${isRefreshing ? 'animate-spin text-[#073318]' : ''}`} />
-                    </button>
-                    <div className="relative mobile-export-trigger px-0">
-                        <button 
-                            onClick={() => setIsExportOpen(!isExportOpen)}
-                            className={`w-[46px] h-[46px] flex items-center justify-center rounded-[12px] border transition-all ${isExportOpen ? 'bg-[#073318]/5 border-[#073318] text-[#073318]' : 'bg-white border-[#E5E7EB] text-gray-400'}`}
-                        >
-                            <Download size={18} />
-                        </button>
-                        {isExportOpen && (
-                            <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[100] py-2 overflow-hidden">
-                                <button onClick={handleExportPDF} className="w-full px-5 py-3.5 flex items-center gap-3 text-[14px] font-bold text-gray-700 active:bg-gray-50">
-                                    <FileText size={18} className="text-red-500" /> PDF
-                                </button>
-                                <button onClick={handleExportExcel} className="w-full px-5 py-3.5 flex items-center gap-3 text-[14px] font-bold text-gray-700 active:bg-gray-50">
-                                    <FileSpreadsheet size={18} className="text-green-600" /> Excel
-                                </button>
-                            </div>
+                        {(isSearchFocused || searchQuery) && searchQuery && (
+                            <button 
+                                onClick={() => setSearchQuery("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                            >
+                                <X size={14} />
+                            </button>
                         )}
                     </div>
-                </div>
-                {/* Row 2: Secondary Actions (Import) */}
-                <div className="flex items-center justify-end gap-3 w-full">
-                    <button 
-                        onClick={() => setIsImportModalOpen(true)}
-                        className="w-[52px] h-[52px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[14px] shadow-sm active:bg-gray-50"
-                        title="Import PO"
-                    >
-                        <Upload size={18} className="text-gray-400" />
-                    </button>
+
+                    {(isSearchFocused || searchQuery) && (
+                        <button 
+                            onClick={() => {
+                                setIsSearchFocused(false);
+                                setSearchQuery("");
+                            }}
+                            className="text-[#073318] text-[14px] font-bold px-1 animate-in fade-in slide-in-from-right-2 duration-200"
+                        >
+                            Cancel
+                        </button>
+                    )}
+
+                    {/* Action Icons - Hidden when searching on mobile */}
+                    {!isSearchFocused && !searchQuery && (
+                        <div className="flex items-center gap-1 ml-auto">
+                            <button 
+                                onClick={handleRefresh}
+                                className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
+                            >
+                                <RefreshCw size={22} className={isRefreshing ? 'animate-spin text-[#073318]' : ''} />
+                            </button>
+                            
+                            <button 
+                                onClick={() => setIsImportModalOpen(true)}
+                                className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
+                            >
+                                <Upload size={22} />
+                            </button>
+
+                            <div className="relative mobile-export-trigger px-0">
+                                <button 
+                                    onClick={() => setIsExportOpen(!isExportOpen)}
+                                    className={`w-[42px] h-[42px] flex items-center justify-center transition-all ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}
+                                >
+                                    <Download size={22} />
+                                </button>
+                                {isExportOpen && (
+                                    <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[100] py-2 overflow-hidden">
+                                        <button onClick={handleExportPDF} className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 active:bg-gray-50 border-none bg-transparent">
+                                            <FileText size={18} className="text-red-500" /> PDF
+                                        </button>
+                                        <button onClick={handleExportExcel} className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 active:bg-gray-50 border-none bg-transparent">
+                                            <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -427,19 +461,19 @@ const PurchaseOrder = () => {
         <div className="overflow-x-auto w-full min-h-[400px] custom-scrollbar">
           <table className="w-full min-w-[1500px] border-collapse text-left">
             <thead>
-              <tr className="bg-emerald-900 border-b border-emerald-950 text-[14px] font-bold text-white uppercase tracking-tight">
+              <tr className="bg-emerald-900 border-b border-emerald-950 text-[15px] font-bold text-white tracking-tight">
                 {[
-                  "PO No", "Supplier Name", "Creation Date", "Expiry Date", "Amount", 
-                  "GST Number", "Credit Days", "Tax Amount", "Total Amount", "Status"
+                  "Po No", "Supplier Name", "Creation Date", "Expiry Date", "Amount", 
+                  "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status"
                 ].map((col) => (
                   <th key={col} className="px-6 py-5 border-r border-white/50 whitespace-nowrap tracking-tight">
-                    <div className="flex items-center gap-1.5 cursor-pointer hover:text-white/80 transition-colors uppercase tracking-tight">
+                    <div className="flex items-center gap-1.5 cursor-pointer hover:text-white/80 transition-colors tracking-tight">
                       {col}
                       <ChevronsUpDown size={14} className="text-white opacity-80" />
                     </div>
                   </th>
                 ))}
-                <th className="px-6 py-5 text-center w-[100px] whitespace-nowrap tracking-tight uppercase">Action</th>
+                <th className="px-6 py-5 text-center w-[100px] whitespace-nowrap tracking-tight">Action</th>
               </tr>
             </thead>
             <tbody className={`text-[14px] text-[#111827] transition-opacity duration-300 ${isRefreshing ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
@@ -547,48 +581,43 @@ const PurchaseOrder = () => {
           )}
         </div>
 
-        {/* Pagination Section */}
-        <div className="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-5 sm:py-6 border-t border-[#F3F4F6] bg-white gap-6">
-          <div className="flex items-center justify-between w-full sm:w-auto gap-3 text-[14px] text-[#6B7280] font-medium order-2 sm:order-1 border-t sm:border-0 pt-4 sm:pt-0">
-            <div className="flex items-center gap-2">
-                <span>Show</span>
-                <div className="relative group">
-                  <select
-                    value={itemsPerPage}
-                    onChange={(e) => {setItemsPerPage(Number(e.target.value)); setCurrentPage(1);}}
-                    className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#073318] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
-                  >
-                    {[5, 10, 20, 50].map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
-                  <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]" />
-                </div>
-                <span>per page</span>
-            </div>
-            <span className="sm:hidden text-gray-400 text-xs font-bold">
-                 {totalItems > 0 ? `${startIndex + 1}-${Math.min(startIndex + itemsPerPage, totalItems)} / ${totalItems}` : `0-0 / 0`}
-            </span>
+        {/* Pagination Section - Standardized Single Row */}
+        <div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-t border-[#F3F4F6] bg-white gap-2">
+          <div className="flex items-center gap-2 text-[13px] sm:text-[14px] text-[#6B7280] font-medium min-w-fit">
+              <span>Show</span>
+              <div className="relative group">
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {setItemsPerPage(Number(e.target.value)); setCurrentPage(1);}}
+                  className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-2 sm:pl-3 pr-6 sm:pr-8 py-1 sm:py-1.5 outline-none focus:border-[#073318] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white text-[13px] sm:text-[14px]"
+                >
+                  {[5, 10, 20, 50].map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+                <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]" />
+              </div>
+              <span className="hidden xs:inline">per page</span>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full sm:w-auto order-1 sm:order-2">
-            <span className="hidden sm:inline text-[#6B7280] text-[14px] font-medium">
+          <div className="flex items-center gap-2 sm:gap-6">
+            <span className="text-[#6B7280] text-[12px] sm:text-[14px] font-medium whitespace-nowrap">
               {totalItems > 0 
                 ? `${((currentPage - 1) * itemsPerPage) + 1}–${Math.min(currentPage * itemsPerPage, totalItems)} of ${totalItems}`
                 : '0-0 of 0'}
             </span>
-            <div className="flex items-center justify-center gap-1.5 w-full sm:w-auto">
+            <div className="flex items-center gap-1 sm:gap-1.5">
               <button
                 disabled={currentPage === 1}
                 onClick={() => handlePageChange(currentPage - 1)}
-                className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
+                className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
               >
                 <ArrowLeft size={18} />
               </button>
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-[180px] sm:max-w-none px-1">
+              <div className="hidden sm:flex items-center gap-1.5 overflow-x-auto no-scrollbar px-1">
                 {[...Array(totalPages)].map((_, i) => (
                   <button
                     key={i}
                     onClick={() => handlePageChange(i + 1)}
-                    className={`min-w-[36px] sm:min-w-[40px] h-[36px] sm:h-[40px] rounded-[10px] flex items-center justify-center transition-all text-[13px] sm:text-[14px] font-bold
+                    className={`min-w-[40px] h-[40px] rounded-[10px] flex items-center justify-center transition-all text-[14px] font-bold
                       ${currentPage === i + 1 
                         ? 'bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100' 
                         : 'text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]'}`}
@@ -600,7 +629,7 @@ const PurchaseOrder = () => {
               <button
                 disabled={currentPage === totalPages || totalPages === 0}
                 onClick={() => handlePageChange(currentPage + 1)}
-                className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
+                className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
               >
                 <ArrowRight size={18} />
               </button>

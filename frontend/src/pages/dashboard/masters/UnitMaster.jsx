@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Search, Download, Upload, Plus, Filter, MoreVertical, X, FileText, FileSpreadsheet, Eye, FileEdit, ArrowLeft, ArrowRight, ChevronsUpDown, CheckCircle2, RefreshCw, ChevronDown, Database } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import UnitForm from './components/UnitForm';
@@ -11,6 +12,9 @@ import ImportModal from './components/ImportModal';
 
 const UnitMaster = () => {
     const { t } = useTranslation(['modules', 'common']);
+    const location = useLocation();
+    const navigate = useNavigate();
+    const { id } = useParams();
     const defaultFilters = { gstUom: '', status: '', unitName: '' };
     const [searchQuery, setSearchQuery] = useState('');
     const [isExportOpen, setIsExportOpen] = useState(false);
@@ -75,6 +79,25 @@ const UnitMaster = () => {
     useEffect(() => {
         fetchGstUomList();
     }, []);
+
+    // Sync currentView with URL
+    useEffect(() => {
+        if (location.pathname.endsWith('/add')) {
+            setCurrentView({ type: 'add', data: null });
+        } else if (location.pathname.includes('/edit/')) {
+            const unit = tableData.find(u => String(u.id) === String(id));
+            if (unit) {
+                setCurrentView({ type: 'edit', data: unit });
+            }
+        } else if (location.pathname.includes('/view/')) {
+            const unit = tableData.find(u => String(u.id) === String(id));
+            if (unit) {
+                setCurrentView({ type: 'view', data: unit });
+            }
+        } else {
+            setCurrentView({ type: 'list', data: null });
+        }
+    }, [location.pathname, tableData, id]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -263,10 +286,13 @@ const UnitMaster = () => {
                 <>
                     <div className="flex flex-col gap-1 mb-4 md:mb-8">
                         {/* Desktop Header */}
-                        <div className="hidden md:flex flex-row items-center justify-end gap-4">
+                        <div className="hidden md:flex flex-row items-center justify-between gap-4">
+                            <h2 className="text-[20px] md:text-[24px] font-bold text-[#111827] tracking-tight">
+                                {t('modules:unit_master')}
+                            </h2>
 
                             <button 
-                                onClick={() => setCurrentView({ type: 'add', data: null })}
+                                onClick={() => navigate('add')}
                                 className="flex items-center gap-2 bg-[#073318] hover:bg-[#04200f] text-white px-6 h-[44px] rounded-[10px] text-[15px] font-bold transition-all shadow-sm active:scale-[0.98] shrink-0"
                             >
                                 <Plus size={18} />
@@ -276,9 +302,8 @@ const UnitMaster = () => {
 
                         {/* Mobile Header - Stacked Layout */}
                         <div className="md:hidden flex flex-col gap-3">
-
                             <button
-                                onClick={() => setCurrentView({ type: 'add', data: null })}
+                                onClick={() => navigate('add')}
                                 className="flex items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-full max-w-[358px] self-center"
                             >
                                 <Plus size={18} strokeWidth={3} />
@@ -504,7 +529,7 @@ const UnitMaster = () => {
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 setActiveDropdown(null);
-                                                                setCurrentView({ type: 'view', data: row });
+                                                                navigate(`view/${row.id}`);
                                                             }}
                                                             className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors whitespace-nowrap font-bold"
                                                         >
@@ -539,55 +564,50 @@ const UnitMaster = () => {
                             </table>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-5 sm:py-6 border-t border-[#F3F4F6] bg-white gap-6">
-                            <div className="flex items-center justify-between w-full sm:w-auto gap-3 text-[14px] text-[#6B7280] font-medium order-2 sm:order-1 border-t sm:border-0 pt-4 sm:pt-0">
-                                <div className="flex items-center gap-2">
-                                    <span>{t('common:show')}</span>
-                                    <div className="relative group">
-                                        <select
-                                            value={itemsPerPage}
-                                            onChange={(e) => {
-                                                setItemsPerPage(Number(e.target.value));
-                                                setCurrentPage(1);
-                                            }}
-                                            className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#0A3622] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
-                                        >
-                                            <option value={5}>5</option>
-                                            <option value={10}>10</option>
-                                            <option value={20}>20</option>
-                                            <option value={50}>50</option>
-                                        </select>
-                                        <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#0A3622]" />
-                                    </div>
-                                    <span>{t('common:per_page')}</span>
+                        <div className="flex flex-row items-center justify-between px-4 sm:px-6 py-4 border-t border-[#F3F4F6] bg-white gap-4 w-full">
+                            <div className="flex items-center gap-2 text-[13px] text-[#6B7280] font-medium">
+                                <span className="hidden sm:inline">{t('common:show')}</span>
+                                <div className="relative group">
+                                    <select
+                                        value={itemsPerPage}
+                                        onChange={(e) => {
+                                            setItemsPerPage(Number(e.target.value));
+                                            setCurrentPage(1);
+                                        }}
+                                        className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#0A3622] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
+                                    >
+                                        <option value={5}>5</option>
+                                        <option value={10}>10</option>
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                    </select>
+                                    <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#0A3622]" />
                                 </div>
-                                <span className="sm:hidden text-gray-400">
-                                    {totalItems > 0 ? `${startIndex + 1}-${endIndex} / ${totalItems}` : `0-0 / 0`}
-                                </span>
+                                <span className="hidden sm:inline">{t('common:per_page')}</span>
                             </div>
 
-                            <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full sm:w-auto order-1 sm:order-2">
-                                <span className="hidden sm:inline text-[#6B7280] text-[14px] font-medium">
+                            <div className="flex items-center gap-3">
+                                <span className="text-[#6B7280] text-[13px] font-medium whitespace-nowrap">
                                     {totalItems > 0 ? `${startIndex + 1}-${endIndex} of ${totalItems}` : `0-0 of 0`}
                                 </span>
-                                <div className="flex items-center justify-center gap-1.5 w-full sm:w-auto">
+                                <div className="flex items-center gap-1">
                                     <button
                                         onClick={() => handlePageChange(currentPage - 1)}
                                         disabled={currentPage === 1}
-                                        className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
+                                        className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
                                     >
-                                        <ArrowLeft size={18} />
+                                        <ArrowLeft size={16} />
                                     </button>
-                                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-[180px] sm:max-w-none px-1">
+                                    <div className="hidden md:flex items-center gap-1.5 px-1">
                                         {getVisiblePages().map((page, index) => (
                                             <button
                                                 key={index}
                                                 onClick={() => handlePageChange(page)}
-                                                className={`min-w-[36px] sm:min-w-[40px] h-[36px] sm:h-[40px] rounded-[10px] flex items-center justify-center transition-all text-[13px] sm:text-[14px] font-bold
-                                                                    ${currentPage === page
+                                                className={`min-w-[32px] h-[32px] rounded-[8px] flex items-center justify-center transition-all text-[13px] font-bold ${
+                                                    currentPage === page
                                                         ? 'bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100'
                                                         : 'text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]'
-                                                    }`}
+                                                }`}
                                             >
                                                 {page}
                                             </button>
@@ -596,9 +616,9 @@ const UnitMaster = () => {
                                     <button
                                         onClick={() => handlePageChange(currentPage + 1)}
                                         disabled={currentPage === totalPages || totalPages === 0}
-                                        className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
+                                        className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
                                     >
-                                        <ArrowRight size={18} />
+                                        <ArrowRight size={16} />
                                     </button>
                                 </div>
                             </div>
@@ -690,11 +710,11 @@ const UnitMaster = () => {
                 <UnitForm
                     mode={currentView.type}
                     initialData={currentView.data}
-                    onBack={() => setCurrentView({ type: 'list', data: null })}
-                    onEdit={(data) => setCurrentView({ type: 'edit', data })}
+                    onBack={() => navigate('/seller/masters/unit-master')}
+                    onEdit={(data) => navigate(`/seller/masters/unit-master/edit/${data.id}`)}
                     onSuccess={() => {
                         const message = currentView.type === 'add' ? 'Unit added successfully' : 'Unit edited successfully';
-                        setCurrentView({ type: 'list', data: null });
+                        navigate('/seller/masters/unit-master');
                         showToast(message);
                         fetchUnits();
                     }}

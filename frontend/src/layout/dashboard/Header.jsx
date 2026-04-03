@@ -59,7 +59,26 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
         );
 
         if (pathSegments.length > 0) {
-            const formattedSegments = pathSegments.map(segment => {
+            const formattedSegments = pathSegments.map((segment, index) => {
+                // Special handling for 'add' and 'edit' segments to show verbose labels
+                if (segment === 'add' || segment === 'edit') {
+                    const parent = pathSegments[index - 1];
+                    if (parent) {
+                        let parentKey = parent.replace(/-/g, '_');
+                        if (parentKey === 'category') parentKey = 'category_master';
+                        
+                        const action = segment === 'add' ? 'add' : 'edit';
+                        // Map entity names (e.g., group_master -> group, order -> po/order)
+                        let entity = parentKey.replace('_master', '');
+                        if (entity === 'order') entity = 'po';
+                        if (entity === 'invoice') entity = 'purchase_invoice';
+                        
+                        const verboseKey = `${action}_${entity}`;
+                        const translated = t(`modules:${verboseKey}`, { defaultValue: '' });
+                        if (translated) return translated;
+                    }
+                }
+
                 let key = segment.replace(/-/g, '_');
                 if (key === 'category') key = 'category_master';
                 const translated = t(`modules:${key}`, { defaultValue: '' }) || t(`common:${key}`, { defaultValue: '' });

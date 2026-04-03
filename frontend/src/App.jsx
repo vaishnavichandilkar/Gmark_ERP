@@ -8,18 +8,36 @@ function App() {
   return (
     <Provider store={store}>
       <Toaster
-        position="top-center"
+        position="bottom-right"
         reverseOrder={false}
         toastOptions={{
-          className: 'text-[14px] font-medium font-["Plus_Jakarta_Sans"]',
+          className: 'text-[14px] font-semibold font-["Plus_Jakarta_Sans"]',
           style: {
-            borderRadius: '12px',
-            background: '#333',
+            borderRadius: '16px',
+            background: '#073318',
             color: '#fff',
-            padding: '12px 24px',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+            padding: '16px 24px',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.2)',
+            border: '1px solid #062a14',
           },
           duration: 4000,
+          success: {
+            iconTheme: {
+              primary: '#fff',
+              secondary: '#073318',
+            },
+          },
+          error: {
+            style: {
+              background: '#fff',
+              color: '#dc2626',
+              border: '1px solid #fee2e2',
+            },
+            iconTheme: {
+              primary: '#dc2626',
+              secondary: '#fff',
+            },
+          },
         }}
       />
       <RouterProvider router={router} />

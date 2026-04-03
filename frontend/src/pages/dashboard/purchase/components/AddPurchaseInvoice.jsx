@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Search, UploadCloud, ChevronDown, ChevronUp, X, FileText, Plus } from 'lucide-react';
 
-const AddPurchaseInvoice = ({ onBack, initialData, onSave }) => {
+const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave }) => {
     const navigate = useNavigate();
+    const { id } = useParams();
     const { t } = useTranslation(['modules', 'common']);
-    const isEditMode = !!initialData;
+    const isEditMode = !!propsInitialData || !!id;
     const supplierDropdownRef = useRef(null);
     const productDropdownRef = useRef(null);
     const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
@@ -65,16 +66,16 @@ const AddPurchaseInvoice = ({ onBack, initialData, onSave }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const [formData, setFormData] = useState(initialData ? {
-        supplierName: initialData.supplierName || '',
-        creditDays: initialData.cred || '',
+    const [formData, setFormData] = useState(propsInitialData ? {
+        supplierName: propsInitialData.supplierName || '',
+        creditDays: propsInitialData.cred || '',
         address: '24 Market Street, Gujarat', // Example address as mockData currently doesn't have it
-        supplierInvoiceDate: initialData.invoiceDate ? initialData.invoiceDate.split('-').reverse().join('-') : '',
-        poNumber: initialData.poNo || '',
-        bookingDate: initialData.bookingDate ? initialData.bookingDate.split('-').reverse().join('-') : '',
-        supplierInvoiceNumber: initialData.invoiceNo || '',
+        supplierInvoiceDate: propsInitialData.invoiceDate ? propsInitialData.invoiceDate.split('-').reverse().join('-') : '',
+        poNumber: propsInitialData.poNo || '',
+        bookingDate: propsInitialData.bookingDate ? propsInitialData.bookingDate.split('-').reverse().join('-') : '',
+        supplierInvoiceNumber: propsInitialData.invoiceNo || '',
         supplierChallanNumber: '',
-        gstNo: initialData.gstNo || ''
+        gstNo: propsInitialData.gstNo || ''
     } : {
         supplierName: '',
         creditDays: '',
@@ -263,7 +264,7 @@ const AddPurchaseInvoice = ({ onBack, initialData, onSave }) => {
         <div className="flex flex-col w-full animate-in fade-in duration-300 font-['Plus_Jakarta_Sans'] px-4 md:px-0">
             <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm flex flex-col w-full relative mb-8">
                 <div className="flex flex-col sm:flex-row border-b border-[#E5E7EB] px-4 md:px-6 py-4 items-center justify-between bg-white rounded-t-[12px] gap-4">
-                    <h2 className="text-[18px] font-bold text-[#111827]">{isEditMode ? t('modules:edit_pi', 'Edit Purchase Invoice') : t('modules:add_purchase_invoice', 'Add Purchase Invoice')}</h2>
+                    <h2 className="hidden md:block text-[18px] font-bold text-[#111827]">{isEditMode ? t('modules:edit_pi', 'Edit Purchase Invoice') : t('modules:add_purchase_invoice', 'Add Purchase Invoice')}</h2>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                         <button
                             type="button"

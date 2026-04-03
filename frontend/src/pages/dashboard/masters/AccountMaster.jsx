@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchAllAccounts, toggleAccountStatus } from '../../../redux/account/accountSlice';
 import { Search, Download, Upload, Filter, MoreVertical, Eye, Edit3, CheckCircle2, ChevronDown, RefreshCw, ArrowLeft, ArrowRight, ChevronsUpDown, X, FileText, FileSpreadsheet, Plus, Database, Check } from 'lucide-react';
@@ -18,6 +18,8 @@ const AccountMaster = () => {
     const { t } = useTranslation(['common', 'modules']);
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const { id } = useParams();
+    const location = useLocation();
     const [dropdownIndex, setDropdownIndex] = useState(null);
     const dropdownRef = useRef(null);
 
@@ -64,11 +66,26 @@ const AccountMaster = () => {
     const paginatedData = accounts || [];
 
     useEffect(() => {
-        const mode = searchParams.get('mode');
-        if (mode === 'add') {
+        if (location.pathname.endsWith('/add')) {
             setCurrentView('add');
+            setSelectedAccount(null);
+        } else if (location.pathname.includes('/edit/')) {
+            const acc = accounts.find(a => String(a.id) === String(id));
+            if (acc) {
+                setCurrentView('edit');
+                setSelectedAccount(acc);
+            }
+        } else if (location.pathname.includes('/view/')) {
+            const acc = accounts.find(a => String(a.id) === String(id));
+            if (acc) {
+                setCurrentView('view');
+                setSelectedAccount(acc);
+            }
+        } else {
+            setCurrentView('list');
+            setSelectedAccount(null);
         }
-    }, [searchParams]);
+    }, [location.pathname, accounts, id]);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -287,13 +304,7 @@ const AccountMaster = () => {
                 navigate(redirect);
                 return;
             }
-            if (previousView === 'view') {
-                setCurrentView('view');
-            } else {
-                setCurrentView('list');
-                setSelectedAccount(null);
-            }
-            setPreviousView(null);
+            navigate('/seller/masters/account-master');
         };
 
         const handleSuccess = () => {
@@ -302,10 +313,11 @@ const AccountMaster = () => {
             if (redirect && currentView === 'add') {
                 setTimeout(() => navigate(redirect), 1500);
             } else {
+                dispatch(fetchAllAccounts({ page: currentPage, limit: rowsPerPage, search: searchQuery, ...appliedFilters }));
                 if (currentView === 'add') {
-                    handleAddAccount();
+                    navigate('/seller/masters/account-master');
                 } else {
-                    handleUpdateAccount();
+                    navigate(`/seller/masters/account-master/view/${id}`);
                 }
             }
         };
@@ -323,19 +335,22 @@ const AccountMaster = () => {
     if (currentView === 'view') {
         return <ViewAccount 
             initialData={selectedAccount} 
-            onBack={() => { setCurrentView('list'); setSelectedAccount(null); setPreviousView(null); }} 
-            onEdit={() => { setPreviousView('view'); setCurrentView('edit'); }} 
+            onBack={() => navigate('/seller/masters/account-master')} 
+            onEdit={() => navigate(`/seller/masters/account-master/edit/${selectedAccount.id}`)} 
         />;
     }
 
     return (
-        <div className="flex flex-col font-['Plus_Jakarta_Sans'] w-full animate-in fade-in duration-500">
+        <div className="flex flex-col font-['Plus_Jakarta_Sans'] w-full relative">
             <div className="flex flex-col gap-1 mb-4 md:mb-8">
                 {/* Desktop Header */}
-                <div className="hidden md:flex flex-row items-center justify-end gap-4">
+                <div className="hidden md:flex flex-row items-center justify-between gap-4">
+                    <h2 className="text-[20px] md:text-[24px] font-bold text-[#111827] tracking-tight">
+                        {t('modules:account_master')}
+                    </h2>
 
                     <button 
-                        onClick={() => { setPreviousView(null); setCurrentView('add'); }}
+                        onClick={() => navigate('add') }
                         className="flex flex-row items-center justify-center gap-2 bg-[#073318] hover:bg-[#04200f] text-white px-6 h-[44px] rounded-[10px] text-[15px] font-bold transition-all shadow-sm active:scale-[0.98] shrink-0 whitespace-nowrap"
                     >
                         <Plus size={18} />
@@ -345,9 +360,8 @@ const AccountMaster = () => {
 
                 {/* Mobile Header - Stacked Layout */}
                 <div className="md:hidden flex flex-col gap-3">
-
                     <button
-                        onClick={() => { setPreviousView(null); setCurrentView('add'); }}
+                        onClick={() => navigate('add') }
                         className="flex flex-row items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-full max-w-[358px] self-center whitespace-nowrap"
                     >
                         <Plus size={18} strokeWidth={3} />
@@ -628,7 +642,7 @@ const AccountMaster = () => {
                                                 }`}
                                             >
                                                 <button 
-                                                    onClick={(e) => { e.stopPropagation(); setSelectedAccount(row); setCurrentView('view'); setDropdownIndex(null); }} 
+                                                    onClick={(e) => { e.stopPropagation(); navigate(`view/${row.id}`); setDropdownIndex(null); }} 
                                                     className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
                                                 >
                                                     <Eye size={18} className="text-gray-400" />

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Search,
   Download,
@@ -36,6 +37,9 @@ import SuccessToast from "./components/SuccessToast";
 
 const CategoryMaster = () => {
   const { t } = useTranslation(["modules", "common"]);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { id } = useParams();
   const [currentView, setCurrentView] = useState({
     type: "list",
     data: null,
@@ -78,6 +82,31 @@ const CategoryMaster = () => {
 
   const [masterData, setMasterData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Sync currentView with URL
+  useEffect(() => {
+    if (location.pathname.endsWith('/add')) {
+      setCurrentView({ type: "form", data: null, mode: "add" });
+    } else if (location.pathname.includes('/edit/')) {
+      // Find the category to edit
+      const findCategory = (data, targetId) => {
+        for (const cat of data) {
+          if (String(cat.id) === String(targetId)) return cat;
+          if (cat.items) {
+            const found = findCategory(cat.items, targetId);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      const category = findCategory(masterData, id);
+      if (category) {
+        setCurrentView({ type: "form", data: category, mode: "edit" });
+      }
+    } else {
+      setCurrentView({ type: "list", data: null, mode: "add" });
+    }
+  }, [location.pathname, masterData, id]);
 
   const fetchCategories = async () => {
     setIsLoading(true);
@@ -411,10 +440,10 @@ const CategoryMaster = () => {
       <CategoryForm
         mode={currentView.mode}
         initialData={currentView.data}
-        onBack={() => setCurrentView({ type: "list", data: null, mode: "add" })}
+        onBack={() => navigate('/seller/masters/category')}
         onSuccess={() => {
           fetchCategories();
-          setCurrentView({ type: "list", data: null, mode: "add" });
+          navigate('/seller/masters/category');
         }}
         onShowToast={showToast}
       />
@@ -422,15 +451,33 @@ const CategoryMaster = () => {
   }
 
   return (
-    <div className="flex flex-col animate-in fade-in duration-500">
-      <div className="flex md:justify-end justify-center mb-6 md:mb-8">
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 w-full max-w-[358px] md:w-auto"
-        >
-          <Plus size={18} />
-          {t("modules:add_category")}
-        </button>
+    <div className="flex flex-col w-full relative">
+      <div className="flex flex-col gap-1 mb-4 md:mb-8">
+        {/* Desktop Header */}
+        <div className="hidden md:flex flex-row items-center justify-between gap-4">
+          <h2 className="text-[20px] md:text-[24px] font-bold text-[#111827] tracking-tight">
+            {t('modules:category_master')}
+          </h2>
+
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 shrink-0"
+          >
+            <Plus size={18} />
+            {t("modules:add_category")}
+          </button>
+        </div>
+
+        {/* Mobile Header - Stacked Layout */}
+        <div className="md:hidden flex flex-col gap-3">
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-full max-w-[358px] self-center"
+          >
+            <Plus size={18} strokeWidth={3} />
+            {t("modules:add_category")}
+          </button>
+        </div>
       </div>
 
       <div
@@ -1036,75 +1083,64 @@ const CategoryMaster = () => {
         </div>
 
         {/* Pagination Footer */}
-        <div className="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-5 sm:py-6 border-t border-[#F3F4F6] bg-white gap-6">
-          <div className="flex items-center justify-between w-full sm:w-auto gap-3 text-[14px] text-[#6B7280] font-medium order-2 sm:order-1 border-t sm:border-0 pt-4 sm:pt-0">
-            <div className="flex items-center gap-2">
-              <span>{t("common:show")}</span>
-              <div className="relative group">
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#073318] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]"
-                />
-              </div>
-              <span>{t("common:per_page")}</span>
+        <div className="flex flex-row items-center justify-between px-4 sm:px-6 py-4 border-t border-[#F3F4F6] bg-white gap-4 w-full">
+          <div className="flex items-center gap-2 text-[13px] text-[#6B7280] font-medium">
+            <span className="hidden sm:inline">{t("common:show")}</span>
+            <div className="relative group">
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#073318] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+              <ChevronDown
+                size={14}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]"
+              />
             </div>
-            <span className="sm:hidden text-gray-400">
-              {totalItems > 0
-                ? `${startIndex + 1}-${endIndex} / ${totalItems}`
-                : `0-0 / 0`}
-            </span>
+            <span className="hidden sm:inline">{t("common:per_page")}</span>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full sm:w-auto order-1 sm:order-2">
-            <span className="hidden sm:inline text-[#6B7280] text-[14px] font-medium">
-              {totalItems > 0
-                ? `${startIndex + 1}-${endIndex} of ${totalItems}`
-                : `0-0 of 0`}
+          <div className="flex items-center gap-3">
+            <span className="text-[#6B7280] text-[13px] font-medium whitespace-nowrap">
+              {totalItems > 0 ? `${startIndex + 1}-${endIndex} of ${totalItems}` : `0-0 of 0`}
             </span>
-            <div className="flex items-center justify-center gap-1.5 w-full sm:w-auto">
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
+                className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
               >
-                <LeftIcon size={18} />
+                <LeftIcon size={16} />
               </button>
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-[180px] sm:max-w-none px-1">
+              <div className="hidden md:flex items-center gap-1.5 px-1">
                 {getVisiblePages().map((page, index) => (
                   <button
                     key={index}
                     onClick={() => setCurrentPage(page)}
-                    className={`min-w-[36px] sm:min-w-[40px] h-[36px] sm:h-[40px] rounded-[10px] flex items-center justify-center transition-all text-[13px] sm:text-[14px] font-bold
-                                            ${currentPage === page
+                    className={`min-w-[32px] h-[32px] rounded-[8px] flex items-center justify-center transition-all text-[13px] font-bold ${
+                      currentPage === page
                         ? "bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100"
                         : "text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]"
-                      }`}
+                    }`}
                   >
                     {page}
                   </button>
                 ))}
               </div>
               <button
-                onClick={() =>
-                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                }
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages || totalPages === 0}
-                className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
+                className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
               >
-                <RightIcon size={18} />
+                <RightIcon size={16} />
               </button>
             </div>
           </div>
