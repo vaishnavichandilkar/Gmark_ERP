@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 import html2pdf from "html2pdf.js";
 import { toast } from 'react-hot-toast';
 import axiosInstance from '../../../services/axiosInstance';
@@ -245,12 +245,14 @@ const POPrintPreview = () => {
                     <button onClick={() => window.print()} className="px-6 h-[40px] bg-[#073318] text-white rounded-[10px] font-bold text-[14px] flex items-center justify-center">
                         Print PO
                     </button>
-                    <button onClick={() => navigate(-1)} className="px-6 h-[40px] border border-gray-300 rounded-[10px] font-bold text-[14px]">Back</button>
+                    <button onClick={() => navigate(-1)} className="px-6 h-[40px] border border-gray-300 rounded-[10px] font-bold text-[14px] flex items-center justify-center gap-2">
+                        <ArrowLeft size={16} /> Back
+                    </button>
                 </div>
             </div>
 
             <div className="no-print-bg flex justify-center p-6 bg-gray-50/50 min-h-screen">
-                <div ref={printRef} className="print-container w-[210mm] min-h-[297mm] bg-white black-border flex flex-col font-outfit text-black leading-tight overflow-hidden p-[10mm]">
+                <div ref={printRef} className="print-container w-[210mm] h-[296mm] max-h-[296mm] bg-white black-border flex flex-col font-outfit text-black leading-tight overflow-hidden p-[10mm] box-border">
 
                     {/* Brand Header */}
                     <div className="w-full border-black border flex flex-col">

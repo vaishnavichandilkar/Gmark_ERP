@@ -325,7 +325,7 @@ const CategoryMaster = () => {
       toast.dismiss(loadingToast);
       toast.error(
         error?.response?.data?.message ||
-          t("common:import_failed", "Failed to import data"),
+        t("common:import_failed", "Failed to import data"),
       );
       return Promise.reject(error);
     }
@@ -772,13 +772,13 @@ const CategoryMaster = () => {
 
                             <div className="flex items-stretch shrink-0 invisible">
                               {/* Placeholder to maintain height and structure */}
-                              <div className="w-[110px] md:w-[120px] h-10"></div>
-                              <div className="w-16 md:w-20 h-10"></div>
+                              <div className="w-[120px] h-10"></div>
+                              <div className="w-20 h-10"></div>
                             </div>
 
                             <div className="flex items-stretch shrink-0">
                               {/* Status Column */}
-                              <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4">
+                              <div className="w-[120px] flex items-center justify-center px-4">
                                 <div
                                   className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${item.status === "INACTIVE" ? "bg-[#FEF2F2] text-[#DC2626]" : "bg-[#ECFDF5] text-[#059669]"}`}
                                 >
@@ -792,7 +792,7 @@ const CategoryMaster = () => {
                               </div>
 
                               {/* Action Column */}
-                              <div className="w-16 md:w-20 flex items-center justify-center px-2 md:px-4 relative">
+                              <div className="w-20 flex items-center justify-center px-4 relative">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -930,11 +930,10 @@ const CategoryMaster = () => {
                     key={index}
                     onClick={() => setCurrentPage(page)}
                     className={`min-w-[36px] sm:min-w-[40px] h-[36px] sm:h-[40px] rounded-[10px] flex items-center justify-center transition-all text-[13px] sm:text-[14px] font-bold
-                                            ${
-                                              currentPage === page
-                                                ? "bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100"
-                                                : "text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]"
-                                            }`}
+                                            ${currentPage === page
+                        ? "bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100"
+                        : "text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]"
+                      }`}
                   >
                     {page}
                   </button>

@@ -125,41 +125,43 @@ const ViewPO = () => {
                 .custom-po-scrollbar::-webkit-scrollbar-thumb:hover { background: #014A36; }
             `}</style>
 
-            {/* Header */}
-            <div className="flex flex-col gap-1">
-                <h1 className="text-[24px] font-bold text-[#111827]">Purchase</h1>
-                <p className="text-[14px] text-[#6B7280]">Create and monitor purchase orders, supplier invoices, and stock procurement activities.</p>
-            </div>
-
-            <div className="flex items-center gap-8 border-b border-[#F3F4F6] -mt-2">
-                <div 
-                    className="pb-3 border-b-2 border-[#073318] text-[#073318] font-bold text-[14px] cursor-pointer" 
-                    onClick={() => navigate('/seller/purchase/order')}
-                >
-                    Purchase Order
-                </div>
-                <div 
-                    className="pb-3 text-[#9CA3AF] font-medium text-[14px] cursor-pointer hover:text-gray-600 transition-colors" 
-                    onClick={() => navigate('/seller/purchase/invoice')}
-                >
-                    Purchase Invoice
-                </div>
-            </div>
-
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
                 {/* Card Header Section */}
                 <div className="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-[#F3F4F6] gap-4">
-                    <h2 className="text-[18px] md:text-[20px] font-bold text-[#111827]">View PO {isLoading ? '' : `- ${formData.po_number}`}</h2>
+                    <h2 className="text-[18px] md:text-[20px] font-bold text-[#111827]">
+                        View PO
+                    </h2>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
-                        {(formData.status === 'PENDING' || formData.status === 'Approved') && (
-                            <button 
-                                onClick={() => navigate(ROUTES.PURCHASE_ORDER_EDIT.replace(':id', id))}
-                                className="flex-1 sm:flex-none px-6 md:px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] md:text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-md flex items-center justify-center gap-2"
-                            >
-                                <Edit3 size={18} />
-                                Edit PO
-                            </button>
-                        )}
+                        {(() => {
+                            if (isLoading || (formData.status !== 'PENDING' && formData.status !== 'Approved')) return null;
+                            
+                            const parseDate = (d) => {
+                                if (!d) return new Date();
+                                if (d.includes && d.includes("T")) return new Date(d);
+                                const parts = String(d).split('-');
+                                if (parts.length === 3) {
+                                    const [p1, p2, p3] = parts;
+                                    if (p1.length === 4) return new Date(d);
+                                    return new Date(Number(p3), Number(p2) - 1, Number(p1));
+                                }
+                                return new Date(d);
+                            };
+                            
+                            const expDate = parseDate(formData.expiry_date);
+                            const expiryEndOfDay = new Date(expDate);
+                            expiryEndOfDay.setHours(23, 59, 59, 999);
+                            if (expiryEndOfDay < new Date()) return null;
+
+                            return (
+                                <button 
+                                    onClick={() => navigate(ROUTES.PURCHASE_ORDER_EDIT.replace(':id', id))}
+                                    className="flex-1 sm:flex-none px-6 md:px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] md:text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-md flex items-center justify-center gap-2"
+                                >
+                                    Edit PO
+                                </button>
+                            );
+                        })()}
+
                         <button 
                             onClick={() => navigate(-1)}
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[44px] border border-[#E5E7EB] rounded-[10px] text-[14px] md:text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all font-outfit"
@@ -168,36 +170,6 @@ const ViewPO = () => {
                             <span className="hidden sm:inline">Back</span>
                             <span className="sm:hidden text-gray-500">Back</span>
                         </button>
-                        {(() => {
-                            if (isLoading || formData.status !== 'PENDING') return null;
-                            
-                            // Check Expiry
-                            const parseDate = (d) => {
-                                if (!d) return new Date();
-                                const parts = String(d).split('-');
-                                if (parts.length === 3) {
-                                    const [day, month, year] = parts.map(Number);
-                                    return new Date(year, month - 1, day);
-                                }
-                                return new Date(d);
-                            };
-                            
-                            const expDate = parseDate(formData.expiry_date);
-                            const expiryEndOfDay = new Date(expDate);
-                            expiryEndOfDay.setHours(23, 59, 59, 999);
-                            const isExpired = expiryEndOfDay < new Date();
-
-                            if (isExpired) return null;
-
-                            return (
-                                <button 
-                                    onClick={() => navigate(ROUTES.PURCHASE_ORDER_EDIT.replace(':id', id))}
-                                    className="flex items-center gap-2 px-6 h-[40px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#04200f] transition-all shadow-sm"
-                                >
-                                    <Edit3 size={18} /> Edit
-                                </button>
-                            );
-                        })()}
                     </div>
                 </div>
 
@@ -211,7 +183,26 @@ const ViewPO = () => {
                         </div>
                     </div>
                 ) : (
-                    <div className="p-8 border-b border-[#F3F4F6]">
+                    <div className="p-6 md:p-8 border-b border-[#F3F4F6] flex flex-col">
+                        <div className="mb-6">
+                            <h1 className="text-[28px] md:text-[32px] font-bold text-[#111827] mb-2 uppercase">
+                                {formData.po_number ? `#${formData.po_number}` : '-'}
+                            </h1>
+                            <div className="flex gap-2">
+                                <div className="inline-flex items-center px-4 py-1.5 bg-[#4B5563] text-white rounded-[100px] text-[14px] font-medium">
+                                    Purchase Order
+                                </div>
+                                {formData.status && (
+                                    <div className={`inline-flex items-center px-4 py-1.5 rounded-[100px] text-[14px] font-bold shadow-sm border ${
+                                        formData.status === 'Approved' ? 'bg-[#D1FAE5] text-[#059669] border-[#A7F3D0]' :
+                                        'bg-[#F3F4F6] text-[#4B5563] border-[#E5E7EB]'
+                                    }`}>
+                                        {formData.status}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
                         <div className="border border-[#E5E7EB] rounded-[12px] overflow-hidden shadow-sm">
                             <InfoTableRow label1="Supplier Name:" value1={formData.supplier_name} label2="Credit Days:" value2={formData.credit_days} />
                             <InfoTableRow label1="Address:" value1={formData.address} label2="PO Creation Date:" value2={formatDate(formData.creation_date)} />

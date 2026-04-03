@@ -19,16 +19,20 @@ import {
   ChevronsUpDown,
   Upload,
   CloudUpload,
+  Trash2,
+  XCircle
 } from "lucide-react";
 import toast from 'react-hot-toast';
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 import { ROUTES } from "../../../constants/routes";
+import { useTranslation } from 'react-i18next';
 
 import purchaseOrderService from "../../../services/purchaseOrderService";
 
 const PurchaseOrder = () => {
+  const { t } = useTranslation(['modules', 'common']);
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -78,7 +82,7 @@ const PurchaseOrder = () => {
                 if (activeTab === "Pending") params.filter = "pending";
                 if (activeTab === "Completed") params.filter = "completed";
                 if (activeTab === "Deleted") params.filter = "deleted";
-                if (activeTab === "Expiring soon") params.filter = "expiring";
+                if (activeTab === "Expiring Soon") params.filter = "expiring";
                 if (activeTab === "Expired") params.filter = "expired";
             }
 
@@ -99,10 +103,16 @@ const PurchaseOrder = () => {
   // Helper date parsing
   const parseDate = (dateStr) => {
     if (!dateStr) return new Date();
+    if (dateStr.includes("T")) {
+      return new Date(dateStr);
+    }
     const parts = dateStr.split("-");
     if (parts.length === 3) {
-      const [day, month, year] = parts.map(Number);
-      return new Date(year, month - 1, day);
+      const [yearOrDay, month, dayOrYear] = parts;
+      if (yearOrDay.length === 4) {
+        return new Date(dateStr);
+      }
+      return new Date(Number(dayOrYear), Number(month) - 1, Number(yearOrDay));
     }
     return new Date(dateStr);
   };
@@ -111,9 +121,35 @@ const PurchaseOrder = () => {
    * Filter Logic
    */
   const filteredData = useMemo(() => {
-    // Backend handles all filtering now.
-    return purchaseOrders;
-  }, [purchaseOrders]);
+    const mapped = purchaseOrders.map(po => {
+      const status = po.status;
+      const expDate = parseDate(po.expiryDate);
+      const now = new Date();
+      const expiryEndOfDay = new Date(expDate);
+      expiryEndOfDay.setHours(23, 59, 59, 999);
+      const diffHrs = (expiryEndOfDay.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+      let computedStatusLabel = "Pending";
+      let bgClass = "bg-orange-100 text-orange-600";
+
+      if (status === 'INVOICE_GENERATED') {
+        computedStatusLabel = "Completed"; bgClass = "bg-emerald-100 text-emerald-600";
+      } else if (status === 'DELETED') {
+        computedStatusLabel = "Deleted"; bgClass = "bg-red-100 text-red-600";
+      } else if (expiryEndOfDay < now) {
+        computedStatusLabel = "Expired"; bgClass = "bg-red-100 text-red-600";
+      } else if (diffHrs > 0 && diffHrs <= 48) {
+        computedStatusLabel = "Expiring Soon"; bgClass = "bg-amber-100 text-amber-600";
+      } else {
+        computedStatusLabel = "Pending"; bgClass = "bg-gray-100 text-gray-600";
+      }
+
+      return { ...po, computedStatusLabel, bgClass };
+    });
+
+    if (activeTab === "All") return mapped;
+    return mapped.filter(po => po.computedStatusLabel === activeTab);
+  }, [purchaseOrders, activeTab]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -151,6 +187,22 @@ const PurchaseOrder = () => {
         setIsRefreshing(false);
         toast.success("Data refreshed successfully");
     }, 400);
+  };
+
+  const handleDeletePO = async (id) => {
+    if (window.confirm("Are you sure you want to delete this purchase order?")) {
+        setIsRefreshing(true);
+        try {
+            await purchaseOrderService.deletePurchaseOrder(id);
+            toast.success("Purchase order deleted successfully");
+            // Triggers useEffect refresh trick
+            setTimeout(() => { setIsRefreshing(false); }, 400);
+        } catch (error) {
+            console.error("Error deleting PO:", error);
+            toast.error(error.response?.data?.message || "Failed to delete Purchase Order");
+            setIsRefreshing(false);
+        }
+    }
   };
 
   /**
@@ -231,7 +283,7 @@ const PurchaseOrder = () => {
     }
   };
 
-  const statusTabs = ["All", "Pending", "Expiring soon", "Expired", "Completed", "Deleted"];
+  const statusTabs = ["All", "Pending", "Expiring Soon", "Expired", "Completed", "Deleted"];
 
   return (
     <div className="flex flex-col gap-1 w-full animate-in fade-in duration-300 relative">
@@ -259,25 +311,22 @@ const PurchaseOrder = () => {
       `}</style>
       
       {/* Title Section */}
-      <div className="flex flex-col gap-4 mb-6 md:mb-8">
+      <div className="flex flex-col md:flex-row gap-4 mb-6 md:mb-8 justify-between items-start md:items-center">
           <div className="flex flex-col gap-1">
               <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">
-                Purchase Order
+                {t('modules:purchase_order', 'Purchase Order')}
               </h1>
               <p className="text-[#6B7280] text-[14px] md:text-[15px]">
-                View, verify, and monitor all purchase orders, supplier invoices, and stock procurement activities.
+                {t('modules:purchase_order_desc', 'View, verify, and monitor all purchase orders, supplier invoices, and stock procurement activities.')}
               </p>
           </div>
-          
-          <div className="flex justify-end">
-              <button 
-                onClick={() => navigate('/seller/purchase/order/add')}
-                className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2"
-              >
-                <Plus size={18} />
-                Add PO
-              </button>
-          </div>
+          <button 
+            onClick={() => navigate('/seller/purchase/order/add')}
+            className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 flex-shrink-0"
+          >
+            <Plus size={18} />
+            {t('modules:add_po', 'Add PO')}
+          </button>
       </div>
 
       {/* Sub-Tabs */}
@@ -310,7 +359,7 @@ const PurchaseOrder = () => {
                         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                         <input
                             type="text"
-                            placeholder="Search By Anything..."
+                            placeholder={t('common:search_by_anything', 'Search By Anything...')}
                             value={searchQuery}
                             onChange={(e) => {setSearchQuery(e.target.value); setCurrentPage(1);}}
                             className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all placeholder:text-gray-400 shadow-sm"
@@ -340,7 +389,7 @@ const PurchaseOrder = () => {
                         className="flex items-center justify-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 shadow-sm transition-all"
                     >
                         <Upload size={18} className="text-gray-400" />
-                        Import
+                        {t('common:import', 'Import')}
                     </button>
 
                     <div className="relative" ref={exportRef}>
@@ -349,7 +398,7 @@ const PurchaseOrder = () => {
                             className={`flex items-center justify-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 shadow-sm transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : ''}`}
                         >
                             <Download size={18} className="text-gray-400" />
-                            Export
+                            {t('common:export', 'Export')}
                         </button>
                         {isExportOpen && (
                             <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -357,13 +406,13 @@ const PurchaseOrder = () => {
                                     onClick={handleExportPDF}
                                     className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors"
                                 >
-                                    <FileText size={18} className="text-red-500" /> PDF
+                                    <FileText size={18} className="text-red-500" /> {t('common:pdf', 'PDF')}
                                 </button>
                                 <button 
                                     onClick={handleExportExcel}
                                     className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors"
                                 >
-                                    <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                                    <FileSpreadsheet size={18} className="text-green-600" /> {t('common:excel', 'Excel')}
                                 </button>
                             </div>
                         )}
@@ -474,33 +523,9 @@ const PurchaseOrder = () => {
                         {isLoading ? <div className="h-4 bg-gray-200 rounded w-20"></div> : (po.grandTotal || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                        {isLoading ? <div className="h-4 bg-gray-200 rounded w-20"></div> : (() => {
-                          const status = po.status;
-                          const expDate = parseDate(po.expiryDate);
-                          const now = new Date();
-                          
-                          // Set expiry to end of that day for fair comparison
-                          const expiryEndOfDay = new Date(expDate);
-                          expiryEndOfDay.setHours(23, 59, 59, 999);
-                          
-                          const diffHrs = (expiryEndOfDay.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-                          if (status === 'INVOICE_GENERATED') {
-                            return <span className="px-3 py-1 bg-emerald-100 text-emerald-600 rounded-full text-[12px] font-bold uppercase shadow-sm">COMPLETED</span>;
-                          }
-                          if (status === 'DELETED') {
-                            return <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-[12px] font-bold uppercase shadow-sm">DELETED</span>;
-                          }
-                          
-                          if (expiryEndOfDay < now) {
-                            return <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-[12px] font-bold uppercase shadow-sm">EXPIRED</span>;
-                          }
-                          if (diffHrs > 0 && diffHrs <= 48) {
-                            return <span className="px-3 py-1 bg-amber-100 text-amber-600 rounded-full text-[12px] font-bold uppercase shadow-sm">EXPIRING SOON</span>;
-                          }
-                          
-                          return <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[12px] font-bold uppercase shadow-sm">PENDING</span>;
-                        })()}
+                        {isLoading ? <div className="h-4 bg-gray-200 rounded w-20"></div> : (
+                          <span className={`px-3 py-1 ${po.bgClass} rounded-full text-[12px] font-bold uppercase shadow-sm whitespace-nowrap`}>{po.computedStatusLabel}</span>
+                        )}
                     </td>
                     <td className="px-6 py-5 text-center relative" ref={el => dropdownRefs.current[po.id] = el}>
                       <button
@@ -511,21 +536,27 @@ const PurchaseOrder = () => {
                       </button>
 
                       {activeDropdown === po.id && (
-                        <div className={`absolute right-4 w-max min-w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in duration-200 text-left ${index >= currentItems.length - 2 ? 'bottom-0 mb-2' : 'top-0 mt-2'}`}>
+                        <div className={`absolute right-[calc(50%+1.25rem)] w-max min-w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in duration-200 text-left ${index >= currentItems.length - 2 ? 'bottom-0 mb-2' : 'top-0 mt-2'}`}>
                           <button 
-                            onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))}
+                            onClick={() => { setActiveDropdown(null); navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id)); }}
                             className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors font-bold"
                           >
                             <Eye size={18} className="text-gray-400" /> 
-                            {(() => {
-                               const expDate = parseDate(po.expiryDate);
-                               const expiryEndOfDay = new Date(expDate);
-                               expiryEndOfDay.setHours(23, 59, 59, 999);
-                               const isExpired = expiryEndOfDay < new Date();
-                               
-                               return (po.status === 'PENDING' && !isExpired) ? 'View and Edit Order' : 'View Order';
-                            })()}
+                            {(po.computedStatusLabel === 'Pending' || po.computedStatusLabel === 'Expiring Soon') 
+                              ? t('common:view_and_edit_po', 'View and edit PO')
+                              : t('common:view_po', 'View PO')
+                            }
                           </button>
+
+                          {po.computedStatusLabel === 'Expired' && (
+                              <button 
+                                onClick={() => { setActiveDropdown(null); handleDeletePO(po.id); }}
+                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-red-600 hover:bg-red-50 transition-colors font-bold"
+                              >
+                                <XCircle size={18} className="text-red-500" /> 
+                                {t('common:delete', 'delete')}
+                              </button>
+                          )}
                         </div>
                       )}
                     </td>

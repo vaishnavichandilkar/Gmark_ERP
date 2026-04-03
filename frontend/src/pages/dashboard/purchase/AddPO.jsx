@@ -67,6 +67,8 @@ const AddPO = () => {
     const [tableSearch, setTableSearch] = useState('');
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
     const [products, setProducts] = useState([]);
+    
+    const [showValidationPopup, setShowValidationPopup] = useState(false);
 
     // Fetch Suppliers
     useEffect(() => {
@@ -75,13 +77,49 @@ const AddPO = () => {
                 // Requirement 1: Sundry Creditors (Mapping to SUNDRY_CREDITORS for backend compatibility)
                 const response = await accountService.getAllAccounts({ groupName: 'SUNDRY_CREDITORS' });
                 // Account API returns: { data: [...], total: ... }
-                setSuppliers(response.data || []);
+                const fetchedSuppliers = response.data || [];
+                setSuppliers(fetchedSuppliers);
+
+                // Recover Draft if exists
+                const draftStr = sessionStorage.getItem('add_po_draft');
+                if (draftStr && !isEditMode) {
+                    try {
+                        const draft = JSON.parse(draftStr);
+                        let restoredFormData = draft.formData;
+                        
+                        const oldIdsStr = sessionStorage.getItem('add_po_supplier_ids');
+                        if (oldIdsStr) {
+                            const oldIds = JSON.parse(oldIdsStr);
+                            const newSupplier = fetchedSuppliers.find(s => !oldIds.includes(s.id));
+                            if (newSupplier) {
+                                restoredFormData = {
+                                    ...restoredFormData,
+                                    supplier_id: newSupplier.id,
+                                    supplier_name: newSupplier.accountName,
+                                    address: newSupplier.addressLine1 || '',
+                                    credit_days: newSupplier.supplierCreditDays || '',
+                                    gst_number: newSupplier.gstNo || '',
+                                    pan_number: newSupplier.panNo || ''
+                                };
+                                setSupplierSearch(newSupplier.accountName);
+                            }
+                        }
+                        
+                        setFormData(restoredFormData);
+                        setItems(draft.items);
+                    } catch (e) {
+                        console.error('Draft parsing failed', e);
+                    } finally {
+                        sessionStorage.removeItem('add_po_draft');
+                        sessionStorage.removeItem('add_po_supplier_ids');
+                    }
+                }
             } catch (error) {
                 console.error("Error fetching suppliers:", error);
             }
         };
         fetchSuppliers();
-    }, []);
+    }, [isEditMode]);
 
     // Fetch Products (Requirement 6: Search from Product Master)
     useEffect(() => {
@@ -231,6 +269,9 @@ const AddPO = () => {
     };
 
     const handleItemChange = (index, field, value) => {
+        // Prevent negative values for numbers
+        if (value && Number(value) < 0) return;
+
         const newItems = [...items];
         const item = { ...newItems[index] };
         item[field] = value;
@@ -286,7 +327,6 @@ const AddPO = () => {
         if (!formData.po_number) newErrors.po_number = "PO number is required";
         if (!formData.expiry_date) newErrors.expiry_date = "Expiry date is required";
         if (!formData.gst_number) newErrors.gst_number = "GST number is required";
-        if (!formData.pan_number) newErrors.pan_number = "PAN number is required";
 
         // Validate items
         const validItems = items.filter(item => item.product_name);
@@ -385,6 +425,11 @@ const AddPO = () => {
     };
 
     const handlePrintPreview = () => {
+        if (!validateForm()) {
+            setShowValidationPopup(true);
+            return;
+        }
+
         const fullPOData = {
             ...formData,
             items: items.map(item => {
@@ -420,12 +465,12 @@ const AddPO = () => {
                     </div>
                     
                     <button 
-                        onClick={() => navigate(ROUTES.PURCHASE_ORDER)}
-                        className="group flex items-center justify-center w-10 h-10 sm:w-auto sm:h-[40px] sm:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[10px] sm:rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
+                        onClick={() => navigate(-1)}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[40px] sm:h-[44px] border border-[#E5E7EB] rounded-[10px] text-[14px] md:text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all font-outfit shadow-sm"
                     >
-                        <X size={22} className="sm:hidden text-gray-500" />
-                        <ArrowLeft size={16} className="hidden sm:block" />
-                        <span className="hidden sm:inline ml-2">Back</span>
+                        <ArrowLeft size={18} /> 
+                        <span className="hidden sm:inline">Back</span>
+                        <span className="sm:hidden text-gray-500">Back</span>
                     </button>
                 </div>
 
@@ -474,7 +519,11 @@ const AddPO = () => {
                                             </div>
                                             <div className="p-3 bg-gray-50 border-t border-[#F3F4F6]">
                                                 <button 
-                                                    onClick={() => navigate(`/seller/masters/account-master?mode=add&redirect=${ROUTES.PURCHASE_ORDER_ADD}`)}
+                                                    onClick={() => {
+                                                        sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
+                                                        sessionStorage.setItem('add_po_supplier_ids', JSON.stringify(suppliers.map(s => s.id)));
+                                                        navigate(`/seller/masters/account-master?mode=add&redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
+                                                    }}
                                                     className="w-full h-[40px] bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-sm font-outfit"
                                                 >
                                                     <Plus size={16} className="group-hover:scale-110 transition-transform" /> 
@@ -488,10 +537,10 @@ const AddPO = () => {
                         </div>
 
                         <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">Credit Days <span className="text-red-500">*</span></label>
+                            <label className="text-[14px] font-semibold text-[#374151]">Credit Days</label>
                             <input
                                 type="number"
-                                placeholder="Enter credit days"
+                                placeholder="Auto-filled from supplier"
                                 value={formData.credit_days}
                                 readOnly
                                 className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.credit_days ? 'border-red-500' : 'border-[#E5E7EB]'}`}
@@ -501,10 +550,10 @@ const AddPO = () => {
 
                         {/* Row 2 */}
                         <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">Address <span className="text-red-500">*</span></label>
+                            <label className="text-[14px] font-semibold text-[#374151]">Address</label>
                             <input
                                 type="text"
-                                placeholder="Enter address"
+                                placeholder="Auto-filled from supplier"
                                 value={formData.address}
                                 readOnly
                                 className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.address ? 'border-red-500' : 'border-[#E5E7EB]'}`}
@@ -513,7 +562,7 @@ const AddPO = () => {
                         </div>
 
                         <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">PO Creation Date <span className="text-red-500">*</span></label>
+                            <label className="text-[14px] font-semibold text-[#374151]">PO Creation Date</label>
                             <input
                                 type="date"
                                 placeholder="Enter Date"
@@ -551,27 +600,15 @@ const AddPO = () => {
 
                         {/* Row 4 */}
                         <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">GST Number <span className="text-red-500">*</span></label>
+                            <label className="text-[14px] font-semibold text-[#374151]">GST Number</label>
                             <input
                                 type="text"
-                                placeholder="Enter GST number"
+                                placeholder="Auto-filled from supplier"
                                 value={formData.gst_number}
                                 readOnly
                                 className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.gst_number ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                             />
                             {errors.gst_number && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.gst_number}</p>}
-                        </div>
-
-                        <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">PAN Number <span className="text-red-500">*</span></label>
-                            <input
-                                type="text"
-                                placeholder="Enter PAN number"
-                                value={formData.pan_number}
-                                readOnly
-                                className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.pan_number ? 'border-red-500' : 'border-[#E5E7EB]'}`}
-                            />
-                            {errors.pan_number && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.pan_number}</p>}
                         </div>
                     </div>
                 </div>
@@ -712,6 +749,7 @@ const AddPO = () => {
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input 
                                             type="number" 
+                                            min="0"
                                             value={item.quantity || ''}
                                             onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                                             className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] outline-none focus:ring-1 text-right transition-all shadow-sm ${errors.itemErrors?.[index]?.quantity ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
@@ -720,6 +758,7 @@ const AddPO = () => {
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input 
                                             type="number" 
+                                            min="0"
                                             value={item.rate || ''}
                                             onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
                                             className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] outline-none focus:ring-1 text-right transition-all shadow-sm ${errors.itemErrors?.[index]?.rate ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
@@ -738,6 +777,7 @@ const AddPO = () => {
                                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[12px] text-gray-400 font-bold">₹</span>
                                             <input 
                                                 type="number" 
+                                                min="0"
                                                 value={item.discount_amount || ''}
                                                 onChange={(e) => handleItemChange(index, 'discount_amount', e.target.value)}
                                                 className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] pl-5 pr-2 text-[13px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 text-right transition-all shadow-sm"
@@ -749,6 +789,7 @@ const AddPO = () => {
                                             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[12px] text-[#073318] font-bold">%</span>
                                             <input 
                                                 type="number" 
+                                                min="0"
                                                 value={item.discount_percent || ''}
                                                 onChange={(e) => handleItemChange(index, 'discount_percent', e.target.value)}
                                                 className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] pl-2 pr-5 text-[13px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 text-right font-medium text-[#073318] transition-all shadow-sm"
@@ -858,7 +899,7 @@ const AddPO = () => {
                         onClick={handleSave}
                         className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 md:px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-md"
                     >
-                        {isEditMode ? 'Update PO' : 'Save PO'}
+                        Save PO
                     </button>
                     <button 
                         onClick={() => navigate(-1)}
@@ -868,6 +909,31 @@ const AddPO = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Validation Popup Modal */}
+            {showValidationPopup && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[16px] shadow-2xl w-full max-w-[400px] overflow-hidden flex flex-col scale-100 animate-in zoom-in-95 duration-200 font-outfit">
+                        <div className="px-6 py-5 border-b border-[#F3F4F6] flex items-center justify-between bg-white">
+                            <h3 className="text-[18px] font-bold text-[#111827]">Missing Required Fields</h3>
+                            <button onClick={() => setShowValidationPopup(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <p className="text-[15px] text-[#4B5563]">Please fill all required fields before previewing.</p>
+                        </div>
+                        <div className="px-6 py-4 bg-gray-50 border-t border-[#F3F4F6] flex justify-end">
+                            <button
+                                onClick={() => setShowValidationPopup(false)}
+                                className="px-6 h-[40px] bg-[#073318] text-white rounded-[8px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-sm"
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
