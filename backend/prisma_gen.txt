@@ -1,9 +1,0 @@
-warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).
-For more information, see: https://pris.ly/prisma-config
-
-Environment variables loaded from .env
-Prisma schema loaded from src\prisma\schema.prisma
-Error: 
-EPERM: operation not permitted, rename 'C:\Users\parth\OneDrive\Desktop\weighting_scale\backend\node_modules\.prisma\client\query_engine-windows.dll.node.tmp1948' -> 'C:\Users\parth\OneDrive\Desktop\weighting_scale\backend\node_modules\.prisma\client\query_engine-windows.dll.node'
-
-
