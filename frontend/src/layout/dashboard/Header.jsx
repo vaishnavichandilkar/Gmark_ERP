@@ -128,23 +128,9 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
 
                 {/* Rightmost Action icons */}
                 <div className="flex items-center gap-2 md:gap-4 relative">
-                    <div className="hidden sm:block">
+                    <div>
                         <LanguageSwitcher />
                     </div>
-
-                    {/* Globe specifically shown on mobile */}
-                    <button
-                        onClick={() => setActivePopupType(activePopupType === 'status' ? null : 'status')}
-                        data-status-trigger="true"
-                        className={`sm:hidden flex items-center transition-colors p-2 rounded-full
-                            ${activePopupType === 'status'
-                                ? 'text-[#166534] bg-[#166534]/10 z-[60] relative'
-                                : 'text-[#4B5563] hover:text-[#111827] relative z-10'
-                            }`}
-                    >
-                        <Globe size={18} strokeWidth={1.5} />
-                        <ChevronDown size={12} strokeWidth={1.5} className={`ml-0.5 transition-transform duration-200 ${activePopupType === 'status' ? 'rotate-180' : ''}`} />
-                    </button>
 
                     <button
                         onClick={() => setActivePopupType(activePopupType === 'profile' ? null : 'profile')}

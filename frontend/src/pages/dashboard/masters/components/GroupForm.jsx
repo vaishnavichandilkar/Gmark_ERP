@@ -219,7 +219,7 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
                                                             </span>
                                                         </div>
                                                         {isHeader && (
-                                                            <span className="text-[9px] bg-white text-[#6B7280] px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-gray-100 ml-2">
+                                                            <span className="text-[9px] bg-white text-[#6B7280] px-2 py-0.5 rounded font-bold tracking-wider border border-gray-100 ml-2">
                                                                 {t('common:header')}
                                                             </span>
                                                         )}

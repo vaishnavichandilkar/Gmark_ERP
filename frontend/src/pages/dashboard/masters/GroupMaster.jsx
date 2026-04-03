@@ -16,6 +16,7 @@ const GroupMaster = () => {
     const [expandedGroups, setExpandedGroups] = useState({});
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isSearchExpanded, setIsSearchExpanded] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [filterInputs, setFilterInputs] = useState({ status: '' });
     const [appliedFilters, setAppliedFilters] = useState({ status: '' });
@@ -251,7 +252,7 @@ const GroupMaster = () => {
                             >
                                 {translateDynamic(group.group_name, t)}
                                 {group.is_header && group.level === 1 && (
-                                    <span className="ml-2 px-1.5 py-0.5 bg-gray-100 text-[#6B7280] text-[9px] font-bold rounded uppercase tracking-wider">
+                                    <span className="ml-2 px-1.5 py-0.5 bg-gray-100 text-[#6B7280] text-[9px] font-bold rounded tracking-wider">
                                         {t('common:header', 'Header')}
                                     </span>
                                 )}
@@ -343,11 +344,8 @@ const GroupMaster = () => {
 
             <div className="flex flex-col gap-1 mb-4 md:mb-8">
                 {/* Desktop Header */}
-                <div className="hidden md:flex flex-row items-center justify-between gap-4">
-                    <div className="flex flex-col gap-1">
-                        <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('group_master')}</h1>
-                        <p className="text-[#6B7280] text-[15px] font-medium leading-relaxed max-w-[600px]">{t('group_master_desc')}</p>
-                    </div>
+                <div className="hidden md:flex flex-row items-center justify-end gap-4">
+
                     <button
                         onClick={() => setCurrentView({ type: 'add', data: null })}
                         className="px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 shrink-0"
@@ -359,13 +357,10 @@ const GroupMaster = () => {
 
                 {/* Mobile Header - Stacked Layout */}
                 <div className="md:hidden flex flex-col gap-3">
-                    <div className="flex flex-col gap-1">
-                        <h1 className="text-[24px] font-bold text-[#111827] tracking-tight">{t('group_master')}</h1>
-                        <p className="text-[#6B7280] text-[14px] font-medium leading-relaxed">{t('group_master_desc')}</p>
-                    </div>
+
                     <button
                         onClick={() => setCurrentView({ type: 'add', data: null })}
-                        className="flex items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-fit self-end"
+                        className="flex items-center justify-center gap-2 h-[42px] px-6 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold active:scale-[0.98] transition-all shadow-md w-full max-w-[358px] self-center"
                     >
                         <Plus size={18} strokeWidth={3} />
                         {t('add_group')}
@@ -374,9 +369,9 @@ const GroupMaster = () => {
             </div>
 
             {/* Action Bar - Mobile Optimized */}
-            <div className="master-table-container !bg-transparent !shadow-none !border-none md:!bg-white md:!shadow-[0_4px_20px_rgba(0,0,0,0.03)] md:!border md:!border-[#E5E7EB] mb-8">
+            <div className="master-table-container bg-white shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-[#E5E7EB] mb-8 rounded-[20px] overflow-hidden">
                 {/* Desktop Action Bar */}
-                <div className="hidden md:flex items-center justify-between p-6 border-b border-[#F3F4F6] bg-white gap-4 rounded-t-[16px]">
+                <div className="hidden md:flex items-center justify-between p-6 border-b border-[#F3F4F6] bg-white gap-4 rounded-t-[20px]">
                     <div className="flex items-center gap-3 flex-1">
                         <div className="relative flex-1 max-w-[320px]">
                             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -441,77 +436,85 @@ const GroupMaster = () => {
                 </div>
 
                 {/* Mobile Action Bar - Optimized One-line Layout */}
-                <div className="md:hidden mt-2">
-                    <div className="flex items-center gap-2 h-[48px]">
-                        {/* Compact Search */}
-                        <div className="flex-1 relative h-full">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                            <input
-                                type="text"
-                                placeholder={t('common:search')}
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full h-full bg-white border border-[#E5E7EB] rounded-[12px] pl-9 pr-8 text-[14px] outline-none shadow-sm placeholder:text-gray-400"
-                            />
-                            {searchQuery && (
-                                <button
-                                    onClick={() => setSearchQuery('')}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400"
+                <div className="md:hidden py-3 px-4 border-b border-[#F3F4F6] rounded-t-[20px]">
+                    <div className="flex items-center gap-2 h-[40px]">
+                        {/* Expandable Search */}
+                        <div className={`relative h-full transition-all duration-300 flex items-center ${isSearchExpanded ? 'flex-1' : 'w-[42px]'}`}>
+                            {!isSearchExpanded ? (
+                                <button 
+                                    onClick={() => setIsSearchExpanded(true)}
+                                    className="w-full h-full flex items-center justify-center text-gray-500"
                                 >
-                                    <X size={14} />
+                                    <Search size={22} />
                                 </button>
+                            ) : (
+                                <div className="relative w-full h-full flex items-center animate-in slide-in-from-right-4 duration-300">
+                                    <Search className="absolute left-3 text-gray-400" size={18} />
+                                    <input
+                                        type="text"
+                                        autoFocus
+                                        placeholder={t('common:search')}
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-full h-full bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none shadow-sm placeholder:text-gray-400"
+                                    />
+                                    {searchQuery && (
+                                        <button 
+                                            onClick={() => setSearchQuery('')}
+                                            className="absolute right-3 text-gray-400"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    )}
+                                </div>
                             )}
                         </div>
 
-                        {/* Control Buttons Group */}
-                        <div className="flex items-center gap-1.5 h-full">
-                            <button
-                                onClick={() => fetchGroups()}
-                                className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-500"
-                                title={t('common:refresh')}
-                            >
-                                <RefreshCw size={18} />
-                            </button>
-
-                            <button
-                                onClick={() => setIsImportModalOpen(true)}
-                                className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-500"
-                            >
-                                <Upload size={18} />
-                            </button>
-
-                            <div className="relative mobile-export-trigger">
-                                <button
-                                    onClick={() => setIsExportOpen(!isExportOpen)}
-                                    className={`w-[44px] h-[44px] flex items-center justify-center border rounded-[12px] shadow-sm transition-all active:scale-95 ${isExportOpen ? 'bg-[#073318] border-[#073318] text-white' : 'bg-white border-[#E5E7EB] text-gray-500'}`}
-                                >
-                                    <Download size={18} />
+                        {/* Action Icons - Hidden when search expanded */}
+                        {!isSearchExpanded ? (
+                            <div className="flex items-center gap-1 ml-auto animate-in fade-in duration-300">
+                                <button onClick={() => fetchGroups()} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                                    <RefreshCw size={20} />
                                 </button>
-                                {isExportOpen && (
-                                    <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-2xl z-[100] py-1 border-t border-gray-50 overflow-hidden">
-                                        <button onClick={handleExportPDF} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50">
-                                            <FileText size={16} className="text-red-500" /> PDF
-                                        </button>
-                                        <button onClick={handleExportExcel} className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-bold text-gray-700 active:bg-gray-50 border-t border-gray-50">
-                                            <FileSpreadsheet size={16} className="text-green-600" /> Excel
-                                        </button>
-                                    </div>
-                                )}
+                                <button onClick={() => setIsImportModalOpen(true)} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                                    <Upload size={20} />
+                                </button>
+                                <div className="relative">
+                                    <button 
+                                        onClick={() => setIsExportOpen(!isExportOpen)} 
+                                        className={`w-10 h-10 flex items-center justify-center transition-colors ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}
+                                    >
+                                        <Download size={20} />
+                                    </button>
+                                    {isExportOpen && (
+                                        <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-[100] py-1 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
+                                            <button onClick={handleExportPDF} className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50">
+                                                <FileText size={18} className="text-red-500" /> PDF
+                                            </button>
+                                            <button onClick={handleExportExcel} className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50 border-t border-gray-50">
+                                                <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                                <button onClick={toggleExpandAll} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                                    {isAllExpanded ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                                </button>
                             </div>
-
-                            <button
-                                onClick={toggleExpandAll}
-                                className="w-[44px] h-[44px] flex items-center justify-center bg-white border border-[#E5E7EB] rounded-[12px] shadow-sm active:bg-gray-50 text-gray-500"
+                        ) : (
+                            <button 
+                                onClick={() => { setIsSearchExpanded(false); setSearchQuery(''); }}
+                                className="text-[14px] font-bold text-[#073318] px-2 animate-in fade-in duration-300"
                             >
-                                {isAllExpanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                                {t('common:cancel')}
                             </button>
-                        </div>
+                        )}
                     </div>
                 </div>
 
                 <div className="w-full overflow-x-auto no-scrollbar">
                     <div className="min-w-[800px]">
-                    <div className="flex items-stretch justify-between bg-emerald-900 border-b border-emerald-950 text-[14px] font-bold text-white uppercase tracking-tight">
+                    <div className="flex items-stretch justify-between bg-emerald-900 border-b border-emerald-950 text-[14px] font-bold text-white tracking-tight">
                         <div className="flex-1 border-r border-white/50 pr-4 md:pr-6 py-3 md:py-5 pl-6 md:pl-9 flex items-center gap-2">
                             {t('modules:group_master')}
                             <ChevronsUpDown size={14} className="text-gray-300" />

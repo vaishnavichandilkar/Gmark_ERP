@@ -47,7 +47,7 @@ const MastersLayout = () => {
                             className={({ isActive }) =>
                                 `relative text-[14px] md:text-[16px] font-bold transition-all duration-300 ease-in-out whitespace-nowrap px-4 py-2.5 rounded-[12px]
                                 ${isActive
-                                    ? 'text-[#073318] bg-[#073318]/5 border-2 border-[#073318] shadow-sm shadow-[#073318]/10'
+                                    ? 'text-[#073318] bg-[#073318]/5 border-2 border-[#E5E7EB] shadow-sm shadow-[#073318]/10'
                                     : 'text-[#6B7280] hover:text-[#111827] hover:bg-gray-50'
                                 }`
                             }

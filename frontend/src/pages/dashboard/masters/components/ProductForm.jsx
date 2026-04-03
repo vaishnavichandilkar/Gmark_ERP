@@ -521,7 +521,7 @@ const ProductForm = ({
             className="flex border-b border-[#F3F4F6] min-h-[56px] last:border-b-0 group"
           >
             <div className="w-[240px] bg-[#F9FAFB] px-8 py-4 flex items-center border-r border-[#F3F4F6]">
-              <span className="text-[14px] font-bold text-gray-500 uppercase tracking-tight">
+              <span className="text-[14px] font-bold text-gray-500 tracking-tight">
                 {item.label}:
               </span>
             </div>
