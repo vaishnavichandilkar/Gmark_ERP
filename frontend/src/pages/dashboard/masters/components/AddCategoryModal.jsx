@@ -1,124 +1,118 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ChevronDown, Loader2 } from 'lucide-react';
+import { X, ChevronDown, Loader2, Info, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-hot-toast';
 import categoryService from '../../../../services/masters/categoryService';
-import { translateDynamic } from '../../../../utils/i18nUtils';
 
-const AddCategoryModal = ({
-    isOpen,
-    onClose,
-    onSuccess,
-    onShowToast,
-    initialStep = 1,
-    initialType = '',
-    lockType = false
-}) => {
+const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
     const { t } = useTranslation(['common', 'modules']);
-    const [step, setStep] = useState(initialStep);
-    const [type, setType] = useState(initialType);
+    const [step, setStep] = useState(1);
+    const [type, setType] = useState(''); // 'Category', 'Sub Category', 'Sub Sub Category'
     const [categoryName, setCategoryName] = useState('');
     const [parentCategory, setParentCategory] = useState(null);
-    const [subCategory, setSubCategory] = useState(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [dropdownCategories, setDropdownCategories] = useState([]);
-    const [dropdownSubCategories, setDropdownSubCategories] = useState([]);
     const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
-    const [isSubDropdownOpen, setIsSubDropdownOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [hierarchyStats, setHierarchyStats] = useState({ hasCategories: false, hasSubCategories: false });
-    const [tooltip, setTooltip] = useState({ show: false, content: '', x: 0, y: 0 });
+    const [stats, setStats] = useState({ hasCategories: false, hasSubCategories: false, isLoaded: false });
     const dropdownRef = useRef(null);
     const parentDropdownRef = useRef(null);
 
     useEffect(() => {
         if (isOpen) {
-            setStep(initialStep);
-            setType(initialType);
+            setStep(1);
+            setType('');
             setCategoryName('');
             setParentCategory(null);
-            setSubCategory(null);
-            setDropdownSubCategories([]);
-            fetchDropdownData();
-            fetchHierarchyStats();
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = '';
+            setSearchTerm('');
+            fetchStats();
         }
-        return () => {
-            document.body.style.overflow = '';
-        };
     }, [isOpen]);
+
+    const fetchStats = async () => {
+        try {
+            const data = await categoryService.getCategories();
+            const hasCategories = data.length > 0;
+            const hasSubCategories = data.some(cat => cat.sub_categories && cat.sub_categories.length > 0);
+            setStats({ hasCategories, hasSubCategories, isLoaded: true });
+        } catch (err) {
+            console.error('Error fetching stats:', err);
+            setStats(prev => ({ ...prev, isLoaded: true }));
+        }
+    };
 
     const fetchDropdownData = async () => {
         try {
-            const data = await categoryService.getCategoriesDropdown();
-            setDropdownCategories(data || []);
+            if (type === 'Sub Sub Category') {
+                const allData = await categoryService.getCategories();
+                const allSubCategories = allData.flatMap(cat =>
+                    (cat.sub_categories || []).map(sub => ({
+                        ...sub,
+                        categoryName: cat.name
+                    }))
+                );
+                setDropdownCategories(allSubCategories);
+            } else if (type === 'Sub Category') {
+                const data = await categoryService.getCategoriesDropdown();
+                setDropdownCategories(data || []);
+            }
         } catch (err) {
             console.error('Error fetching categories:', err);
         }
     };
-    const fetchHierarchyStats = async () => {
-        try {
-            const stats = await categoryService.getHierarchyStats();
-            setHierarchyStats(stats);
-        } catch (err) {
-            console.error('Error fetching hierarchy stats:', err);
+
+    useEffect(() => {
+        if (type && type !== 'Category') {
+            fetchDropdownData();
+            setParentCategory(null);
+            setSearchTerm('');
         }
-    };
+    }, [type]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setIsDropdownOpen(false);
-            }
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setIsDropdownOpen(false);
             if (parentDropdownRef.current && !parentDropdownRef.current.contains(event.target)) {
                 setIsParentDropdownOpen(false);
+                setSearchTerm('');
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const filteredParents = searchTerm
+        ? dropdownCategories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        : dropdownCategories;
+
     const handleNext = () => {
-        if (type) {
-            setStep(2);
-        }
+        if (type) setStep(2);
     };
 
     const handleSave = async () => {
-        if (!categoryName.trim()) {
-            toast.error(t('modules:category_name_required', 'Category name is required'));
+        const trimmedName = categoryName.trim();
+        if (!trimmedName) {
+            toast.error(t('modules:name_required', 'Name is required'));
             return;
         }
 
-        if (type === 'Sub Category' && !parentCategory) {
-            toast.error(t('modules:parent_category_required'));
-            return;
-        }
-
-        if (type === 'Sub Sub Category' && (!parentCategory || !subCategory)) {
-            toast.error(t('modules:parent_sub_category_required', 'Parent sub category is required'));
+        if (type !== 'Category' && !parentCategory) {
+            toast.error(t('modules:parent_selection_required', 'Parent selection is required'));
             return;
         }
 
         setIsLoading(true);
         try {
             if (type === 'Category') {
-                await categoryService.createCategory({ name: categoryName });
+                await categoryService.createCategory({ name: trimmedName });
                 onShowToast && onShowToast(t('modules:category_added_successfully'));
             } else if (type === 'Sub Category') {
-                await categoryService.createSubCategory({
-                    name: categoryName,
-                    category_id: parentCategory.id
-                });
+                await categoryService.createSubCategory({ name: trimmedName, category_id: parentCategory.id });
                 onShowToast && onShowToast(t('modules:sub_category_added_successfully'));
-            } else if (type === 'Sub Sub Category') {
-                await categoryService.createSubSubCategory({
-                    name: categoryName,
-                    sub_category_id: subCategory.id
-                });
-                onShowToast && onShowToast(t('modules:sub_sub_category_added_successfully', 'Sub Sub Category added successfully'));
+            } else {
+                await categoryService.createSubSubCategory({ name: trimmedName, sub_category_id: parentCategory.id });
+                onShowToast && onShowToast(t('modules:sub_sub_category_added_successfully'));
             }
             onSuccess();
             onClose();
@@ -133,223 +127,134 @@ const AddCategoryModal = ({
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            {/* Overlay */}
-            <div
-                className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-300"
-                onClick={onClose}
-            />
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-300" onClick={onClose} />
 
-            {/* Modal */}
-            <div className={`relative bg-white rounded-[20px] shadow-[0_20px_50px_rgba(0,0,0,0.15)] w-full max-w-[440px] transform transition-all duration-500 ease-in-out animate-in zoom-in-95`}>
+            <div className="relative bg-white rounded-[24px] shadow-2xl w-full max-w-[440px] overflow-hidden animate-in zoom-in-95 duration-300">
                 {/* Header */}
-                <div className="flex items-center justify-between px-8 py-5 border-b border-[#04200f] bg-emerald-900 rounded-t-[20px]">
-                    <h2 className="text-[18px] font-bold text-white tracking-tight">{t('modules:add_category')}</h2>
-                    <button
-                        onClick={onClose}
-                        className="p-1 text-emerald-100 hover:text-white transition-colors"
-                    >
+                <div className="flex items-center justify-between px-8 py-5 bg-emerald-900 text-white border-b border-emerald-800">
+                    <h2 className="text-[18px] font-bold tracking-tight">
+                        {step === 1 ? t('modules:select_category_type', 'Step 1: Select Type') : t('modules:add_details', 'Step 2: Add Details')}
+                    </h2>
+                    <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full transition-colors">
                         <X size={20} />
                     </button>
                 </div>
 
-                {/* Body */}
                 <div className="p-8 space-y-6">
-                    {/* Type Dropdown */}
-                    <div className="space-y-2 relative" ref={dropdownRef}>
-                        <label className="text-[13px] font-semibold text-[#4B5563]">{t('common:type')}</label>
-                        <div
-                            className={`w-full h-[46px] border rounded-[10px] flex items-center justify-between px-4 ${lockType ? 'cursor-default border-[#E5E7EB] bg-white' : 'cursor-pointer hover:border-gray-300 bg-white'} transition-all ${isDropdownOpen && !lockType ? 'border-[#073318] ring-4 ring-[#073318]/5' : ''}`}
-                            onClick={() => !lockType && setIsDropdownOpen(!isDropdownOpen)}
-                        >
-                            <span className={`text-[14px] ${type ? 'text-[#111827] font-medium' : 'text-gray-400'}`}>
-                                {type ? (
-                                    type === 'Category' ? t('modules:category') :
-                                        type === 'Sub Category' ? t('modules:sub_category') :
-                                            t('modules:sub_sub_category', 'Sub Sub Category')
-                                ) : t('modules:select_type')}
-                            </span>
-                            <ChevronDown size={18} className={`text-gray-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
-                        </div>
-
-                        {isDropdownOpen && (
-                            <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[12px] shadow-xl z-[110] py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                                {['Category', 'Sub Category', 'Sub Sub Category'].map((opt) => {
-                                    let isDisabled = false;
-                                    let tooltipMsg = '';
-
-                                    if (opt === 'Sub Category') {
-                                        if (!hierarchyStats.hasCategories) {
-                                            isDisabled = true;
-                                            tooltipMsg = t('modules:add_category_first', 'Please add a Category first');
-                                        }
-                                    } else if (opt === 'Sub Sub Category') {
-                                        if (!hierarchyStats.hasCategories) {
-                                            isDisabled = true;
-                                            tooltipMsg = t('modules:add_cat_and_sub_first', 'Please add a Category and SubCategory first');
-                                        } else if (!hierarchyStats.hasSubCategories) {
-                                            isDisabled = true;
-                                            tooltipMsg = t('modules:add_sub_category_first', 'Please add a SubCategory first');
-                                        }
-                                    }
-
-                                    return (
-                                        <div
-                                            key={opt}
-                                            className={`group relative px-4 py-3 text-[14px] transition-colors ${isDisabled
-                                                ? 'text-gray-300 cursor-not-allowed bg-gray-50/50'
-                                                : type === opt
-                                                    ? 'bg-[#F9FAFB] text-[#073318] font-bold cursor-pointer'
-                                                    : 'text-[#4B5563] hover:bg-gray-50 cursor-pointer'
-                                                }`}
-                                            onMouseEnter={(e) => {
-                                                if (isDisabled) {
-                                                    const rect = e.currentTarget.getBoundingClientRect();
-                                                    setTooltip({
-                                                        show: true,
-                                                        content: tooltipMsg,
-                                                        x: rect.left + rect.width / 2,
-                                                        y: rect.top
-                                                    });
-                                                }
-                                            }}
-                                            onMouseLeave={() => setTooltip({ ...tooltip, show: false })}
-                                            onClick={(e) => {
-                                                if (isDisabled) {
-                                                    const rect = e.currentTarget.getBoundingClientRect();
-                                                    setTooltip({
-                                                        show: true,
-                                                        content: tooltipMsg,
-                                                        x: rect.left + rect.width / 2,
-                                                        y: rect.top
-                                                    });
-                                                } else {
-                                                    setType(opt);
-                                                    setParentCategory(null);
-                                                    setSubCategory(null);
-                                                    setDropdownSubCategories([]);
-                                                    setIsDropdownOpen(false);
-                                                }
-                                            }}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <span>
-                                                    {opt === 'Category' ? t('modules:category') :
-                                                        opt === 'Sub Category' ? t('modules:sub_category') :
-                                                            t('modules:sub_sub_category', 'Sub Sub Category')}
-                                                </span>
-                                                {isDisabled && (
-                                                    <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
-                                                        {t('common:locked', 'Locked')}
-                                                    </span>
-                                                )}
-                                            </div>
+                    {step === 1 ? (
+                        <div className="space-y-4">
+                            <label className="text-[13px] font-semibold text-gray-500 uppercase tracking-wider">{t('modules:choose_hierarchy_level', 'Choose Hierarchy Level')}</label>
+                            <div className="grid grid-cols-1 gap-3">
+                                {[
+                                    { id: 'Category', label: t('modules:category'), desc: 'Top Level (Level 1)', disabled: false },
+                                    { id: 'Sub Category', label: t('modules:sub_category'), desc: 'Child Level (Level 2)', disabled: !stats.hasCategories },
+                                    { id: 'Sub Sub Category', label: t('modules:sub_sub_category'), desc: 'Grandchild Level (Level 3)', disabled: !stats.hasSubCategories }
+                                ].map((opt) => (
+                                    <button
+                                        key={opt.id}
+                                        disabled={opt.disabled}
+                                        onClick={() => setType(opt.id)}
+                                        className={`flex flex-col items-start p-4 rounded-xl border-2 transition-all text-left ${type === opt.id ? 'border-emerald-600 bg-emerald-50' : 'border-gray-100 hover:border-emerald-200'} ${opt.disabled ? 'opacity-40 grayscale cursor-not-allowed' : 'active:scale-98'}`}
+                                    >
+                                        <div className="flex items-center justify-between w-full">
+                                            <span className={`text-[15px] font-bold ${type === opt.id ? 'text-emerald-900' : 'text-gray-700'}`}>{opt.label}</span>
+                                            {type === opt.id && <div className="w-4 h-4 rounded-full bg-emerald-600" />}
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Step 2 Content: smooth transition expansion */}
-                    <div className={`space-y-6 transition-all duration-500 ease-in-out ${step === 2 ? 'max-height-expanded opacity-100 mb-6 overflow-visible' : 'max-h-0 opacity-0 invisible -mt-6 overflow-hidden'}`}>
-                        <div className="space-y-2">
-                            <label className="text-[13px] font-semibold text-[#4B5563]">
-                                {type === 'Category' ? t('modules:category_name') :
-                                    type === 'Sub Category' ? t('modules:sub_category_name') :
-                                        t('modules:sub_sub_category_name', 'Sub Sub Category Name')}
-                            </label>
-                            <input
-                                type="text"
-                                value={categoryName}
-                                onChange={(e) => setCategoryName(e.target.value)}
-                                placeholder={type === 'Category' ? t('modules:enter_category_name') :
-                                    type === 'Sub Category' ? t('modules:enter_sub_category_name') :
-                                        t('modules:enter_sub_sub_category_name', 'Enter Sub Sub Category Name')}
-                                className="w-full h-[46px] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-medium outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all placeholder:text-gray-400"
-                            />
-                        </div>
-
-                        {(type === 'Sub Category' || type === 'Sub Sub Category') && (
-                            <div className="space-y-2 relative" ref={parentDropdownRef}>
-                                <label className="text-[13px] font-semibold text-[#4B5563]">{t('modules:category_under')}</label>
-                                <div
-                                    className={`w-full h-[46px] border rounded-[10px] flex items-center justify-between px-4 cursor-pointer transition-all ${isParentDropdownOpen ? 'border-[#073318] ring-4 ring-[#073318]/5' : 'border-[#E5E7EB] hover:border-gray-300 bg-white'}`}
-                                    onClick={() => setIsParentDropdownOpen(!isParentDropdownOpen)}
-                                >
-                                    <span className={`text-[14px] ${parentCategory ? 'text-[#111827] font-medium' : 'text-gray-400'}`}>
-                                        {parentCategory ? parentCategory.name : t('modules:select_category')}
-                                    </span>
-                                    <ChevronDown size={18} className={`text-gray-400 transition-transform duration-200 ${isParentDropdownOpen ? 'rotate-180' : ''}`} />
-                                </div>
-
-                                {isParentDropdownOpen && (
-                                    <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[12px] shadow-xl z-[110] py-2 max-h-[160px] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
-                                        {dropdownCategories.map((cat) => (
-                                            <div
-                                                key={cat.id}
-                                                className={`px-4 py-3 text-[14px] cursor-pointer transition-colors ${parentCategory?.id === cat.id ? 'bg-[#F9FAFB] text-[#073318] font-bold' : 'text-[#4B5563] hover:bg-gray-50'}`}
-                                                onClick={async () => {
-                                                    setParentCategory(cat);
-                                                    setSubCategory(null);
-                                                    setIsParentDropdownOpen(false);
-                                                    if (type === 'Sub Sub Category') {
-                                                        const subs = await categoryService.getSubCategoriesDropdown(cat.id);
-                                                        setDropdownSubCategories(subs || []);
-                                                    }
-                                                }}
-                                            >
-                                                {cat.name}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {type === 'Sub Sub Category' && (
-                            <div className="space-y-2 relative">
-                                <label className="text-[13px] font-semibold text-[#4B5563]">{t('modules:sub_category_under', 'Sub Category Under')}</label>
-                                <div
-                                    className={`w-full h-[46px] border rounded-[10px] flex items-center justify-between px-4 transition-all ${!parentCategory ? 'bg-gray-50 cursor-not-allowed border-[#E5E7EB]' : 'cursor-pointer hover:border-gray-300 bg-white'} ${isSubDropdownOpen ? 'border-[#073318] ring-4 ring-[#073318]/5' : 'border-[#E5E7EB]'}`}
-                                    onClick={() => parentCategory && setIsSubDropdownOpen(!isSubDropdownOpen)}
-                                >
-                                    <span className={`text-[14px] ${subCategory ? 'text-[#111827] font-medium' : 'text-gray-400'}`}>
-                                        {subCategory ? subCategory.name : t('modules:select_sub_category', 'Select Sub Category')}
-                                    </span>
-                                    <ChevronDown size={18} className={`text-gray-400 transition-transform duration-200 ${isSubDropdownOpen ? 'rotate-180' : ''}`} />
-                                </div>
-
-                                {isSubDropdownOpen && (
-                                    <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[12px] shadow-xl z-[110] py-2 max-h-[160px] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
-                                        {dropdownSubCategories.length > 0 ? (
-                                            dropdownSubCategories.map((sub) => (
-                                                <div
-                                                    key={sub.id}
-                                                    className={`px-4 py-3 text-[14px] cursor-pointer transition-colors ${subCategory?.id === sub.id ? 'bg-[#F9FAFB] text-[#073318] font-bold' : 'text-[#4B5563] hover:bg-gray-50'}`}
-                                                    onClick={() => {
-                                                        setSubCategory(sub);
-                                                        setIsSubDropdownOpen(false);
-                                                    }}
-                                                >
-                                                    {sub.name}
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="px-4 py-3 text-[13px] text-gray-400 italic">No sub categories found</div>
+                                        <span className="text-[12px] text-gray-400 font-medium">{opt.desc}</span>
+                                        {opt.disabled && (
+                                            <span className="text-[10px] text-red-500 mt-1 font-bold italic flex items-center gap-1">
+                                                <Info size={10} /> {opt.id === 'Sub Category' ? 'Add a category first' : 'Add a sub-category first'}
+                                            </span>
                                         )}
-                                    </div>
-                                )}
+                                    </button>
+                                ))}
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-5 animate-in slide-in-from-right-4 duration-300">
+                            {/* Selected Type Badge */}
+                            <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 flex items-center justify-between">
+                                <div>
+                                    <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">{t('common:type')}</p>
+                                    <p className="text-[14px] font-bold text-emerald-900">{type}</p>
+                                </div>
+                                <button onClick={() => setStep(1)} className="text-[12px] text-emerald-700 font-bold hover:underline">
+                                    {t('common:change')}
+                                </button>
+                            </div>
 
-                    {/* Footer Buttons */}
-                    <div className="flex items-center justify-center gap-3 pt-2">
+                            {/* Name Input */}
+                            <div className="space-y-2">
+                                <label className="text-[13px] font-semibold text-gray-600">{t('modules:name')}</label>
+                                <input
+                                    type="text" autoFocus
+                                    value={categoryName}
+                                    onChange={(e) => setCategoryName(e.target.value)}
+                                    placeholder={t('modules:enter_name')}
+                                    className="w-full h-[46px] border border-gray-200 rounded-xl px-4 text-[14px] font-medium outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/5 transition-all"
+                                />
+                            </div>
+
+                            {/* Parent Dropdown (Conditional) */}
+                            {type !== 'Category' && (
+                                <div className="space-y-2 relative" ref={parentDropdownRef}>
+                                    <label className="text-[13px] font-semibold text-gray-600">
+                                        {type === 'Sub Category' ? t('modules:select_parent_category') : t('modules:select_parent_sub_category')}
+                                    </label>
+                                    <div
+                                        className={`w-full h-[46px] border rounded-xl flex items-center justify-between px-4 cursor-pointer transition-all ${isParentDropdownOpen ? 'border-emerald-600 ring-4 ring-emerald-600/5' : 'border-gray-200 hover:border-gray-300'}`}
+                                        onClick={() => setIsParentDropdownOpen(!isParentDropdownOpen)}
+                                    >
+                                        {isParentDropdownOpen ? (
+                                            <input
+                                                type="text" autoFocus
+                                                placeholder={parentCategory?.name || t('common:search')}
+                                                className="w-full bg-transparent outline-none text-[14px] font-medium"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                        ) : (
+                                            <span className={`text-[14px] ${parentCategory ? 'text-gray-900 font-medium' : 'text-gray-400 italic'}`}>
+                                                {parentCategory ? parentCategory.name : t('common:select_option')}
+                                            </span>
+                                        )}
+                                        <ChevronDown size={18} className={`text-gray-400 transition-transform ${isParentDropdownOpen ? 'rotate-180' : ''}`} />
+                                    </div>
+
+                                    {isParentDropdownOpen && (
+                                        <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white border border-gray-100 rounded-xl shadow-2xl z-[110] py-2 max-h-[180px] overflow-y-auto dropdown-scrollbar animate-in slide-in-from-top-2">
+                                            {filteredParents.length > 0 ? (
+                                                filteredParents.map((cat) => (
+                                                    <div
+                                                        key={cat.id}
+                                                        className={`px-4 py-2.5 text-[14px] cursor-pointer hover:bg-emerald-50 transition-colors ${parentCategory?.id === cat.id ? 'bg-emerald-50 text-emerald-900 font-bold' : 'text-gray-600'}`}
+                                                        onClick={() => {
+                                                            setParentCategory(cat);
+                                                            setIsParentDropdownOpen(false);
+                                                            setSearchTerm('');
+                                                        }}
+                                                    >
+                                                        {cat.name} {cat.categoryName && <span className="text-[11px] text-gray-400 ml-1">({cat.categoryName})</span>}
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="px-4 py-3 text-[12px] text-gray-400 text-center italic">{t('common:no_results')}</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Footer Actions */}
+                    <div className="flex items-center gap-3 pt-2">
                         {step === 1 ? (
                             <button
                                 onClick={handleNext}
                                 disabled={!type}
-                                className={`flex-1 h-[48px] rounded-[12px] text-[15px] font-bold transition-all ${!type ? 'bg-[#B0C4B8] text-white cursor-not-allowed' : 'bg-[#073318] text-white hover:bg-[#04200f]'}`}
+                                className="flex-1 h-[52px] bg-emerald-900 text-white rounded-xl text-[16px] font-bold shadow-lg shadow-emerald-900/20 hover:bg-emerald-950 transition-all disabled:opacity-50 disabled:grayscale active:scale-95"
                             >
                                 {t('common:next')}
                             </button>
@@ -357,63 +262,33 @@ const AddCategoryModal = ({
                             <button
                                 onClick={handleSave}
                                 disabled={isLoading}
-                                className="flex-1 h-[48px] bg-[#073318] text-white rounded-[12px] text-[15px] font-bold hover:bg-[#04200f] transition-all flex items-center justify-center gap-2"
+                                className="flex-1 h-[52px] bg-emerald-900 text-white rounded-xl text-[16px] font-bold shadow-lg shadow-emerald-900/20 hover:bg-emerald-950 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
                             >
-                                {isLoading ? <Loader2 size={18} className="animate-spin" /> : t('common:save')}
+                                {isLoading ? <Loader2 size={20} className="animate-spin" /> : t('common:save')}
                             </button>
                         )}
                         <button
                             onClick={onClose}
-                            className="w-[100px] h-[48px] border border-[#E5E7EB] text-[#4B5563] rounded-[12px] text-[15px] font-bold hover:bg-gray-50 transition-all bg-white"
+                            className="w-[100px] h-[52px] border border-gray-200 rounded-xl text-[15px] font-bold text-gray-500 hover:bg-gray-50 transition-all"
                         >
-                            {t('common:exit', 'Exit')}
+                            {t('common:cancel')}
                         </button>
                     </div>
                 </div>
             </div>
 
-            {/* Dynamic Tooltip */}
-            {tooltip.show && (
-                <div
-                    className="fixed z-[999] px-3 py-2 bg-slate-900 text-white text-[12px] font-medium rounded-lg shadow-xl pointer-events-none transform -translate-x-1/2 -translate-y-full mb-2 animate-in fade-in zoom-in-95 duration-200"
-                    style={{ left: tooltip.x, top: tooltip.y }}
-                >
-                    {tooltip.content}
-                    {/* Tooltip Arrow */}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-slate-900" />
-                </div>
-            )}
-
             <style jsx>{`
-                .max-height-expanded {
-                    max-height: 400px;
-                }
-                .animate-in {
-                    animation-duration: 300ms;
-                    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-                    animation-fill-mode: forwards;
-                }
-                .zoom-in-95 {
-                    animation-name: zoomIn;
-                }
-                .fade-in {
-                    animation-name: fadeIn;
-                }
-                .slide-in-from-top-2 {
-                    animation-name: slideInTop;
-                }
-                @keyframes zoomIn {
-                    from { opacity: 0; transform: scale(0.95); }
-                    to { opacity: 1; transform: scale(1); }
-                }
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                @keyframes slideInTop {
-                    from { transform: translateY(-8px); opacity: 0; }
-                    to { transform: translateY(0); opacity: 1; }
-                }
+                .animate-in { animation-duration: 300ms; animation-fill-mode: forwards; }
+                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+                @keyframes slideInSide { from { transform: translateX(10px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+                @keyframes slideInTop { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+                .fade-in { animation-name: fadeIn; }
+                .zoom-in-95 { animation-name: zoomIn; }
+                .slide-in-from-right-4 { animation-name: slideInSide; }
+                .slide-in-from-top-2 { animation-name: slideInTop; }
+                .dropdown-scrollbar::-webkit-scrollbar { width: 4px; }
+                .dropdown-scrollbar::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 10px; }
             `}</style>
         </div>
     );

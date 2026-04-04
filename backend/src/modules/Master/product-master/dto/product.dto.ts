@@ -28,6 +28,11 @@ export class CreateProductDto {
     @IsNotEmpty()
     sub_category_id: number;
 
+    @ApiProperty({ required: false })
+    @IsNumber()
+    @IsOptional()
+    sub_sub_category_id?: number;
+
     @ApiProperty()
     @IsString()
     @IsNotEmpty()
@@ -64,6 +69,11 @@ export class UpdateProductDto {
     @IsNumber()
     @IsOptional()
     sub_category_id?: number;
+
+    @ApiProperty({ required: false })
+    @IsNumber()
+    @IsOptional()
+    sub_sub_category_id?: number;
 
     @ApiProperty()
     @IsString()

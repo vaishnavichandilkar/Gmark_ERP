@@ -48,7 +48,12 @@ export const getCategoriesDropdown = async () => {
 };
 
 export const getSubCategoriesDropdown = async (categoryId) => {
-    const response = await axiosInstance.get(`${API_PATH}/dropdown/sub-categories/${categoryId}`);
+    const response = await axiosInstance.get(`${API_PATH}/sub-categories/dropdown/${categoryId}`);
+    return response.data;
+};
+
+export const getSubSubCategoriesDropdown = async (subCategoryId) => {
+    const response = await axiosInstance.get(`${API_PATH}/sub-sub-categories/dropdown/${subCategoryId}`);
     return response.data;
 };
 

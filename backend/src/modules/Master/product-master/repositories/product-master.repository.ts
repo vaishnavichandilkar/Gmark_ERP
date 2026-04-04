@@ -22,7 +22,7 @@ export class ProductMasterRepository {
     async findProductById(id: number) {
         return this.prisma.product.findUnique({
             where: { id, is_deleted: false },
-            include: { uom: true, category: true, sub_category: true, hsn: true }
+            include: { uom: true, category: true, sub_category: true, sub_sub_category: true, hsn: true }
         });
     }
 
@@ -48,6 +48,7 @@ export class ProductMasterRepository {
                 { uom: { unit_name: { contains: searchTerm, mode: 'insensitive' } } },
                 { category: { name: { contains: searchTerm, mode: 'insensitive' } } },
                 { sub_category: { name: { contains: searchTerm, mode: 'insensitive' } } },
+                { sub_sub_category: { name: { contains: searchTerm, mode: 'insensitive' } } },
             ];
 
             // Add enum searches
@@ -75,7 +76,7 @@ export class ProductMasterRepository {
         const findOptions: Prisma.ProductFindManyArgs = {
             where,
             orderBy: { created_at: 'desc' },
-            include: { uom: true, category: true, sub_category: true, hsn: true }
+            include: { uom: true, category: true, sub_category: true, sub_sub_category: true, hsn: true }
         };
 
         if (!isExport) {
@@ -119,6 +120,10 @@ export class ProductMasterRepository {
         return this.prisma.subCategory.findUnique({ where: { id } });
     }
 
+    async getSubSubCategoryById(id: number) {
+        return this.prisma.subSubCategory.findUnique({ where: { id } });
+    }
+
     async getActiveUomsForDropdown(userId: number) {
         return this.prisma.unitMaster.findMany({
             where: { user_id: userId, status: 'ACTIVE' },
@@ -138,6 +143,14 @@ export class ProductMasterRepository {
     async getActiveSubCategoriesForDropdown(categoryId: number, userId: number) {
         return this.prisma.subCategory.findMany({
             where: { category_id: categoryId, user_id: userId, status: 'ACTIVE' },
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' }
+        });
+    }
+
+    async getActiveSubSubCategoriesForDropdown(subCategoryId: number, userId: number) {
+        return this.prisma.subSubCategory.findMany({
+            where: { sub_category_id: subCategoryId, user_id: userId, status: 'ACTIVE' },
             select: { id: true, name: true },
             orderBy: { name: 'asc' }
         });

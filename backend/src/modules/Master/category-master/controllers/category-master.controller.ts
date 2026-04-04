@@ -1,5 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, ParseIntPipe, Query, UseGuards, Request, UploadedFile, UseInterceptors, BadRequestException, Res } from '@nestjs/common';
-import { Response } from 'express';
+import { Body, Controller, Get, Param, Patch, Post, ParseIntPipe, Query, UseGuards, Request, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CategoryMasterService } from '../services/category-master.service';
@@ -47,52 +46,11 @@ export class CategoryMasterController {
         );
     }
 
-    @Get('sub-categories/dropdown')
-    @ApiOperation({ summary: 'Get Sub Categories for dropdown' })
-    async getSubDropdown(
-        @Request() req,
-        @Query('categoryId', ParseIntPipe) categoryId: number,
-    ) {
-        return this.service.getSubCategoriesForDropdown(req.user.userId, categoryId);
-    }
-
-    @Get('sub-sub-categories/dropdown')
-    @ApiOperation({ summary: 'Get Sub Sub Categories for dropdown' })
-    async getSubSubDropdown(
-        @Request() req,
-        @Query('subCategoryId', ParseIntPipe) subCategoryId: number,
-    ) {
-        return this.service.getSubSubCategoriesForDropdown(req.user.userId, subCategoryId);
-    }
-    @Get('hierarchy-stats')
-    @ApiOperation({ summary: 'Get category hierarchy existence status' })
-    async getHierarchyStats(@Request() req) {
-        return this.service.getHierarchyStats(req.user.userId);
-    }
-
     @Get()
     @ApiOperation({ summary: 'Get Category with Sub Categories listing' })
     @ApiResponse({ status: 200, description: 'Nested Category list' })
     async getListing(@Request() req) {
         return this.service.getCategoryListing(req.user.userId);
-    }
-
-    @Get('export')
-    @ApiOperation({ summary: 'Export categories list to XLSX or PDF format' })
-    async exportCategories(
-        @Request() req,
-        @Res() res: Response,
-        @Query('format') format: string,
-    ) {
-        const file = await this.service.exportCategories(format.toLowerCase(), req.user.userId);
-
-        res.set({
-            'Content-Type': file.mimetype,
-            'Content-Disposition': `attachment; filename="${file.filename}"`,
-            'Content-Length': file.buffer.length,
-        });
-
-        res.send(file.buffer);
     }
 
     @Patch('category/:id/status')
@@ -151,7 +109,7 @@ export class CategoryMasterController {
     }
 
     @Patch('sub-sub-category/:id')
-    @ApiOperation({ summary: 'Update Sub Sub Category name' })
+    @ApiOperation({ summary: 'Update Sub Sub Category' })
     @ApiResponse({ status: 200, description: 'Sub Sub Category updated' })
     async updateSubSubCategory(
         @Request() req,
@@ -159,18 +117,6 @@ export class CategoryMasterController {
         @Body() dto: UpdateSubSubCategoryDto,
     ) {
         return this.service.updateSubSubCategory(id, dto, req.user.userId);
-    }
-
-    @Get('sample-excel')
-    @ApiOperation({ summary: 'Download sample Excel for category import' })
-    async downloadSample(@Request() req, @Res() res: Response) {
-        const buffer = await this.service.getSampleExcel();
-        res.set({
-            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition': 'attachment; filename="category_master_sample.xlsx"',
-            'Content-Length': (buffer as any).length,
-        });
-        res.end(buffer);
     }
 
     @Post('import')
@@ -207,39 +153,57 @@ export class CategoryMasterController {
         return this.service.promoteSubCategory(id, req.user.userId);
     }
 
-    @Patch('sub-sub-category/:id/promote')
-    @ApiOperation({ summary: 'Change Sub Sub Category hierarchy level' })
-    async promoteSubSubCategory(
-        @Request() req,
-        @Param('id', ParseIntPipe) id: number,
-        @Query('targetLevel') targetLevel: 'sub_category' | 'category',
-        @Query('newCategoryId') newCategoryId?: string
-    ) {
-        return this.service.promoteSubSubCategory(
-            id,
-            targetLevel,
-            req.user.userId,
-            newCategoryId ? parseInt(newCategoryId) : undefined
-        );
-    }
-
-    @Post('category/:id/demote')
+    @Post('category/:id/demote/:newParentId')
     @ApiOperation({ summary: 'Demote Category to Sub Category' })
+    @ApiResponse({ status: 200, description: 'Category demoted to Sub Category' })
     async demoteCategory(
         @Request() req,
         @Param('id', ParseIntPipe) id: number,
-        @Query('newParentId', ParseIntPipe) newParentId: number,
+        @Param('newParentId', ParseIntPipe) newParentId: number,
     ) {
         return this.service.demoteCategory(id, newParentId, req.user.userId);
     }
 
-    @Post('category/:id/demote-to-sub-sub')
+    @Post('category/:id/demote-to-sub-sub/:subId')
     @ApiOperation({ summary: 'Demote Category to Sub Sub Category' })
-    async demoteCategoryToSubSubCategory(
+    @ApiResponse({ status: 200, description: 'Category demoted to Sub Sub Category' })
+    async demoteCategoryToSubSub(
         @Request() req,
         @Param('id', ParseIntPipe) id: number,
-        @Query('newParentSubId', ParseIntPipe) newParentSubId: number
+        @Param('subId', ParseIntPipe) subId: number,
     ) {
-        return this.service.demoteCategoryToSubSubCategory(id, newParentSubId, req.user.userId);
+        return this.service.demoteCategoryToSubSubCategory(id, subId, req.user.userId);
+    }
+
+    @Post('sub-category/:id/demote-to-sub-sub/:subId')
+    @ApiOperation({ summary: 'Demote Sub Category to Sub Sub Category' })
+    @ApiResponse({ status: 200, description: 'Sub Category demoted to Sub Sub Category' })
+    async demoteSubCategoryToSubSub(
+        @Request() req,
+        @Param('id', ParseIntPipe) id: number,
+        @Param('subId', ParseIntPipe) subId: number,
+    ) {
+        return this.service.demoteSubCategoryToSubSub(id, subId, req.user.userId);
+    }
+
+    @Post('sub-sub-category/:id/promote-to-sub/:newParentCatId')
+    @ApiOperation({ summary: 'Promote Sub Sub Category to Sub Category' })
+    @ApiResponse({ status: 200, description: 'Sub Sub Category promoted to Sub Category' })
+    async promoteSubSubToSub(
+        @Request() req,
+        @Param('id', ParseIntPipe) id: number,
+        @Param('newParentCatId', ParseIntPipe) newParentCatId: number,
+    ) {
+        return this.service.promoteSubSubCategoryToSub(id, newParentCatId, req.user.userId);
+    }
+
+    @Post('sub-sub-category/:id/promote-to-category')
+    @ApiOperation({ summary: 'Promote Sub Sub Category to Category' })
+    @ApiResponse({ status: 200, description: 'Sub Sub Category promoted to Category' })
+    async promoteSubSubToCategory(
+        @Request() req,
+        @Param('id', ParseIntPipe) id: number,
+    ) {
+        return this.service.promoteSubSubToCategory(id, req.user.userId);
     }
 }

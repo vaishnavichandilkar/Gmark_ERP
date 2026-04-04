@@ -53,6 +53,7 @@ export class ProductMasterService {
                 { header: 'Type', key: 'productType', width: 15 },
                 { header: 'Category', key: 'category', width: 20 },
                 { header: 'Sub Category', key: 'subCategory', width: 20 },
+                { header: 'Sub-SubCategory', key: 'subSubCategory', width: 20 },
                 { header: 'HSN Code', key: 'hsnCode', width: 15 },
                 { header: 'Tax %', key: 'taxRate', width: 10 },
                 { header: 'Status', key: 'status', width: 12 },
@@ -67,6 +68,7 @@ export class ProductMasterService {
                     productType: prod.product_type,
                     category: prod.category?.name || '-',
                     subCategory: prod.sub_category?.name || '-',
+                    subSubCategory: prod.sub_sub_category?.name || '-',
                     hsnCode: prod.hsn_code,
                     taxRate: `${prod.tax_rate}%`,
                     status: prod.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive',
@@ -170,9 +172,10 @@ export class ProductMasterService {
                     doc.text(prod.product_type, colX[4], y);
                     doc.text(prod.category?.name || '-', colX[5], y, { width: 90 });
                     doc.text(prod.sub_category?.name || '-', colX[6], y, { width: 90 });
-                    doc.text(prod.hsn_code, colX[7], y);
-                    doc.text(`${prod.tax_rate}%`, colX[8], y);
-                    doc.text(prod.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[9], y);
+                    doc.text(prod.sub_sub_category?.name || '-', colX[7], y, { width: 90 });
+                    doc.text(prod.hsn_code, colX[8], y);
+                    doc.text(`${prod.tax_rate}%`, colX[9], y);
+                    doc.text(prod.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[10], y);
 
                     y += 18;
                 });
@@ -220,8 +223,12 @@ export class ProductMasterService {
         return this.repository.getActiveCategoriesForDropdown(userId);
     }
 
-    async getSubCategoryDropdown(categoryId: number, userId: number) {
+    async getActiveSubCategories(categoryId: number, userId: number) {
         return this.repository.getActiveSubCategoriesForDropdown(categoryId, userId);
+    }
+
+    async getActiveSubSubCategories(subCategoryId: number, userId: number) {
+        return this.repository.getActiveSubSubCategoriesForDropdown(subCategoryId, userId);
     }
 
     async createProduct(dto: CreateProductDto, userId: number) {
@@ -242,6 +249,20 @@ export class ProductMasterService {
             throw new BadRequestException('Invalid Sub Category ID or it does not belong to the selected Category');
         }
 
+        // Validate SubSubCategory if provided
+        if (dto.sub_sub_category_id) {
+            const subSub = await this.repository.getSubSubCategoryById(dto.sub_sub_category_id);
+            if (!subSub || subSub.sub_category_id !== dto.sub_category_id) {
+                throw new BadRequestException('Invalid Sub Sub Category ID or it does not belong to the selected Sub Category');
+            }
+        } else {
+            // Check if SubCategory HAS SubSubCategories. If so, selection is required.
+            const subSubs = await this.repository.getActiveSubSubCategoriesForDropdown(dto.sub_category_id, userId);
+            if (subSubs.length > 0) {
+                throw new BadRequestException('Sub-SubCategory is required for this SubCategory');
+            }
+        }
+
         const hsn = await this.repository.getHsnByCode(dto.hsn_code);
         if (!hsn) throw new BadRequestException('HSN Code not found in master');
 
@@ -254,6 +275,7 @@ export class ProductMasterService {
             product_type: dto.product_type as ProductType,
             category_id: dto.category_id,
             sub_category_id: dto.sub_category_id,
+            sub_sub_category_id: dto.sub_sub_category_id,
             hsn_code: dto.hsn_code,
             tax_rate: Number(hsn.gst_rate),
             description: dto.description,
@@ -279,12 +301,27 @@ export class ProductMasterService {
             if (!uom || uom.user_id !== userId) throw new BadRequestException('No units found for this user');
         }
 
-        if (dto.category_id || dto.sub_category_id) {
+        if (dto.category_id || dto.sub_category_id || dto.sub_sub_category_id) {
             const catId = dto.category_id || product.category_id;
             const subCatId = dto.sub_category_id || product.sub_category_id;
+            const subSubId = dto.sub_sub_category_id || product.sub_sub_category_id;
+
             const subCategory = await this.repository.getSubCategoryById(subCatId);
             if (!subCategory || subCategory.category_id !== catId) {
                 throw new BadRequestException('Invalid Category/Sub Category relation');
+            }
+
+            if (subSubId) {
+                const subSub = await this.repository.getSubSubCategoryById(subSubId);
+                if (!subSub || subSub.sub_category_id !== subCatId) {
+                    throw new BadRequestException('Invalid Sub Category/Sub Sub Category relation');
+                }
+            } else {
+                // Check if SubCategory has children. If yes, SubSub selection is required.
+                const subSubs = await this.repository.getActiveSubSubCategoriesForDropdown(subCatId, userId);
+                if (subSubs.length > 0) {
+                    throw new BadRequestException('Sub-SubCategory is required for this SubCategory');
+                }
             }
         }
 
@@ -452,11 +489,11 @@ export class ProductMasterService {
 
         for (let i = headerRowIndex + 1; i <= rowCount; i++) {
             const row = worksheet.getRow(i);
-            
+
             const prodCode = String(getVal(row, 'prodCode')).trim();
             const prodName = String(getVal(row, 'prodName')).trim();
             const description = String(getVal(row, 'description')).trim();
-            
+
             if (!prodName || prodName === '-') continue; // Skip empty rows
 
             try {
@@ -477,7 +514,7 @@ export class ProductMasterService {
 
                 const productTypeRaw = String(getVal(row, 'productType')).trim().toUpperCase();
                 let productType: ProductType = productTypeRaw === 'SERVICES' ? ProductType.SERVICES : ProductType.GOODS;
-                
+
                 let catName = String(getVal(row, 'category')).trim();
                 let cat = catName && catName !== '-' ? await prisma.category.findFirst({ where: { user_id: userId, name: catName } }) : null;
                 if (!cat && catName && catName !== '-') {

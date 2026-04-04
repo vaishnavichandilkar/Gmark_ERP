@@ -112,16 +112,7 @@ const CategoryMaster = () => {
     setIsLoading(true);
     try {
       const data = await categoryService.getCategories();
-      const mappedData = data.map((cat) => ({
-        id: cat.id,
-        name: cat.name,
-        status: cat.status || "ACTIVE",
-        items: (cat.sub_categories || []).map((sub) => ({
-          ...sub,
-          items: sub.sub_sub_categories || []
-        })),
-      }));
-      setMasterData(mappedData);
+      setMasterData(data);
       setSelectedItems([]);
     } catch (error) {
       showToast(
@@ -144,7 +135,6 @@ const CategoryMaster = () => {
         setIsExportOpen(false);
       }
 
-      // Only clear dropdown if NOT clicking on a dropdown button or item
       if (
         !event.target.closest(".dropdown-trigger") &&
         !event.target.closest(".dropdown-menu")
@@ -190,8 +180,8 @@ const CategoryMaster = () => {
       const newSubExpanded = {};
       masterData.forEach((section) => {
         newExpanded[section.id] = true;
-        section.items.forEach(sub => {
-          if (sub.items && sub.items.length > 0) {
+        (section.sub_categories || []).forEach(sub => {
+          if (sub.sub_sub_categories && sub.sub_sub_categories.length > 0) {
             newSubExpanded[sub.id] = true;
           }
         });
@@ -210,21 +200,24 @@ const CategoryMaster = () => {
         if (type === "category" && Number(cat.id) === Number(id)) {
           const updatedCat = { ...cat, status: newStatus };
           if (newStatus === "INACTIVE") {
-            updatedCat.items = cat.items.map((sub) => ({
+            updatedCat.sub_categories = (cat.sub_categories || []).map((sub) => ({
               ...sub,
               status: "INACTIVE",
-              items: (sub.items || []).map(ss => ({ ...ss, status: "INACTIVE" }))
+              sub_sub_categories: (sub.sub_sub_categories || []).map(ss => ({ ...ss, status: "INACTIVE" }))
             }));
           }
           return updatedCat;
         } else if (type === "sub_category") {
+          const subExists = (cat.sub_categories || []).some(s => Number(s.id) === Number(id));
+          if (!subExists) return cat;
+
           return {
             ...cat,
-            items: cat.items.map((sub) => {
+            sub_categories: (cat.sub_categories || []).map((sub) => {
               if (Number(sub.id) === Number(id)) {
                 const updatedSub = { ...sub, status: newStatus };
                 if (newStatus === "INACTIVE") {
-                  updatedSub.items = (sub.items || []).map(ss => ({ ...ss, status: "INACTIVE" }));
+                  updatedSub.sub_sub_categories = (sub.sub_sub_categories || []).map(ss => ({ ...ss, status: "INACTIVE" }));
                 }
                 return updatedSub;
               }
@@ -232,11 +225,16 @@ const CategoryMaster = () => {
             }),
           };
         } else if (type === "sub_sub_category") {
+          const subSubExists = (cat.sub_categories || []).some(s =>
+            (s.sub_sub_categories || []).some(ss => Number(ss.id) === Number(id))
+          );
+          if (!subSubExists) return cat;
+
           return {
             ...cat,
-            items: cat.items.map((sub) => ({
+            sub_categories: (cat.sub_categories || []).map((sub) => ({
               ...sub,
-              items: (sub.items || []).map((ss) =>
+              sub_sub_categories: (sub.sub_sub_categories || []).map((ss) =>
                 Number(ss.id) === Number(id)
                   ? { ...ss, status: newStatus }
                   : ss
@@ -257,15 +255,15 @@ const CategoryMaster = () => {
         await categoryService.toggleSubSubCategoryStatus(id, newStatus);
       }
       showToast(
-        `${type.replace('_', ' ')} ${newStatus === "ACTIVE" ? "activated" : "inactivated"} successfully`,
+        `${type.replace(/_/g, ' ')} ${newStatus === "ACTIVE" ? "activated" : "inactivated"} successfully`,
       );
-      fetchCategories(); // Final sync from DB
+      // fetchCategories(); // Removed redundant fetch to keep optimistic UI smoothness
     } catch (error) {
       showToast(
         error.response?.data?.message || "Failed to update status",
         "error",
       );
-      fetchCategories(); // Revert if failed
+      fetchCategories(); // Revert on failure
     } finally {
       setActiveRowDropdown(null);
     }
@@ -288,27 +286,6 @@ const CategoryMaster = () => {
     }
   };
 
-  const handleBulkDeactivate = async () => {
-    if (selectedItems.length === 0) return;
-    try {
-      await Promise.all(
-        selectedItems.map((id) =>
-          categoryService.toggleSubCategoryStatus(id, "INACTIVE"),
-        ),
-      );
-      toast.success(
-        t(
-          "modules:bulk_deactivate_success",
-          "Selected items deactivated successfully",
-        ),
-      );
-      setSelectedItems([]);
-      fetchCategories();
-    } catch (error) {
-      toast.error("Bulk operation failed");
-    }
-  };
-
   // Filter logic
   const filteredData = () => {
     let data = masterData;
@@ -317,11 +294,11 @@ const CategoryMaster = () => {
       const q = searchQuery.toLowerCase();
       data = data.filter((section) => {
         const nameMatch = section.name.toLowerCase().includes(q);
-        const subMatch = section.items.some((item) =>
+        const subMatch = (section.sub_categories || []).some((item) =>
           (item.name || "").toLowerCase().includes(q)
         );
-        const subSubMatch = section.items.some((item) =>
-          (item.items || []).some(ss => (ss.name || "").toLowerCase().includes(q))
+        const subSubMatch = (section.sub_categories || []).some((item) =>
+          (item.sub_sub_categories || []).some(ss => (ss.name || "").toLowerCase().includes(q))
         );
         return nameMatch || subMatch || subSubMatch;
       });
@@ -433,8 +410,6 @@ const CategoryMaster = () => {
     return pages;
   };
 
-  // No edit/add view redirection needed as we use modals
-
   if (currentView.type === "form") {
     return (
       <CategoryForm
@@ -485,7 +460,6 @@ const CategoryMaster = () => {
       >
         {/* Desktop Action Bar */}
         <div className="hidden md:flex flex-col lg:flex-row items-stretch lg:items-center justify-between p-4 md:p-6 border-b border-[#F3F4F6] gap-4 rounded-t-[20px]">
-          {/* Desktop Action Bar */}
           <div className="hidden md:flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 flex-1">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               {selectedItems.length > 0 ? (
@@ -548,9 +522,6 @@ const CategoryMaster = () => {
                       ? t("common:collapse_all")
                       : t("common:expand_all")}
                   </span>
-                  <span className="sm:hidden">
-                    {isAllExpanded ? "Collapse" : "Expand"}
-                  </span>
                 </button>
 
                 <button
@@ -577,14 +548,13 @@ const CategoryMaster = () => {
                 <span className="hidden sm:inline">
                   {t("common:import", "Import")}
                 </span>
-                <span className="sm:hidden">Import</span>
               </button>
 
               <div className="relative flex-1 sm:flex-none">
                 <button
                   onClick={() => setIsExportOpen(!isExportOpen)}
                   className={`w-full sm:w-auto flex items-center justify-center gap-2 px-3 sm:px-4 h-[42px] border rounded-[10px] text-[13px] sm:text-[14px] font-bold transition-all duration-200 bg-white
-                                        ${isExportOpen ? "border-[#073318] text-[#073318]" : "border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50"}`}
+                    ${isExportOpen ? "border-[#073318] text-[#073318]" : "border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50"}`}
                 >
                   <Download
                     size={18}
@@ -616,91 +586,79 @@ const CategoryMaster = () => {
           </div>
         </div>
 
-          {/* Mobile Action Bar - Optimized One-line Layout */}
-          <div className="md:hidden py-3 px-4 border-b border-[#F3F4F6] rounded-t-[20px]">
-            <div className="flex items-center gap-2 h-[40px]">
-              {/* Expandable Search */}
-              <div className={`relative h-full transition-all duration-300 flex items-center ${isSearchExpanded ? 'flex-1' : 'w-[42px]'}`}>
-                {!isSearchExpanded ? (
-                  <button 
-                    onClick={() => setIsSearchExpanded(true)}
-                    className="w-full h-full flex items-center justify-center text-gray-500"
-                  >
-                    <Search size={22} />
-                  </button>
-                ) : (
-                  <div className="relative w-full h-full flex items-center animate-in slide-in-from-right-4 duration-300">
-                    <Search className="absolute left-3 text-gray-400" size={18} />
-                    <input
-                      type="text"
-                      autoFocus
-                      placeholder={t('common:search')}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full h-full bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none shadow-sm placeholder:text-gray-400 font-medium"
-                    />
-                    {searchQuery && (
-                      <button 
-                        onClick={() => setSearchQuery('')}
-                        className="absolute right-3 text-gray-400"
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Action Icons - Hidden when search expanded */}
+        {/* Mobile Action Bar */}
+        <div className="md:hidden py-3 px-4 border-b border-[#F3F4F6] rounded-t-[20px]">
+          <div className="flex items-center gap-2 h-[40px]">
+            <div className={`relative h-full transition-all duration-300 flex items-center ${isSearchExpanded ? 'flex-1' : 'w-[42px]'}`}>
               {!isSearchExpanded ? (
-                <div className="flex items-center gap-1 ml-auto animate-in fade-in duration-300">
-                  <button 
-                    onClick={() => {
-                      setSearchQuery("");
-                      setExpandedGroups({});
-                      handleClearFilter();
-                      fetchCategories();
-                    }} 
-                    className="w-10 h-10 flex items-center justify-center text-gray-500"
-                  >
-                    <RefreshCw size={20} />
-                  </button>
-                  <button onClick={() => setIsImportModalOpen(true)} className="w-10 h-10 flex items-center justify-center text-gray-500">
-                    <Upload size={20} />
-                  </button>
-                  <div className="relative">
-                    <button 
-                      onClick={() => setIsExportOpen(!isExportOpen)} 
-                      className={`w-10 h-10 flex items-center justify-center transition-colors ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}
-                    >
-                      <Download size={20} />
-                    </button>
-                    {isExportOpen && (
-                      <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-[100] py-1 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
-                        <button onClick={handleExportPDF} className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50">
-                          <FileText size={18} className="text-red-500" /> PDF
-                        </button>
-                        <button onClick={handleExportExcel} className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50 border-t border-gray-50">
-                          <FileSpreadsheet size={18} className="text-green-600" /> Excel
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <button onClick={toggleExpandAll} className="w-10 h-10 flex items-center justify-center text-gray-500">
-                    {isAllExpanded ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
-                  </button>
-                </div>
-              ) : (
-                <button 
-                  onClick={() => { setIsSearchExpanded(false); setSearchQuery(''); }}
-                  className="text-[14px] font-bold text-[#073318] px-2 animate-in fade-in duration-300"
+                <button
+                  onClick={() => setIsSearchExpanded(true)}
+                  className="w-full h-full flex items-center justify-center text-gray-500"
                 >
-                  {t('common:cancel')}
+                  <Search size={22} />
                 </button>
+              ) : (
+                <div className="relative w-full h-full flex items-center animate-in slide-in-from-right-4 duration-300">
+                  <Search className="absolute left-3 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder={t('common:search')}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full h-full bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none shadow-sm placeholder:text-gray-400 font-medium"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 text-gray-400"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
               )}
             </div>
-          </div>
 
+            {!isSearchExpanded ? (
+              <div className="flex items-center gap-1 ml-auto animate-in fade-in duration-300">
+                <button onClick={fetchCategories} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                  <RefreshCw size={20} />
+                </button>
+                <button onClick={() => setIsImportModalOpen(true)} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                  <Upload size={20} />
+                </button>
+                <div className="relative">
+                  <button onClick={() => setIsExportOpen(!isExportOpen)} className={`w-10 h-10 flex items-center justify-center transition-colors ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}>
+                    <Download size={20} />
+                  </button>
+                  {isExportOpen && (
+                    <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-lg z-[100] py-1">
+                      <button onClick={handleExportPDF} className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50">
+                        <FileText size={18} className="text-red-500" /> PDF
+                      </button>
+                      <button onClick={handleExportExcel} className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50">
+                        <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <button onClick={toggleExpandAll} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                  {isAllExpanded ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setIsSearchExpanded(false); setSearchQuery(''); }}
+                className="text-[14px] font-bold text-[#073318] px-2"
+              >
+                {t('common:cancel')}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Table Header */}
         <div className="flex items-stretch justify-between border-b border-emerald-950 bg-emerald-900 text-[14px] font-bold text-white tracking-tight">
           <div className="flex-1 border-r border-white/50 px-4 md:px-6 py-3 md:py-5 flex items-center gap-2">
             {t("modules:category_sub_category")}
@@ -717,6 +675,7 @@ const CategoryMaster = () => {
           </div>
         </div>
 
+        {/* Hierarchical List */}
         <div className="min-h-[300px]">
           {isLoading ? (
             <div className="p-12 flex items-center justify-center text-gray-400">
@@ -724,124 +683,62 @@ const CategoryMaster = () => {
             </div>
           ) : paginatedData.length > 0 ? (
             paginatedData.map((section, paginatedIndex) => {
-              const isSearchExpanding =
-                searchQuery &&
-                section.items.some((item) =>
-                  (item.name || "")
-                    .toLowerCase()
-                    .includes(searchQuery.toLowerCase()) ||
-                  (item.items || []).some(ss =>
-                    (ss.name || "").toLowerCase().includes(searchQuery.toLowerCase())
-                  )
-                );
-              const isExpanded =
-                expandedGroups[section.id] || isSearchExpanding;
+              const isSearchExpanding = searchQuery && (section.sub_categories || []).some(item =>
+                (item.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (item.sub_sub_categories || []).some(ss => (ss.name || "").toLowerCase().includes(searchQuery.toLowerCase()))
+              );
+              const isExpanded = expandedGroups[section.id] || isSearchExpanding;
 
               return (
-                <div
-                  key={section.id}
-                  className={`flex flex-col border-b border-[#E5E7EB] last:border-b-0 relative ${activeRowDropdown?.includes(section.id.toString()) ? "z-[30]" : "z-0"}`}
-                >
-                  <div className="flex items-center justify-between py-2 md:py-4 bg-white hover:bg-gray-50/50 transition-colors group">
-                    <div
-                      className="flex items-center flex-1 cursor-pointer select-none gap-3 pl-4 md:pl-6"
-                      onClick={() => toggleGroup(section.id)}
-                    >
+                <div key={section.id} className="flex flex-col border-b border-[#E5E7EB] last:border-b-0 relative">
+                  {/* Category Row */}
+                  <div className="flex items-center justify-between py-2 md:py-4 bg-white hover:bg-gray-50/30 transition-colors group">
+                    <div className="flex items-center flex-1 cursor-pointer select-none gap-3 pl-4 md:pl-6" onClick={() => toggleGroup(section.id)}>
                       <div className="flex items-center justify-center w-5 h-5">
-                        {isExpanded ? (
-                          <Minus
-                            size={14}
-                            className="text-[#111827] stroke-[3px]"
-                          />
-                        ) : (
-                          <Plus
-                            size={14}
-                            className="text-[#111827] stroke-[3px]"
-                          />
-                        )}
+                        {isExpanded ? <Minus size={14} className="text-[#111827] stroke-[3px]" /> : <Plus size={14} className="text-[#111827] stroke-[3px]" />}
                       </div>
-                      <span className="text-[14px] font-bold text-[#111827]">
-                        {section.name}
-                      </span>
+                      <span className="text-[14px] font-bold text-[#111827]">{section.name}</span>
                     </div>
 
                     <div className="flex items-stretch shrink-0">
-                      {/* Status Column */}
                       <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4">
-                        <div
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${section.status === "INACTIVE" ? "bg-[#FEF2F2] text-[#DC2626]" : "bg-[#ECFDF5] text-[#059669]"}`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${section.status === "INACTIVE" ? "bg-[#DC2626]" : "bg-[#059669]"}`}
-                          ></span>
-                          {section.status === "INACTIVE"
-                            ? t("common:inactive")
-                            : t("common:active")}
+                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${section.status === "INACTIVE" ? "bg-[#FEF2F2] text-[#DC2626]" : "bg-[#ECFDF5] text-[#059669]"}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${section.status === "INACTIVE" ? "bg-[#DC2626]" : "bg-[#059669]"}`}></span>
+                          {section.status === "INACTIVE" ? t("common:inactive") : t("common:active")}
                         </div>
                       </div>
-
-                      {/* Action Column */}
                       <div className="w-16 md:w-20 flex items-center justify-center px-4 relative">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setActiveRowDropdown(
-                              activeRowDropdown === `group-${section.id}`
-                                ? null
-                                : `group-${section.id}`,
-                            );
+                            setActiveRowDropdown(activeRowDropdown === `group-${section.id}` ? null : `group-${section.id}`);
                           }}
-                          className={`p-1.5 rounded-md transition-all duration-200 dropdown-trigger
-                                                        ${activeRowDropdown === `group-${section.id}` ? "bg-gray-100 text-[#111827]" : "text-gray-400 hover:text-[#073318] hover:bg-white border border-transparent"}`}
+                          className={`dropdown-trigger p-1.5 rounded-md text-gray-400 hover:text-[#073318] hover:bg-gray-100 ${activeRowDropdown === `group-${section.id}` ? "bg-gray-100 text-[#111827]" : ""}`}
                         >
                           <MoreVertical size={18} />
                         </button>
-
                         {activeRowDropdown === `group-${section.id}` && (
-                          <div
-                            className={`absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in zoom-in-95 duration-200 dropdown-menu text-left
-                                                            ${paginatedIndex >= paginatedData.length - 1 && paginatedData.length > 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
-                          >
+                          <div className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-xl z-[110] py-2 animate-in zoom-in-95 ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedCategoryData({
-                                  ...section,
-                                  type: "category",
-                                });
+                                setSelectedCategoryData({ ...section, type: "category" });
                                 setIsEditModalOpen(true);
                                 setActiveRowDropdown(null);
                               }}
-                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap dropdown-item"
+                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318] transition-colors whitespace-nowrap"
                             >
-                              <Edit size={18} className="text-[#073318]" />
-                              {t("modules:view_and_edit_category")}
+                              <Edit size={18} /> {t("modules:view_and_edit_category")}
                             </button>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleToggleStatus(
-                                  section.id,
-                                  section.status,
-                                  "category",
-                                );
+                                handleToggleStatus(section.id, section.status, "category");
                               }}
-                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap dropdown-item"
+                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318] transition-colors whitespace-nowrap"
                             >
-                              {section.status === "INACTIVE" ? (
-                                <CheckCircle2
-                                  size={18}
-                                  className="text-[#073318]"
-                                />
-                              ) : (
-                                <XCircle
-                                  size={18}
-                                  className="text-gray-400 -mt-0.5"
-                                />
-                              )}
-                              {section.status === "INACTIVE"
-                                ? t("common:active")
-                                : t("common:inactive")}
+                              {section.status === "INACTIVE" ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
+                              {section.status === "INACTIVE" ? t("common:active") : t("common:inactive")}
                             </button>
                           </div>
                         )}
@@ -849,206 +746,121 @@ const CategoryMaster = () => {
                     </div>
                   </div>
 
-                  <div
-                    className={`transition-all duration-300 ease-in-out ${isExpanded ? "max-h-[800px] opacity-100 overflow-visible" : "max-h-0 opacity-0 overflow-hidden"}`}
-                  >
-                    <div className="flex flex-col bg-gray-50/30 border-t border-[#E5E7EB]/50">
-                      {section.items.map((item, itemIdx) => {
-                        const dropdownId = `${section.id}-item-${itemIdx}`;
-                        const hasSubSubs = item.items && item.items.length > 0;
-                        const isSearchExpandingSub = searchQuery && (
-                          (item.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (item.items || []).some(ss =>
-                            (ss.name || "").toLowerCase().includes(searchQuery.toLowerCase())
-                          )
-                        );
-                        const isSubExpanded = expandedSubGroups[item.id] || isSearchExpandingSub;
+                  {/* SubCategories & SubSubCategories Container */}
+                  {isExpanded && (
+                    <div className="flex flex-col bg-gray-50/50 border-t border-gray-100">
+                      {(section.sub_categories || []).map((item) => {
+                        const subDropdownId = `sub-${item.id}`;
+                        const hasSubSubs = item.sub_sub_categories && item.sub_sub_categories.length > 0;
+                        const isSubExpanded = expandedSubGroups[item.id] || (searchQuery && (item.sub_sub_categories || []).some(ss => (ss.name || "").toLowerCase().includes(searchQuery.toLowerCase())));
 
                         return (
-                          <div
-                            key={itemIdx}
-                            className={`relative flex items-center justify-between py-3.5 pl-[52px] text-[13px] border-b border-[#E5E7EB]/50 last:border-b-0 ${activeRowDropdown === dropdownId ? "z-[50]" : "z-0"}`}
-                          >
-                            <div className="absolute inset-y-0 left-[52px] flex items-center">
-                              <span className="font-medium text-[#4B5563]">
-                                {itemIdx + 1}. {item.name}
-                              </span>
-                            </div>
+                          <div key={item.id} className="flex flex-col border-b border-gray-100/80 last:border-b-0">
+                            <div className="flex items-center justify-between py-3 hover:bg-white transition-colors cursor-pointer group" onClick={() => hasSubSubs && toggleSubGroup(item.id)}>
+                              <div className="flex items-center gap-3 pl-12">
+                                <div className="w-5 h-5 flex items-center justify-center">
+                                  {hasSubSubs ? (
+                                    isSubExpanded ? <ChevronDown size={14} className="text-[#073318]" /> : <ArrowRight size={14} className="text-gray-400" />
+                                  ) : (
+                                    <div className="w-1 h-1 rounded-full bg-gray-300" />
+                                  )}
+                                </div>
+                                <span className={`text-[13px] font-medium ${isSubExpanded ? 'text-[#073318] font-bold' : 'text-gray-600'}`}>{item.name}</span>
+                              </div>
 
-                            <div className="flex items-stretch shrink-0 invisible">
-                              {/* Placeholder to maintain height and structure */}
-                              <div className="w-[120px] h-10"></div>
-                              <div className="w-20 h-10"></div>
-                            </div>
-
-                            <div className="flex items-stretch shrink-0">
-                              {/* Status Column */}
-                              <div className="w-[120px] flex items-center justify-center px-4">
-                                <div
-                                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${item.status === "INACTIVE" ? "bg-[#FEF2F2] text-[#DC2626]" : "bg-[#ECFDF5] text-[#059669]"}`}
-                                >
-                                  <span
-                                    className={`w-1.5 h-1.5 rounded-full ${item.status === "INACTIVE" ? "bg-[#DC2626]" : "bg-[#059669]"}`}
-                                  ></span>
-                                  {item.status === "INACTIVE"
-                                    ? t("common:inactive")
-                                    : t("common:active")}
+                              <div className="flex items-stretch shrink-0">
+                                <div className="w-[120px] flex items-center justify-center px-4">
+                                  <div className={`px-2 py-0.5 rounded-full text-[12px] font-bold ${item.status === "INACTIVE" ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600"}`}>
+                                    {item.status === "INACTIVE" ? t("common:inactive") : t("common:active")}
+                                  </div>
+                                </div>
+                                <div className="w-20 flex items-center justify-center px-4 relative">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveRowDropdown(activeRowDropdown === subDropdownId ? null : subDropdownId);
+                                    }}
+                                    className={`dropdown-trigger p-1.5 rounded-md text-gray-400 hover:text-[#073318] ${activeRowDropdown === subDropdownId ? 'text-[#111827] bg-gray-100' : ''}`}
+                                  >
+                                    <MoreVertical size={16} />
+                                  </button>
+                                  {activeRowDropdown === subDropdownId && (
+                                    <div className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-xl shadow-xl z-[120] py-2 ${paginatedIndex >= paginatedData.length - 1 ? 'bottom-0 mb-1' : 'top-0 mt-1'}`}>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedCategoryData({ ...item, type: "sub_category" });
+                                          setIsEditModalOpen(true);
+                                          setActiveRowDropdown(null);
+                                        }}
+                                        className="w-full px-5 py-2.5 flex items-center gap-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318]"
+                                      >
+                                        <Edit size={16} /> {t("modules:view_and_edit_category")}
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleToggleStatus(item.id, item.status, "sub_category");
+                                        }}
+                                        className="w-full px-5 py-2.5 flex items-center gap-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318]"
+                                      >
+                                        {item.status === "INACTIVE" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+                                        {item.status === "INACTIVE" ? t("common:active") : t("common:inactive")}
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-
-                              {/* Action Column */}
-                              <div className="w-20 flex items-center justify-center px-4 relative">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveRowDropdown(
-                                      activeRowDropdown === dropdownId
-                                        ? null
-                                        : dropdownId,
-                                    );
-                                  }}
-                                  className={`p-1.5 rounded-md transition-all duration-200 dropdown-trigger
-                                                                        ${activeRowDropdown === dropdownId ? "bg-gray-100 text-[#111827]" : "text-gray-400 hover:text-[#073318] hover:bg-white border border-transparent"}`}
-                                >
-                                  <MoreVertical size={16} />
-                                </button>
-
-                                {activeRowDropdown === dropdownId && (
-                                  <div
-                                    className={`absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in zoom-in-95 duration-200 dropdown-menu text-left
-                                                                            ${itemIdx >= section.items.length - 1 && section.items.length > 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
-                                  >
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedCategoryData({
-                                          ...item,
-                                          type: "sub_category",
-                                          parentId: section.id,
-                                        });
-                                        setIsEditModalOpen(true);
-                                        setActiveRowDropdown(null);
-                                      }}
-                                      className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap dropdown-item"
-                                    >
-                                      <Edit
-                                        size={18}
-                                        className="text-[#073318]"
-                                      />
-                                      {t("modules:view_and_edit_category")}
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleToggleStatus(
-                                          item.id,
-                                          item.status,
-                                          "sub_category",
-                                        );
-                                      }}
-                                      className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap dropdown-item"
-                                    >
-                                      {item.status === "INACTIVE" ? (
-                                        <CheckCircle2
-                                          size={18}
-                                          className="text-[#073318]"
-                                        />
-                                      ) : (
-                                        <XCircle
-                                          size={18}
-                                          className="text-gray-400 -mt-0.5"
-                                        />
-                                      )}
-                                      {item.status === "INACTIVE"
-                                        ? t("common:active")
-                                        : t("common:inactive")}
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
                             </div>
 
-                            {/* Third Level - SubSubCategories */}
+                            {/* SubSubCategories List */}
                             {hasSubSubs && isSubExpanded && (
-                              <div className="flex flex-col bg-gray-100/40">
-                                {item.items.map((subSub, subSubIdx) => {
-                                  const subSubDropdownId = `subsub-${subSub.id}`;
+                              <div className="flex flex-col bg-gray-100/40 pb-2">
+                                {item.sub_sub_categories.map((subSub) => {
+                                  const ssDropdownId = `ss-${subSub.id}`;
                                   return (
-                                    <div key={subSub.id} className="flex items-center justify-between py-2.5 pl-[90px] text-[12px] border-b border-[#E5E7EB]/30 last:border-b-0 hover:bg-gray-100/60 transition-colors">
-                                      <div className="flex items-center gap-2">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
-                                        <span className="font-medium text-[#6B7280]">
-                                          {subSub.name}
-                                        </span>
+                                    <div key={subSub.id} className="flex items-center justify-between py-2 pl-[76px] text-[12px] hover:bg-white transition-colors group">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-3 h-[1px] bg-gray-300" />
+                                        <span className="font-medium text-gray-500">{subSub.name}</span>
                                       </div>
-
                                       <div className="flex items-stretch shrink-0">
-                                        {/* Status Column */}
-                                        <div className="w-[110px] md:w-[120px] flex items-center justify-center px-4">
-                                          <div
-                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${subSub.status === "INACTIVE" ? "bg-[#FEF2F2] text-[#DC2626]" : "bg-[#ECFDF5] text-[#059669]"}`}
-                                          >
-                                            {subSub.status === "INACTIVE"
-                                              ? t("common:inactive")
-                                              : t("common:active")}
+                                        <div className="w-[120px] flex items-center justify-center px-4">
+                                          <div className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${subSub.status === "INACTIVE" ? "bg-red-50 text-red-500" : "bg-emerald-50 text-emerald-500"}`}>
+                                            {subSub.status === "INACTIVE" ? t("common:inactive") : t("common:active")}
                                           </div>
                                         </div>
-
-                                        {/* Action Column */}
-                                        <div className="w-16 md:w-20 flex items-center justify-center px-4 relative">
+                                        <div className="w-20 flex items-center justify-center px-4 relative">
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setActiveRowDropdown(
-                                                activeRowDropdown === subSubDropdownId
-                                                  ? null
-                                                  : subSubDropdownId,
-                                              );
+                                              setActiveRowDropdown(activeRowDropdown === ssDropdownId ? null : ssDropdownId);
                                             }}
-                                            className={`p-1 rounded-md transition-all duration-200 dropdown-trigger
-                                                                                  ${activeRowDropdown === subSubDropdownId ? "bg-gray-200 text-[#111827]" : "text-gray-400 hover:text-[#073318]"}`}
+                                            className={`dropdown-trigger p-1 rounded-md text-gray-400 hover:text-[#073318] ${activeRowDropdown === ssDropdownId ? 'text-[#111827] bg-gray-200' : ''}`}
                                           >
                                             <MoreVertical size={14} />
                                           </button>
-
-                                          {activeRowDropdown === subSubDropdownId && (
-                                            <div
-                                              className={`absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[120] py-2 animate-in zoom-in-95 duration-200 dropdown-menu text-left
-                                                ${subSubIdx >= item.items.length - 1 && item.items.length > 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
-                                            >
+                                          {activeRowDropdown === ssDropdownId && (
+                                            <div className={`dropdown-menu absolute right-[80%] w-max min-w-[180px] bg-white border border-gray-100 rounded-xl shadow-lg z-[130] py-2 ${paginatedIndex >= paginatedData.length - 1 ? 'bottom-0' : 'top-0'}`}>
                                               <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  setSelectedCategoryData({
-                                                    ...subSub,
-                                                    type: "sub_sub_category",
-                                                    parentId: item.id,
-                                                    grandParentId: section.id
-                                                  });
+                                                  setSelectedCategoryData({ ...subSub, type: "sub_sub_category" });
                                                   setIsEditModalOpen(true);
                                                   setActiveRowDropdown(null);
                                                 }}
-                                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap dropdown-item"
+                                                className="w-full px-4 py-2 flex items-center gap-2.5 text-[12px] font-bold text-gray-600 hover:bg-gray-50"
                                               >
-                                                <Edit size={18} className="text-[#073318]" />
-                                                {t("modules:view_and_edit_category")}
+                                                <Edit size={14} /> {t("modules:view_and_edit_category")}
                                               </button>
                                               <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  handleToggleStatus(
-                                                    subSub.id,
-                                                    subSub.status,
-                                                    "sub_sub_category",
-                                                  );
+                                                  handleToggleStatus(subSub.id, subSub.status, "sub_sub_category");
                                                 }}
-                                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap dropdown-item"
+                                                className="w-full px-4 py-2 flex items-center gap-2.5 text-[12px] font-bold text-gray-600 hover:bg-gray-50"
                                               >
-                                                {subSub.status === "INACTIVE" ? (
-                                                  <CheckCircle2 size={18} className="text-[#073318]" />
-                                                ) : (
-                                                  <XCircle size={18} className="text-gray-400 -mt-0.5" />
-                                                )}
+                                                {subSub.status === "INACTIVE" ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
                                                 {subSub.status === "INACTIVE" ? t("common:active") : t("common:inactive")}
                                               </button>
                                             </div>
@@ -1064,7 +876,7 @@ const CategoryMaster = () => {
                         );
                       })}
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             })
@@ -1093,10 +905,7 @@ const CategoryMaster = () => {
                 <option value={20}>20</option>
                 <option value={50}>50</option>
               </select>
-              <ChevronDown
-                size={14}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]"
-              />
+              <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]" />
             </div>
             <span className="hidden sm:inline">{t("common:per_page")}</span>
           </div>
@@ -1119,10 +928,7 @@ const CategoryMaster = () => {
                     key={index}
                     onClick={() => setCurrentPage(page)}
                     className={`min-w-[36px] sm:min-w-[40px] h-[36px] sm:h-[40px] rounded-[10px] flex items-center justify-center transition-all text-[13px] sm:text-[14px] font-bold
-                                            ${currentPage === page
-                        ? "bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100"
-                        : "text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]"
-                      }`}
+                      ${currentPage === page ? "bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100" : "text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]"}`}
                   >
                     {page}
                   </button>

@@ -1,12 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronUp, ArrowLeft, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, ArrowLeft, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { translateDynamic } from "../../../../utils/i18nUtils";
 import productService from "../../../../services/productService";
 import toast from "react-hot-toast";
-import UnitForm from "./UnitForm";
-import AddCategoryModal from "./AddCategoryModal";
 
 const CustomSelect = ({
   label,
@@ -30,9 +28,9 @@ const CustomSelect = ({
   const filteredOptions =
     isSearchable && searchTerm
       ? options.filter((opt) => {
-          const label = getOptionLabel ? getOptionLabel(opt) : opt;
-          return label?.toLowerCase().includes(searchTerm.toLowerCase());
-        })
+        const label = getOptionLabel ? getOptionLabel(opt) : opt;
+        return label?.toLowerCase().includes(searchTerm.toLowerCase());
+      })
       : options;
 
   useEffect(() => {
@@ -153,6 +151,7 @@ const ProductForm = ({
   const [uomList, setUomList] = useState([]);
   const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
+  const [subSubCategories, setSubSubCategories] = useState([]);
   const PRODUCT_TYPES = ["GOODS", "SERVICES"];
 
   const initialFormData = {
@@ -162,6 +161,7 @@ const ProductForm = ({
     productType: initialData?.product_type || "",
     category: initialData?.category || null,
     subcategory: initialData?.sub_category || null,
+    subsubcategory: initialData?.sub_sub_category || null,
     hsnCode: initialData?.hsn_code || "",
     tax: initialData?.tax_rate ? initialData.tax_rate + "%" : "",
     description: initialData?.description || "",
@@ -172,9 +172,6 @@ const ProductForm = ({
   const [suggestions, setSuggestions] = useState([]);
   const [nameError, setNameError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [isUomModalOpen, setIsUomModalOpen] = useState(false);
-  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [isSubCategoryModalOpen, setIsSubCategoryModalOpen] = useState(false);
   const suggestionsRef = useRef(null);
 
   useEffect(() => {
@@ -231,24 +228,26 @@ const ProductForm = ({
     let error = "";
     if (field === "productName") {
       if (!value?.trim() || value.trim().length < 3) {
-        error = t('modules:enter_valid_product_name', 'Enter valid product name (e.g., ABC Product)');
+        error = "Enter valid product name (e.g., ABC Product)";
       }
     } else if (field === "description") {
       if (!value?.trim() || value.trim().length < 3) {
-        error = t('modules:enter_valid_product_desc', 'Enter valid product description');
+        error = "Enter valid product description";
       }
     } else if (field === "hsnCode") {
       if (!value || !/^\d{4,}$/.test(value.trim())) {
-        error = t('modules:enter_valid_hsn_code', 'Enter valid HSN Code (min 4 digits)');
+        error = "Enter valid HSN Code (min 4 digits)";
       }
     } else if (field === "uom") {
-      if (!value) error = t('modules:select_uom', 'Please select UOM');
+      if (!value) error = "Please select UOM";
     } else if (field === "productType") {
-      if (!value) error = t('modules:select_product_type', 'Please select Product Type');
+      if (!value) error = "Please select Product Type";
     } else if (field === "category") {
-      if (!value) error = t('modules:select_category', 'Please select Category');
+      if (!value) error = "Please select Category";
     } else if (field === "subcategory") {
-      if (!value) error = t('modules:select_sub_category', 'Please select Sub Category');
+      if (!value) error = "Please select Sub Category";
+    } else if (field === "subsubcategory") {
+      if (!value && subSubCategories.length > 0) error = "Please select Sub Sub Category";
     }
 
     setErrors((prev) => {
@@ -273,6 +272,7 @@ const ProductForm = ({
       "productType",
       "category",
       "subcategory",
+      "subsubcategory",
     ];
     let isValid = true;
     fields.forEach((f) => {
@@ -283,14 +283,15 @@ const ProductForm = ({
   const isDirty =
     mode === "edit"
       ? formData.productName !== initialFormData.productName ||
-        formData.productCode !== initialFormData.productCode ||
-        formData.uom !== initialFormData.uom ||
-        formData.productType !== initialFormData.productType ||
-        formData.category !== initialFormData.category ||
-        formData.subcategory !== initialFormData.subcategory ||
-        formData.hsnCode !== initialFormData.hsnCode ||
-        formData.tax !== initialFormData.tax ||
-        formData.description !== initialFormData.description
+      formData.productCode !== initialFormData.productCode ||
+      formData.uom !== initialFormData.uom ||
+      formData.productType !== initialFormData.productType ||
+      formData.category !== initialFormData.category ||
+      formData.subcategory !== initialFormData.subcategory ||
+      formData.subsubcategory !== initialFormData.subsubcategory ||
+      formData.hsnCode !== initialFormData.hsnCode ||
+      formData.tax !== initialFormData.tax ||
+      formData.description !== initialFormData.description
       : true;
 
   useEffect(() => {
@@ -313,6 +314,13 @@ const ProductForm = ({
             initialData.category_id,
           );
           setSubCategories(subs);
+        }
+
+        if (initialData?.sub_category_id) {
+          const subSubs = await productService.getSubSubCategoriesDropdown(
+            initialData.sub_category_id,
+          );
+          setSubSubCategories(subSubs);
         }
       } catch (error) {
         console.error("Error fetching initial form data:", error);
@@ -351,13 +359,29 @@ const ProductForm = ({
   const handleCategoryChange = async (val) => {
     handleInputChange("category", val);
     handleInputChange("subcategory", null);
+    handleInputChange("subsubcategory", null);
     setSubCategories([]);
+    setSubSubCategories([]);
     if (val?.id) {
       try {
         const subs = await productService.getSubCategoriesDropdown(val.id);
         setSubCategories(subs);
       } catch (error) {
         console.error("Error fetching subcategories:", error);
+      }
+    }
+  };
+
+  const handleSubCategoryChange = async (val) => {
+    handleInputChange("subcategory", val);
+    handleInputChange("subsubcategory", null);
+    setSubSubCategories([]);
+    if (val?.id) {
+      try {
+        const subSubs = await productService.getSubSubCategoriesDropdown(val.id);
+        setSubSubCategories(subSubs);
+      } catch (error) {
+        console.error("Error fetching subsubcategories:", error);
       }
     }
   };
@@ -371,7 +395,7 @@ const ProductForm = ({
 
   const handleSubmit = async () => {
     if (mode === "edit" && !isDirty) {
-      toast.error(t("common:please_make_changes_to_save", "Please make changes to save"));
+      toast.error("Please make changes to save");
       return;
     }
     if (!validateAll()) return;
@@ -383,6 +407,7 @@ const ProductForm = ({
         product_type: formData.productType,
         category_id: formData.category?.id,
         sub_category_id: formData.subcategory?.id,
+        sub_sub_category_id: formData.subsubcategory?.id,
         hsn_code: formData.hsnCode,
         description: formData.description,
       };
@@ -488,12 +513,10 @@ const ProductForm = ({
         </h2>
         <button
           onClick={onBack}
-          className="group flex items-center justify-center w-10 h-10 md:w-auto md:h-[44px] md:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[12px] md:rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
-          title={t("common:back")}
+          className="flex items-center gap-2 px-6 h-[44px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
         >
-          <X size={22} className="md:hidden text-gray-500" />
-          <ArrowLeft size={18} className="hidden md:block" />
-          <span className="hidden md:inline ml-2">{t("common:back")}</span>
+          <ArrowLeft size={18} />
+          {t("common:back")}
         </button>
       </div>
 
@@ -504,11 +527,14 @@ const ProductForm = ({
           { label: t("modules:product_code"), value: formData.productCode },
           { label: t("modules:uom"), value: formData.uom?.gst_uom },
           { label: t("modules:product_type"), value: formData.productType },
-          { label: t("modules:category"), value: formData.category?.name },
           {
             label: t("modules:sub_category"),
             value: formData.subcategory?.name,
           },
+          ...(formData.subsubcategory ? [{
+            label: t("modules:sub_sub_category", "Sub-SubCategory"),
+            value: formData.subsubcategory?.name,
+          }] : []),
           { label: t("modules:hsn_code"), value: formData.hsnCode },
           { label: t("modules:tax_percent"), value: formData.tax },
           {
@@ -521,7 +547,7 @@ const ProductForm = ({
             className="flex border-b border-[#F3F4F6] min-h-[56px] last:border-b-0 group"
           >
             <div className="w-[240px] bg-[#F9FAFB] px-8 py-4 flex items-center border-r border-[#F3F4F6]">
-              <span className="text-[14px] font-bold text-gray-500 tracking-tight">
+              <span className="text-[14px] font-bold text-gray-500 uppercase tracking-tight">
                 {item.label}:
               </span>
             </div>
@@ -544,9 +570,9 @@ const ProductForm = ({
         </button>
         <button
           onClick={() => onEdit && onEdit(initialData)}
-          className="px-8 h-[46px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center min-w-[140px] whitespace-nowrap"
+          className="px-8 h-[46px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center min-w-[140px]"
         >
-          {t('modules:save')}
+          Save Product
         </button>
       </div>
     </div>
@@ -564,10 +590,10 @@ const ProductForm = ({
           <div>
             <h2 className="text-[20px] font-bold text-[#111827] tracking-tight">
               {mode === "add"
-                ? t("modules:add_product")
+                ? "Add New Product"
                 : mode === "edit"
-                  ? t("modules:edit_product")
-                  : t("modules:view_product")}
+                  ? "Edit Product"
+                  : "View Product"}
             </h2>
           </div>
 
@@ -586,23 +612,21 @@ const ProductForm = ({
                 type="button"
                 onClick={handleSubmit}
                 disabled={loading}
-                className={`px-6 h-[40px] text-white rounded-[8px] text-[14px] font-bold transition-all shadow-sm flex items-center justify-center min-w-[140px] whitespace-nowrap ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-[#073318] hover:bg-[#04200f]"}`}
+                className={`px-6 h-[40px] text-white rounded-[8px] text-[14px] font-bold transition-all shadow-sm flex items-center justify-center min-w-[140px] ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-[#073318] hover:bg-[#04200f]"}`}
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : t('modules:save')}
+                ) : 'Save Product'}
               </button>
             ) : null}
             <button
               type="button"
               onClick={onBack}
               disabled={loading}
-              className="group flex items-center justify-center w-10 h-10 md:w-auto md:h-[40px] md:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[10px] md:rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
-              title={t("common:back")}
+              className="px-6 h-[40px] bg-white border border-[#E5E7EB] text-[#4B5563] rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2"
             >
-              <X size={22} className="md:hidden text-gray-500" />
-              <ArrowLeft size={16} className="hidden md:block" />
-              <span className="hidden md:inline ml-2">{t("common:back")}</span>
+              <ArrowLeft size={16} />
+              {t("common:back")}
             </button>
           </div>
         </div>
@@ -634,7 +658,7 @@ const ProductForm = ({
               showAsterisk={true}
               disabled={isView}
               footerLabel="+ Add UOM"
-              onFooterClick={() => setIsUomModalOpen(true)}
+              onFooterClick={() => navigate("/seller/masters/unit-master")}
               error={errors.uom}
             />
 
@@ -659,7 +683,7 @@ const ProductForm = ({
               showAsterisk={true}
               disabled={isView}
               footerLabel="+ Add Category"
-              onFooterClick={() => setIsCategoryModalOpen(true)}
+              onFooterClick={() => navigate("/seller/masters/category")}
               error={errors.category}
             />
 
@@ -668,14 +692,30 @@ const ProductForm = ({
               placeholder={t("common:select") + " " + t("modules:sub_category")}
               options={subCategories}
               value={formData.subcategory}
-              onChange={(val) => handleInputChange("subcategory", val)}
+              onChange={(val) => handleSubCategoryChange(val)}
               getOptionLabel={(opt) => opt.name}
               showAsterisk={true}
               disabled={isView || !formData.category}
               footerLabel="+ Add Sub Category"
-              onFooterClick={() => setIsSubCategoryModalOpen(true)}
+              onFooterClick={() => navigate("/seller/masters/category")}
               error={errors.subcategory}
             />
+
+            {subSubCategories.length > 0 && (
+              <CustomSelect
+                label={t("modules:sub_sub_category", "Sub-SubCategory")}
+                placeholder={t("common:select") + " " + t("modules:sub_sub_category", "Sub-SubCategory")}
+                options={subSubCategories}
+                value={formData.subsubcategory}
+                onChange={(val) => handleInputChange("subsubcategory", val)}
+                getOptionLabel={(opt) => opt.name}
+                showAsterisk={true}
+                disabled={isView || !formData.subcategory}
+                footerLabel="+ Add Sub-SubCategory"
+                onFooterClick={() => navigate("/seller/masters/category")}
+                error={errors.subsubcategory}
+              />
+            )}
 
             {renderInput(
               t("modules:hsn_code"),
@@ -712,11 +752,11 @@ const ProductForm = ({
               type="button"
               onClick={handleSubmit}
               disabled={loading}
-              className={`px-10 h-[46px] text-white rounded-[10px] text-[14px] font-bold transition-all shadow-md flex items-center justify-center min-w-[160px] whitespace-nowrap ${loading ? "bg-gray-400 cursor-not-allowed shadow-none" : "bg-[#073318] hover:bg-[#04200f]"}`}
+              className={`px-10 h-[46px] text-white rounded-[10px] text-[14px] font-bold transition-all shadow-md flex items-center justify-center min-w-[160px] ${loading ? "bg-gray-400 cursor-not-allowed shadow-none" : "bg-[#073318] hover:bg-[#04200f]"}`}
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : t('modules:save')}
+              ) : 'Save Product'}
             </button>
             <button
               type="button"
@@ -729,108 +769,6 @@ const ProductForm = ({
           </div>
         )}
       </div>
-
-      {isUomModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-300"
-            onClick={() => setIsUomModalOpen(false)}
-          />
-          <div className="relative w-full max-w-[800px] h-auto overflow-visible transform transition-all duration-300 ease-in-out animate-in zoom-in-95 bg-transparent">
-            <UnitForm
-              mode="add"
-              onBack={() => setIsUomModalOpen(false)}
-              onSuccess={async () => {
-                setIsUomModalOpen(false);
-                try {
-                  const newUoms = await productService.getUomsDropdown();
-                  setUomList(newUoms);
-                  // Auto-select the newly added UOM
-                  if (newUoms.length > uomList.length) {
-                    const addedUom = newUoms.find(
-                      (uom) => !uomList.some((oldUom) => oldUom.id === uom.id)
-                    );
-                    if (addedUom) {
-                      handleInputChange("uom", addedUom);
-                    }
-                  } else {
-                    // Fallback to select the last added if same length (shouldn't happen on add though)
-                    const latestUom = newUoms[newUoms.length - 1];
-                    if (latestUom) {
-                      handleInputChange("uom", latestUom);
-                    }
-                  }
-                } catch (error) {
-                  console.error("Error fetching UOMs:", error);
-                }
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      <AddCategoryModal
-        isOpen={isCategoryModalOpen}
-        onClose={() => setIsCategoryModalOpen(false)}
-        initialStep={2}
-        initialType="Category"
-        lockType={true}
-        onSuccess={async () => {
-          try {
-            const newCategories = await productService.getCategoriesDropdown();
-            setCategories(newCategories);
-            if (newCategories.length > categories.length) {
-              const addedCat = newCategories.find(
-                (c) => !categories.some((oldC) => oldC.id === c.id)
-              );
-              if (addedCat) {
-                handleCategoryChange(addedCat);
-              }
-            } else {
-              const latestCat = newCategories[newCategories.length - 1];
-              if (latestCat) {
-                handleCategoryChange(latestCat);
-              }
-            }
-          } catch (error) {
-            console.error("Error refreshing categories:", error);
-          }
-        }}
-      />
-
-      <AddCategoryModal
-        isOpen={isSubCategoryModalOpen}
-        onClose={() => setIsSubCategoryModalOpen(false)}
-        initialStep={2}
-        initialType="Sub Category"
-        lockType={true}
-        onSuccess={async () => {
-          try {
-            const newCategories = await productService.getCategoriesDropdown();
-            setCategories(newCategories);
-            
-            if (formData.category?.id) {
-              const newSubCategories = await productService.getSubCategoriesDropdown(formData.category.id);
-              setSubCategories(newSubCategories);
-              if (newSubCategories.length > subCategories.length) {
-                const addedSubCat = newSubCategories.find(
-                  (c) => !subCategories.some((oldC) => oldC.id === c.id)
-                );
-                if (addedSubCat) {
-                  handleInputChange("subcategory", addedSubCat);
-                }
-              } else {
-                const latestSubCat = newSubCategories[newSubCategories.length - 1];
-                if (latestSubCat) {
-                  handleInputChange("subcategory", latestSubCat);
-                }
-              }
-            }
-          } catch (error) {
-            console.error("Error refreshing subcategories:", error);
-          }
-        }}
-      />
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {

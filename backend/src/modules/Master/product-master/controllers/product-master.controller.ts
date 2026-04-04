@@ -81,14 +81,16 @@ export class ProductMasterController {
         return this.service.getCategoryDropdown(req.user.userId);
     }
 
-    @Get('dropdown/sub-categories/:categoryId')
-    @ApiOperation({ summary: 'Get active Sub Categories for dropdown based on category' })
-    @ApiResponse({ status: 200, description: 'List of active Sub Categories' })
-    async getSubCategoryDropdown(
-        @Request() req,
-        @Param('categoryId', ParseIntPipe) categoryId: number
-    ) {
-        return this.service.getSubCategoryDropdown(categoryId, req.user.userId);
+    @Get('sub-categories/dropdown/:categoryId')
+    @ApiOperation({ summary: 'Get active sub-categories for dropdown' })
+    async getSubCategories(@Request() req, @Param('categoryId', ParseIntPipe) categoryId: number) {
+        return this.service.getActiveSubCategories(categoryId, req.user.userId);
+    }
+
+    @Get('sub-sub-categories/dropdown/:subCategoryId')
+    @ApiOperation({ summary: 'Get active sub-sub-categories for dropdown' })
+    async getSubSubCategories(@Request() req, @Param('subCategoryId', ParseIntPipe) subCategoryId: number) {
+        return this.service.getActiveSubSubCategories(subCategoryId, req.user.userId);
     }
 
     @Get()
@@ -174,24 +176,24 @@ export class ProductMasterController {
     @ApiOperation({ summary: 'Import products from XLSX' })
     @ApiConsumes('multipart/form-data')
     @ApiBody({
-      schema: {
-        type: 'object',
-        properties: {
-          file: {
-            type: 'string',
-            format: 'binary',
-          },
+        schema: {
+            type: 'object',
+            properties: {
+                file: {
+                    type: 'string',
+                    format: 'binary',
+                },
+            },
         },
-      },
     })
     @UseInterceptors(FileInterceptor('file'))
     async importProducts(
-      @UploadedFile() file: Express.Multer.File,
-      @Request() req,
+        @UploadedFile() file: Express.Multer.File,
+        @Request() req,
     ) {
-      if (!file) {
-        throw new BadRequestException('Excel file is required');
-      }
-      return this.service.importProducts(file.buffer, req.user.userId);
+        if (!file) {
+            throw new BadRequestException('Excel file is required');
+        }
+        return this.service.importProducts(file.buffer, req.user.userId);
     }
 }

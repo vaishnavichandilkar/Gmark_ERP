@@ -18,10 +18,6 @@ const categoryService = {
         const response = await axiosInstance.get(url);
         return response.data;
     },
-    getHierarchyStats: async () => {
-        const response = await axiosInstance.get('/category-master/hierarchy-stats');
-        return response.data;
-    },
     importCategories: async (formData) => {
         const response = await axiosInstance.post('/category-master/import', formData, {
             headers: {
@@ -66,47 +62,38 @@ const categoryService = {
         const response = await axiosInstance.patch(`/category-master/sub-sub-category/${id}/status`, { status });
         return response.data;
     },
-    getSubCategoriesDropdown: async (categoryId) => {
-        const response = await axiosInstance.get(`/category-master/sub-categories/dropdown?categoryId=${categoryId}`);
-        return response.data;
-    },
-    getSubSubCategoriesDropdown: async (subCategoryId) => {
-        const response = await axiosInstance.get(`/category-master/sub-sub-categories/dropdown?subCategoryId=${subCategoryId}`);
-        return response.data;
-    },
     promoteSubCategory: async (id) => {
         const response = await axiosInstance.post(`/category-master/sub-category/${id}/promote`);
         return response.data;
     },
-    promoteSubSubCategory: async (id, targetLevel, newCategoryId) => {
-        let url = `/category-master/sub-sub-category/${id}/promote?targetLevel=${targetLevel}`;
-        if (newCategoryId) url += `&newCategoryId=${newCategoryId}`;
-        const response = await axiosInstance.patch(url);
-        return response.data;
-    },
     demoteCategory: async (id, newParentId) => {
-        const response = await axiosInstance.post(`/category-master/category/${id}/demote?newParentId=${newParentId}`);
+        const response = await axiosInstance.post(`/category-master/category/${id}/demote/${newParentId}`);
         return response.data;
     },
-    demoteCategoryToSubSubCategory: async (id, newParentSubId) => {
-        const response = await axiosInstance.post(`/category-master/category/${id}/demote-to-sub-sub?newParentSubId=${newParentSubId}`);
+    demoteCategoryToSubSub: async (id, subId) => {
+        const response = await axiosInstance.post(`/category-master/category/${id}/demote-to-sub-sub/${subId}`);
         return response.data;
     },
-    downloadCategorySampleExcel: async () => {
-        const response = await axiosInstance.get('/category-master/sample-excel', {
-            responseType: 'blob'
-        });
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'category_master_sample.xlsx');
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+    demoteSubCategoryToSubSub: async (id, subId) => {
+        const response = await axiosInstance.post(`/category-master/sub-category/${id}/demote-to-sub-sub/${subId}`);
+        return response.data;
+    },
+    promoteSubSubToSub: async (id, newParentCatId) => {
+        const response = await axiosInstance.post(`/category-master/sub-sub-category/${id}/promote-to-sub/${newParentCatId}`);
+        return response.data;
+    },
+    promoteSubSubToCategory: async (id) => {
+        const response = await axiosInstance.post(`/category-master/sub-sub-category/${id}/promote-to-category`);
+        return response.data;
     },
     exportCategories: async (format) => {
-        const response = await axiosInstance.get('/category-master/export', {
-            params: { format },
+        const response = await axiosInstance.get(`/category-master/export?format=${format}`, {
+            responseType: 'blob'
+        });
+        return response;
+    },
+    downloadCategorySampleExcel: async () => {
+        const response = await axiosInstance.get('/category-master/sample', {
             responseType: 'blob'
         });
         return response;

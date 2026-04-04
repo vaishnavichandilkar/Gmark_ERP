@@ -3,9 +3,6 @@ import { MasterStatus } from '@prisma/client';
 import { CategoryMasterRepository } from '../repositories/category-master.repository';
 import { CreateCategoryDto, CreateSubCategoryDto, CreateSubSubCategoryDto, ToggleStatusDto, UpdateCategoryDto, UpdateSubCategoryDto, UpdateSubSubCategoryDto } from '../dto/category.dto';
 import * as ExcelJS from 'exceljs';
-import * as PDFDocument from 'pdfkit';
-import * as fs from 'fs';
-import * as path from 'path';
 
 @Injectable()
 export class CategoryMasterService {
@@ -94,17 +91,6 @@ export class CategoryMasterService {
         return this.repository.getCategoriesForDropdown(userId, excludeId);
     }
 
-    async getSubCategoriesForDropdown(userId: number, categoryId: number) {
-        return this.repository.getSubCategoriesForDropdown(userId, categoryId);
-    }
-
-    async getSubSubCategoriesForDropdown(userId: number, subCategoryId: number) {
-        return this.repository.getSubSubCategoriesForDropdown(userId, subCategoryId);
-    }
-    async getHierarchyStats(userId: number) {
-        return this.repository.getHierarchyStats(userId);
-    }
-
     async getCategoryListing(userId: number) {
         return this.repository.getCategoryWithSubCategories(userId);
     }
@@ -117,10 +103,9 @@ export class CategoryMasterService {
 
         const updatedCategory = await this.repository.toggleCategoryStatus(id, dto.status);
 
-        // If Category is set to INACTIVE, set all its Sub Categories AND Sub Sub Categories to INACTIVE
+        // If Category is set to INACTIVE, set all its Sub Categories to INACTIVE
         if (dto.status === MasterStatus.INACTIVE) {
             await this.repository.updateSubCategoriesStatusByCategory(id, MasterStatus.INACTIVE);
-            await this.repository.updateSubSubCategoriesStatusByCategory(id, MasterStatus.INACTIVE);
         }
 
         return updatedCategory;
@@ -141,14 +126,14 @@ export class CategoryMasterService {
             }
         }
 
-        const updatedSub = await this.repository.toggleSubCategoryStatus(id, dto.status);
+        const updatedSubCategory = await this.repository.toggleSubCategoryStatus(id, dto.status);
 
         // If Sub Category is set to INACTIVE, set all its Sub Sub Categories to INACTIVE
         if (dto.status === MasterStatus.INACTIVE) {
             await this.repository.updateSubSubCategoriesStatusBySubCategory(id, MasterStatus.INACTIVE);
         }
 
-        return updatedSub;
+        return updatedSubCategory;
     }
 
     async toggleSubSubCategoryStatus(id: number, dto: ToggleStatusDto, userId: number) {
@@ -261,8 +246,6 @@ export class CategoryMasterService {
                 const val = String(cell.value || '').trim().toLowerCase();
                 if (val === 'category' || val === 'category name') { colMap['categoryName'] = colNumber; foundHeaders = true; }
                 if (val === 'sub category' || val === 'sub category name') colMap['subCategoryName'] = colNumber;
-                if (val === 'sub sub category' || val === 'sub sub category name') colMap['subSubCategoryName'] = colNumber;
-                if (val === 'status') colMap['status'] = colNumber;
             });
 
             if (foundHeaders) {
@@ -282,35 +265,26 @@ export class CategoryMasterService {
         };
 
         let currentCategoryId: number | null = null;
-        let currentSubCategoryId: number | null = null;
 
         for (let i = headerRowIndex + 1; i <= rowCount; i++) {
             const row = worksheet.getRow(i);
-            const rawCategoryName = String(getVal(row, 'categoryName') || '').trim();
-            const rawSubCategoryName = String(getVal(row, 'subCategoryName') || '').trim();
-            const rawSubSubCategoryName = String(getVal(row, 'subSubCategoryName') || '').trim();
+            const rawCategoryName = String(getVal(row, 'categoryName')).trim();
+            const rawSubCategoryName = String(getVal(row, 'subCategoryName')).trim();
 
-            if (!rawCategoryName && !rawSubCategoryName && !rawSubSubCategoryName) continue; // Empty row
-            if (rawCategoryName === '-' && rawSubCategoryName === '-' && rawSubSubCategoryName === '-') continue;
+            if (!rawCategoryName && !rawSubCategoryName) continue; // Empty row
+            if (rawCategoryName === '-' && rawSubCategoryName === '-') continue;
 
             try {
                 if (rawCategoryName) {
-                    // Handle status for category
-                    const statusStr = String(getVal(row, 'status')).trim().toLowerCase();
-                    const status = statusStr === 'inactive' ? MasterStatus.INACTIVE : MasterStatus.ACTIVE;
-
                     // Try to find or create category
                     let category = await this.repository.findCategoryByName(rawCategoryName, userId);
                     if (!category) {
                         category = await this.repository.createCategory({
                             name: rawCategoryName,
                             user_id: userId,
-                            status: status,
+                            status: MasterStatus.ACTIVE,
                         });
                         importedCategories++;
-                    } else if (status !== category.status) {
-                        // Update status if it changed
-                        await this.repository.toggleCategoryStatus(category.id, status);
                     }
                     currentCategoryId = category.id;
                 }
@@ -319,44 +293,15 @@ export class CategoryMasterService {
                     if (!currentCategoryId) {
                         throw new BadRequestException('Sub category found without a parent category preceding it');
                     }
-
-                    const statusStr = String(getVal(row, 'status')).trim().toLowerCase();
-                    const status = statusStr === 'inactive' ? MasterStatus.INACTIVE : MasterStatus.ACTIVE;
-
-                    let subCategory = await this.repository.findSubCategoryByName(rawSubCategoryName, currentCategoryId, userId);
-                    if (!subCategory) {
-                        subCategory = await this.repository.createSubCategory({
+                    const existingSub = await this.repository.findSubCategoryByName(rawSubCategoryName, currentCategoryId, userId);
+                    if (!existingSub) {
+                        await this.repository.createSubCategory({
                             name: rawSubCategoryName,
                             category_id: currentCategoryId,
                             user_id: userId,
-                            status: status,
+                            status: MasterStatus.ACTIVE,
                         });
                         importedSubCategories++;
-                    } else if (status !== subCategory.status) {
-                        await this.repository.toggleSubCategoryStatus(subCategory.id, status);
-                    }
-                    currentSubCategoryId = subCategory.id;
-                }
-
-                if (rawSubSubCategoryName) {
-                    if (!currentSubCategoryId) {
-                        throw new BadRequestException('Sub sub category found without a parent sub category preceding it');
-                    }
-
-                    const statusStr = String(getVal(row, 'status')).trim().toLowerCase();
-                    const status = statusStr === 'inactive' ? MasterStatus.INACTIVE : MasterStatus.ACTIVE;
-
-                    const existingSubSub = await this.repository.findSubSubCategoryByName(rawSubSubCategoryName, currentSubCategoryId, userId);
-                    if (!existingSubSub) {
-                        await this.repository.createSubSubCategory({
-                            name: rawSubSubCategoryName,
-                            sub_category_id: currentSubCategoryId,
-                            user_id: userId,
-                            status: status,
-                        });
-                        // We can track sub_sub_categories count too if needed, but for now just increment a general counter or keep it simple
-                    } else if (status !== existingSubSub.status) {
-                        await this.repository.toggleSubSubCategoryStatus(existingSubSub.id, status);
                     }
                 }
             } catch (error) {
@@ -382,26 +327,24 @@ export class CategoryMasterService {
 
     async promoteSubCategory(id: number, userId: number) {
         try {
-            return await this.repository.promoteSubCategory(id, userId);
+            return await this.repository.promoteSubCategoryToCategory(id, userId);
         } catch (error) {
             throw new BadRequestException(error.message);
         }
     }
 
-    async promoteSubSubCategory(id: number, targetLevel: 'sub_category' | 'category', userId: number, newCategoryId?: number) {
+    async promoteSubSubCategoryToSub(id: number, newParentCatId: number, userId: number) {
         try {
-            if (targetLevel === 'sub_category') {
-                if (!newCategoryId) {
-                    throw new BadRequestException('Target parent category is required');
-                }
-                return await this.repository.promoteSubSubToSubCategory(id, userId, newCategoryId);
-            } else if (targetLevel === 'category') {
-                return await this.repository.promoteSubSubToCategory(id, userId);
-            } else {
-                throw new BadRequestException('Invalid target level');
-            }
+            return await this.repository.promoteSubSubCategoryToSubCategory(id, newParentCatId, userId);
         } catch (error) {
-            if (error instanceof BadRequestException) throw error;
+            throw new BadRequestException(error.message);
+        }
+    }
+
+    async promoteSubSubToCategory(id: number, userId: number) {
+        try {
+            return await this.repository.promoteSubSubCategoryToCategory(id, userId);
+        } catch (error) {
             throw new BadRequestException(error.message);
         }
     }
@@ -422,188 +365,11 @@ export class CategoryMasterService {
         }
     }
 
-    async getSampleExcel() {
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('Sample Data');
-
-        worksheet.columns = [
-            { header: 'Category Name', key: 'category_name', width: 30 },
-            { header: 'Sub Category', key: 'sub_category', width: 30 },
-            { header: 'Sub Sub Category', key: 'sub_sub_category', width: 30 },
-            { header: 'Status', key: 'status', width: 15 },
-        ];
-
-        // Add validation for status (column D)
-        (worksheet as any).dataValidations.add('D2:D100', {
-            type: 'list',
-            allowBlank: true,
-            formulae: ['"active,inactive"'],
-            showErrorMessage: true,
-            errorTitle: 'Invalid Status',
-            error: 'Please select from the list (active, inactive)'
-        });
-
-        const buffer = await workbook.xlsx.writeBuffer();
-        return buffer;
-    }
-
-    async exportCategories(format: string, userId: number) {
-        const categories = await this.repository.getCategoryWithSubCategories(userId) as any[];
-
-        if (categories.length === 0) {
-            throw new BadRequestException('No data available to export');
+    async demoteSubCategoryToSubSub(id: number, newParentSubId: number, userId: number) {
+        try {
+            return await this.repository.demoteSubCategoryToSubSubCategory(id, newParentSubId, userId);
+        } catch (error) {
+            throw new BadRequestException(error.message);
         }
-
-        const now = new Date();
-        const pad = (n: number) => n.toString().padStart(2, '0');
-        const timestamp = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}, ${pad(now.getHours() % 12 || 12)}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${now.getHours() >= 12 ? 'pm' : 'am'}`;
-
-        if (format === 'xlsx') {
-            const workbook = new ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet('Categories');
-
-            worksheet.columns = [
-                { header: 'Category Name', key: 'categoryName', width: 30 },
-                { header: 'Sub Category Name', key: 'subCategoryName', width: 30 },
-                { header: 'Sub Sub Category Name', key: 'subSubCategoryName', width: 30 },
-                { header: 'Status', key: 'status', width: 15 },
-            ];
-
-            categories.forEach(cat => {
-                worksheet.addRow({
-                    categoryName: cat.name,
-                    subCategoryName: '-',
-                    subSubCategoryName: '-',
-                    status: cat.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive',
-                });
-
-                if (cat.sub_categories && cat.sub_categories.length > 0) {
-                    cat.sub_categories.forEach((sub: any) => {
-                        worksheet.addRow({
-                            categoryName: '',
-                            subCategoryName: sub.name,
-                            subSubCategoryName: '-',
-                            status: sub.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive',
-                        });
-
-                        if (sub.sub_sub_categories && sub.sub_sub_categories.length > 0) {
-                            sub.sub_sub_categories.forEach((subSub: any) => {
-                                worksheet.addRow({
-                                    categoryName: '',
-                                    subCategoryName: '',
-                                    subSubCategoryName: subSub.name,
-                                    status: subSub.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive',
-                                });
-                            });
-                        }
-                    });
-                }
-            });
-
-            // Styling and headers
-            worksheet.spliceRows(1, 0, [], [], [], []);
-            worksheet.mergeCells('A1:D1');
-            const titleCell = worksheet.getCell('A1');
-            titleCell.value = 'ERP';
-            titleCell.font = { size: 18, bold: true };
-            titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-
-            worksheet.mergeCells('A2:D2');
-            const subtitleCell = worksheet.getCell('A2');
-            subtitleCell.value = 'Category Master Report';
-            subtitleCell.font = { size: 14 };
-            subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-
-            worksheet.mergeCells('A3:D3');
-            const timestampCell = worksheet.getCell('A3');
-            timestampCell.value = `Exported on: ${timestamp}`;
-            timestampCell.font = { size: 10 };
-            timestampCell.alignment = { horizontal: 'right', vertical: 'middle' };
-
-            const headerRow = worksheet.getRow(5);
-            headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
-            headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
-
-            const buffer = await workbook.xlsx.writeBuffer();
-            return {
-                buffer: Buffer.from(buffer),
-                filename: `categories_export_${Date.now()}.xlsx`,
-                mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            };
-        }
-
-        if (format === 'pdf') {
-            return new Promise<any>((resolve, reject) => {
-                const doc = new PDFDocument({ margin: 20, size: 'A4' });
-                const buffers: Buffer[] = [];
-                doc.on('data', buffers.push.bind(buffers));
-                doc.on('end', () => {
-                    resolve({
-                        buffer: Buffer.concat(buffers),
-                        filename: `categories_export_${Date.now()}.pdf`,
-                        mimetype: 'application/pdf',
-                    });
-                });
-
-                doc.fontSize(18).font('Helvetica-Bold').text('ERP', { align: 'center' });
-                doc.fontSize(14).font('Helvetica').text('Category Master Report', { align: 'center' });
-                doc.moveDown(0.5);
-                doc.fontSize(10).text(`Exported on: ${timestamp}`, { align: 'right' });
-                doc.moveDown();
-
-                const tableTop = 100;
-                const colX = [30, 180, 330, 480];
-                const headers = ['Category', 'Sub Category', 'Sub Sub Category', 'Status'];
-
-                doc.rect(20, tableTop - 5, 555, 20).fill('#4472C4');
-                doc.fontSize(10).font('Helvetica-Bold').fillColor('#FFFFFF');
-                headers.forEach((header, i) => doc.text(header, colX[i], tableTop));
-
-                let y = tableTop + 20;
-                doc.fillColor('#000000').font('Helvetica');
-
-                categories.forEach((cat) => {
-                    if (y > 750) { doc.addPage(); y = 40; }
-
-                    doc.fontSize(9).font('Helvetica-Bold').text(cat.name, colX[0], y);
-                    doc.text('-', colX[1], y);
-                    doc.text('-', colX[2], y);
-                    doc.text(cat.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[3], y);
-                    y += 15;
-
-                    if (cat.sub_categories && cat.sub_categories.length > 0) {
-                        cat.sub_categories.forEach((sub: any) => {
-                            if (y > 750) { doc.addPage(); y = 40; }
-                            doc.fontSize(9).font('Helvetica').text('', colX[0], y);
-                            doc.text(sub.name, colX[1], y);
-                            doc.text('-', colX[2], y);
-                            doc.text(sub.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[3], y);
-                            y += 15;
-
-                            if (sub.sub_sub_categories && sub.sub_sub_categories.length > 0) {
-                                sub.sub_sub_categories.forEach((subSub: any) => {
-                                    if (y > 750) { doc.addPage(); y = 40; }
-                                    doc.fontSize(9).font('Helvetica').text('', colX[0], y);
-                                    doc.text('', colX[1], y);
-                                    doc.text(subSub.name, colX[2], y);
-                                    doc.text(subSub.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[3], y);
-                                    y += 15;
-                                });
-                            }
-                        });
-                    }
-                    y += 10;
-                });
-
-                doc.end();
-            });
-        }
-
-        throw new BadRequestException('Invalid format. Use xlsx or pdf.');
-    }
-
-    async hasChildren(id: number, type: 'category' | 'sub_category' | 'sub_sub_category') {
-        return this.repository.hasChildren(id, type);
     }
 }
