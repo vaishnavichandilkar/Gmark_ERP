@@ -28,6 +28,7 @@ const CustomSelect = ({
   disabled = false,
   widthClass = "w-full",
   error = "",
+  renderValue,
 }) => {
   const { t } = useTranslation(["common"]);
   const [isOpen, setIsOpen] = useState(false);
@@ -51,9 +52,10 @@ const CustomSelect = ({
     isSearchable &&
     searchTerm &&
     searchTerm.toLowerCase() !== (value || "").toLowerCase()
-      ? options.filter((opt) =>
-          opt.toLowerCase().includes(searchTerm.toLowerCase()),
-        )
+      ? options.filter((opt) => {
+          const displayLabel = renderValue ? renderValue(opt) : opt;
+          return displayLabel.toLowerCase().includes(searchTerm.toLowerCase());
+        })
       : options;
 
   return (
@@ -76,7 +78,11 @@ const CustomSelect = ({
             disabled={disabled}
             className={`w-full h-full text-[14px] text-[#111827] outline-none bg-transparent placeholder:text-gray-500 ${disabled ? "cursor-not-allowed" : ""}`}
             placeholder={placeholder}
-            value={isOpen ? searchTerm : value || ""}
+            value={
+              isOpen
+                ? searchTerm
+                : (renderValue && value ? renderValue(value) : value || "")
+            }
             onChange={(e) => {
               setSearchTerm(e.target.value);
               if (!isOpen) setIsOpen(true);
@@ -93,7 +99,7 @@ const CustomSelect = ({
           <span
             className={`text-[14px] truncate ${value ? "text-[#111827]" : "text-gray-500"}`}
           >
-            {value || placeholder}
+            {renderValue && value ? renderValue(value) : value || placeholder}
           </span>
         )}
         <div
@@ -131,7 +137,7 @@ const CustomSelect = ({
                     setSearchTerm("");
                   }}
                 >
-                  {opt}
+                  {renderValue ? renderValue(opt) : opt}
                 </div>
               ))
             ) : (
@@ -275,7 +281,7 @@ const OTHER_DOC_OPTIONS = [
   "gst_certificate",
   "food_license",
   "shop_act_license",
-  "cancelled_cheque_bank_passbook_copy",
+  "cancelled_cheque_bank_passbook_cc",
   "agreement_copy",
   "medicine_license",
   "pesticide_license",
@@ -858,23 +864,7 @@ const AddAccount = ({
             {isEditMode ? t("modules:edit_account") : t("modules:add_account")}
           </h2>
           <div className="flex items-center gap-3">
-            {isEditMode && (
-              <button
-                onClick={handleSave}
-                disabled={isLoading}
-                className={`px-6 h-[40px] text-white rounded-[8px] text-[14px] font-bold transition-all shadow-sm flex items-center justify-center min-w-[120px] ${
-                  isLoading
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-[#014A36] hover:bg-[#013b2b]"
-                }`}
-              >
-                {isLoading ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  t("modules:save", "Save Account")
-                )}
-              </button>
-            )}
+
             <button
               onClick={onBack}
               className="group flex items-center justify-center w-10 h-10 md:w-auto md:h-[40px] md:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[10px] md:rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
@@ -1443,6 +1433,7 @@ const AddAccount = ({
                           "retailer",
                         ]}
                         value={formData.customerType}
+                        renderValue={(val) => t(`modules:${val}`, val.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}
                         onChange={(val) =>
                           handleInputChange("customerType", val)
                         }
@@ -1505,7 +1496,7 @@ const AddAccount = ({
                             <CustomSelect
                               options={availableOptions}
                               value={doc.type || ""}
-                              renderValue={(val) => t(`modules:${val}`)}
+                              renderValue={(val) => t(`modules:${val}`, val.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}
                               onChange={(val) => {
                                 const newDocs = [...otherDocs];
                                 newDocs[idx].type = val;
@@ -1674,7 +1665,6 @@ const AddAccount = ({
             </div>
           </div>
 
-          {!isEditMode && (
             <div className="mt-10 flex flex-col sm:flex-row justify-end gap-3 md:gap-4 py-6 border-t border-[#E5E7EB]">
               <button
                 onClick={handleSave}
@@ -1697,7 +1687,6 @@ const AddAccount = ({
                 {t("common:cancel")}
               </button>
             </div>
-          )}
 
           <style jsx global>{`
             .custom-scrollbar::-webkit-scrollbar {

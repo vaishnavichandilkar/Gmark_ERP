@@ -599,7 +599,13 @@ const ProductMaster = () => {
                     </th>
                     <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
                       <div className="flex items-center gap-2 tracking-tight">
-                        {t("sub_category")}{" "}
+                        {t("sub_category", "Sub Category")}{" "}
+                        <ChevronsUpDown size={14} className="text-gray-300" />
+                      </div>
+                    </th>
+                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
+                      <div className="flex items-center gap-2 tracking-tight">
+                        {t("sub_sub_category", "Sub-SubCategory")}{" "}
                         <ChevronsUpDown size={14} className="text-gray-300" />
                       </div>
                     </th>
@@ -661,6 +667,9 @@ const ProductMaster = () => {
                         </td>
                         <td className="px-3 md:px-6 py-3 md:py-4 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
                           {translateDynamic(row.sub_category?.name, t)}
+                        </td>
+                        <td className="px-3 md:px-6 py-3 md:py-4 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
+                          {translateDynamic(row.sub_sub_category?.name, t) || "-"}
                         </td>
                         <td className="px-3 md:px-6 py-3 md:py-4 text-[#6B7280] border-r border-[#F3F4F6]">
                           {row.hsn_code}
@@ -746,7 +755,7 @@ const ProductMaster = () => {
                   ) : (
                     <tr>
                       <td
-                        colSpan="10"
+                        colSpan="11"
                         className="px-6 py-20 text-center text-gray-400"
                       >
                         <div className="flex flex-col items-center gap-3">

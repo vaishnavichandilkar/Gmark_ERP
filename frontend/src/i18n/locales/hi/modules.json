@@ -8,6 +8,8 @@
     "group_master_desc": "संगठित वित्तीय रिपोर्टिंग के लिए सभी खाता समूहों और उपसमूहों को देखें, सत्यापित करें और प्रबंधित करें।",
     "add_group": "ग्रुप जोड़ें",
     "no_matching_groups": "कोई मेल खाने वाला ग्रुप नहीं मिला",
+    "save_group": "समूह सहेजें",
+    "save_category": "श्रेणी सहेजें",
     "facility": "सुविधा",
     "unit_master": "यूनिट मास्टर",
     "unit_name": "यूनिट का नाम",
@@ -51,7 +53,8 @@
     "product_name": "उत्पाद का नाम",
     "uom": "UOM",
     "product_type": "उत्पाद का प्रकार",
-    "sub_category": "उप श्रेणी",
+    "sub_category": "उप-श्रेणी",
+    "sub_sub_category": "उप-उप श्रेणी",
     "hsn_code": "HSN कोड",
     "tax_percent": "टैक्स %",
     "add_product": "उत्पाद जोड़ें",
@@ -251,9 +254,10 @@
     "gst_certificate": "जीएसटी प्रमाणपत्र",
     "food_license": "खाद्य लाइसेंस",
     "shop_act_license": "शॉप एक्ट लाइसेंस",
-    "cancelled_cheque_bank_passbook_copy": "रद्द चेक/बैंक पासबुक कॉपी",
+    "cancelled_cheque_bank_passbook_copy": "कैंसिल चेक / बैंक पासबुक कॉपी",
     "agreement_copy": "अनुबंध की प्रति",
     "medicine_license": "दवा लाइसेंस",
     "pesticide_license": "कीटनाशक लाइसेंस",
-    "other": "अन्य"
+    "other": "अन्य",
+    "save_unit": "यूनिट सहेजें"
 }

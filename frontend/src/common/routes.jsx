@@ -200,6 +200,7 @@ export const router = createBrowserRouter([
                                         children: [
                                             { index: true, element: <AccountMaster /> },
                                             { path: 'add', element: <AccountMaster /> },
+                                            { path: 'view/:id', element: <AccountMaster /> },
                                             { path: 'edit/:id', element: <AccountMaster /> }
                                         ]
                                     },
@@ -208,6 +209,7 @@ export const router = createBrowserRouter([
                                         children: [
                                             { index: true, element: <UnitMaster /> },
                                             { path: 'add', element: <UnitMaster /> },
+                                            { path: 'view/:id', element: <UnitMaster /> },
                                             { path: 'edit/:id', element: <UnitMaster /> }
                                         ]
                                     },
@@ -224,6 +226,7 @@ export const router = createBrowserRouter([
                                         children: [
                                             { index: true, element: <ProductMaster /> },
                                             { path: 'add', element: <ProductMaster /> },
+                                            { path: 'view/:id', element: <ProductMaster /> },
                                             { path: 'edit/:id', element: <ProductMaster /> }
                                         ]
                                     }

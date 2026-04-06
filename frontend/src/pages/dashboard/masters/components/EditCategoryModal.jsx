@@ -384,17 +384,17 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
                     {/* Footer */}
                     <div className="flex items-center gap-3 pt-4">
                         <button
-                            onClick={handleSave}
-                            disabled={isLoading}
-                            className="flex-1 h-[48px] rounded-[12px] bg-emerald-900 text-white text-[15px] font-bold hover:bg-emerald-950 transition-all flex items-center justify-center shadow-lg shadow-emerald-900/20 active:scale-95 disabled:opacity-50"
-                        >
-                            {isLoading ? <Loader2 size={18} className="animate-spin" /> : t('common:save')}
-                        </button>
-                        <button
                             onClick={onClose}
                             className="w-[100px] h-[48px] border border-[#E5E7EB] rounded-[12px] text-[15px] font-bold hover:bg-gray-50 transition-all"
                         >
                             {t('common:cancel')}
+                        </button>
+                        <button
+                            onClick={handleSave}
+                            disabled={isLoading}
+                            className="flex-1 h-[48px] rounded-[12px] bg-emerald-900 text-white text-[15px] font-bold hover:bg-emerald-950 transition-all flex items-center justify-center shadow-lg shadow-emerald-900/20 active:scale-95 disabled:opacity-50"
+                        >
+                            {isLoading ? <Loader2 size={18} className="animate-spin" /> : t('modules:save_category', 'Save Category')}
                         </button>
                     </div>
                 </div>

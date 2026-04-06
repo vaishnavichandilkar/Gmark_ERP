@@ -348,15 +348,23 @@ const UnitForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onEdit 
                 <div>
                     <h3 className="text-[20px] font-bold text-[#111827]">{t('modules:view_unit')}</h3>
                 </div>
-                <button
-                    onClick={onBack}
-                    className="group flex items-center justify-center w-10 h-10 md:w-auto md:h-[44px] md:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[12px] md:rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
-                    title={t('common:back')}
-                >
-                    <X size={22} className="md:hidden text-gray-500" />
-                    <ArrowLeft size={18} className="hidden md:block" />
-                    <span className="hidden md:inline ml-2">{t('common:back')}</span>
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => initialData && onEdit && onEdit(initialData)}
+                        className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center min-w-[140px]"
+                    >
+                        {t('modules:edit_unit')}
+                    </button>
+                    <button
+                        onClick={onBack}
+                        className="group flex items-center justify-center w-10 h-10 md:w-auto md:h-[44px] md:px-6 border border-[#E5E7EB] text-[#4B5563] rounded-[12px] md:rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm active:scale-95"
+                        title={t('common:back')}
+                    >
+                        <X size={22} className="md:hidden text-gray-500" />
+                        <ArrowLeft size={18} className="hidden md:block" />
+                        <span className="hidden md:inline ml-2">{t('common:back')}</span>
+                    </button>
+                </div>
             </div>
 
             <div className="flex flex-col">
@@ -376,20 +384,7 @@ const UnitForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onEdit 
                 ))}
             </div>
 
-            <div className="px-8 py-6 bg-[#F9FAFB]/50 flex justify-end gap-3 border-t border-[#F3F4F6]">
-                <button
-                    onClick={onBack}
-                    className="px-8 h-[46px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-white transition-all bg-white"
-                >
-                    {t('common:cancel')}
-                </button>
-                <button
-                    onClick={() => initialData && onEdit && onEdit(initialData)}
-                    className="px-8 h-[46px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center min-w-[140px]"
-                >
-                    {t('modules:edit_unit')}
-                </button>
-            </div>
+
         </div>
     );
 
@@ -473,21 +468,21 @@ const UnitForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onEdit 
                     <div className="px-8 py-6 bg-[#F9FAFB]/50 flex justify-end gap-3 border-t border-[#F3F4F6]">
                         <button
                             type="button"
+                            onClick={onBack}
+                            disabled={loading}
+                            className="px-8 h-[46px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-white transition-all bg-white shadow-sm flex items-center justify-center"
+                        >
+                            {t('common:cancel')}
+                        </button>
+                        <button
+                            type="button"
                             onClick={handleSubmit}
                             disabled={loading}
                             className={`px-8 h-[46px] text-white rounded-[10px] text-[14px] font-bold transition-all shadow-md flex items-center justify-center min-w-[160px] ${loading ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#073318] hover:bg-[#04200f]'}`}
                         >
                             {loading ? (
                                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            ) : t('modules:save')}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onBack}
-                            disabled={loading}
-                            className="px-8 h-[46px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-white transition-all bg-white shadow-sm flex items-center justify-center"
-                        >
-                            {t('common:cancel')}
+                            ) : t('modules:save_unit')}
                         </button>
                     </div>
                 )}

@@ -140,8 +140,8 @@ const CategoryForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onS
                                 {isLoading ? (
                                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                                 ) : (
-                                    type === 'Category' ? t('modules:save_category', 'Save Category') : t('modules:save_sub_category', 'Save SubCategory')
-                                )}
+                                     t('modules:save_category', 'Save Category')
+                                 )}
                             </button>
                         )}
                         <button
@@ -286,6 +286,13 @@ const CategoryForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onS
                 {/* Footer Buttons - Only for Add Mode */}
                 {mode === 'add' && !isView && (
                     <div className="px-8 py-6 bg-[#F9FAFB]/50 flex justify-end gap-3 border-t border-[#F3F4F6]">
+                        <button
+                            onClick={onBack}
+                            disabled={isLoading}
+                            className="px-8 h-[46px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-white transition-all bg-white shadow-sm flex items-center justify-center"
+                        >
+                            {t('common:cancel')}
+                        </button>
                         {step === 1 ? (
                             <button
                                 onClick={handleNext}
@@ -299,16 +306,9 @@ const CategoryForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onS
                                 disabled={isLoading}
                                 className={`px-10 h-[46px] text-white rounded-[10px] text-[14px] font-bold transition-all shadow-md flex items-center justify-center min-w-[160px] ${isLoading ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#073318] hover:bg-[#04200f]'}`}
                             >
-                                {isLoading ? <Loader2 size={18} className="animate-spin" /> : type === 'Category' ? t('modules:save_category', 'Save Category') : t('modules:save_sub_category', 'Save SubCategory')}
+                                {isLoading ? <Loader2 size={18} className="animate-spin" /> : t('modules:save_category', 'Save Category')}
                             </button>
                         )}
-                        <button
-                            onClick={onBack}
-                            disabled={isLoading}
-                            className="px-8 h-[46px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-white transition-all bg-white shadow-sm flex items-center justify-center"
-                        >
-                            {t('common:cancel')}
-                        </button>
                     </div>
                 )}
             </div>

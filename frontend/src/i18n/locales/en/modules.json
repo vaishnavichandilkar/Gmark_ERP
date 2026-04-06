@@ -8,6 +8,8 @@
     "group_master_desc": "View, verify, and manage all account groups and subgroups for organized financial reporting.",
     "add_group": "Add Group",
     "no_matching_groups": "No matching groups found",
+    "save_group": "Save Group",
+    "save_category": "Save Category",
     "facility": "Facility",
     "unit_master": "Unit Master",
     "unit_name": "Unit Name",
@@ -51,6 +53,7 @@
     "uom": "UOM",
     "product_type": "Product Type",
     "sub_category": "Sub Category",
+    "sub_sub_category": "Sub-SubCategory",
     "hsn_code": "HSN Code",
     "tax_percent": "Tax %",
     "add_product": "Add Product",
@@ -282,7 +285,7 @@
     "gst_certificate": "GST Certificate",
     "food_license": "Food License",
     "shop_act_license": "Shop Act License",
-    "cancelled_cheque_bank_passbook_copy": "Cancelled Cheque/Bank Passbook Copy",
+    "cancelled_cheque_bank_passbook_cc": "Cancelled Cheque / Bank Passbook Copy",
     "agreement_copy": "Agreement Copy",
     "medicine_license": "Medicine License",
     "pesticide_license": "Pesticide License",
@@ -300,5 +303,11 @@
     "order": "Purchase Order",
     "add": "Add PO",
     "customer_type": "Customer Type",
-    "pan_info_content": "If you have a Company/ Firm pan card please provide the Company's/ Firm's PAN card number; otherwise, kindly provide your personal PAN card number."
+    "pan_info_content": "If you have a Company/ Firm pan card please provide the Company's/ Firm's PAN card number; otherwise, kindly provide your personal PAN card number.",
+    "save_product": "Save Product",
+    "save_account": "Save Account",
+    "industrial": "Industrial",
+    "institutional": "Institutional",
+    "dealer": "Dealer",
+    "retailer": "Retailer"
 }

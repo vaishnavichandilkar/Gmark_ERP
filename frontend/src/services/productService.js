@@ -107,6 +107,7 @@ export default {
     getUomsDropdown,
     getCategoriesDropdown,
     getSubCategoriesDropdown,
+    getSubSubCategoriesDropdown,
     getTaxByHsn,
     exportProducts,
     getSuggestions,

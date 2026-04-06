@@ -239,19 +239,19 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
                 {/* Footer Buttons */}
                 <div className="px-8 py-6 bg-[#F9FAFB]/50 flex items-center justify-end gap-3 border-t border-[#F3F4F6]">
                     <button
+                        className="px-8 h-[46px] border border-[#E5E7EB] text-[#4B5563] font-bold rounded-[10px] hover:bg-white hover:text-[#111827] transition-all text-[14px] bg-white shadow-sm shadow-black/5"
+                        onClick={onBack}
+                    >
+                        {t('common:cancel')}
+                    </button>
+                    <button
                         className="px-10 h-[46px] bg-[#073318] text-white font-bold rounded-[10px] hover:bg-[#04200f] transition-all text-[14px] disabled:opacity-50 shadow-md shadow-[#073318]/10 min-w-[140px] whitespace-nowrap"
                         onClick={handleSave}
                         disabled={isLoading}
                     >
                         {isLoading ? (
                             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto"></div>
-                        ) : t('modules:save')}
-                    </button>
-                    <button
-                        className="px-8 h-[46px] border border-[#E5E7EB] text-[#4B5563] font-bold rounded-[10px] hover:bg-white hover:text-[#111827] transition-all text-[14px] bg-white shadow-sm shadow-black/5"
-                        onClick={onBack}
-                    >
-                        {t('common:cancel')}
+                        ) : t('modules:save_group', 'Save Group')}
                     </button>
                 </div>
             </div>

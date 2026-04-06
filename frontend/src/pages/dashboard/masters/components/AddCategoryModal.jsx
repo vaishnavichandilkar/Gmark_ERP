@@ -250,6 +250,12 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
 
                     {/* Footer Actions */}
                     <div className="flex items-center gap-3 pt-2">
+                        <button
+                            onClick={onClose}
+                            className="w-[100px] h-[52px] border border-gray-200 rounded-xl text-[15px] font-bold text-gray-500 hover:bg-gray-50 transition-all"
+                        >
+                            {t('common:cancel')}
+                        </button>
                         {step === 1 ? (
                             <button
                                 onClick={handleNext}
@@ -264,15 +270,9 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
                                 disabled={isLoading}
                                 className="flex-1 h-[52px] bg-emerald-900 text-white rounded-xl text-[16px] font-bold shadow-lg shadow-emerald-900/20 hover:bg-emerald-950 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
                             >
-                                {isLoading ? <Loader2 size={20} className="animate-spin" /> : t('common:save')}
+                                {isLoading ? <Loader2 size={20} className="animate-spin" /> : t('modules:save_category', 'Save Category')}
                             </button>
                         )}
-                        <button
-                            onClick={onClose}
-                            className="w-[100px] h-[52px] border border-gray-200 rounded-xl text-[15px] font-bold text-gray-500 hover:bg-gray-50 transition-all"
-                        >
-                            {t('common:cancel')}
-                        </button>
                     </div>
                 </div>
             </div>

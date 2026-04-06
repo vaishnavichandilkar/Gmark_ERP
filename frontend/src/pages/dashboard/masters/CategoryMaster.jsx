@@ -21,6 +21,7 @@ import {
   X,
   Filter,
   Edit,
+  Eye,
   Loader2,
   ArrowLeft as LeftIcon,
   ArrowRight as RightIcon,
@@ -728,7 +729,7 @@ const CategoryMaster = () => {
                               }}
                               className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318] transition-colors whitespace-nowrap"
                             >
-                              <Edit size={18} /> {t("modules:view_and_edit_category")}
+                              <Eye size={18} className="text-gray-400" /> {t("modules:view_and_edit_category")}
                             </button>
                             <button
                               onClick={(e) => {
@@ -795,7 +796,7 @@ const CategoryMaster = () => {
                                         }}
                                         className="w-full px-5 py-2.5 flex items-center gap-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318]"
                                       >
-                                        <Edit size={16} /> {t("modules:view_and_edit_category")}
+                                        <Eye size={16} className="text-gray-400" /> {t("modules:view_and_edit_category")}
                                       </button>
                                       <button
                                         onClick={(e) => {
@@ -851,7 +852,7 @@ const CategoryMaster = () => {
                                                 }}
                                                 className="w-full px-4 py-2 flex items-center gap-2.5 text-[12px] font-bold text-gray-600 hover:bg-gray-50"
                                               >
-                                                <Edit size={14} /> {t("modules:view_and_edit_category")}
+                                                <Eye size={14} className="text-gray-400" /> {t("modules:view_and_edit_category")}
                                               </button>
                                               <button
                                                 onClick={(e) => {
