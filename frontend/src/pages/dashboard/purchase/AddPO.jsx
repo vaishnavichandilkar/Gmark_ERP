@@ -70,13 +70,11 @@ const AddPO = () => {
     
     const [showValidationPopup, setShowValidationPopup] = useState(false);
 
-    // Fetch Suppliers
+    // Fetch Suppliers and Handle Draft Recovery
     useEffect(() => {
-        const fetchSuppliers = async () => {
+        const fetchInitialLists = async () => {
             try {
-                // Requirement 1: Sundry Creditors (Mapping to SUNDRY_CREDITORS for backend compatibility)
                 const response = await accountService.getAllAccounts({ groupName: 'SUNDRY_CREDITORS' });
-                // Account API returns: { data: [...], total: ... }
                 const fetchedSuppliers = response.data || [];
                 setSuppliers(fetchedSuppliers);
 
@@ -86,10 +84,12 @@ const AddPO = () => {
                     try {
                         const draft = JSON.parse(draftStr);
                         let restoredFormData = draft.formData;
+                        let restoredItems = draft.items;
                         
-                        const oldIdsStr = sessionStorage.getItem('add_po_supplier_ids');
-                        if (oldIdsStr) {
-                            const oldIds = JSON.parse(oldIdsStr);
+                        // 1. Detect New Supplier
+                        const oldSupplierIdsStr = sessionStorage.getItem('add_po_supplier_ids');
+                        if (oldSupplierIdsStr) {
+                            const oldIds = JSON.parse(oldSupplierIdsStr);
                             const newSupplier = fetchedSuppliers.find(s => !oldIds.includes(s.id));
                             if (newSupplier) {
                                 restoredFormData = {
@@ -104,21 +104,59 @@ const AddPO = () => {
                                 setSupplierSearch(newSupplier.accountName);
                             }
                         }
+
+                        // 2. Detect New Product
+                        const oldProductIdsStr = sessionStorage.getItem('add_po_product_ids');
+                        if (oldProductIdsStr) {
+                            const oldIds = JSON.parse(oldProductIdsStr);
+                            // Fetch products to find the new one (limit 50 to cover most cases)
+                            const productRes = await productService.getProducts({ limit: 50 });
+                            const newProduct = (productRes.products || []).find(p => !oldIds.includes(p.id));
+                            if (newProduct) {
+                                // Auto-generate the row but avoid duplicates if already present
+                                const newItem = {
+                                    id: Date.now(), 
+                                    product_id: newProduct.id,
+                                    product_code: newProduct.product_code, 
+                                    product_name: newProduct.product_name, 
+                                    quantity: 1, 
+                                    rate: newProduct.purchaseRate || 0, 
+                                    uom: newProduct.uom?.unit_name || newProduct.uom?.gst_uom || 'NOS', 
+                                    discount_amount: 0, 
+                                    discount_percent: 0, 
+                                    hsn: newProduct.hsn_code || '', 
+                                    tax_percent: newProduct.tax_rate || 0, 
+                                    before_tax: (newProduct.purchaseRate || 0).toFixed(2), 
+                                    tax_amount: ((newProduct.purchaseRate || 0) * (newProduct.tax_rate || 0) / 100).toFixed(2), 
+                                    total_amount: ((newProduct.purchaseRate || 0) * (1 + (newProduct.tax_rate || 0) / 100)).toFixed(2),
+                                    description: newProduct.description || '' 
+                                };
+                                
+                                // Replace an empty row or append
+                                if (restoredItems.length === 1 && !restoredItems[0].product_name) {
+                                    restoredItems = [newItem];
+                                } else if (!restoredItems.some(i => i.product_id === newProduct.id)) {
+                                    restoredItems = [...restoredItems, newItem];
+                                }
+                                toast.success(`New product "${newProduct.product_name}" added!`);
+                            }
+                        }
                         
                         setFormData(restoredFormData);
-                        setItems(draft.items);
+                        setItems(restoredItems);
                     } catch (e) {
                         console.error('Draft parsing failed', e);
                     } finally {
                         sessionStorage.removeItem('add_po_draft');
                         sessionStorage.removeItem('add_po_supplier_ids');
+                        sessionStorage.removeItem('add_po_product_ids');
                     }
                 }
             } catch (error) {
                 console.error("Error fetching suppliers:", error);
             }
         };
-        fetchSuppliers();
+        fetchInitialLists();
     }, [isEditMode]);
 
     // Fetch Products (Requirement 6: Search from Product Master)
@@ -229,7 +267,7 @@ const AddPO = () => {
                 supplier_name: supplier.accountName,
                 address: supplier.addressLine1 + (supplier.addressLine2 ? ', ' + supplier.addressLine2 : ''),
                 gst_number: supplier.gstNo || '',
-                credit_days: supplier.supplierCreditDays || '',
+                credit_days: supplier.supplierCreditDays || supplier.creditDays || '',
                 pan_number: supplier.panNo || ''
             });
             setSupplierSearch(supplier.accountName);
@@ -238,23 +276,23 @@ const AddPO = () => {
     };
 
     const handleQuickAddProduct = (product) => {
-        // Requirement 7: product.purchaseRate, product.uom, product.hsn, product.taxPercent
+        // Requirement 7: Product Code, Product, UOM, hsn code auto field
         const newItem = {
             id: Date.now(), 
             product_id: product.id,
-            product_code: product.product_code, 
-            product_name: product.product_name, 
+            product_code: product.product_code || product.productCode || '', 
+            product_name: product.product_name || product.productName || '', 
             quantity: 1, 
-            rate: product.purchaseRate || 0, 
-            uom: product.uom?.unit_name || 'NOS', 
+            rate: product.purchaseRate || product.purchase_rate || product.rate || 0, 
+            uom: product.uom?.unit_name || product.uom?.gst_uom || product.uom || 'NOS', 
             discount_amount: 0, 
             discount_percent: 0, 
-            hsn: product.hsn_code, 
-            tax_percent: product.tax_rate || 0, 
+            hsn: product.hsn_code || product.hsn || '', 
+            tax_percent: product.tax_rate || product.tax || 0, 
             before_tax: (product.purchaseRate || 0).toFixed(2), 
             tax_amount: ((product.purchaseRate || 0) * (product.tax_rate || 0) / 100).toFixed(2), 
             total_amount: ((product.purchaseRate || 0) * (1 + (product.tax_rate || 0) / 100)).toFixed(2),
-            description: '' 
+            description: product.description || product.printDescription || '' 
         };
         
         // Remove empty row if it's the only one
@@ -269,48 +307,59 @@ const AddPO = () => {
     };
 
     const handleItemChange = (index, field, value) => {
-        // Prevent negative values for numbers
-        if (value && Number(value) < 0) return;
-
         const newItems = [...items];
         const item = { ...newItems[index] };
+        
+        // Update the direct field value from input
         item[field] = value;
 
-        // Numerical values
-        let qty = parseFloat(item.quantity) || 0;
-        let rate = parseFloat(item.rate) || 0;
+        // Perform numerical conversions for computation
+        const qty = parseFloat(item.quantity) || 0;
+        const rate = parseFloat(item.rate) || 0;
+        const taxPct = parseFloat(item.tax_percent) || 0;
         let discAmt = parseFloat(item.discount_amount) || 0;
         let discPct = parseFloat(item.discount_percent) || 0;
-        let taxPct = parseFloat(item.tax_percent) || 0;
 
         const baseAmount = qty * rate;
 
-        // Discount Conversion Logic
-        if (field === 'discount_percent') {
-            // Discount % changed -> calculate Discount Amount
-            discAmt = (baseAmount * discPct) / 100;
-            item.discount_amount = discAmt.toFixed(2);
-        } else if (field === 'discount_amount') {
-            // Discount Amount changed -> calculate Discount %
-            discPct = baseAmount > 0 ? (discAmt / baseAmount) * 100 : 0;
-            item.discount_percent = discPct.toFixed(2);
-        } else if (field === 'quantity' || field === 'rate') {
-            // Quantity or Rate changed -> keep Discount % lead, update Amount
-            discAmt = (baseAmount * discPct) / 100;
-            item.discount_amount = discAmt.toFixed(2);
+        // 🔴 1. DISCOUNT AUTO-CONVERSION (CRITICAL)
+        if (baseAmount === 0) {
+            discAmt = 0;
+            discPct = 0;
+            item.discount_amount = 0;
+            item.discount_percent = 0;
+        } else {
+            if (field === 'discount_percent') {
+                // If user enters Discount %: Auto-calculate Discount Amount
+                if (discPct > 100) discPct = 100;
+                discAmt = (baseAmount * discPct) / 100;
+                item.discount_percent = discPct;
+                item.discount_amount = parseFloat(discAmt.toFixed(2));
+            } else if (field === 'discount_amount') {
+                // If user enters Discount Amount: Auto-calculate Discount %
+                if (discAmt > baseAmount) discAmt = baseAmount;
+                discPct = (discAmt / baseAmount) * 100;
+                item.discount_amount = discAmt;
+                item.discount_percent = parseFloat(discPct.toFixed(2));
+            } else {
+                // For changes in Quantity or Rate: Keep % constant and sync Amount
+                discAmt = (baseAmount * discPct) / 100;
+                item.discount_amount = parseFloat(discAmt.toFixed(2));
+            }
         }
 
-        // 1. Before Tax Amount = (Quantity × Rate) - Discount Amount
-        const beforeTax = baseAmount - discAmt;
-        item.before_tax = beforeTax.toFixed(2);
+        // 🔴 4. ROW CALCULATION LOGIC
+        // Step 1: Before Tax Amount = (Quantity × Rate) - Discount Amount
+        const beforeTaxAmount = baseAmount - discAmt;
+        item.before_tax = parseFloat(beforeTaxAmount.toFixed(2));
 
-        // 2. Tax Amount = (Before Tax Amount × Tax %) / 100
-        const taxAmt = (beforeTax * taxPct) / 100;
-        item.tax_amount = taxAmt.toFixed(2);
+        // Step 2: Tax Amount = (Before Tax Amount × Tax %) / 100
+        const taxAmount = (beforeTaxAmount * taxPct) / 100;
+        item.tax_amount = parseFloat(taxAmount.toFixed(2));
 
-        // 3. Total Amount = Before Tax Amount + Tax Amount
-        const totalPerItem = beforeTax + taxAmt;
-        item.total_amount = totalPerItem.toFixed(2);
+        // Step 3: Final Amount (Per Row)
+        const totalAmount = beforeTaxAmount + taxAmount;
+        item.total_amount = parseFloat(totalAmount.toFixed(2));
 
         newItems[index] = item;
         setItems(newItems);
@@ -672,7 +721,17 @@ const AddPO = () => {
                             )}
                         </div>
                         <button
-                            onClick={() => navigate(`/seller/masters/product-master?mode=add&redirect=${ROUTES.PURCHASE_ORDER_ADD}`)}
+                            onClick={async () => {
+                                sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
+                                // Get current products to track new ones
+                                try {
+                                    const res = await productService.getProducts({ limit: 100 });
+                                    sessionStorage.setItem('add_po_product_ids', JSON.stringify((res.products || []).map(p => p.id)));
+                                } catch (e) {
+                                    sessionStorage.setItem('add_po_product_ids', '[]');
+                                }
+                                navigate(`/seller/masters/product-master?mode=add&redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
+                            }}
                             className="bg-[#073318] hover:bg-[#04200f] text-white px-8 h-[44px] rounded-[10px] text-[14px] font-semibold transition-all shadow-sm active:scale-[0.98] font-outfit whitespace-nowrap flex items-center justify-center gap-2"
                         >
                             <Plus size={18} />
@@ -809,7 +868,7 @@ const AddPO = () => {
                                             type="number" 
                                             readOnly
                                             value={item.tax_percent || ''}
-                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] text-right outline-none cursor-not-allowed"
+                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-right text-[#6B7280] outline-none cursor-not-allowed"
                                         />
                                     </td>
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
@@ -839,9 +898,9 @@ const AddPO = () => {
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input 
                                             type="text" 
-                                            readOnly
                                             value={item.description}
-                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none cursor-not-allowed"
+                                            onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                                            className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] text-[#111827] outline-none focus:border-[#073318] transition-all shadow-sm"
                                             placeholder="Description"
                                         />
                                     </td>
