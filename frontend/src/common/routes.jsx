@@ -274,7 +274,15 @@ export const router = createBrowserRouter([
                                              },
                                              {
                                                  path: 'add',
-                                                 element: <AddPurchaseInvoice />
+                                                 element: <PurchaseInvoice />
+                                             },
+                                             {
+                                                 path: 'edit/:id',
+                                                 element: <PurchaseInvoice />
+                                             },
+                                             {
+                                                 path: 'view/:id',
+                                                 element: <PurchaseInvoice />
                                              }
                                          ]
                                      }

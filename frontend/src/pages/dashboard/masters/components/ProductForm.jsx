@@ -5,6 +5,9 @@ import { useTranslation } from "react-i18next";
 import { translateDynamic } from "../../../../utils/i18nUtils";
 import productService from "../../../../services/productService";
 import toast from "react-hot-toast";
+import SuccessToast from "./SuccessToast";
+import AddCategoryModal from "./AddCategoryModal";
+import AddUomModal from "./AddUomModal";
 
 const CustomSelect = ({
   label,
@@ -172,6 +175,10 @@ const ProductForm = ({
   const [suggestions, setSuggestions] = useState([]);
   const [nameError, setNameError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
+  const [isAddSubCategoryModalOpen, setIsAddSubCategoryModalOpen] = useState(false);
+  const [isAddSubSubCategoryModalOpen, setIsAddSubSubCategoryModalOpen] = useState(false);
+  const [isAddUomModalOpen, setIsAddUomModalOpen] = useState(false);
   const suggestionsRef = useRef(null);
 
   useEffect(() => {
@@ -330,6 +337,42 @@ const ProductForm = ({
 
     fetchInitialData();
   }, []);
+
+  const fetchUomsDropdown = async () => {
+    try {
+      const uoms = await productService.getUomsDropdown();
+      setUomList(uoms);
+    } catch (error) {
+      console.error("Error fetching UOMs:", error);
+    }
+  };
+
+  const fetchCategoriesDropdown = async () => {
+    try {
+      const cats = await productService.getCategoriesDropdown();
+      setCategories(cats);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+    }
+  };
+
+  const fetchSubCategoriesDropdown = async (catId) => {
+    try {
+      const subs = await productService.getSubCategoriesDropdown(catId);
+      setSubCategories(subs);
+    } catch (error) {
+      console.error("Error fetching subcategories:", error);
+    }
+  };
+
+  const fetchSubSubCategoriesDropdown = async (subCatId) => {
+    try {
+      const subSubs = await productService.getSubSubCategoriesDropdown(subCatId);
+      setSubSubCategories(subSubs);
+    } catch (error) {
+      console.error("Error fetching subsubcategories:", error);
+    }
+  };
 
   useEffect(() => {
     if (isView) return;
@@ -525,7 +568,10 @@ const ProductForm = ({
         {[
           { label: t("modules:product_name"), value: formData.productName },
           { label: t("modules:product_code"), value: formData.productCode },
-          { label: t("modules:uom"), value: formData.uom?.gst_uom },
+          {
+            label: t("modules:uom"),
+            value: formData.uom ? `${formData.uom.gst_uom} – ${formData.uom.full_name_of_measurement}` : "-"
+          },
           { label: t("modules:product_type"), value: formData.productType },
           {
             label: t("modules:sub_category"),
@@ -653,12 +699,12 @@ const ProductForm = ({
               options={uomList}
               value={formData.uom}
               onChange={(val) => handleInputChange("uom", val)}
-              getOptionLabel={(opt) => opt.gst_uom}
+              getOptionLabel={(opt) => opt.gst_uom && opt.full_name_of_measurement ? `${opt.gst_uom} – ${opt.full_name_of_measurement}` : opt.gst_uom}
               isSearchable={true}
               showAsterisk={true}
               disabled={isView}
               footerLabel="+ Add UOM"
-              onFooterClick={() => navigate("/seller/masters/unit-master")}
+              onFooterClick={() => setIsAddUomModalOpen(true)}
               error={errors.uom}
             />
 
@@ -683,7 +729,7 @@ const ProductForm = ({
               showAsterisk={true}
               disabled={isView}
               footerLabel="+ Add Category"
-              onFooterClick={() => navigate("/seller/masters/category")}
+              onFooterClick={() => setIsAddCategoryModalOpen(true)}
               error={errors.category}
             />
 
@@ -697,25 +743,23 @@ const ProductForm = ({
               showAsterisk={true}
               disabled={isView || !formData.category}
               footerLabel="+ Add Sub Category"
-              onFooterClick={() => navigate("/seller/masters/category")}
+              onFooterClick={() => setIsAddSubCategoryModalOpen(true)}
               error={errors.subcategory}
             />
 
-            {subSubCategories.length > 0 && (
-              <CustomSelect
-                label={t("modules:sub_sub_category", "Sub-SubCategory")}
-                placeholder={t("common:select") + " " + t("modules:sub_sub_category", "Sub-SubCategory")}
-                options={subSubCategories}
-                value={formData.subsubcategory}
-                onChange={(val) => handleInputChange("subsubcategory", val)}
-                getOptionLabel={(opt) => opt.name}
-                showAsterisk={true}
-                disabled={isView || !formData.subcategory}
-                footerLabel="+ Add Sub-SubCategory"
-                onFooterClick={() => navigate("/seller/masters/category")}
-                error={errors.subsubcategory}
-              />
-            )}
+            <CustomSelect
+              label={t("modules:sub_sub_category", "Sub-SubCategory")}
+              placeholder={!formData.subcategory ? t("modules:select_subcategory_first", "Select Subcategory first") : subSubCategories.length === 0 ? t("modules:no_sub_sub_available", "No Sub-Sub Categories available") : t("common:select") + " " + t("modules:sub_sub_category", "Sub-SubCategory")}
+              options={subSubCategories}
+              value={formData.subsubcategory}
+              onChange={(val) => handleInputChange("subsubcategory", val)}
+              getOptionLabel={(opt) => opt.name}
+              showAsterisk={subSubCategories.length > 0}
+              disabled={isView || !formData.subcategory}
+              footerLabel={formData.subcategory ? "+ Add Sub-SubCategory" : ""}
+              onFooterClick={() => setIsAddSubSubCategoryModalOpen(true)}
+              error={errors.subsubcategory}
+            />
 
             {renderInput(
               t("modules:hsn_code"),
@@ -769,6 +813,78 @@ const ProductForm = ({
           </div>
         )}
       </div>
+
+      <AddCategoryModal
+        isOpen={isAddCategoryModalOpen}
+        onClose={() => setIsAddCategoryModalOpen(false)}
+        initialStep={2}
+        initialType="Category"
+        onSuccess={(newCategory) => {
+          fetchCategoriesDropdown();
+          if (newCategory) {
+            handleCategoryChange(newCategory);
+          }
+        }}
+        onShowToast={(msg, type) => {
+          if (type === 'error') toast.error(msg);
+          else toast.success(msg);
+        }}
+      />
+
+      <AddCategoryModal
+        isOpen={isAddSubSubCategoryModalOpen}
+        onClose={() => setIsAddSubSubCategoryModalOpen(false)}
+        initialStep={2}
+        initialType="Sub Sub Category"
+        initialParent={formData.subcategory}
+        onSuccess={(newSubSub) => {
+          if (formData.subcategory?.id) {
+            fetchSubSubCategoriesDropdown(formData.subcategory.id);
+          }
+          if (newSubSub) {
+            handleInputChange("subsubcategory", newSubSub);
+          }
+        }}
+        onShowToast={(msg, type) => {
+          if (type === 'error') toast.error(msg);
+          else toast.success(msg);
+        }}
+      />
+
+      <AddCategoryModal
+        isOpen={isAddSubCategoryModalOpen}
+        onClose={() => setIsAddSubCategoryModalOpen(false)}
+        initialStep={2}
+        initialType="Sub Category"
+        initialParent={formData.category}
+        onSuccess={(newSub) => {
+          if (formData.category?.id) {
+            fetchSubCategoriesDropdown(formData.category.id);
+          }
+          if (newSub) {
+            handleSubCategoryChange(newSub);
+          }
+        }}
+        onShowToast={(msg, type) => {
+          if (type === 'error') toast.error(msg);
+          else toast.success(msg);
+        }}
+      />
+
+      <AddUomModal
+        isOpen={isAddUomModalOpen}
+        onClose={() => setIsAddUomModalOpen(false)}
+        onSuccess={(newUom) => {
+          fetchUomsDropdown();
+          if (newUom) {
+            handleInputChange("uom", newUom);
+          }
+        }}
+        onShowToast={(msg, type) => {
+          if (type === 'error') toast.error(msg);
+          else toast.success(msg);
+        }}
+      />
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {

@@ -433,7 +433,7 @@ const PurchaseInvoice = () => {
                     </h2>
 
                     <button 
-                        onClick={() => setCurrentView('add')}
+                        onClick={() => navigate('add')}
                         className="md:min-w-[160px] md:px-5 h-[42px] md:h-[38px] bg-[#073318] hover:bg-[#04200f] text-white rounded-[10px] md:rounded-[8px] text-[15px] md:text-[14px] font-semibold transition-all shadow-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
                         <Plus size={16} />
@@ -444,7 +444,7 @@ const PurchaseInvoice = () => {
                 {/* Mobile Header - Stacked Layout */}
                 <div className="md:hidden flex flex-col gap-3">
                     <button 
-                        onClick={() => setCurrentView('add')}
+                        onClick={() => navigate('add')}
                         className="w-full max-w-[358px] h-[42px] bg-[#073318] hover:bg-[#04200f] text-white rounded-[10px] text-[15px] font-semibold transition-all shadow-md flex items-center justify-center gap-2 active:scale-[0.98] self-center"
                     >
                         <Plus size={16} />
@@ -739,8 +739,7 @@ const PurchaseInvoice = () => {
                                                     <button 
                                                         onClick={(e) => { 
                                                             e.stopPropagation(); 
-                                                            setSelectedInvoice(row);
-                                                            setCurrentView('view');
+                                                            navigate(`view/${row.id}`);
                                                             setDropdownIndex(null); 
                                                         }} 
                                                         className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
@@ -753,8 +752,7 @@ const PurchaseInvoice = () => {
                                                         <button 
                                                             onClick={(e) => { 
                                                                 e.stopPropagation(); 
-                                                                setSelectedInvoice(row);
-                                                                setCurrentView('view');
+                                                                navigate(`view/${row.id}`);
                                                                 setDropdownIndex(null); 
                                                             }} 
                                                             className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
@@ -766,8 +764,7 @@ const PurchaseInvoice = () => {
                                                             <button 
                                                                 onClick={(e) => { 
                                                                     e.stopPropagation(); 
-                                                                    setSelectedInvoice(row);
-                                                                    setCurrentView('edit');
+                                                                    navigate(`edit/${row.id}`);
                                                                     setDropdownIndex(null); 
                                                                 }} 
                                                                 className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"

@@ -4,12 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-hot-toast';
 import categoryService from '../../../../services/masters/categoryService';
 
-const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
+const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast, initialStep = 1, initialType = '', initialParent = null }) => {
     const { t } = useTranslation(['common', 'modules']);
-    const [step, setStep] = useState(1);
-    const [type, setType] = useState(''); // 'Category', 'Sub Category', 'Sub Sub Category'
+    const [step, setStep] = useState(initialStep);
+    const [type, setType] = useState(initialType); // 'Category', 'Sub Category', 'Sub Sub Category'
     const [categoryName, setCategoryName] = useState('');
-    const [parentCategory, setParentCategory] = useState(null);
+    const [parentCategory, setParentCategory] = useState(initialParent);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [dropdownCategories, setDropdownCategories] = useState([]);
     const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
@@ -21,14 +21,14 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
 
     useEffect(() => {
         if (isOpen) {
-            setStep(1);
-            setType('');
+            setStep(initialStep || 1);
+            setType(initialType || '');
             setCategoryName('');
-            setParentCategory(null);
+            setParentCategory(initialParent || null);
             setSearchTerm('');
             fetchStats();
         }
-    }, [isOpen]);
+    }, [isOpen, initialStep, initialType, initialParent]);
 
     const fetchStats = async () => {
         try {
@@ -104,17 +104,18 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
 
         setIsLoading(true);
         try {
+            let result;
             if (type === 'Category') {
-                await categoryService.createCategory({ name: trimmedName });
+                result = await categoryService.createCategory({ name: trimmedName });
                 onShowToast && onShowToast(t('modules:category_added_successfully'));
             } else if (type === 'Sub Category') {
-                await categoryService.createSubCategory({ name: trimmedName, category_id: parentCategory.id });
+                result = await categoryService.createSubCategory({ name: trimmedName, category_id: parentCategory.id });
                 onShowToast && onShowToast(t('modules:sub_category_added_successfully'));
             } else {
-                await categoryService.createSubSubCategory({ name: trimmedName, sub_category_id: parentCategory.id });
+                result = await categoryService.createSubSubCategory({ name: trimmedName, sub_category_id: parentCategory.id });
                 onShowToast && onShowToast(t('modules:sub_sub_category_added_successfully'));
             }
-            onSuccess();
+            onSuccess(result);
             onClose();
         } catch (error) {
             onShowToast && onShowToast(error.response?.data?.message || 'Operation failed', 'error');
@@ -133,7 +134,7 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
                 {/* Header */}
                 <div className="flex items-center justify-between px-8 py-5 bg-emerald-900 text-white border-b border-emerald-800">
                     <h2 className="text-[18px] font-bold tracking-tight">
-                        {step === 1 ? t('modules:select_category_type', 'Step 1: Select Type') : t('modules:add_details', 'Step 2: Add Details')}
+                        {initialStep === 2 ? t('modules:add_' + type?.toLowerCase()?.replace(/\s+/g, '_'), `Add ${type}`) : (step === 1 ? t('modules:select_category_type', 'Step 1: Select Type') : t('modules:add_details', 'Step 2: Add Details'))}
                     </h2>
                     <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full transition-colors">
                         <X size={20} />
@@ -172,15 +173,19 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
                         </div>
                     ) : (
                         <div className="space-y-5 animate-in slide-in-from-right-4 duration-300">
-                            {/* Selected Type Badge */}
-                            <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 flex items-center justify-between">
-                                <div>
-                                    <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">{t('common:type')}</p>
-                                    <p className="text-[14px] font-bold text-emerald-900">{type}</p>
+                            {/* Selected Type Badge / Selection */}
+                            <div className="space-y-2">
+                                <label className="text-[13px] font-semibold text-gray-600">{t('common:type')}</label>
+                                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <p className="text-[14px] font-bold text-emerald-900">{t('modules:' + type?.toLowerCase()?.replace(/\s+/g, '_'), type)}</p>
+                                    </div>
+                                    {initialStep !== 2 && (
+                                        <button onClick={() => setStep(1)} className="text-[12px] text-emerald-700 font-bold hover:underline">
+                                            {t('common:change')}
+                                        </button>
+                                    )}
                                 </div>
-                                <button onClick={() => setStep(1)} className="text-[12px] text-emerald-700 font-bold hover:underline">
-                                    {t('common:change')}
-                                </button>
                             </div>
 
                             {/* Name Input */}
@@ -201,47 +206,55 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
                                     <label className="text-[13px] font-semibold text-gray-600">
                                         {type === 'Sub Category' ? t('modules:select_parent_category') : t('modules:select_parent_sub_category')}
                                     </label>
-                                    <div
-                                        className={`w-full h-[46px] border rounded-xl flex items-center justify-between px-4 cursor-pointer transition-all ${isParentDropdownOpen ? 'border-emerald-600 ring-4 ring-emerald-600/5' : 'border-gray-200 hover:border-gray-300'}`}
-                                        onClick={() => setIsParentDropdownOpen(!isParentDropdownOpen)}
-                                    >
-                                        {isParentDropdownOpen ? (
-                                            <input
-                                                type="text" autoFocus
-                                                placeholder={parentCategory?.name || t('common:search')}
-                                                className="w-full bg-transparent outline-none text-[14px] font-medium"
-                                                value={searchTerm}
-                                                onChange={(e) => setSearchTerm(e.target.value)}
-                                                onClick={(e) => e.stopPropagation()}
-                                            />
-                                        ) : (
-                                            <span className={`text-[14px] ${parentCategory ? 'text-gray-900 font-medium' : 'text-gray-400 italic'}`}>
-                                                {parentCategory ? parentCategory.name : t('common:select_option')}
-                                            </span>
-                                        )}
-                                        <ChevronDown size={18} className={`text-gray-400 transition-transform ${isParentDropdownOpen ? 'rotate-180' : ''}`} />
-                                    </div>
-
-                                    {isParentDropdownOpen && (
-                                        <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white border border-gray-100 rounded-xl shadow-2xl z-[110] py-2 max-h-[180px] overflow-y-auto dropdown-scrollbar animate-in slide-in-from-top-2">
-                                            {filteredParents.length > 0 ? (
-                                                filteredParents.map((cat) => (
-                                                    <div
-                                                        key={cat.id}
-                                                        className={`px-4 py-2.5 text-[14px] cursor-pointer hover:bg-emerald-50 transition-colors ${parentCategory?.id === cat.id ? 'bg-emerald-50 text-emerald-900 font-bold' : 'text-gray-600'}`}
-                                                        onClick={() => {
-                                                            setParentCategory(cat);
-                                                            setIsParentDropdownOpen(false);
-                                                            setSearchTerm('');
-                                                        }}
-                                                    >
-                                                        {cat.name} {cat.categoryName && <span className="text-[11px] text-gray-400 ml-1">({cat.categoryName})</span>}
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="px-4 py-3 text-[12px] text-gray-400 text-center italic">{t('common:no_results')}</div>
-                                            )}
+                                    {initialStep === 2 && initialParent ? (
+                                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex items-center justify-between">
+                                            <p className="text-[14px] font-bold text-emerald-900">{initialParent.name}</p>
                                         </div>
+                                    ) : (
+                                        <>
+                                            <div
+                                                className={`w-full h-[46px] border rounded-xl flex items-center justify-between px-4 cursor-pointer transition-all ${isParentDropdownOpen ? 'border-emerald-600 ring-4 ring-emerald-600/5' : 'border-gray-200 hover:border-gray-300'}`}
+                                                onClick={() => setIsParentDropdownOpen(!isParentDropdownOpen)}
+                                            >
+                                                {isParentDropdownOpen ? (
+                                                    <input
+                                                        type="text" autoFocus
+                                                        placeholder={parentCategory?.name || t('common:search')}
+                                                        className="w-full bg-transparent outline-none text-[14px] font-medium"
+                                                        value={searchTerm}
+                                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                ) : (
+                                                    <span className={`text-[14px] ${parentCategory ? 'text-gray-900 font-medium' : 'text-gray-400 italic'}`}>
+                                                        {parentCategory ? parentCategory.name : t('common:select_option')}
+                                                    </span>
+                                                )}
+                                                <ChevronDown size={18} className={`text-gray-400 transition-transform ${isParentDropdownOpen ? 'rotate-180' : ''}`} />
+                                            </div>
+
+                                            {isParentDropdownOpen && (
+                                                <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white border border-gray-100 rounded-xl shadow-2xl z-[110] py-2 max-h-[180px] overflow-y-auto dropdown-scrollbar animate-in slide-in-from-top-2">
+                                                    {filteredParents.length > 0 ? (
+                                                        filteredParents.map((cat) => (
+                                                            <div
+                                                                key={cat.id}
+                                                                className={`px-4 py-2.5 text-[14px] cursor-pointer hover:bg-emerald-50 transition-colors ${parentCategory?.id === cat.id ? 'bg-emerald-50 text-emerald-900 font-bold' : 'text-gray-600'}`}
+                                                                onClick={() => {
+                                                                    setParentCategory(cat);
+                                                                    setIsParentDropdownOpen(false);
+                                                                    setSearchTerm('');
+                                                                }}
+                                                            >
+                                                                {cat.name} {cat.categoryName && <span className="text-[11px] text-gray-400 ml-1">({cat.categoryName})</span>}
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="px-4 py-3 text-[12px] text-gray-400 text-center italic">{t('common:no_results')}</div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             )}
@@ -250,28 +263,38 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast }) => {
 
                     {/* Footer Actions */}
                     <div className="flex items-center gap-3 pt-2">
-                        <button
-                            onClick={onClose}
-                            className="w-[100px] h-[52px] border border-gray-200 rounded-xl text-[15px] font-bold text-gray-500 hover:bg-gray-50 transition-all"
-                        >
-                            {t('common:cancel')}
-                        </button>
                         {step === 1 ? (
-                            <button
-                                onClick={handleNext}
-                                disabled={!type}
-                                className="flex-1 h-[52px] bg-emerald-900 text-white rounded-xl text-[16px] font-bold shadow-lg shadow-emerald-900/20 hover:bg-emerald-950 transition-all disabled:opacity-50 disabled:grayscale active:scale-95"
-                            >
-                                {t('common:next')}
-                            </button>
+                            <>
+                                <button
+                                    onClick={onClose}
+                                    className="w-[100px] h-[52px] border border-gray-200 rounded-xl text-[15px] font-bold text-gray-500 hover:bg-gray-50 transition-all"
+                                >
+                                    {t('common:cancel')}
+                                </button>
+                                <button
+                                    onClick={handleNext}
+                                    disabled={!type}
+                                    className="flex-1 h-[52px] bg-emerald-900 text-white rounded-xl text-[16px] font-bold shadow-lg shadow-emerald-900/20 hover:bg-emerald-950 transition-all disabled:opacity-50 disabled:grayscale active:scale-95"
+                                >
+                                    {t('common:next')}
+                                </button>
+                            </>
                         ) : (
-                            <button
-                                onClick={handleSave}
-                                disabled={isLoading}
-                                className="flex-1 h-[52px] bg-emerald-900 text-white rounded-xl text-[16px] font-bold shadow-lg shadow-emerald-900/20 hover:bg-emerald-950 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
-                            >
-                                {isLoading ? <Loader2 size={20} className="animate-spin" /> : t('modules:save_category', 'Save Category')}
-                            </button>
+                            <>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={isLoading}
+                                    className="flex-1 h-[52px] bg-emerald-900 text-white rounded-xl text-[16px] font-bold shadow-lg shadow-emerald-900/20 hover:bg-emerald-950 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                                >
+                                    {isLoading ? <Loader2 size={20} className="animate-spin" /> : (initialStep === 2 ? t('common:save') : t('modules:save_category', 'Save Category'))}
+                                </button>
+                                <button
+                                    onClick={onClose}
+                                    className="w-[100px] h-[52px] border border-gray-200 rounded-xl text-[15px] font-bold text-gray-500 hover:bg-gray-50 transition-all"
+                                >
+                                    {initialStep === 2 ? t('common:exit', 'Exit') : t('common:cancel')}
+                                </button>
+                            </>
                         )}
                     </div>
                 </div>
