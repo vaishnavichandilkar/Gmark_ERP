@@ -31,6 +31,47 @@ import { useTranslation } from 'react-i18next';
 
 import purchaseOrderService from "../../../services/purchaseOrderService";
 
+const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+      <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-8 text-center">
+          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Trash2 size={32} className="text-red-500" />
+          </div>
+          <h3 className="text-[20px] font-bold text-[#111827] mb-2 font-outfit">
+            Delete Purchase Order
+          </h3>
+          <p className="text-[#6B7280] text-[15px] font-medium mb-8">
+            Are you sure you want to delete this purchase order? This action will mark the status as deleted.
+          </p>
+          <div className="flex gap-4">
+            <button
+              onClick={onCancel}
+              disabled={isDeleting}
+              className="flex-1 h-[52px] rounded-[14px] border border-[#E5E7EB] text-[15px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all font-outfit"
+            >
+              No, Keep it
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={isDeleting}
+              className="flex-1 h-[52px] rounded-[14px] bg-red-600 hover:bg-red-700 text-white text-[15px] font-bold transition-all shadow-lg shadow-red-200 flex items-center justify-center gap-2 font-outfit"
+            >
+              {isDeleting ? (
+                <RefreshCw size={18} className="animate-spin" />
+              ) : (
+                "Yes, Delete"
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PurchaseOrder = () => {
   const { t } = useTranslation(['modules', 'common']);
   const navigate = useNavigate();
@@ -42,6 +83,9 @@ const PurchaseOrder = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [poToDelete, setPoToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const dropdownRefs = useRef({});
   const exportRef = useRef(null);
 
@@ -190,19 +234,42 @@ const PurchaseOrder = () => {
     }, 400);
   };
 
-  const handleDeletePO = async (id) => {
-    if (window.confirm("Are you sure you want to delete this purchase order?")) {
-        setIsRefreshing(true);
-        try {
-            await purchaseOrderService.deletePurchaseOrder(id);
-            toast.success("Purchase order deleted successfully");
-            // Triggers useEffect refresh trick
-            setTimeout(() => { setIsRefreshing(false); }, 400);
-        } catch (error) {
-            console.error("Error deleting PO:", error);
-            toast.error(error.response?.data?.message || "Failed to delete Purchase Order");
-            setIsRefreshing(false);
-        }
+  const handleDeletePO = (id) => {
+    setPoToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handlePrint = async (poData) => {
+    try {
+      setIsRefreshing(true);
+      // We already have some data in poData, but it's better to fetch full details if items are missing
+      // However, if the row already has what we need or we can fetch it:
+      const fullPo = await purchaseOrderService.getPurchaseOrderById(poData.id);
+      navigate(ROUTES.PURCHASE_ORDER_PRINT, { state: { poData: fullPo } });
+    } catch (error) {
+      console.error("Print error:", error);
+      toast.error("Failed to load print preview");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!poToDelete) return;
+    setIsDeleting(true);
+    try {
+        await purchaseOrderService.deletePurchaseOrder(poToDelete);
+        toast.success("Purchase order deleted successfully");
+        setIsDeleteModalOpen(false);
+        setPoToDelete(null);
+        // Refresh items:
+        setIsRefreshing(prev => !prev); // Toggle to trigger useEffect
+    } catch (error) {
+        console.error("Error deleting PO:", error);
+        const errorMsg = error.response?.data?.message || "Failed to delete Purchase Order";
+        toast.error(errorMsg);
+    } finally {
+        setIsDeleting(false);
     }
   };
 
@@ -564,9 +631,9 @@ const PurchaseOrder = () => {
 
                       {activeDropdown === po.id && (
                         <div className={`absolute right-[calc(50%+1.25rem)] w-max min-w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in duration-200 text-left ${index >= currentItems.length - 2 ? 'bottom-0 mb-2' : 'top-0 mt-2'}`}>
-                          <button 
+                           <button 
                             onClick={() => { setActiveDropdown(null); navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id)); }}
-                            className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors font-bold"
+                            className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors font-bold border-b border-gray-50"
                           >
                             <Eye size={18} className="text-gray-400" /> 
                             {(po.computedStatusLabel === 'Pending' || po.computedStatusLabel === 'Expiring Soon') 
@@ -574,6 +641,16 @@ const PurchaseOrder = () => {
                               : t('common:view_po', 'View PO')
                             }
                           </button>
+
+                          {(po.computedStatusLabel === 'Pending' || po.computedStatusLabel === 'Expiring Soon' || po.computedStatusLabel === 'Completed') && (
+                            <button 
+                              onClick={() => { setActiveDropdown(null); handlePrint(po); }}
+                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] transition-colors font-bold border-b border-gray-50"
+                            >
+                              <Download size={18} className="text-gray-400" /> 
+                              Print PO
+                            </button>
+                          )}
 
                           {po.computedStatusLabel !== 'Deleted' && (
                               <button 
@@ -731,6 +808,12 @@ const PurchaseOrder = () => {
               </div>
           </div>
       )}
+      <DeleteConfirmModal 
+        isOpen={isDeleteModalOpen}
+        isDeleting={isDeleting}
+        onCancel={() => { setIsDeleteModalOpen(false); setPoToDelete(null); }}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 };

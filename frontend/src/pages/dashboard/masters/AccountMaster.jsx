@@ -301,7 +301,7 @@ const AccountMaster = () => {
         const handleBack = () => {
             const redirect = searchParams.get('redirect');
             if (redirect && currentView === 'add') {
-                navigate(redirect);
+                navigate(redirect, { replace: true });
                 return;
             }
             navigate('/seller/masters/account-master');
@@ -311,7 +311,7 @@ const AccountMaster = () => {
             showToast(currentView === 'add' ? t('common:added_successfully') : t('common:updated_successfully'));
             const redirect = searchParams.get('redirect');
             if (redirect && currentView === 'add') {
-                setTimeout(() => navigate(redirect), 1500);
+                setTimeout(() => navigate(redirect, { replace: true }), 1500);
             } else {
                 dispatch(fetchAllAccounts({ page: currentPage, limit: rowsPerPage, search: searchQuery, ...appliedFilters }));
                 if (currentView === 'add') {

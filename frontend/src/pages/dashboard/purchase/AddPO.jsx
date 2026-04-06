@@ -472,6 +472,24 @@ const AddPO = () => {
     const removeItem = (index) => {
         if (items.length > 1) {
             setItems(items.filter((_, i) => i !== index));
+        } else {
+            // Reset the only row if deleted
+            setItems([{ 
+                id: Date.now(), 
+                product_code: '', 
+                product_name: '', 
+                quantity: 0, 
+                rate: 0, 
+                uom: '', 
+                discount_amount: 0, 
+                discount_percent: 0, 
+                hsn: '', 
+                tax_percent: 0, 
+                before_tax: 0.00, 
+                tax_amount: 0.00, 
+                total_amount: 0.00,
+                description: '' 
+            }]);
         }
     };
 
@@ -667,7 +685,7 @@ const AddPO = () => {
                 {/* Table Section */}
                 <div className="p-4 sm:p-6 md:p-8 border-b border-[#F3F4F6] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1">
-                        <div className="relative flex-1 max-w-full">
+                        <div className="relative flex-1 max-w-full md:max-w-[320px]">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" size={18} />
                             <input
                                 type="text"
@@ -724,9 +742,9 @@ const AddPO = () => {
                                                 } catch (e) {
                                                     sessionStorage.setItem('add_po_product_ids', '[]');
                                                 }
-                                                navigate(`/seller/masters/product-master?mode=add&redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
+                                                navigate(`/seller/masters/product-master/add?redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
                                             }}
-                                            className="w-full h-[40px] bg-[#073318] text-white text-[13px] font-bold rounded-[10px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-sm font-outfit"
+                                            className="w-full h-[40px] bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-sm font-outfit"
                                         >
                                             <Plus size={16} className="group-hover:scale-110 transition-transform" /> 
                                             Add new product

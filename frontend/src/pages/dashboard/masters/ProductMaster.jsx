@@ -979,7 +979,7 @@ const ProductMaster = () => {
           onBack={() => {
             const redirect = searchParams.get("redirect");
             if (redirect) {
-              navigate(redirect);
+              navigate(redirect, { replace: true });
             } else {
               navigate('/seller/masters/product-master');
             }
@@ -994,7 +994,7 @@ const ProductMaster = () => {
             
             const redirect = searchParams.get("redirect");
             if (redirect && currentView.type === "add") {
-              setTimeout(() => navigate(redirect), 1500); // Redirect back after toast
+              setTimeout(() => navigate(redirect, { replace: true }), 1500); // Redirect back after toast
             } else {
               navigate('/seller/masters/product-master');
               fetchProducts();
