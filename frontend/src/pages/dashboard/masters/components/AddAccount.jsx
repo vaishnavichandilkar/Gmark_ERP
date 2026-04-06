@@ -281,7 +281,7 @@ const OTHER_DOC_OPTIONS = [
   "gst_certificate",
   "food_license",
   "shop_act_license",
-  "cancelled_cheque_bank_passbook_cc",
+  "cancelledChequePassbook",
   "agreement_copy",
   "medicine_license",
   "pesticide_license",
@@ -682,7 +682,7 @@ const AddAccount = ({
       )
     ) {
       toast.error(
-        "Please provide both document type/name and file for all added Other Documents, or delete empty rows.",
+        t("modules:error_doc_incomplete")
       );
       return;
     }
@@ -1170,6 +1170,7 @@ const AddAccount = ({
                     placeholder={t("modules:select_prefix")}
                     options={PREFIX_OPTIONS}
                     value={formData.prefix}
+                    renderValue={(val) => t(`modules:${val.toLowerCase()}`, val)}
                     onChange={(val) => handleInputChange("prefix", val)}
                     onBlur={() => validateField("prefix", formData.prefix)}
                     error={errors.prefix}
@@ -1298,7 +1299,7 @@ const AddAccount = ({
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[13px] font-semibold text-[#4B5563]">
-                        {t("modules:opening_balance")}
+                        {t("modules:openingBalance")}
                       </label>
                       <div className="flex w-full gap-2">
                         <input
@@ -1320,6 +1321,7 @@ const AddAccount = ({
                           <CustomSelect
                             options={["Cr", "Dr"]}
                             value={formData.vendorBalanceType}
+                            renderValue={(val) => t(`modules:${val.toLowerCase()}`, val)}
                             onChange={(val) =>
                               handleInputChange("vendorBalanceType", val)
                             }
@@ -1384,7 +1386,7 @@ const AddAccount = ({
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[13px] font-semibold text-[#4B5563]">
-                        {t("modules:opening_balance")}
+                        {t("modules:openingBalance")}
                       </label>
                       <div className="flex w-full gap-2">
                         <input
@@ -1409,6 +1411,7 @@ const AddAccount = ({
                           <CustomSelect
                             options={["Dr", "Cr"]}
                             value={formData.customerBalanceType}
+                            renderValue={(val) => t(`modules:${val.toLowerCase()}`, val)}
                             onChange={(val) =>
                               handleInputChange("customerBalanceType", val)
                             }
@@ -1423,7 +1426,7 @@ const AddAccount = ({
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[13px] font-semibold text-[#4B5563]">
-                        Customer Type
+                        {t("modules:customerType")}
                       </label>
                       <CustomSelect
                         options={[
@@ -1437,7 +1440,7 @@ const AddAccount = ({
                         onChange={(val) =>
                           handleInputChange("customerType", val)
                         }
-                        placeholder="Select Customer Type"
+                        placeholder={t("modules:selectCustomerType")}
                       />
                     </div>
                   </div>
@@ -1461,13 +1464,13 @@ const AddAccount = ({
                   }
                   className="text-[13px] font-bold text-[#0A3622] hover:bg-[#0A3622]/10 px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
                 >
-                  <Plus size={16} /> Add Document
+                  <Plus size={16} /> {t("modules:addDocument")}
                 </button>
               </div>
 
               {otherDocs.length === 0 ? (
                 <div className="text-[13px] text-[#6B7280] italic py-4 bg-gray-50/50 rounded-lg text-center border border-dashed border-gray-200">
-                  No other documents added.
+                  {t("modules:noOtherDocs")}
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
@@ -1490,7 +1493,7 @@ const AddAccount = ({
                         <div className="flex-1 flex flex-col gap-4 min-w-[200px]">
                           <div className="flex flex-col gap-2">
                             <label className="text-[13px] font-semibold text-[#4B5563]">
-                              Document Type{" "}
+                              {t("modules:documentType")}{" "}
                               <span className="text-red-500">*</span>
                             </label>
                             <CustomSelect
@@ -1507,18 +1510,18 @@ const AddAccount = ({
                                 }
                                 setOtherDocs(newDocs);
                               }}
-                              placeholder="Select Document"
+                              placeholder={t("modules:selectDocument")}
                             />
                           </div>
                           {doc.type === "other" && (
                             <div className="flex flex-col gap-2">
                               <label className="text-[13px] font-semibold text-[#4B5563]">
-                                Document Name{" "}
+                                {t("modules:documentName")}{" "}
                                 <span className="text-red-500">*</span>
                               </label>
                               <input
                                 type="text"
-                                placeholder="e.g. Aadhar Card"
+                                placeholder={t("modules:eg_document_name")}
                                 className="w-full h-[40px] border border-[#E5E7EB] rounded-[6px] px-3 text-[14px] outline-none focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"
                                 value={doc.name}
                                 onChange={(e) => {
@@ -1532,7 +1535,7 @@ const AddAccount = ({
                         </div>
                         <div className="flex-1 flex flex-col gap-2 min-w-[200px]">
                           <label className="text-[13px] font-semibold text-[#4B5563]">
-                            Upload File <span className="text-red-500">*</span>
+                            {t("modules:uploadFile")} <span className="text-red-500">*</span>
                           </label>
                           <div className="flex items-center">
                             <input
@@ -1542,7 +1545,7 @@ const AddAccount = ({
                               onChange={(e) => {
                                 const file = e.target.files[0];
                                 if (file && file.size > 10 * 1024 * 1024)
-                                  return toast.error("File size exceeds 10MB");
+                                  return toast.error(t("modules:error_file_large"));
                                 const newDocs = [...otherDocs];
                                 newDocs[idx].file = file;
                                 setOtherDocs(newDocs);
@@ -1627,9 +1630,8 @@ const AddAccount = ({
                   <CustomSelect
                     label={t("modules:reg_under")}
                     placeholder={t("modules:select_reg_under")}
-                    options={REG_UNDER.map((opt) =>
-                      t(`modules:${opt.toLowerCase()}`),
-                    )}
+                    options={REG_UNDER}
+                    renderValue={(val) => t(`modules:${val.toLowerCase()}`, val)}
                     value={formData.regUnder}
                     onChange={(val) => handleInputChange("regUnder", val)}
                     onBlur={() => validateField("regUnder", formData.regUnder)}
@@ -1640,9 +1642,8 @@ const AddAccount = ({
                   <CustomSelect
                     label={t("modules:reg_type")}
                     placeholder={t("modules:select_reg_type")}
-                    options={REG_TYPE.map((opt) =>
-                      t(`modules:${opt.toLowerCase()}`),
-                    )}
+                    options={REG_TYPE}
+                    renderValue={(val) => t(`modules:${val.toLowerCase()}`, val)}
                     value={formData.regType}
                     onChange={(val) => handleInputChange("regType", val)}
                     onBlur={() => validateField("regType", formData.regType)}
@@ -1678,7 +1679,7 @@ const AddAccount = ({
                 {isLoading ? (
                   <Loader2 size={16} className="animate-spin mr-2" />
                 ) : null}
-                {t("modules:save", "Save Account")}
+                {t("modules:saveAccount")}
               </button>
               <button
                 onClick={onBack}

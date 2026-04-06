@@ -134,7 +134,9 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast, initialStep
                 {/* Header */}
                 <div className="flex items-center justify-between px-8 py-5 bg-emerald-900 text-white border-b border-emerald-800">
                     <h2 className="text-[18px] font-bold tracking-tight">
-                        {initialStep === 2 ? t('modules:add_' + type?.toLowerCase()?.replace(/\s+/g, '_'), `Add ${type}`) : (step === 1 ? t('modules:select_category_type', 'Step 1: Select Type') : t('modules:add_details', 'Step 2: Add Details'))}
+                        {initialStep === 2 
+                            ? t('modules:add_' + type?.toLowerCase()?.replace(/\s+/g, '_'), `Add ${type}`) 
+                            : (step === 1 ? t('modules:stepSelectType') : t('modules:stepAddDetails'))}
                     </h2>
                     <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full transition-colors">
                         <X size={20} />
@@ -144,12 +146,12 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast, initialStep
                 <div className="p-8 space-y-6">
                     {step === 1 ? (
                         <div className="space-y-4">
-                            <label className="text-[13px] font-semibold text-gray-500 uppercase tracking-wider">{t('modules:choose_hierarchy_level', 'Choose Hierarchy Level')}</label>
+                            <label className="text-[13px] font-semibold text-gray-500 uppercase tracking-wider">{t('modules:chooseHierarchyLevel')}</label>
                             <div className="grid grid-cols-1 gap-3">
                                 {[
-                                    { id: 'Category', label: t('modules:category'), desc: 'Top Level (Level 1)', disabled: false },
-                                    { id: 'Sub Category', label: t('modules:sub_category'), desc: 'Child Level (Level 2)', disabled: !stats.hasCategories },
-                                    { id: 'Sub Sub Category', label: t('modules:sub_sub_category'), desc: 'Grandchild Level (Level 3)', disabled: !stats.hasSubCategories }
+                                    { id: 'Category', label: t('modules:category'), desc: t('modules:topLevel1'), disabled: false },
+                                    { id: 'Sub Category', label: t('modules:sub_category'), desc: t('modules:childLevel2'), disabled: !stats.hasCategories },
+                                    { id: 'Sub Sub Category', label: t('modules:sub_sub_category'), desc: t('modules:grandchildLevel3'), disabled: !stats.hasSubCategories }
                                 ].map((opt) => (
                                     <button
                                         key={opt.id}
@@ -164,7 +166,7 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast, initialStep
                                         <span className="text-[12px] text-gray-400 font-medium">{opt.desc}</span>
                                         {opt.disabled && (
                                             <span className="text-[10px] text-red-500 mt-1 font-bold italic flex items-center gap-1">
-                                                <Info size={10} /> {opt.id === 'Sub Category' ? 'Add a category first' : 'Add a sub-category first'}
+                                                <Info size={10} /> {opt.id === 'Sub Category' ? t('modules:addCategoryFirst') : t('modules:addSubCategoryFirst')}
                                             </span>
                                         )}
                                     </button>
@@ -195,7 +197,7 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast, initialStep
                                     type="text" autoFocus
                                     value={categoryName}
                                     onChange={(e) => setCategoryName(e.target.value)}
-                                    placeholder={t('modules:enter_name')}
+                                    placeholder={t('modules:enterName')}
                                     className="w-full h-[46px] border border-gray-200 rounded-xl px-4 text-[14px] font-medium outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/5 transition-all"
                                 />
                             </div>
@@ -204,7 +206,7 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast, initialStep
                             {type !== 'Category' && (
                                 <div className="space-y-2 relative" ref={parentDropdownRef}>
                                     <label className="text-[13px] font-semibold text-gray-600">
-                                        {type === 'Sub Category' ? t('modules:select_parent_category') : t('modules:select_parent_sub_category')}
+                                        {type === 'Sub Category' ? t('modules:selectParentCategory') : t('modules:selectParentSubCategory')}
                                     </label>
                                     {initialStep === 2 && initialParent ? (
                                         <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex items-center justify-between">
@@ -227,7 +229,7 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast, initialStep
                                                     />
                                                 ) : (
                                                     <span className={`text-[14px] ${parentCategory ? 'text-gray-900 font-medium' : 'text-gray-400 italic'}`}>
-                                                        {parentCategory ? parentCategory.name : t('common:select_option')}
+                                                        {parentCategory ? parentCategory.name : t('common:selectOption')}
                                                     </span>
                                                 )}
                                                 <ChevronDown size={18} className={`text-gray-400 transition-transform ${isParentDropdownOpen ? 'rotate-180' : ''}`} />

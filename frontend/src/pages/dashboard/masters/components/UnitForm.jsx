@@ -403,7 +403,7 @@ const UnitForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onEdit 
                 <div className="px-8 py-6 border-b border-[#F3F4F6] bg-white flex items-center justify-between">
                     <div>
                         <h2 className="text-[20px] font-bold text-[#111827] tracking-tight">
-                            {mode === 'add' ? t('modules:add_new_unit') : (mode === 'edit' ? t('modules:edit_unit_details') : t('modules:view_unit_details'))}
+                            {mode === 'add' ? t('modules:addUnit') : (mode === 'edit' ? t('modules:editUnitDetails') : t('modules:view_unit_details'))}
                         </h2>
                     </div>
                     <button
@@ -422,27 +422,27 @@ const UnitForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onEdit 
                     <div className="grid grid-cols-1 gap-8 w-full">
                         <CustomSelect
                             label={t('modules:unit_name')}
-                            placeholder={t('modules:select_unit_category')}
+                            placeholder={t('modules:selectUnitCategory')}
                             options={unitNameOptions}
                             value={formData.unit_name}
                             onChange={handleUnitNameChange}
                             showAsterisk={true}
                             disabled={isView}
-                            actionLabel={t('modules:add_unit_name')}
+                            actionLabel={t('modules:addUnitName')}
                             onAction={handleAddCustomUnitName}
                             error={errors.unit_name}
                         />
 
                         <CustomSelect
                             label={t('modules:full_name_of_measurement')}
-                            placeholder={t('modules:select_or_enter_full_name')}
+                            placeholder={t('modules:selectOrEnterFullName')}
                             options={fullNameOptions}
                             value={formData.full_name_of_measurement}
                             onChange={handleFullNameChange}
                             isSearchable={true}
                             disabled={isView || !formData.unit_name}
                             showAsterisk={true}
-                            actionLabel={t('modules:add_full_name_of_measurement')}
+                            actionLabel={t('modules:addFullNameOfMeasurement')}
                             onAction={handleAddCustomFullName}
                             error={errors.full_name_of_measurement}
                         />
@@ -456,7 +456,7 @@ const UnitForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onEdit 
                             isSearchable={true}
                             disabled={isView || !formData.unit_name}
                             showAsterisk={true}
-                            actionLabel={t('modules:add_gst_uom')}
+                            actionLabel={t('modules:addGstUom')}
                             onAction={handleAddCustomGstUom}
                             error={errors.gst_uom}
                         />

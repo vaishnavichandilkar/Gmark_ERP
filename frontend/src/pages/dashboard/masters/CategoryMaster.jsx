@@ -86,9 +86,9 @@ const CategoryMaster = () => {
 
   // Sync currentView with URL
   useEffect(() => {
-    if (location.pathname.endsWith('/add')) {
+    if (location.pathname.endsWith("/add")) {
       setCurrentView({ type: "form", data: null, mode: "add" });
-    } else if (location.pathname.includes('/edit/')) {
+    } else if (location.pathname.includes("/edit/")) {
       // Find the category to edit
       const findCategory = (data, targetId) => {
         for (const cat of data) {
@@ -181,7 +181,7 @@ const CategoryMaster = () => {
       const newSubExpanded = {};
       masterData.forEach((section) => {
         newExpanded[section.id] = true;
-        (section.sub_categories || []).forEach(sub => {
+        (section.sub_categories || []).forEach((sub) => {
           if (sub.sub_sub_categories && sub.sub_sub_categories.length > 0) {
             newSubExpanded[sub.id] = true;
           }
@@ -201,15 +201,21 @@ const CategoryMaster = () => {
         if (type === "category" && Number(cat.id) === Number(id)) {
           const updatedCat = { ...cat, status: newStatus };
           if (newStatus === "INACTIVE") {
-            updatedCat.sub_categories = (cat.sub_categories || []).map((sub) => ({
-              ...sub,
-              status: "INACTIVE",
-              sub_sub_categories: (sub.sub_sub_categories || []).map(ss => ({ ...ss, status: "INACTIVE" }))
-            }));
+            updatedCat.sub_categories = (cat.sub_categories || []).map(
+              (sub) => ({
+                ...sub,
+                status: "INACTIVE",
+                sub_sub_categories: (sub.sub_sub_categories || []).map(
+                  (ss) => ({ ...ss, status: "INACTIVE" }),
+                ),
+              }),
+            );
           }
           return updatedCat;
         } else if (type === "sub_category") {
-          const subExists = (cat.sub_categories || []).some(s => Number(s.id) === Number(id));
+          const subExists = (cat.sub_categories || []).some(
+            (s) => Number(s.id) === Number(id),
+          );
           if (!subExists) return cat;
 
           return {
@@ -218,7 +224,9 @@ const CategoryMaster = () => {
               if (Number(sub.id) === Number(id)) {
                 const updatedSub = { ...sub, status: newStatus };
                 if (newStatus === "INACTIVE") {
-                  updatedSub.sub_sub_categories = (sub.sub_sub_categories || []).map(ss => ({ ...ss, status: "INACTIVE" }));
+                  updatedSub.sub_sub_categories = (
+                    sub.sub_sub_categories || []
+                  ).map((ss) => ({ ...ss, status: "INACTIVE" }));
                 }
                 return updatedSub;
               }
@@ -226,8 +234,10 @@ const CategoryMaster = () => {
             }),
           };
         } else if (type === "sub_sub_category") {
-          const subSubExists = (cat.sub_categories || []).some(s =>
-            (s.sub_sub_categories || []).some(ss => Number(ss.id) === Number(id))
+          const subSubExists = (cat.sub_categories || []).some((s) =>
+            (s.sub_sub_categories || []).some(
+              (ss) => Number(ss.id) === Number(id),
+            ),
           );
           if (!subSubExists) return cat;
 
@@ -238,8 +248,8 @@ const CategoryMaster = () => {
               sub_sub_categories: (sub.sub_sub_categories || []).map((ss) =>
                 Number(ss.id) === Number(id)
                   ? { ...ss, status: newStatus }
-                  : ss
-              )
+                  : ss,
+              ),
             })),
           };
         }
@@ -256,7 +266,7 @@ const CategoryMaster = () => {
         await categoryService.toggleSubSubCategoryStatus(id, newStatus);
       }
       showToast(
-        `${type.replace(/_/g, ' ')} ${newStatus === "ACTIVE" ? "activated" : "inactivated"} successfully`,
+        `${type.replace(/_/g, " ")} ${newStatus === "ACTIVE" ? "activated" : "inactivated"} successfully`,
       );
       // fetchCategories(); // Removed redundant fetch to keep optimistic UI smoothness
     } catch (error) {
@@ -296,10 +306,12 @@ const CategoryMaster = () => {
       data = data.filter((section) => {
         const nameMatch = section.name.toLowerCase().includes(q);
         const subMatch = (section.sub_categories || []).some((item) =>
-          (item.name || "").toLowerCase().includes(q)
+          (item.name || "").toLowerCase().includes(q),
         );
         const subSubMatch = (section.sub_categories || []).some((item) =>
-          (item.sub_sub_categories || []).some(ss => (ss.name || "").toLowerCase().includes(q))
+          (item.sub_sub_categories || []).some((ss) =>
+            (ss.name || "").toLowerCase().includes(q),
+          ),
         );
         return nameMatch || subMatch || subSubMatch;
       });
@@ -377,7 +389,7 @@ const CategoryMaster = () => {
       toast.dismiss(loadingToast);
       toast.error(
         error?.response?.data?.message ||
-        t("common:import_failed", "Failed to import data"),
+          t("common:import_failed", "Failed to import data"),
       );
       return Promise.reject(error);
     }
@@ -416,10 +428,10 @@ const CategoryMaster = () => {
       <CategoryForm
         mode={currentView.mode}
         initialData={currentView.data}
-        onBack={() => navigate('/seller/masters/category')}
+        onBack={() => navigate("/seller/masters/category")}
         onSuccess={() => {
           fetchCategories();
-          navigate('/seller/masters/category');
+          navigate("/seller/masters/category");
         }}
         onShowToast={showToast}
       />
@@ -432,7 +444,7 @@ const CategoryMaster = () => {
         {/* Desktop Header */}
         <div className="hidden md:flex flex-row items-center justify-between gap-4">
           <h2 className="text-[20px] md:text-[24px] font-bold text-[#111827] tracking-tight">
-            {t('modules:category_master')}
+            {t("modules:category_master")}
           </h2>
 
           <button
@@ -490,10 +502,7 @@ const CategoryMaster = () => {
                   />
                   <input
                     type="text"
-                    placeholder={t(
-                      "common:search_placeholder",
-                      "Search By Name...",
-                    )}
+                    placeholder={t('searchByAnything')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all placeholder:text-gray-400 shadow-sm"
@@ -559,7 +568,9 @@ const CategoryMaster = () => {
                 >
                   <Download
                     size={18}
-                    className={isExportOpen ? "text-[#073318]" : "text-gray-400"}
+                    className={
+                      isExportOpen ? "text-[#073318]" : "text-gray-400"
+                    }
                   />
                   {t("common:export")}
                 </button>
@@ -590,7 +601,9 @@ const CategoryMaster = () => {
         {/* Mobile Action Bar */}
         <div className="md:hidden py-3 px-4 border-b border-[#F3F4F6] rounded-t-[20px]">
           <div className="flex items-center gap-2 h-[40px]">
-            <div className={`relative h-full transition-all duration-300 flex items-center ${isSearchExpanded ? 'flex-1' : 'w-[42px]'}`}>
+            <div
+              className={`relative h-full transition-all duration-300 flex items-center ${isSearchExpanded ? "flex-1" : "w-[42px]"}`}
+            >
               {!isSearchExpanded ? (
                 <button
                   onClick={() => setIsSearchExpanded(true)}
@@ -604,14 +617,14 @@ const CategoryMaster = () => {
                   <input
                     type="text"
                     autoFocus
-                    placeholder={t('common:search')}
+                    placeholder={t("common:search")}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full h-full bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none shadow-sm placeholder:text-gray-400 font-medium"
                   />
                   {searchQuery && (
                     <button
-                      onClick={() => setSearchQuery('')}
+                      onClick={() => setSearchQuery("")}
                       className="absolute right-3 text-gray-400"
                     >
                       <X size={16} />
@@ -623,37 +636,63 @@ const CategoryMaster = () => {
 
             {!isSearchExpanded ? (
               <div className="flex items-center gap-1 ml-auto animate-in fade-in duration-300">
-                <button onClick={fetchCategories} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                <button
+                  onClick={fetchCategories}
+                  className="w-10 h-10 flex items-center justify-center text-gray-500"
+                >
                   <RefreshCw size={20} />
                 </button>
-                <button onClick={() => setIsImportModalOpen(true)} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="w-10 h-10 flex items-center justify-center text-gray-500"
+                >
                   <Upload size={20} />
                 </button>
                 <div className="relative">
-                  <button onClick={() => setIsExportOpen(!isExportOpen)} className={`w-10 h-10 flex items-center justify-center transition-colors ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}>
+                  <button
+                    onClick={() => setIsExportOpen(!isExportOpen)}
+                    className={`w-10 h-10 flex items-center justify-center transition-colors ${isExportOpen ? "text-[#073318]" : "text-gray-500"}`}
+                  >
                     <Download size={20} />
                   </button>
                   {isExportOpen && (
                     <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-lg z-[100] py-1">
-                      <button onClick={handleExportPDF} className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50">
+                      <button
+                        onClick={handleExportPDF}
+                        className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50"
+                      >
                         <FileText size={18} className="text-red-500" /> PDF
                       </button>
-                      <button onClick={handleExportExcel} className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50">
-                        <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                      <button
+                        onClick={handleExportExcel}
+                        className="w-full px-4 py-2.5 flex items-center gap-3 text-[13px] text-gray-700 hover:bg-gray-50"
+                      >
+                        <FileSpreadsheet size={18} className="text-green-600" />{" "}
+                        Excel
                       </button>
                     </div>
                   )}
                 </div>
-                <button onClick={toggleExpandAll} className="w-10 h-10 flex items-center justify-center text-gray-500">
-                  {isAllExpanded ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                <button
+                  onClick={toggleExpandAll}
+                  className="w-10 h-10 flex items-center justify-center text-gray-500"
+                >
+                  {isAllExpanded ? (
+                    <Minimize2 size={20} />
+                  ) : (
+                    <Maximize2 size={20} />
+                  )}
                 </button>
               </div>
             ) : (
               <button
-                onClick={() => { setIsSearchExpanded(false); setSearchQuery(''); }}
+                onClick={() => {
+                  setIsSearchExpanded(false);
+                  setSearchQuery("");
+                }}
                 className="text-[14px] font-bold text-[#073318] px-2"
               >
-                {t('common:cancel')}
+                {t("common:cancel")}
               </button>
             )}
           </div>
@@ -684,62 +723,116 @@ const CategoryMaster = () => {
             </div>
           ) : paginatedData.length > 0 ? (
             paginatedData.map((section, paginatedIndex) => {
-              const isSearchExpanding = searchQuery && (section.sub_categories || []).some(item =>
-                (item.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (item.sub_sub_categories || []).some(ss => (ss.name || "").toLowerCase().includes(searchQuery.toLowerCase()))
-              );
-              const isExpanded = expandedGroups[section.id] || isSearchExpanding;
+              const isSearchExpanding =
+                searchQuery &&
+                (section.sub_categories || []).some(
+                  (item) =>
+                    (item.name || "")
+                      .toLowerCase()
+                      .includes(searchQuery.toLowerCase()) ||
+                    (item.sub_sub_categories || []).some((ss) =>
+                      (ss.name || "")
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()),
+                    ),
+                );
+              const isExpanded =
+                expandedGroups[section.id] || isSearchExpanding;
 
               return (
-                <div key={section.id} className="flex flex-col border-b border-[#E5E7EB] last:border-b-0 relative">
+                <div
+                  key={section.id}
+                  className="flex flex-col border-b border-[#E5E7EB] last:border-b-0 relative"
+                >
                   {/* Category Row */}
                   <div className="flex items-center justify-between py-2 md:py-4 bg-white hover:bg-gray-50/30 transition-colors group">
-                    <div className="flex items-center flex-1 cursor-pointer select-none gap-3 pl-4 md:pl-6" onClick={() => toggleGroup(section.id)}>
+                    <div
+                      className="flex items-center flex-1 cursor-pointer select-none gap-3 pl-4 md:pl-6"
+                      onClick={() => toggleGroup(section.id)}
+                    >
                       <div className="flex items-center justify-center w-5 h-5">
-                        {isExpanded ? <Minus size={14} className="text-[#111827] stroke-[3px]" /> : <Plus size={14} className="text-[#111827] stroke-[3px]" />}
+                        {isExpanded ? (
+                          <Minus
+                            size={14}
+                            className="text-[#111827] stroke-[3px]"
+                          />
+                        ) : (
+                          <Plus
+                            size={14}
+                            className="text-[#111827] stroke-[3px]"
+                          />
+                        )}
                       </div>
-                      <span className="text-[14px] font-bold text-[#111827]">{section.name}</span>
+                      <span className="text-[14px] font-bold text-[#111827]">
+                        {section.name}
+                      </span>
                     </div>
 
                     <div className="flex items-stretch shrink-0">
                       <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4">
-                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${section.status === "INACTIVE" ? "bg-[#FEF2F2] text-[#DC2626]" : "bg-[#ECFDF5] text-[#059669]"}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${section.status === "INACTIVE" ? "bg-[#DC2626]" : "bg-[#059669]"}`}></span>
-                          {section.status === "INACTIVE" ? t("common:inactive") : t("common:active")}
+                        <div
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${section.status === "INACTIVE" ? "bg-[#FEF2F2] text-[#DC2626]" : "bg-[#ECFDF5] text-[#059669]"}`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${section.status === "INACTIVE" ? "bg-[#DC2626]" : "bg-[#059669]"}`}
+                          ></span>
+                          {section.status === "INACTIVE"
+                            ? t("common:inactive")
+                            : t("common:active")}
                         </div>
                       </div>
                       <div className="w-16 md:w-20 flex items-center justify-center px-4 relative">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setActiveRowDropdown(activeRowDropdown === `group-${section.id}` ? null : `group-${section.id}`);
+                            setActiveRowDropdown(
+                              activeRowDropdown === `group-${section.id}`
+                                ? null
+                                : `group-${section.id}`,
+                            );
                           }}
                           className={`dropdown-trigger p-1.5 rounded-md text-gray-400 hover:text-[#073318] hover:bg-gray-100 ${activeRowDropdown === `group-${section.id}` ? "bg-gray-100 text-[#111827]" : ""}`}
                         >
                           <MoreVertical size={18} />
                         </button>
                         {activeRowDropdown === `group-${section.id}` && (
-                          <div className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-xl z-[110] py-2 animate-in zoom-in-95 ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}>
+                          <div
+                            className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-xl z-[110] py-2 animate-in zoom-in-95 ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
+                          >
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedCategoryData({ ...section, type: "category" });
+                                setSelectedCategoryData({
+                                  ...section,
+                                  type: "category",
+                                });
                                 setIsEditModalOpen(true);
                                 setActiveRowDropdown(null);
                               }}
                               className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318] transition-colors whitespace-nowrap"
                             >
-                              <Eye size={18} className="text-gray-400" /> {t("modules:view_and_edit_category")}
+                              <Eye size={18} className="text-gray-400" />{" "}
+                              {t("modules:view_and_edit_category")}
                             </button>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleToggleStatus(section.id, section.status, "category");
+                                handleToggleStatus(
+                                  section.id,
+                                  section.status,
+                                  "category",
+                                );
                               }}
                               className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318] transition-colors whitespace-nowrap"
                             >
-                              {section.status === "INACTIVE" ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
-                              {section.status === "INACTIVE" ? t("common:active") : t("common:inactive")}
+                              {section.status === "INACTIVE" ? (
+                                <CheckCircle2 size={18} />
+                              ) : (
+                                <XCircle size={18} />
+                              )}
+                              {section.status === "INACTIVE"
+                                ? t("common:active")
+                                : t("common:inactive")}
                             </button>
                           </div>
                         )}
@@ -752,61 +845,119 @@ const CategoryMaster = () => {
                     <div className="flex flex-col bg-gray-50/50 border-t border-gray-100">
                       {(section.sub_categories || []).map((item) => {
                         const subDropdownId = `sub-${item.id}`;
-                        const hasSubSubs = item.sub_sub_categories && item.sub_sub_categories.length > 0;
-                        const isSubExpanded = expandedSubGroups[item.id] || (searchQuery && (item.sub_sub_categories || []).some(ss => (ss.name || "").toLowerCase().includes(searchQuery.toLowerCase())));
+                        const hasSubSubs =
+                          item.sub_sub_categories &&
+                          item.sub_sub_categories.length > 0;
+                        const isSubExpanded =
+                          expandedSubGroups[item.id] ||
+                          (searchQuery &&
+                            (item.sub_sub_categories || []).some((ss) =>
+                              (ss.name || "")
+                                .toLowerCase()
+                                .includes(searchQuery.toLowerCase()),
+                            ));
 
                         return (
-                          <div key={item.id} className="flex flex-col border-b border-gray-100/80 last:border-b-0">
-                            <div className="flex items-center justify-between py-3 hover:bg-white transition-colors cursor-pointer group" onClick={() => hasSubSubs && toggleSubGroup(item.id)}>
+                          <div
+                            key={item.id}
+                            className="flex flex-col border-b border-gray-100/80 last:border-b-0"
+                          >
+                            <div
+                              className="flex items-center justify-between py-3 hover:bg-white transition-colors cursor-pointer group"
+                              onClick={() =>
+                                hasSubSubs && toggleSubGroup(item.id)
+                              }
+                            >
                               <div className="flex items-center gap-3 pl-12">
                                 <div className="w-5 h-5 flex items-center justify-center">
                                   {hasSubSubs ? (
-                                    isSubExpanded ? <ChevronDown size={14} className="text-[#073318]" /> : <ArrowRight size={14} className="text-gray-400" />
+                                    isSubExpanded ? (
+                                      <ChevronDown
+                                        size={14}
+                                        className="text-[#073318]"
+                                      />
+                                    ) : (
+                                      <ArrowRight
+                                        size={14}
+                                        className="text-gray-400"
+                                      />
+                                    )
                                   ) : (
                                     <div className="w-1 h-1 rounded-full bg-gray-300" />
                                   )}
                                 </div>
-                                <span className={`text-[13px] font-medium ${isSubExpanded ? 'text-[#073318] font-bold' : 'text-gray-600'}`}>{item.name}</span>
+                                <span
+                                  className={`text-[13px] font-medium ${isSubExpanded ? "text-[#073318] font-bold" : "text-gray-600"}`}
+                                >
+                                  {item.name}
+                                </span>
                               </div>
 
                               <div className="flex items-stretch shrink-0">
                                 <div className="w-[120px] flex items-center justify-center px-4">
-                                  <div className={`px-2 py-0.5 rounded-full text-[12px] font-bold ${item.status === "INACTIVE" ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600"}`}>
-                                    {item.status === "INACTIVE" ? t("common:inactive") : t("common:active")}
+                                  <div
+                                    className={`px-2 py-0.5 rounded-full text-[12px] font-bold ${item.status === "INACTIVE" ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600"}`}
+                                  >
+                                    {item.status === "INACTIVE"
+                                      ? t("common:inactive")
+                                      : t("common:active")}
                                   </div>
                                 </div>
                                 <div className="w-20 flex items-center justify-center px-4 relative">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setActiveRowDropdown(activeRowDropdown === subDropdownId ? null : subDropdownId);
+                                      setActiveRowDropdown(
+                                        activeRowDropdown === subDropdownId
+                                          ? null
+                                          : subDropdownId,
+                                      );
                                     }}
-                                    className={`dropdown-trigger p-1.5 rounded-md text-gray-400 hover:text-[#073318] ${activeRowDropdown === subDropdownId ? 'text-[#111827] bg-gray-100' : ''}`}
+                                    className={`dropdown-trigger p-1.5 rounded-md text-gray-400 hover:text-[#073318] ${activeRowDropdown === subDropdownId ? "text-[#111827] bg-gray-100" : ""}`}
                                   >
                                     <MoreVertical size={16} />
                                   </button>
                                   {activeRowDropdown === subDropdownId && (
-                                    <div className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-xl shadow-xl z-[120] py-2 ${paginatedIndex >= paginatedData.length - 1 ? 'bottom-0 mb-1' : 'top-0 mt-1'}`}>
+                                    <div
+                                      className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-xl shadow-xl z-[120] py-2 ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0 mb-1" : "top-0 mt-1"}`}
+                                    >
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          setSelectedCategoryData({ ...item, type: "sub_category" });
+                                          setSelectedCategoryData({
+                                            ...item,
+                                            type: "sub_category",
+                                          });
                                           setIsEditModalOpen(true);
                                           setActiveRowDropdown(null);
                                         }}
                                         className="w-full px-5 py-2.5 flex items-center gap-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318]"
                                       >
-                                        <Eye size={16} className="text-gray-400" /> {t("modules:view_and_edit_category")}
+                                        <Eye
+                                          size={16}
+                                          className="text-gray-400"
+                                        />{" "}
+                                        {t("modules:view_and_edit_category")}
                                       </button>
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleToggleStatus(item.id, item.status, "sub_category");
+                                          handleToggleStatus(
+                                            item.id,
+                                            item.status,
+                                            "sub_category",
+                                          );
                                         }}
                                         className="w-full px-5 py-2.5 flex items-center gap-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318]"
                                       >
-                                        {item.status === "INACTIVE" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
-                                        {item.status === "INACTIVE" ? t("common:active") : t("common:inactive")}
+                                        {item.status === "INACTIVE" ? (
+                                          <CheckCircle2 size={16} />
+                                        ) : (
+                                          <XCircle size={16} />
+                                        )}
+                                        {item.status === "INACTIVE"
+                                          ? t("common:active")
+                                          : t("common:inactive")}
                                       </button>
                                     </div>
                                   )}
@@ -820,49 +971,86 @@ const CategoryMaster = () => {
                                 {item.sub_sub_categories.map((subSub) => {
                                   const ssDropdownId = `ss-${subSub.id}`;
                                   return (
-                                    <div key={subSub.id} className="flex items-center justify-between py-2 pl-[76px] text-[12px] hover:bg-white transition-colors group">
+                                    <div
+                                      key={subSub.id}
+                                      className="flex items-center justify-between py-2 pl-[76px] text-[12px] hover:bg-white transition-colors group"
+                                    >
                                       <div className="flex items-center gap-3">
                                         <div className="w-3 h-[1px] bg-gray-300" />
-                                        <span className="font-medium text-gray-500">{subSub.name}</span>
+                                        <span className="font-medium text-gray-500">
+                                          {subSub.name}
+                                        </span>
                                       </div>
                                       <div className="flex items-stretch shrink-0">
                                         <div className="w-[120px] flex items-center justify-center px-4">
-                                          <div className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${subSub.status === "INACTIVE" ? "bg-red-50 text-red-500" : "bg-emerald-50 text-emerald-500"}`}>
-                                            {subSub.status === "INACTIVE" ? t("common:inactive") : t("common:active")}
+                                          <div
+                                            className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${subSub.status === "INACTIVE" ? "bg-red-50 text-red-500" : "bg-emerald-50 text-emerald-500"}`}
+                                          >
+                                            {subSub.status === "INACTIVE"
+                                              ? t("common:inactive")
+                                              : t("common:active")}
                                           </div>
                                         </div>
                                         <div className="w-20 flex items-center justify-center px-4 relative">
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setActiveRowDropdown(activeRowDropdown === ssDropdownId ? null : ssDropdownId);
+                                              setActiveRowDropdown(
+                                                activeRowDropdown ===
+                                                  ssDropdownId
+                                                  ? null
+                                                  : ssDropdownId,
+                                              );
                                             }}
-                                            className={`dropdown-trigger p-1 rounded-md text-gray-400 hover:text-[#073318] ${activeRowDropdown === ssDropdownId ? 'text-[#111827] bg-gray-200' : ''}`}
+                                            className={`dropdown-trigger p-1 rounded-md text-gray-400 hover:text-[#073318] ${activeRowDropdown === ssDropdownId ? "text-[#111827] bg-gray-200" : ""}`}
                                           >
                                             <MoreVertical size={14} />
                                           </button>
-                                          {activeRowDropdown === ssDropdownId && (
-                                            <div className={`dropdown-menu absolute right-[80%] w-max min-w-[180px] bg-white border border-gray-100 rounded-xl shadow-lg z-[130] py-2 ${paginatedIndex >= paginatedData.length - 1 ? 'bottom-0' : 'top-0'}`}>
+                                          {activeRowDropdown ===
+                                            ssDropdownId && (
+                                            <div
+                                              className={`dropdown-menu absolute right-[80%] w-max min-w-[180px] bg-white border border-gray-100 rounded-xl shadow-lg z-[130] py-2 ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0" : "top-0"}`}
+                                            >
                                               <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  setSelectedCategoryData({ ...subSub, type: "sub_sub_category" });
+                                                  setSelectedCategoryData({
+                                                    ...subSub,
+                                                    type: "sub_sub_category",
+                                                  });
                                                   setIsEditModalOpen(true);
                                                   setActiveRowDropdown(null);
                                                 }}
                                                 className="w-full px-4 py-2 flex items-center gap-2.5 text-[12px] font-bold text-gray-600 hover:bg-gray-50"
                                               >
-                                                <Eye size={14} className="text-gray-400" /> {t("modules:view_and_edit_category")}
+                                                <Eye
+                                                  size={14}
+                                                  className="text-gray-400"
+                                                />{" "}
+                                                {t(
+                                                  "modules:view_and_edit_category",
+                                                )}
                                               </button>
                                               <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  handleToggleStatus(subSub.id, subSub.status, "sub_sub_category");
+                                                  handleToggleStatus(
+                                                    subSub.id,
+                                                    subSub.status,
+                                                    "sub_sub_category",
+                                                  );
                                                 }}
                                                 className="w-full px-4 py-2 flex items-center gap-2.5 text-[12px] font-bold text-gray-600 hover:bg-gray-50"
                                               >
-                                                {subSub.status === "INACTIVE" ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                                                {subSub.status === "INACTIVE" ? t("common:active") : t("common:inactive")}
+                                                {subSub.status ===
+                                                "INACTIVE" ? (
+                                                  <CheckCircle2 size={14} />
+                                                ) : (
+                                                  <XCircle size={14} />
+                                                )}
+                                                {subSub.status === "INACTIVE"
+                                                  ? t("common:active")
+                                                  : t("common:inactive")}
                                               </button>
                                             </div>
                                           )}
@@ -906,14 +1094,19 @@ const CategoryMaster = () => {
                 <option value={20}>20</option>
                 <option value={50}>50</option>
               </select>
-              <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]" />
+              <ChevronDown
+                size={14}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]"
+              />
             </div>
             <span className="hidden sm:inline">{t("common:per_page")}</span>
           </div>
 
           <div className="flex items-center gap-3">
             <span className="text-[#6B7280] text-[13px] font-medium whitespace-nowrap">
-              {totalItems > 0 ? `${startIndex + 1}-${endIndex} of ${totalItems}` : `0-0 of 0`}
+              {totalItems > 0
+                ? `${startIndex + 1}-${endIndex} of ${totalItems}`
+                : `0-0 of 0`}
             </span>
             <div className="flex items-center gap-1">
               <button
@@ -936,7 +1129,9 @@ const CategoryMaster = () => {
                 ))}
               </div>
               <button
-                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                }
                 disabled={currentPage === totalPages || totalPages === 0}
                 className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
               >

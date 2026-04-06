@@ -320,7 +320,7 @@ const UnitMaster = () => {
                                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                     <input
                                         type="text"
-                                        placeholder={t('common:search_placeholder', 'Search By Anything...')}
+                                        placeholder={t('searchByAnything')}
                                         value={searchQuery}
                                         onChange={(e) => {
                                             setSearchQuery(e.target.value);

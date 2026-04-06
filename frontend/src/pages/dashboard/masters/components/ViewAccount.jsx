@@ -105,12 +105,12 @@ const ViewAccount = ({ initialData, onBack, onEdit }) => {
                             label2={`${t('pin_code')}:`} value2={data.pincode} 
                         />
                         <InfoTableRow 
-                            label1={`District:`} value1={data.district} 
+                            label1={`${t('district')}:`} value1={data.district} 
                             label2={`${t('state')}:`} value2={data.state} 
                         />
                         <InfoTableRow 
-                            label1={`${t('msme')}:`} value1={data.msmeEnabled ? 'Yes' : 'No'} 
-                            label2={`MSME ID:`} value2={data.msmeId} 
+                            label1={`${t('msme')}:`} value1={data.msmeEnabled ? t('common:yes') : t('common:no')} 
+                            label2={`${t('msme_id')}:`} value2={data.msmeId} 
                         />
                         <InfoTableRow 
                             label1={`${t('reg_type')}:`} value1={data.regType} 
@@ -120,13 +120,13 @@ const ViewAccount = ({ initialData, onBack, onEdit }) => {
                         {/* Customer Ledger Section */}
                         {(data.groupName?.includes('CUSTOMER') || data.groupName?.includes('SUNDRY_DEBTORS') || data.isCustomer) && (
                             <>
-                                <SectionHeading title="Customer Ledger Details" />
+                                <SectionHeading title={t('customerLedgerDetails')} />
                                 <InfoTableRow 
                                     label1={`${t('customer_code')}:`} value1={data.customerCode} 
-                                    label2={'Credit Days:'} value2={data.customerCreditDays} 
+                                    label2={`${t('credit_days')}:`} value2={data.customerCreditDays} 
                                 />
                                 <InfoTableRow 
-                                    label1={'Opening Balance:'} value1={renderCustomerBalance()} 
+                                    label1={`${t('openingBalance')}:`} value1={renderCustomerBalance()} 
                                     label2={''} value2={''} 
                                 />
                             </>
@@ -135,13 +135,13 @@ const ViewAccount = ({ initialData, onBack, onEdit }) => {
                         {/* Supplier Ledger Section */}
                         {(data.groupName?.includes('SUPPLIER') || data.groupName?.includes('SUNDRY_CREDITORS') || data.isVendor) && (
                             <>
-                                <SectionHeading title="Supplier Ledger Details" />
+                                <SectionHeading title={t('supplierLedgerDetails')} />
                                 <InfoTableRow 
                                     label1={`${t('modules:supplier_code')}:`} value1={data.supplierCode} 
-                                    label2={'Credit Days:'} value2={data.supplierCreditDays} 
+                                    label2={`${t('credit_days')}:`} value2={data.supplierCreditDays} 
                                 />
                                 <InfoTableRow 
-                                    label1={'Opening Balance:'} value1={renderSupplierBalance()} 
+                                    label1={`${t('openingBalance')}:`} value1={renderSupplierBalance()} 
                                     label2={''} value2={''} 
                                 />
                             </>

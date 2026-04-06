@@ -82,5 +82,9 @@
     "edit_order": "Edit Purchase Order",
     "view_order": "View Purchase Order",
     "add_invoice": "Add Purchase Invoice",
-    "edit_invoice": "Edit Purchase Invoice"
+    "edit_invoice": "Edit Purchase Invoice",
+    "yes": "Yes",
+    "no": "No",
+    "change": "Change",
+    "selectOption": "Select Option"
 }

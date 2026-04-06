@@ -392,7 +392,7 @@ const AccountMaster = () => {
                         </div>
                         <button onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)} className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all shadow-sm ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-white border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}>
                             <Filter size={18} className={isFilterApplied ? "text-red-500" : "text-gray-400"} />
-                            {isFilterApplied ? t('common:clear', 'Clear') : t('common:filter', 'Filter')}
+                            {isFilterApplied ? t('common:clear') : t('common:filter')}
                         </button>
                         <button onClick={handleRefresh} className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] hover:bg-gray-50 bg-white">
                             <RefreshCw size={18} className="text-gray-400" />
@@ -751,7 +751,7 @@ const AccountMaster = () => {
 
             <div className={`fixed top-0 right-0 h-full w-full sm:w-[480px] bg-white shadow-2xl z-[70] transform transition-transform duration-300 ease-in-out flex flex-col ${isFilterOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 <div className="flex items-center justify-between px-6 py-5 border-b border-[#04200f] bg-emerald-900">
-                    <h2 className="text-[20px] font-bold text-white tracking-tight">{t('common:apply_filters', 'Apply Filters')}</h2>
+                    <h2 className="text-[20px] font-bold text-white tracking-tight">{t('modules:applyFilters')}</h2>
                     <button onClick={() => setIsFilterOpen(false)} className="text-emerald-100 hover:text-white transition-colors p-1">
                         <X size={20} />
                     </button>
@@ -781,7 +781,7 @@ const AccountMaster = () => {
                                 />
                             </div>
                             <div className="space-y-2.5">
-                                <label className="text-[14px] font-medium text-[#4B5563]">{t('modules:group_name', 'Group Name')}</label>
+                                <label className="text-[14px] font-medium text-[#4B5563]">{t('modules:groupName')}</label>
                                 <div className="flex flex-col gap-3 mt-1">
                                     <label className="flex items-center gap-3 cursor-pointer group">
                                         <div className="relative flex items-center">
@@ -860,13 +860,13 @@ const AccountMaster = () => {
                                 onClick={handleClearFilter}
                                 className="flex-1 h-[46px] bg-white border border-[#E5E7EB] text-[#374151] text-[15px] font-semibold rounded-[10px] hover:bg-gray-50 transition-colors shadow-sm"
                             >
-                                Clear
+                                {t('modules:clear')}
                             </button>
                             <button
                                 onClick={applyFilters}
                                 className="flex-1 h-[46px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-colors shadow-sm"
                             >
-                                {t('common:apply_filter') || 'Apply Filter'}
+                                {t('modules:applyFilters')}
                             </button>
                         </div>
                     </div>
