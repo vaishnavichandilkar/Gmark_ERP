@@ -575,7 +575,7 @@ const PurchaseOrder = () => {
                             }
                           </button>
 
-                          {po.computedStatusLabel === 'Expired' && (
+                          {po.computedStatusLabel !== 'Deleted' && (
                               <button 
                                 onClick={() => { setActiveDropdown(null); handleDeletePO(po.id); }}
                                 className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-red-600 hover:bg-red-50 transition-colors font-bold"

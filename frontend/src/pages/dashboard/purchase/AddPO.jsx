@@ -667,7 +667,7 @@ const AddPO = () => {
                 {/* Table Section */}
                 <div className="p-4 sm:p-6 md:p-8 border-b border-[#F3F4F6] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1">
-                        <div className="relative flex-1 max-w-full md:max-w-[320px]">
+                        <div className="relative flex-1 max-w-full">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" size={18} />
                             <input
                                 type="text"
@@ -714,6 +714,24 @@ const AddPO = () => {
                                             </button>
                                         ))}
                                     </div>
+                                    <div className="p-3 bg-gray-50 border-t border-[#F3F4F6]">
+                                        <button 
+                                            onClick={async () => {
+                                                sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
+                                                try {
+                                                    const res = await productService.getProducts({ limit: 100 });
+                                                    sessionStorage.setItem('add_po_product_ids', JSON.stringify((res.products || []).map(p => p.id)));
+                                                } catch (e) {
+                                                    sessionStorage.setItem('add_po_product_ids', '[]');
+                                                }
+                                                navigate(`/seller/masters/product-master?mode=add&redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
+                                            }}
+                                            className="w-full h-[40px] bg-[#073318] text-white text-[13px] font-bold rounded-[10px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-sm font-outfit"
+                                        >
+                                            <Plus size={16} className="group-hover:scale-110 transition-transform" /> 
+                                            Add new product
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                             
@@ -722,23 +740,6 @@ const AddPO = () => {
                                 <div className="fixed inset-0 z-50 cursor-default" onClick={() => setIsProductSearchOpen(false)}></div>
                             )}
                         </div>
-                        <button
-                            onClick={async () => {
-                                sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
-                                // Get current products to track new ones
-                                try {
-                                    const res = await productService.getProducts({ limit: 100 });
-                                    sessionStorage.setItem('add_po_product_ids', JSON.stringify((res.products || []).map(p => p.id)));
-                                } catch (e) {
-                                    sessionStorage.setItem('add_po_product_ids', '[]');
-                                }
-                                navigate(`/seller/masters/product-master?mode=add&redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
-                            }}
-                            className="bg-[#073318] hover:bg-[#04200f] text-white px-8 h-[44px] rounded-[10px] text-[14px] font-semibold transition-all shadow-sm active:scale-[0.98] font-outfit whitespace-nowrap flex items-center justify-center gap-2"
-                        >
-                            <Plus size={18} />
-                            Add Product
-                        </button>
                     </div>
                 </div>
 

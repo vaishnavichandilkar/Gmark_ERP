@@ -152,8 +152,7 @@ export class PurchaseOrderService {
         where.status = 'DELETED';
         break;
       default:
-        // 'all' or undefined: exclude DELETED by default
-        where.status = { not: 'DELETED' };
+        // 'all' or undefined: include everything by default now as requested
         break;
     }
 
