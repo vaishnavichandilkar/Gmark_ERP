@@ -371,11 +371,13 @@ const AddPO = () => {
         
         if (!formData.supplier_name) newErrors.supplier_name = "Supplier name is required";
         if (!formData.address) newErrors.address = "Address is required";
-        if (!formData.credit_days && formData.credit_days !== 0) newErrors.credit_days = "Credit days are required";
+        if (!formData.credit_days && formData.credit_days !== 0) {
+            // Optional but recommended, let's keep it non-blocking if user cleared it but maybe set a default or just allow it.
+            // Requirement says fetched and editable. If they clear it, we might want to warn or just allow.
+        }
         if (!formData.creation_date) newErrors.creation_date = "Creation date is required";
         if (!formData.po_number) newErrors.po_number = "PO number is required";
         if (!formData.expiry_date) newErrors.expiry_date = "Expiry date is required";
-        if (!formData.gst_number) newErrors.gst_number = "GST number is required";
 
         // Validate items
         const validItems = items.filter(item => item.product_name);
@@ -571,7 +573,7 @@ const AddPO = () => {
                                                     onClick={() => {
                                                         sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
                                                         sessionStorage.setItem('add_po_supplier_ids', JSON.stringify(suppliers.map(s => s.id)));
-                                                        navigate(`/seller/masters/account-master?mode=add&redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
+                                                        navigate(`/seller/masters/account-master/add?redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
                                                     }}
                                                     className="w-full h-[40px] bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-sm font-outfit"
                                                 >
@@ -591,8 +593,8 @@ const AddPO = () => {
                                 type="number"
                                 placeholder="Auto-filled from supplier"
                                 value={formData.credit_days}
-                                readOnly
-                                className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.credit_days ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                                onChange={(e) => setFormData({ ...formData, credit_days: e.target.value })}
+                                className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none transition-all ${errors.credit_days ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                             />
                             {errors.credit_days && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.credit_days}</p>}
                         </div>
@@ -652,10 +654,10 @@ const AddPO = () => {
                             <label className="text-[14px] font-semibold text-[#374151]">GST Number</label>
                             <input
                                 type="text"
-                                placeholder="Auto-filled from supplier"
+                                placeholder="Optional"
                                 value={formData.gst_number}
-                                readOnly
-                                className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.gst_number ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                                onChange={(e) => setFormData({ ...formData, gst_number: e.target.value })}
+                                className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none transition-all ${errors.gst_number ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                             />
                             {errors.gst_number && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.gst_number}</p>}
                         </div>
