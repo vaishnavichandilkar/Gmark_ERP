@@ -13,6 +13,7 @@ import ImportModal from './components/ImportModal';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import ScrollableTable from "../../../components/common/ScrollableTable";
 
 const AccountMaster = () => {
     const { t } = useTranslation(['common', 'modules']);
@@ -503,7 +504,7 @@ const AccountMaster = () => {
                     </div>
                 </div>
 
-                <div className="master-table-wrapper">
+                <ScrollableTable className="master-table-wrapper">
                     <table className="master-table min-w-[1200px]">
                         <thead>
                             <tr>
@@ -674,7 +675,7 @@ const AccountMaster = () => {
                             )}
                         </tbody>
                     </table>
-                </div>
+                </ScrollableTable>
 
                 <div className="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-5 sm:py-6 border-t border-[#F3F4F6] bg-white gap-6">
                     <div className="flex items-center justify-between w-full sm:w-auto gap-3 text-[14px] text-[#6B7280] font-medium order-2 sm:order-1 border-t sm:border-0 pt-4 sm:pt-0">

@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { translateDynamic } from '../../../utils/i18nUtils';
 import SuccessToast from './components/SuccessToast';
 import ImportModal from './components/ImportModal';
+import ScrollableTable from "../../../components/common/ScrollableTable";
 
 const UnitMaster = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -450,7 +451,7 @@ const UnitMaster = () => {
                             </div>
                         </div>
 
-                        <div className="master-table-wrapper">
+                        <ScrollableTable className="master-table-wrapper">
                             <table className="master-table min-w-[1000px]">
                                 <thead>
                                     <tr>
@@ -562,7 +563,7 @@ const UnitMaster = () => {
                                     )}
                                 </tbody>
                             </table>
-                        </div>
+                        </ScrollableTable>
 
                         <div className="flex flex-row items-center justify-between px-4 sm:px-6 py-4 border-t border-[#F3F4F6] bg-white gap-4 w-full">
                             <div className="flex items-center gap-2 text-[13px] text-[#6B7280] font-medium">

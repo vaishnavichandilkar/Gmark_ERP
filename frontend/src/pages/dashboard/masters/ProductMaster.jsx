@@ -27,6 +27,7 @@ import SuccessToast from "./components/SuccessToast";
 import productService from "../../../services/productService";
 import toast from 'react-hot-toast';
 import ImportModal from './components/ImportModal';
+import ScrollableTable from "../../../components/common/ScrollableTable";
 
 const ProductMaster = () => {
   const { t } = useTranslation(["modules", "common"]);
@@ -548,7 +549,7 @@ const ProductMaster = () => {
               </div>
             </div>
 
-            <div className="master-table-wrapper">
+            <ScrollableTable className="master-table-wrapper">
               <table className="master-table min-w-[1200px]">
                 <thead>
                   <tr>
@@ -745,7 +746,7 @@ const ProductMaster = () => {
                   )}
                 </tbody>
               </table>
-            </div>
+            </ScrollableTable>
 
             {/* Pagination */}
             <div className="flex flex-row items-center justify-between px-4 sm:px-6 py-4 border-t border-[#F3F4F6] bg-white gap-4 w-full">

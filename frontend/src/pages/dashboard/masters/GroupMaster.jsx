@@ -9,6 +9,7 @@ import masterService from '../../../services/masterService';
 import { translateDynamic } from '../../../utils/i18nUtils';
 import toast from 'react-hot-toast';
 import SuccessToast from './components/SuccessToast';
+import ScrollableTable from "../../../components/common/ScrollableTable";
 
 const GroupMaster = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -543,7 +544,7 @@ const GroupMaster = () => {
                     </div>
                 </div>
 
-                <div className="w-full overflow-x-auto no-scrollbar">
+                <ScrollableTable className="w-full">
                     <div className="min-w-[800px]">
                     <div className="flex items-stretch justify-between bg-emerald-900 border-b border-emerald-950 text-[14px] font-bold text-white tracking-tight">
                         <div className="flex-1 border-r border-white/50 pr-4 md:pr-6 py-3 md:py-5 pl-6 md:pl-9 flex items-center gap-2">
@@ -576,7 +577,7 @@ const GroupMaster = () => {
                         )}
                     </div>
                 </div>
-            </div>
+            </ScrollableTable>
         </div>
 
         {isImportModalOpen && (
