@@ -9,136 +9,137 @@ import ImportModal from './components/ImportModal';
 import SuccessToast from '../masters/components/SuccessToast';
 import { exportToPDF, exportToExcel } from '../../../utils/exportUtils';
 import { toast } from '../../../utils/toast-mock';
+import ScrollableTable from '../../../components/common/ScrollableTable';
 
 const INITIAL_MOCK_DATA = [
-  {
-    id: 1,
-    invoiceNo: 'INV-0001',
-    supplierName: 'Shree Agro Traders',
-    bookingDate: '02-03-2026',
-    invoiceDate: '10-03-2026',
-    poNo: 'PO00001',
-    gstNo: '27ABCDE1234F1Z5',
-    cred: '15',
-    taxableAmount: '1000',
-    taxAmount: '180',
-    grossAmount: '1180',
-    status: 'Deleted',
-    type: 'Invoice',
-    actionText: 'View PI',
-  },
-  {
-    id: 2,
-    invoiceNo: 'INV-0002',
-    supplierName: 'Global Industrial',
-    bookingDate: '02-03-2026',
-    invoiceDate: '10-03-2026',
-    poNo: 'PO00002',
-    gstNo: '27PQRSX5678L1Z2',
-    cred: '30',
-    taxableAmount: '2500',
-    taxAmount: '450',
-    grossAmount: '2950',
-    status: 'Generated',
-    type: 'Invoice',
-    actionText: 'View & Edit PI',
-  },
-  {
-    id: 3,
-    invoiceNo: 'GRN-0001',
-    supplierName: 'Metro Supplies Co.',
-    bookingDate: '02-03-2026',
-    invoiceDate: '10-03-2026',
-    poNo: 'PO00003',
-    gstNo: '27LMNOP4321K2Z7',
-    cred: '30',
-    taxableAmount: '3500',
-    taxAmount: '630',
-    grossAmount: '4130',
-    status: 'Generated',
-    type: 'GRN',
-    actionText: 'View PI',
-  },
-  {
-    id: 4,
-    invoiceNo: 'INV-0004',
-    supplierName: 'BlueStone Supplies',
-    bookingDate: '05-03-2026',
-    invoiceDate: '12-03-2026',
-    poNo: 'PO00004',
-    gstNo: '27GHIJK9012M1Z3',
-    cred: '45',
-    taxableAmount: '5000',
-    taxAmount: '900',
-    grossAmount: '5900',
-    status: 'Generated',
-    type: 'Invoice',
-    actionText: 'View & Edit PI',
-  },
-  {
-    id: 5,
-    invoiceNo: 'GRN-0002',
-    supplierName: 'Sunrise Global Vendors',
-    bookingDate: '06-03-2026',
-    invoiceDate: '15-03-2026',
-    poNo: 'PO00005',
-    gstNo: '27UVWXY3456N1Z4',
-    cred: '60',
-    taxableAmount: '12000',
-    taxAmount: '2160',
-    grossAmount: '14160',
-    status: 'Generated',
-    type: 'GRN',
-    actionText: 'View & Edit PI',
-  },
-  {
-    id: 6,
-    invoiceNo: 'INV-0006',
-    supplierName: 'SilverPeak Traders',
-    bookingDate: '08-03-2026',
-    invoiceDate: '18-03-2026',
-    poNo: 'PO00006',
-    gstNo: '27ABCDE5678P1Z6',
-    cred: '15',
-    taxableAmount: '8500',
-    taxAmount: '1530',
-    grossAmount: '10030',
-    status: 'Generated',
-    type: 'Invoice',
-    actionText: 'View & Edit PI',
-  },
-  {
-    id: 7,
-    invoiceNo: 'INV-0007',
-    supplierName: 'GreenLeaf Distributors',
-    bookingDate: '10-03-2026',
-    invoiceDate: '20-03-2026',
-    poNo: 'PO00007',
-    gstNo: '27KLMNO7890Q1Z7',
-    cred: '30',
-    taxableAmount: '4200',
-    taxAmount: '756',
-    grossAmount: '4956',
-    status: 'Deleted',
-    type: 'Invoice',
-    actionText: 'View PI',
-  },
-  {
-    id: 8,
-    invoiceNo: 'GRN-0003',
-    supplierName: 'Oceanic Wholesalers',
-    bookingDate: '12-03-2026',
-    invoiceDate: '22-03-2026',
-    poNo: 'PO00008',
-    gstNo: '27PQRST1234R1Z8',
-    cred: '30',
-    taxableAmount: '6700',
-    taxAmount: '1206',
-    grossAmount: '7906',
-    status: 'Generated',
-    type: 'GRN',
-    actionText: 'View & Edit PI',
-  }
+    {
+        id: 1,
+        invoiceNo: 'INV-0001',
+        supplierName: 'Shree Agro Traders',
+        bookingDate: '02-03-2026',
+        invoiceDate: '10-03-2026',
+        poNo: 'PO00001',
+        gstNo: '27ABCDE1234F1Z5',
+        cred: '15',
+        taxableAmount: '1000',
+        taxAmount: '180',
+        grossAmount: '1180',
+        status: 'Deleted',
+        type: 'Invoice',
+        actionText: 'View PI',
+    },
+    {
+        id: 2,
+        invoiceNo: 'INV-0002',
+        supplierName: 'Global Industrial',
+        bookingDate: '02-03-2026',
+        invoiceDate: '10-03-2026',
+        poNo: 'PO00002',
+        gstNo: '27PQRSX5678L1Z2',
+        cred: '30',
+        taxableAmount: '2500',
+        taxAmount: '450',
+        grossAmount: '2950',
+        status: 'Generated',
+        type: 'Invoice',
+        actionText: 'View & Edit PI',
+    },
+    {
+        id: 3,
+        invoiceNo: 'GRN-0001',
+        supplierName: 'Metro Supplies Co.',
+        bookingDate: '02-03-2026',
+        invoiceDate: '10-03-2026',
+        poNo: 'PO00003',
+        gstNo: '27LMNOP4321K2Z7',
+        cred: '30',
+        taxableAmount: '3500',
+        taxAmount: '630',
+        grossAmount: '4130',
+        status: 'Generated',
+        type: 'GRN',
+        actionText: 'View PI',
+    },
+    {
+        id: 4,
+        invoiceNo: 'INV-0004',
+        supplierName: 'BlueStone Supplies',
+        bookingDate: '05-03-2026',
+        invoiceDate: '12-03-2026',
+        poNo: 'PO00004',
+        gstNo: '27GHIJK9012M1Z3',
+        cred: '45',
+        taxableAmount: '5000',
+        taxAmount: '900',
+        grossAmount: '5900',
+        status: 'Generated',
+        type: 'Invoice',
+        actionText: 'View & Edit PI',
+    },
+    {
+        id: 5,
+        invoiceNo: 'GRN-0002',
+        supplierName: 'Sunrise Global Vendors',
+        bookingDate: '06-03-2026',
+        invoiceDate: '15-03-2026',
+        poNo: 'PO00005',
+        gstNo: '27UVWXY3456N1Z4',
+        cred: '60',
+        taxableAmount: '12000',
+        taxAmount: '2160',
+        grossAmount: '14160',
+        status: 'Generated',
+        type: 'GRN',
+        actionText: 'View & Edit PI',
+    },
+    {
+        id: 6,
+        invoiceNo: 'INV-0006',
+        supplierName: 'SilverPeak Traders',
+        bookingDate: '08-03-2026',
+        invoiceDate: '18-03-2026',
+        poNo: 'PO00006',
+        gstNo: '27ABCDE5678P1Z6',
+        cred: '15',
+        taxableAmount: '8500',
+        taxAmount: '1530',
+        grossAmount: '10030',
+        status: 'Generated',
+        type: 'Invoice',
+        actionText: 'View & Edit PI',
+    },
+    {
+        id: 7,
+        invoiceNo: 'INV-0007',
+        supplierName: 'GreenLeaf Distributors',
+        bookingDate: '10-03-2026',
+        invoiceDate: '20-03-2026',
+        poNo: 'PO00007',
+        gstNo: '27KLMNO7890Q1Z7',
+        cred: '30',
+        taxableAmount: '4200',
+        taxAmount: '756',
+        grossAmount: '4956',
+        status: 'Deleted',
+        type: 'Invoice',
+        actionText: 'View PI',
+    },
+    {
+        id: 8,
+        invoiceNo: 'GRN-0003',
+        supplierName: 'Oceanic Wholesalers',
+        bookingDate: '12-03-2026',
+        invoiceDate: '22-03-2026',
+        poNo: 'PO00008',
+        gstNo: '27PQRST1234R1Z8',
+        cred: '30',
+        taxableAmount: '6700',
+        taxAmount: '1206',
+        grossAmount: '7906',
+        status: 'Generated',
+        type: 'GRN',
+        actionText: 'View & Edit PI',
+    }
 ];
 
 const PurchaseInvoice = ({ defaultTab }) => {
@@ -150,7 +151,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
     const [currentView, setCurrentView] = useState('list');
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [activeTab, setActiveTab] = useState(defaultTab || 'Invoice');
-    
+
     useEffect(() => {
         if (defaultTab) setActiveTab(defaultTab);
     }, [defaultTab]);
@@ -178,7 +179,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
     useEffect(() => {
         setCurrentPage(1);
     }, [activeTab, searchQuery]);
-    
+
     // filtering based on active tab
     // filtering based on active tab and search query
     // filtering based on active tab and search query
@@ -390,8 +391,8 @@ const PurchaseInvoice = ({ defaultTab }) => {
 
     if (currentView === 'add' || currentView === 'edit') {
         return (
-            <AddPurchaseInvoice 
-                onBack={() => navigate(`/seller/purchase/${activeTab.toLowerCase()}`)} 
+            <AddPurchaseInvoice
+                onBack={() => navigate(`/seller/purchase/${activeTab.toLowerCase()}`)}
                 initialData={selectedInvoice}
                 onSave={handleSave}
                 type={activeTab}
@@ -401,10 +402,10 @@ const PurchaseInvoice = ({ defaultTab }) => {
 
     if (currentView === 'view') {
         return (
-            <ViewPurchaseInvoice 
-                initialData={selectedInvoice} 
-                onBack={() => navigate(`/seller/purchase/${activeTab.toLowerCase()}`)} 
-                onEdit={() => navigate(`/seller/purchase/${activeTab.toLowerCase()}/edit/${selectedInvoice.id}`)} 
+            <ViewPurchaseInvoice
+                initialData={selectedInvoice}
+                onBack={() => navigate(`/seller/purchase/${activeTab.toLowerCase()}`)}
+                onEdit={() => navigate(`/seller/purchase/${activeTab.toLowerCase()}/edit/${selectedInvoice.id}`)}
                 onDelete={handleDelete}
             />
         );
@@ -420,7 +421,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                         {activeTab === 'Invoice' ? 'Invoice' : 'GRN'}
                     </h2>
 
-                    <button 
+                    <button
                         onClick={() => navigate('add')}
                         className="md:min-w-[160px] md:px-5 h-[42px] md:h-[38px] bg-[#073318] hover:bg-[#04200f] text-white rounded-[10px] md:rounded-[8px] text-[15px] md:text-[14px] font-semibold transition-all shadow-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
@@ -431,7 +432,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
 
                 {/* Mobile Header - Stacked Layout */}
                 <div className="md:hidden flex flex-col gap-3">
-                    <button 
+                    <button
                         onClick={() => navigate('add')}
                         className="w-full max-w-[358px] h-[42px] bg-[#073318] hover:bg-[#04200f] text-white rounded-[10px] text-[15px] font-semibold transition-all shadow-md flex items-center justify-center gap-2 active:scale-[0.98] self-center"
                     >
@@ -439,39 +440,38 @@ const PurchaseInvoice = ({ defaultTab }) => {
                         {activeTab === 'Invoice' ? t('modules:add_invoice', 'Add Invoice') : 'Add GRN'}
                     </button>
                 </div>
-                
+
                 {/* Embedded Sub-tabs matching previous structure */}
                 <div className="flex justify-center gap-16 border-b border-[#E5E7EB] w-full mt-6">
-                  {['Invoice', 'GRN'].map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => {
-                        setActiveTab(tab);
-                        navigate(`/seller/purchase/${tab.toLowerCase()}`);
-                      }}
-                      className={`relative pb-4 text-[16px] md:text-[18px] font-bold transition-colors duration-300 ${
-                        activeTab === tab
-                          ? 'text-[#073318]'
-                          : 'text-[#6B7280] hover:text-[#111827]'
-                      }`}
-                    >
-                      {tab === 'Invoice' ? t('common:invoice', 'Invoice') : 'GRN'}
-                      {activeTab === tab && (
-                        <motion.div
-                          layoutId="activeSubTabUnderline"
-                          className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#073318] rounded-t-full"
-                          transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                        />
-                      )}
-                    </button>
-                  ))}
+                    {['Invoice', 'GRN'].map((tab) => (
+                        <button
+                            key={tab}
+                            onClick={() => {
+                                setActiveTab(tab);
+                                navigate(`/seller/purchase/${tab.toLowerCase()}`);
+                            }}
+                            className={`relative pb-4 text-[16px] md:text-[18px] font-bold transition-colors duration-300 ${activeTab === tab
+                                    ? 'text-[#073318]'
+                                    : 'text-[#6B7280] hover:text-[#111827]'
+                                }`}
+                        >
+                            {tab === 'Invoice' ? t('common:invoice', 'Invoice') : 'GRN'}
+                            {activeTab === tab && (
+                                <motion.div
+                                    layoutId="activeSubTabUnderline"
+                                    className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#073318] rounded-t-full"
+                                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                />
+                            )}
+                        </button>
+                    ))}
                 </div>
 
             </div>
 
             {/* Main Card exactly like Account Master */}
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] w-full overflow-hidden mb-8">
-                
+
                 {/* Toolbar */}
                 <div className="p-4 md:p-6 border-b border-[#F3F4F6] bg-white">
                     {/* Desktop Toolbar (Hidden on Mobile) */}
@@ -487,7 +487,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                     className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all placeholder:text-gray-400 shadow-sm"
                                 />
                                 {searchQuery && (
-                                    <button 
+                                    <button
                                         onClick={() => setSearchQuery('')}
                                         className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                                     >
@@ -506,7 +506,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                         </div>
 
                         <div className="flex flex-row items-center gap-3 w-full sm:w-auto" ref={exportRef}>
-                            <button 
+                            <button
                                 onClick={() => setIsImportModalOpen(true)}
                                 className="flex items-center justify-center gap-2 w-full sm:w-auto px-5 h-[42px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
                             >
@@ -515,7 +515,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                             </button>
 
                             <div className="relative w-full sm:w-auto">
-                                <button 
+                                <button
                                     onClick={() => setIsExportOpen(!isExportOpen)}
                                     className={`flex items-center justify-center gap-2 w-full px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all duration-200 bg-white
                                         ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
@@ -526,14 +526,14 @@ const PurchaseInvoice = ({ defaultTab }) => {
 
                                 {isExportOpen && (
                                     <div className="absolute top-full right-0 mt-2 w-full sm:w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-[50] py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <button 
+                                        <button
                                             onClick={handleExportPDF}
                                             className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors bg-transparent border-none"
                                         >
                                             <FileText size={18} className="text-red-500" />
                                             PDF
                                         </button>
-                                        <button 
+                                        <button
                                             onClick={handleExportExcel}
                                             className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors bg-transparent border-none"
                                         >
@@ -554,12 +554,12 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                 placeholder={isSearchFocused || searchQuery ? t('common:search_placeholder', 'Search...') : ""}
                                 value={searchQuery}
                                 onFocus={() => setIsSearchFocused(true)}
-                                onChange={(e) => {setSearchQuery(e.target.value); setCurrentPage(1);}}
+                                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                                 className={`w-full h-[42px] bg-[#F9FAFB] rounded-[10px] pl-10 pr-8 text-[14px] outline-none transition-all duration-300
                                     ${isSearchFocused || searchQuery ? 'border border-[#073318]/20 ring-1 ring-[#073318]/5' : 'border-none bg-transparent cursor-pointer'}`}
                             />
                             {(isSearchFocused || searchQuery) && searchQuery && (
-                                <button 
+                                <button
                                     onClick={() => setSearchQuery("")}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
                                 >
@@ -569,7 +569,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                         </div>
 
                         {(isSearchFocused || searchQuery) && (
-                            <button 
+                            <button
                                 onClick={() => {
                                     setIsSearchFocused(false);
                                     setSearchQuery("");
@@ -583,14 +583,14 @@ const PurchaseInvoice = ({ defaultTab }) => {
                         {/* Action Icons - Hidden when searching on mobile */}
                         {!isSearchFocused && !searchQuery && (
                             <div className="flex items-center gap-1 ml-auto">
-                                <button 
+                                <button
                                     onClick={handleRefresh}
                                     className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
                                 >
                                     <RefreshCw size={22} className={isRefreshing ? 'animate-spin text-[#073318]' : ''} />
                                 </button>
-                                
-                                <button 
+
+                                <button
                                     onClick={() => setIsImportModalOpen(true)}
                                     className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
                                 >
@@ -598,7 +598,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                 </button>
 
                                 <div className="relative mobile-export-trigger px-0">
-                                    <button 
+                                    <button
                                         onClick={() => setIsExportOpen(!isExportOpen)}
                                         className={`w-[42px] h-[42px] flex items-center justify-center transition-all ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}
                                     >
@@ -621,13 +621,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                 </div>
 
                 {/* Table matching Account Master UI */}
-                <div className="overflow-x-auto custom-scrollbar relative min-h-[400px]">
-                    <style>{`
-                        .custom-scrollbar::-webkit-scrollbar { height: 6px; }
-                        .custom-scrollbar::-webkit-scrollbar-track { background: #E5E7EB; }
-                        .custom-scrollbar::-webkit-scrollbar-thumb { background: #A7C0B8; border-radius: 4px; }
-                        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #014A36; }
-                    `}</style>
+                <ScrollableTable className="relative min-h-[400px]">
                     <table className="w-full min-w-[1400px] text-left border-collapse">
                         <thead>
                             <tr className="bg-emerald-900 border-b border-emerald-950 text-[15px] font-bold text-white tracking-wider">
@@ -727,20 +721,19 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                             <MoreVertical size={20} />
                                         </button>
                                         {dropdownIndex === row.id && (
-                                            <div 
-                                                className={`absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in fade-in zoom-in-95 duration-200 text-left ${
-                                                    index >= paginatedData.length - 2 && paginatedData.length > 2
+                                            <div
+                                                className={`absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in fade-in zoom-in-95 duration-200 text-left ${index >= paginatedData.length - 2 && paginatedData.length > 2
                                                         ? 'bottom-0 mb-2'
                                                         : 'top-0 mt-2'
-                                                }`}
+                                                    }`}
                                             >
                                                 {row.status === 'Generated' ? (
-                                                    <button 
-                                                        onClick={(e) => { 
-                                                            e.stopPropagation(); 
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
                                                             navigate(`view/${row.id}`);
-                                                            setDropdownIndex(null); 
-                                                        }} 
+                                                            setDropdownIndex(null);
+                                                        }}
                                                         className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
                                                     >
                                                         <FileEdit size={18} className="text-gray-400" />
@@ -748,24 +741,24 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                                     </button>
                                                 ) : (
                                                     <>
-                                                        <button 
-                                                            onClick={(e) => { 
-                                                                e.stopPropagation(); 
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
                                                                 navigate(`view/${row.id}`);
-                                                                setDropdownIndex(null); 
-                                                            }} 
+                                                                setDropdownIndex(null);
+                                                            }}
                                                             className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
                                                         >
                                                             <Eye size={18} className="text-gray-400" />
                                                             {t('common:view')}
                                                         </button>
                                                         {row.status !== 'Deleted' && (
-                                                            <button 
-                                                                onClick={(e) => { 
-                                                                    e.stopPropagation(); 
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
                                                                     navigate(`edit/${row.id}`);
-                                                                    setDropdownIndex(null); 
-                                                                }} 
+                                                                    setDropdownIndex(null);
+                                                                }}
                                                                 className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
                                                             >
                                                                 <Edit3 size={18} className="text-gray-400" />
@@ -792,13 +785,13 @@ const PurchaseInvoice = ({ defaultTab }) => {
                             )}
                         </tbody>
                     </table>
-                </div>
+                </ScrollableTable>
 
                 <div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-t border-[#F3F4F6] bg-white gap-2">
                     <div className="flex items-center gap-2 text-[13px] sm:text-[14px] text-[#6B7280] font-medium min-w-fit">
                         <span>{t('common:show', 'Show')}</span>
                         <div className="relative group">
-                            <select 
+                            <select
                                 value={rowsPerPage}
                                 onChange={(e) => {
                                     setRowsPerPage(Number(e.target.value));
@@ -821,7 +814,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                             {totalItems > 0 ? `${startIndex + 1}-${endIndex} ${t('common:of')} ${totalItems}` : `0-0 ${t('common:of')} 0`}
                         </span>
                         <div className="flex items-center gap-1 sm:gap-1.5">
-                            <button 
+                            <button
                                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                                 disabled={currentPage === 1}
                                 className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px]"
@@ -830,7 +823,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                             </button>
                             <div className="hidden sm:flex items-center gap-1.5">
                                 {getVisiblePages().map((page, index) => (
-                                    <button 
+                                    <button
                                         key={index}
                                         onClick={() => setCurrentPage(page)}
                                         className={`w-10 h-10 rounded-[10px] flex items-center justify-center transition-all text-[14px] font-bold
@@ -843,7 +836,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                     </button>
                                 ))}
                             </div>
-                            <button 
+                            <button
                                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                 disabled={currentPage === totalPages || totalPages === 0}
                                 className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px]"
@@ -854,19 +847,19 @@ const PurchaseInvoice = ({ defaultTab }) => {
                     </div>
                 </div>
             </div>
-            
+
             {/* Filter Dialog removed for brevity, works identical to account master when implemented */}
 
             {toastMessage.show && (
-                <SuccessToast 
-                    message={toastMessage.message} 
+                <SuccessToast
+                    message={toastMessage.message}
                     type={toastMessage.type}
-                    onClose={() => setToastMessage({ ...toastMessage, show: false })} 
+                    onClose={() => setToastMessage({ ...toastMessage, show: false })}
                 />
             )}
 
             {/* Import Modal matching the design in the image */}
-            <ImportModal 
+            <ImportModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 onImport={(fileName) => {

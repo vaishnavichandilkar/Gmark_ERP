@@ -30,6 +30,7 @@ import { ROUTES } from "../../../constants/routes";
 import { useTranslation } from 'react-i18next';
 
 import purchaseOrderService from "../../../services/purchaseOrderService";
+import ScrollableTable from "../../../components/common/ScrollableTable";
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
   if (!isOpen) return null;
@@ -287,7 +288,7 @@ const PurchaseOrder = () => {
         setIsExportOpen(false);
         return;
       }
-      
+
       setIsExportOpen(false);
       setIsRefreshing(true);
 
@@ -329,18 +330,18 @@ const PurchaseOrder = () => {
     } catch (error) {
       console.error("Export error:", error);
       let errorMessage = "Export failed. Please try again.";
-      
+
       // If error is from axios and we have a response
       if (error.response && error.response.data instanceof Blob) {
         try {
           const text = await error.response.data.text();
           const errorData = JSON.parse(text);
           errorMessage = errorData.message || errorMessage;
-        } catch (e) {}
+        } catch (e) { }
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       toast.error(errorMessage);
 
     } finally {
@@ -354,26 +355,26 @@ const PurchaseOrder = () => {
   const handleDownloadSample = async () => {
     try {
       const response = await purchaseOrderService.downloadSample();
-      
+
       // Axios with responseType: 'blob' returns raw blob in response.data
       const blob = response.data;
       if (!blob || blob.size === 0) {
         throw new Error("Received empty sample file.");
       }
-      
+
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', 'PO_Import_Sample.xlsx');
       document.body.appendChild(link);
       link.click();
-      
+
       // Cleanup
       setTimeout(() => {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
       }, 100);
-      
+
       toast.success("Sample file downloaded successfully!");
     } catch (error) {
       console.error("Error downloading sample:", error);
@@ -407,28 +408,7 @@ const PurchaseOrder = () => {
 
   return (
     <div className="flex flex-col w-full relative">
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-            height: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #E5E7EB;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #A7C0B8;
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #073318;
-        }
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-      `}</style>
+
 
       {/* Title Section */}
       <div className="flex flex-col md:flex-row gap-4 mb-6 md:mb-8 justify-between items-start md:items-center">
@@ -618,7 +598,7 @@ const PurchaseOrder = () => {
         </div>
 
         {/* Table Body */}
-        <div className="overflow-x-auto w-full min-h-[400px] custom-scrollbar">
+        <ScrollableTable className="w-full min-h-[400px]">
           <table className="w-full min-w-[1500px] border-collapse text-left">
             <thead>
               <tr className="bg-emerald-900 border-b border-emerald-950 text-[15px] font-bold text-white tracking-tight">
@@ -725,13 +705,13 @@ const PurchaseOrder = () => {
                 </tr>
               )}
             </tbody >
-          </table >
+          </table>
           {isRefreshing && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/20 backdrop-blur-[1px] transition-all">
               <div className="w-10 h-10 border-4 border-[#073318]/10 border-t-[#073318] rounded-full animate-spin"></div>
             </div>
           )}
-        </div >
+        </ScrollableTable>
 
         {/* Pagination Section - Standardized Single Row */}
         < div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-t border-[#F3F4F6] bg-white gap-2" >

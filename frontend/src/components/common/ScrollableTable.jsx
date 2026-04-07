@@ -19,11 +19,11 @@ const ScrollableTable = ({ children, className = "" }) => {
     if (!el) return;
 
     checkScroll();
-    
+
     // Efficiently handle both resize and DOM additions (important for loading tables)
     const observer = new ResizeObserver(() => checkScroll());
     observer.observe(el);
-    
+
     // Also observing children changes for dynamic content loading
     const mutationObserver = new MutationObserver(() => checkScroll());
     mutationObserver.observe(el, { childList: true, subtree: true });
@@ -59,10 +59,11 @@ const ScrollableTable = ({ children, className = "" }) => {
       {showLeft && (
         <button
           onClick={() => scroll('left')}
-          className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/90 backdrop-blur-md border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex items-center justify-center text-gray-700 hover:bg-white hover:scale-110 active:scale-95 transition-all duration-300 opacity-0 group-hover/scroll:opacity-100"
+          className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-[#073318] border border-[#073318]/10 shadow-[0_4px_12px_rgba(0,0,0,0.2)] flex items-center justify-center text-white hover:bg-[#0a4d25] hover:scale-110 active:scale-95 transition-all duration-300 opacity-0 group-hover/scroll:opacity-100"
           aria-label="Scroll Left"
+          title="Previous"
         >
-          <ArrowLeft size={20} strokeWidth={2.5} />
+          <ArrowLeft size={18} strokeWidth={3} />
         </button>
       )}
 
@@ -70,10 +71,11 @@ const ScrollableTable = ({ children, className = "" }) => {
       {showRight && (
         <button
           onClick={() => scroll('right')}
-          className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/90 backdrop-blur-md border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex items-center justify-center text-gray-700 hover:bg-white hover:scale-110 active:scale-95 transition-all duration-300 opacity-0 group-hover/scroll:opacity-100"
+          className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-[#073318] border border-[#073318]/10 shadow-[0_4px_12px_rgba(0,0,0,0.2)] flex items-center justify-center text-white hover:bg-[#0a4d25] hover:scale-110 active:scale-95 transition-all duration-300 opacity-0 group-hover/scroll:opacity-100"
           aria-label="Scroll Right"
+          title="Next"
         >
-          <ArrowRight size={20} strokeWidth={2.5} />
+          <ArrowRight size={18} strokeWidth={3} />
         </button>
       )}
 
