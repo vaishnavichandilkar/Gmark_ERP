@@ -8,42 +8,42 @@ datasource db {
 }
 
 model User {
-  id                    Int                    @id @default(autoincrement())
-  first_name            String?
-  last_name             String?
-  email                 String?                @unique
-  phone                 String?                @unique
-  username              String?                @unique
-  selected_language     String?
-  role                  Role                   @default(buyer)
-  refresh_token         String?
-  onboarded_at          DateTime?
-  verified              Boolean                @default(false)
-  isApproved            Boolean                @default(false)
-  created_at            DateTime               @default(now())
-  updated_at            DateTime               @updatedAt
-  deleted_at            DateTime?
-  isBlocked             Boolean                @default(false)
-  approvalStatus        ApprovalStatus         @default(PENDING)
-  rejectionReason       String?
-  isFirstApprovalLogin  Boolean                @default(true)
-  bankDetail            BankDetail?
-  sellerDocuments       SellerDocument[]       @relation("UploadedByUser")
-  shopDetail            ShopDetail?
-  groups                Group[]
-  subGroups             SubGroup[]
-  subSubGroups          SubSubGroup[]
-  subSubSubGroups       SubSubSubGroup[]
-  subSubSubSubGroups    SubSubSubSubGroup[]
-
-  units                 UnitMaster[]
-  categories            Category[]
-  sub_categories        SubCategory[]
-  sub_sub_categories    SubSubCategory[]
-  products              Product[]
-  accounts              AccountMaster[]
-  purchaseOrders       PurchaseOrder[]
+  id                   Int                 @id @default(autoincrement())
+  first_name           String?
+  last_name            String?
+  email                String?             @unique
+  phone                String?             @unique
+  username             String?             @unique
+  selected_language    String?
+  role                 Role                @default(buyer)
+  refresh_token        String?
+  onboarded_at         DateTime?
+  verified             Boolean             @default(false)
+  isApproved           Boolean             @default(false)
+  created_at           DateTime            @default(now())
+  updated_at           DateTime            @updatedAt
+  deleted_at           DateTime?
+  isBlocked            Boolean             @default(false)
+  approvalStatus       ApprovalStatus      @default(PENDING)
+  rejectionReason      String?
+  isFirstApprovalLogin Boolean             @default(true)
+  bankDetail           BankDetail?
+  sellerDocuments      SellerDocument[]    @relation("UploadedByUser")
+  shopDetail           ShopDetail?
+  accounts             AccountMaster[]
+  categories           Category[]
+  groups               Group[]
+  products             Product[]
   purchaseInvoices     PurchaseInvoice[]
+  purchaseOrders       PurchaseOrder[]
+  sub_categories       SubCategory[]
+  subGroups            SubGroup[]
+  sub_sub_categories   SubSubCategory[]
+  subSubGroups         SubSubGroup[]
+  subSubSubGroups      SubSubSubGroup[]
+  subSubSubSubGroups   SubSubSubSubGroup[]
+  units                UnitMaster[]
+
   @@map("User")
 }
 
@@ -104,7 +104,6 @@ model Otp {
 model SellerDocument {
   id               Int                @id @default(autoincrement())
   profileId        Int?
-  sellerProfile    SellerProfile?     @relation(fields: [profileId], references: [id])
   type             SellerDocumentType
   url              String
   category         String?
@@ -113,6 +112,7 @@ model SellerDocument {
   size             BigInt             @default(0)
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
+  sellerProfile    SellerProfile?     @relation(fields: [profileId], references: [id])
   uploadedByUser   User?              @relation("UploadedByUser", fields: [uploadedByUserId], references: [id])
 
   @@map("SellerDocument")
@@ -145,38 +145,36 @@ model AuditLog {
 }
 
 model SellerProfile {
-  id              Int       @id @default(autoincrement())
-  userId          Int       @unique
-  currentStep     Int       @default(0)
-  status          String    @default("IN_PROGRESS")
-  sessionId       Int       @unique @default(autoincrement())
+  id              Int                @id @default(autoincrement())
+  userId          Int                @unique
+  currentStep     Int                @default(0)
+  status          String             @default("IN_PROGRESS")
+  sessionId       Int                @unique @default(autoincrement())
   addressId       Int?
   sellerId        Int?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
+  created_at      DateTime           @default(now())
+  updated_at      DateTime           @updatedAt
   approvedAt      DateTime?
   onHoldUntil     DateTime?
   rejectionReason String?
-
-  reviews   SellerStepReview[]
-  documents SellerDocument[]
+  documents       SellerDocument[]
+  reviews         SellerStepReview[]
 
   @@map("SellerProfile")
 }
 
 model SellerStepReview {
-  id              Int       @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
   sellerProfileId Int
   step            Int
-  status          String    @default("PENDING")
+  status          String        @default("PENDING")
   data            Json?
   remark          String?
   reviewedBy      String?
   reviewedAt      DateTime?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
-
-  sellerProfile SellerProfile @relation(fields: [sellerProfileId], references: [id], onDelete: Cascade)
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+  sellerProfile   SellerProfile @relation(fields: [sellerProfileId], references: [id], onDelete: Cascade)
 
   @@unique([sellerProfileId, step])
   @@map("SellerStepReview")
@@ -206,6 +204,332 @@ model Language {
   updatedAt DateTime @updatedAt
 
   @@map("Language")
+}
+
+model AccountMaster {
+  id                     Int           @id @default(autoincrement())
+  accountName            String
+  groupName              String[]
+  gstNo                  String?
+  panNo                  String
+  addressLine1           String
+  addressLine2           String?
+  pincode                String
+  area                   String?
+  subDistrict            String?
+  district               String?
+  state                  String
+  country                String?
+  prefix                 ContactPrefix
+  contactPersonName      String
+  emailId                String?
+  mobileNo               String
+  supplierCode           String?
+  supplierCreditDays     Int?
+  supplierOpeningBalance Decimal?
+  supplierBalanceType    BalanceType?
+  customerCode           String?
+  customerCreditDays     Int?
+  customerOpeningBalance Decimal?
+  customerBalanceType    BalanceType?
+  customerType           CustomerType?
+  msmeEnabled            Boolean       @default(false)
+  msmeId                 String?
+  regUnder               RegUnder?
+  regType                RegType?
+  msmeCertificateUrl     String?
+  otherDocuments         Json?
+  userId                 Int
+  status                 MasterStatus  @default(ACTIVE)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  user                   User          @relation(fields: [userId], references: [id])
+
+  @@unique([accountName, userId])
+  @@unique([customerCode, userId])
+  @@unique([supplierCode, userId])
+  @@map("account_master")
+}
+
+model SystemUomLibrary {
+  id                       Int      @id @default(autoincrement())
+  full_name_of_measurement String
+  unit_name                String
+  uom_code                 String
+  created_at               DateTime @default(now())
+
+  @@map("system_uom_library")
+}
+
+model UnitMaster {
+  id                       Int        @id @default(autoincrement())
+  user_id                  Int
+  unit_name                String
+  gst_uom                  String
+  full_name_of_measurement String
+  source                   UnitSource @default(SYSTEM)
+  status                   UnitStatus @default(ACTIVE)
+  created_at               DateTime   @default(now())
+  updated_at               DateTime   @updatedAt
+  products                 Product[]
+  user                     User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, gst_uom])
+  @@map("unit_master")
+}
+
+model Group {
+  id         Int          @id @default(autoincrement())
+  group_name String
+  parent_id  Int?
+  userId     Int?
+  is_header  Boolean      @default(false)
+  status     MasterStatus @default(ACTIVE)
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+  parent     Group?       @relation("GroupToGroup", fields: [parent_id], references: [id])
+  children   Group[]      @relation("GroupToGroup")
+  user       User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sub_groups SubGroup[]
+
+  @@map("groups")
+}
+
+model SubGroup {
+  id             Int           @id @default(autoincrement())
+  group_id       Int
+  subgroup_name  String
+  userId         Int?
+  status         MasterStatus  @default(ACTIVE)
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+  group          Group         @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sub_sub_groups SubSubGroup[]
+
+  @@map("sub_groups")
+}
+
+model SubSubGroup {
+  id                 Int              @id @default(autoincrement())
+  sub_group_id       Int
+  name               String
+  userId             Int?
+  status             MasterStatus     @default(ACTIVE)
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @updatedAt
+  sub_group          SubGroup         @relation(fields: [sub_group_id], references: [id], onDelete: Cascade)
+  user               User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sub_sub_sub_groups SubSubSubGroup[]
+
+  @@map("sub_sub_groups")
+}
+
+model SubSubSubGroup {
+  id                     Int                 @id @default(autoincrement())
+  sub_sub_group_id       Int
+  name                   String
+  userId                 Int?
+  status                 MasterStatus        @default(ACTIVE)
+  created_at             DateTime            @default(now())
+  updated_at             DateTime            @updatedAt
+  sub_sub_group          SubSubGroup         @relation(fields: [sub_sub_group_id], references: [id], onDelete: Cascade)
+  user                   User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sub_sub_sub_sub_groups SubSubSubSubGroup[]
+
+  @@map("sub_sub_sub_groups")
+}
+
+model SubSubSubSubGroup {
+  id                   Int            @id @default(autoincrement())
+  sub_sub_sub_group_id Int
+  name                 String
+  userId               Int?
+  status               MasterStatus   @default(ACTIVE)
+  created_at           DateTime       @default(now())
+  updated_at           DateTime       @updatedAt
+  sub_sub_sub_group    SubSubSubGroup @relation(fields: [sub_sub_sub_group_id], references: [id], onDelete: Cascade)
+  user                 User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sub_sub_sub_sub_groups")
+}
+
+model Category {
+  id             Int           @id @default(autoincrement())
+  name           String
+  user_id        Int
+  status         MasterStatus  @default(ACTIVE)
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+  user           User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  products       Product[]
+  sub_categories SubCategory[]
+
+  @@unique([name, user_id])
+  @@map("categories")
+}
+
+model SubCategory {
+  id                 Int              @id @default(autoincrement())
+  name               String
+  category_id        Int
+  user_id            Int
+  status             MasterStatus     @default(ACTIVE)
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @updatedAt
+  products           Product[]
+  category           Category         @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  user               User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  sub_sub_categories SubSubCategory[]
+
+  @@unique([name, category_id, user_id])
+  @@map("sub_categories")
+}
+
+model SubSubCategory {
+  id              Int          @id @default(autoincrement())
+  name            String
+  sub_category_id Int
+  user_id         Int
+  status          MasterStatus @default(ACTIVE)
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  products        Product[]
+  sub_category    SubCategory  @relation(fields: [sub_category_id], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([name, sub_category_id, user_id])
+  @@map("sub_sub_categories")
+}
+
+model HsnMaster {
+  id          Int       @id @default(autoincrement())
+  hsn_code    String    @unique
+  description String
+  gst_rate    Decimal
+  created_by  Int?
+  created_at  DateTime  @default(now())
+  products    Product[]
+
+  @@map("hsn_master")
+}
+
+model Product {
+  id              Int              @id @default(autoincrement())
+  product_name    String
+  product_code    String           
+  uom_id          Int
+  product_type    ProductType
+  category_id     Int
+  sub_category_id     Int?
+  sub_sub_category_id Int?
+  hsn_code        String
+  tax_rate        Float
+  description     String?
+  status          MasterStatus     @default(ACTIVE)
+  is_deleted      Boolean          @default(false)
+  created_by      Int
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
+
+  uom             UnitMaster       @relation(fields: [uom_id], references: [id])
+  category        Category         @relation(fields: [category_id], references: [id])
+  sub_category    SubCategory?      @relation(fields: [sub_category_id], references: [id])
+  sub_sub_category SubSubCategory? @relation(fields: [sub_sub_category_id], references: [id])
+  creator         User             @relation(fields: [created_by], references: [id])
+  hsn             HsnMaster        @relation(fields: [hsn_code], references: [hsn_code])
+
+  @@unique([product_code, created_by])
+  @@map("products")
+}
+
+model PurchaseOrder {
+  id              Int                 @id @default(autoincrement())
+  poNumber        String              @unique
+  supplierName    String
+  address         String
+  creditDays      Int
+  poCreationDate  DateTime            @default(now())
+  expiryDate      DateTime
+  gstNumber       String?
+  panNumber       String?
+  status          POStatus            @default(PENDING)
+  totalAmount     Float               @default(0)
+  taxAmount       Float               @default(0)
+  grandTotal      Float               @default(0)
+  userId          Int
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  purchaseInvoice PurchaseInvoice?
+  items           PurchaseOrderItem[]
+  user            User                @relation(fields: [userId], references: [id])
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id               Int           @id @default(autoincrement())
+  purchaseOrderId  Int
+  productCode      String
+  productName      String
+  hsnCode          String
+  quantity         Float
+  rate             Float
+  uom              String
+  discountPercent  Float
+  discountAmount   Float
+  taxPercent       Float
+  taxAmount        Float
+  totalAmount      Float
+  beforeTaxAmount  Float         @default(0)
+  printDescription String?
+  purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_order_items")
+}
+
+model PurchaseInvoice {
+  id                    Int                   @id @default(autoincrement())
+  invoiceNumber         String                @unique
+  invoiceDate           DateTime              @default(now())
+  poId                  Int?                  @unique
+  supplierName          String
+  address               String
+  creditDays            Int
+  grandTotal            Float                 @default(0)
+  userId                Int
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  bookingDate           DateTime              @default(now())
+  cgstAmount            Float                 @default(0)
+  challanNumber         String?
+  cumulativeBalance     Float                 @default(0)
+  poNumber              String?
+  sgstAmount            Float                 @default(0)
+  supplierInvoiceDate   DateTime
+  supplierInvoiceNumber String
+  taxableAmount         Float                 @default(0)
+  totalQuantity         Float                 @default(0)
+  uploadedFilePath      String?
+  status                PIStatus              @default(GENERATED)
+  items                 PurchaseInvoiceItem[]
+  purchaseOrder         PurchaseOrder?        @relation(fields: [poId], references: [id])
+  user                  User                  @relation(fields: [userId], references: [id])
+
+  @@map("purchase_invoices")
+}
+
+model PurchaseInvoiceItem {
+  id                Int             @id @default(autoincrement())
+  purchaseInvoiceId Int
+  productCode       String
+  productName       String
+  quantity          Float
+  rate              Float
+  uom               String
+  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_invoice_items")
 }
 
 enum AdminStatus {
@@ -279,67 +603,6 @@ enum CustomerType {
   retailer
 }
 
-model AccountMaster {
-  id Int @id @default(autoincrement())
-
-  accountName String
-  groupName   String[]
-
-  gstNo String?
-  panNo String
-
-  addressLine1 String
-  addressLine2 String?
-  pincode      String
-  area         String?
-  subDistrict  String?
-  district     String?
-  state        String
-  country      String?
-
-  // Contact Persons
-  prefix            ContactPrefix
-  contactPersonName String
-  emailId           String?
-  mobileNo          String
-
-  // Supplier Details
-  supplierCode           String?
-  supplierCreditDays     Int?
-  supplierOpeningBalance Decimal?
-  supplierBalanceType    BalanceType?
-
-  // Customer Details
-  customerCode           String?
-  customerCreditDays     Int?
-  customerOpeningBalance Decimal?
-  customerBalanceType    BalanceType?
-  customerType           CustomerType?
-
-  // MSME Details
-  msmeEnabled        Boolean @default(false)
-  msmeId             String?
-  regUnder           RegUnder?
-  regType            RegType?
-  msmeCertificateUrl String?
-
-  otherDocuments Json?
-
-  // Ownership
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-
-  // Metadata
-  status    MasterStatus @default(ACTIVE)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-
-  @@unique([accountName, userId])
-  @@unique([customerCode, userId])
-  @@unique([supplierCode, userId])
-  @@map("account_master")
-}
-
 enum UnitStatus {
   ACTIVE
   INACTIVE
@@ -350,212 +613,11 @@ enum UnitSource {
   USER
 }
 
-model SystemUomLibrary {
-  id                       Int      @id @default(autoincrement())
-  full_name_of_measurement String
-  unit_name                String
-  uom_code                 String
-  created_at               DateTime @default(now())
-
-  @@map("system_uom_library")
-}
-
-model UnitMaster {
-  id                       Int        @id @default(autoincrement())
-  user_id                  Int
-  unit_name                String
-  gst_uom                  String
-  full_name_of_measurement String
-  source                   UnitSource @default(SYSTEM)
-  status                   UnitStatus @default(ACTIVE)
-  created_at               DateTime   @default(now())
-  updated_at               DateTime   @updatedAt
-  user                     User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  products                 Product[]
-
-  @@unique([user_id, gst_uom])
-  @@map("unit_master")
-}
-
-
-model Group {
-  id          Int          @id @default(autoincrement())
-  group_name  String
-  parent_id   Int?
-  userId      Int?
-  is_header   Boolean      @default(false)
-  status      MasterStatus @default(ACTIVE)
-  created_at  DateTime     @default(now())
-  updated_at  DateTime     @updatedAt
-
-  parent      Group?       @relation("GroupToGroup", fields: [parent_id], references: [id])
-  children    Group[]      @relation("GroupToGroup")
-  user        User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  sub_groups  SubGroup[]
-
-  @@map("groups")
-}
-
-model SubGroup {
-  id             Int          @id @default(autoincrement())
-  group_id       Int
-  subgroup_name  String
-  userId         Int?
-  status         MasterStatus @default(ACTIVE)
-  created_at     DateTime     @default(now())
-  updated_at     DateTime     @updatedAt
-
-  group          Group        @relation(fields: [group_id], references: [id], onDelete: Cascade)
-  user           User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sub_sub_groups SubSubGroup[]
-
-  @@map("sub_groups")
-}
-
-model SubSubGroup {
-  id               Int                   @id @default(autoincrement())
-  sub_group_id     Int
-  name             String
-  userId           Int?
-  status           MasterStatus          @default(ACTIVE)
-  created_at       DateTime              @default(now())
-  updated_at       DateTime              @updatedAt
-
-  sub_group        SubGroup              @relation(fields: [sub_group_id], references: [id], onDelete: Cascade)
-  user             User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sub_sub_sub_groups SubSubSubGroup[]
-
-  @@map("sub_sub_groups")
-}
-
-model SubSubSubGroup {
-  id                 Int               @id @default(autoincrement())
-  sub_sub_group_id   Int
-  name               String
-  userId             Int?
-  status             MasterStatus      @default(ACTIVE)
-  created_at         DateTime          @default(now())
-  updated_at         DateTime          @updatedAt
-
-  sub_sub_group      SubSubGroup       @relation(fields: [sub_sub_group_id], references: [id], onDelete: Cascade)
-  user               User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sub_sub_sub_sub_groups SubSubSubSubGroup[]
-
-  @@map("sub_sub_sub_groups")
-}
-
-model SubSubSubSubGroup {
-  id                   Int               @id @default(autoincrement())
-  sub_sub_sub_group_id Int
-  name                 String
-  userId               Int?
-  status               MasterStatus      @default(ACTIVE)
-  created_at           DateTime          @default(now())
-  updated_at           DateTime          @updatedAt
-
-  sub_sub_sub_group    SubSubSubGroup    @relation(fields: [sub_sub_sub_group_id], references: [id], onDelete: Cascade)
-  user                 User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("sub_sub_sub_sub_groups")
-}
-
-model Category {
-  id          Int          @id @default(autoincrement())
-  name        String
-  user_id     Int
-  status      MasterStatus @default(ACTIVE)
-  created_at  DateTime     @default(now())
-  updated_at  DateTime     @updatedAt
-
-  user           User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  sub_categories SubCategory[]
-  products       Product[]
-
-  @@unique([name, user_id])
-  @@map("categories")
-}
-
-model SubCategory {
-  id          Int          @id @default(autoincrement())
-  name        String
-  category_id Int
-  user_id     Int
-  status      MasterStatus @default(ACTIVE)
-  created_at  DateTime     @default(now())
-  updated_at  DateTime     @updatedAt
-
-  category    Category     @relation(fields: [category_id], references: [id], onDelete: Cascade)
-  user        User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  products    Product[]
-  sub_sub_categories SubSubCategory[]
-
-  @@unique([name, category_id, user_id])
-  @@map("sub_categories")
-}
-
-model SubSubCategory {
-  id              Int          @id @default(autoincrement())
-  name            String
-  sub_category_id Int
-  user_id         Int
-  status          MasterStatus @default(ACTIVE)
-  created_at      DateTime     @default(now())
-  updated_at      DateTime     @updatedAt
-
-  sub_category    SubCategory  @relation(fields: [sub_category_id], references: [id], onDelete: Cascade)
-  user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  products        Product[]
-
-  @@unique([name, sub_category_id, user_id])
-  @@map("sub_sub_categories")
-}
-
-model HsnMaster {
-  id          Int      @id @default(autoincrement())
-  hsn_code    String   @unique
-  description String
-  gst_rate    Decimal
-  created_by  Int?
-  created_at  DateTime @default(now())
-  products    Product[]
-
-  @@map("hsn_master")
-}
-
 enum ProductType {
   GOODS
   SERVICES
 }
 
-model Product {
-  id              Int              @id @default(autoincrement())
-  product_name    String
-  product_code    String           
-  uom_id          Int
-  product_type    ProductType
-  category_id     Int
-  sub_category_id     Int?
-  sub_sub_category_id Int?
-  hsn_code        String
-  tax_rate        Float
-  description     String?
-  status          MasterStatus     @default(ACTIVE)
-  is_deleted      Boolean          @default(false)
-  created_by      Int
-  created_at      DateTime         @default(now())
-  updated_at      DateTime         @updatedAt
-
-  uom             UnitMaster       @relation(fields: [uom_id], references: [id])
-  category        Category         @relation(fields: [category_id], references: [id])
-  sub_category    SubCategory?      @relation(fields: [sub_category_id], references: [id])
-  sub_sub_category SubSubCategory? @relation(fields: [sub_sub_category_id], references: [id])
-  creator         User             @relation(fields: [created_by], references: [id])
-  hsn             HsnMaster        @relation(fields: [hsn_code], references: [hsn_code])
-
-  @@unique([product_code, created_by])
-  @@map("products")
-}
 
 enum POStatus {
   PENDING
@@ -563,110 +625,7 @@ enum POStatus {
   DELETED
 }
 
-model PurchaseOrder {
-  id              Int                 @id @default(autoincrement())
-  poNumber        String              @unique
-  supplierName    String
-  address         String
-  creditDays      Int
-  poCreationDate  DateTime            @default(now())
-  expiryDate      DateTime
-  gstNumber       String?
-  panNumber       String?
-  status          POStatus            @default(PENDING)
-  totalAmount     Float               @default(0)
-  taxAmount       Float               @default(0)
-  grandTotal      Float               @default(0)
-  
-  items           PurchaseOrderItem[]
-  userId          Int 
-  user            User @relation(fields: [userId], references: [id]) 
-
-  purchaseInvoice PurchaseInvoice?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-
-  @@map("purchase_orders")
-}
-
-model PurchaseOrderItem {
-  id              Int           @id @default(autoincrement())
-  purchaseOrderId Int
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  
-  productCode     String
-  productName     String
-  hsnCode         String
-  quantity        Float
-  rate            Float
-  uom             String
-  discountPercent Float
-  discountAmount  Float
-  taxPercent      Float
-  taxAmount       Float
-  beforeTaxAmount Float         @default(0)
-  totalAmount     Float
-  printDescription String?
-
-  @@map("purchase_order_items")
-}
-
 enum PIStatus {
   GENERATED
   DELETED
 }
-
-model PurchaseInvoice {
-  id                  Int                   @id @default(autoincrement())
-  invoiceNumber       String                @unique // System generated internal PI number
-  supplierInvoiceNumber String              // Physical invoice number provided by supplier
-  supplierInvoiceDate DateTime              // Date provided on supplier's physical invoice
-  invoiceDate         DateTime              @default(now()) // Keeping for compatibility, but user may use supplierInvoiceDate
-  bookingDate         DateTime              @default(now()) // Date invoice is recorded in system
-  
-  supplierName        String
-  address             String
-  poNumber            String?
-  challanNumber       String?
-  creditDays          Int
-  
-  status              PIStatus              @default(GENERATED)
-  uploadedFilePath    String?
-  
-  // Totals
-  totalQuantity       Float               @default(0)
-  taxableAmount       Float               @default(0)
-  cgstAmount          Float               @default(0)
-  sgstAmount          Float               @default(0)
-  grandTotal          Float               @default(0)
-  cumulativeBalance   Float               @default(0)
-
-  items               PurchaseInvoiceItem[]
-  
-  userId              Int 
-  user                User                  @relation(fields: [userId], references: [id]) 
-  
-  poId                Int?                  @unique
-  purchaseOrder       PurchaseOrder?        @relation(fields: [poId], references: [id])
-
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-
-  @@map("purchase_invoices")
-}
-
-model PurchaseInvoiceItem {
-  id                Int             @id @default(autoincrement())
-  purchaseInvoiceId Int
-  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
-  
-  productCode       String
-  productName       String
-  quantity          Float
-  rate              Float
-  uom               String
-
-  
-  @@map("purchase_invoice_items")
-}
-

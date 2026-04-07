@@ -24,7 +24,6 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '180',
     grossAmount: '1180',
     status: 'Deleted',
-    type: 'Invoice',
     actionText: 'View PI',
   },
   {
@@ -40,12 +39,11 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '450',
     grossAmount: '2950',
     status: 'Generated',
-    type: 'Invoice',
     actionText: 'View & Edit PI',
   },
   {
     id: 3,
-    invoiceNo: 'GRN-0001',
+    invoiceNo: 'INV-0003',
     supplierName: 'Metro Supplies Co.',
     bookingDate: '02-03-2026',
     invoiceDate: '10-03-2026',
@@ -55,8 +53,7 @@ const INITIAL_MOCK_DATA = [
     taxableAmount: '3500',
     taxAmount: '630',
     grossAmount: '4130',
-    status: 'Generated',
-    type: 'GRN',
+    status: 'Deleted',
     actionText: 'View PI',
   },
   {
@@ -72,12 +69,11 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '900',
     grossAmount: '5900',
     status: 'Generated',
-    type: 'Invoice',
     actionText: 'View & Edit PI',
   },
   {
     id: 5,
-    invoiceNo: 'GRN-0002',
+    invoiceNo: 'INV-0005',
     supplierName: 'Sunrise Global Vendors',
     bookingDate: '06-03-2026',
     invoiceDate: '15-03-2026',
@@ -88,7 +84,6 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '2160',
     grossAmount: '14160',
     status: 'Generated',
-    type: 'GRN',
     actionText: 'View & Edit PI',
   },
   {
@@ -104,7 +99,6 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '1530',
     grossAmount: '10030',
     status: 'Generated',
-    type: 'Invoice',
     actionText: 'View & Edit PI',
   },
   {
@@ -120,12 +114,11 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '756',
     grossAmount: '4956',
     status: 'Deleted',
-    type: 'Invoice',
     actionText: 'View PI',
   },
   {
     id: 8,
-    invoiceNo: 'GRN-0003',
+    invoiceNo: 'INV-0008',
     supplierName: 'Oceanic Wholesalers',
     bookingDate: '12-03-2026',
     invoiceDate: '22-03-2026',
@@ -136,12 +129,41 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '1206',
     grossAmount: '7906',
     status: 'Generated',
-    type: 'GRN',
+    actionText: 'View & Edit PI',
+  },
+  {
+    id: 9,
+    invoiceNo: 'INV-0009',
+    supplierName: 'Master Logistics',
+    bookingDate: '14-03-2026',
+    invoiceDate: '24-03-2026',
+    poNo: 'PO00009',
+    gstNo: '27VWXYZ5678S1Z9',
+    cred: '45',
+    taxableAmount: '3000',
+    taxAmount: '540',
+    grossAmount: '3540',
+    status: 'Generated',
+    actionText: 'View & Edit PI',
+  },
+  {
+    id: 10,
+    invoiceNo: 'INV-0010',
+    supplierName: 'Prime Sources Ltd.',
+    bookingDate: '15-03-2026',
+    invoiceDate: '26-03-2026',
+    poNo: 'PO00010',
+    gstNo: '27DEFGH9012T1Z1',
+    cred: '20',
+    taxableAmount: '15000',
+    taxAmount: '2700',
+    grossAmount: '17700',
+    status: 'Generated',
     actionText: 'View & Edit PI',
   }
 ];
 
-const PurchaseInvoice = ({ defaultTab }) => {
+const PurchaseInvoice = () => {
     const { t } = useTranslation(['modules', 'common']);
     const navigate = useNavigate();
     const location = useLocation();
@@ -149,11 +171,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
     const [data, setData] = useState(INITIAL_MOCK_DATA);
     const [currentView, setCurrentView] = useState('list');
     const [selectedInvoice, setSelectedInvoice] = useState(null);
-    const [activeTab, setActiveTab] = useState(defaultTab || 'Invoice');
-    
-    useEffect(() => {
-        if (defaultTab) setActiveTab(defaultTab);
-    }, [defaultTab]);
+    const [activeTab, setActiveTab] = useState('All');
     const [dropdownIndex, setDropdownIndex] = useState(null);
     const dropdownRef = useRef(null);
 
@@ -181,12 +199,9 @@ const PurchaseInvoice = ({ defaultTab }) => {
     
     // filtering based on active tab
     // filtering based on active tab and search query
-    // filtering based on active tab and search query
-    const filteredByTab = data
-        .filter(item => {
-            if (activeTab === 'Deleted') return item.status === 'Deleted';
-            return item.type === activeTab && item.status !== 'Deleted';
-        })
+    const filteredByTab = (activeTab === 'Deleted' 
+        ? data.filter(item => item.status === 'Deleted')
+        : data)
         .filter(row => {
             if (!searchQuery) return true;
             const query = searchQuery.toLowerCase();
@@ -353,7 +368,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                 }
                 return item;
             }));
-            showToast('Invoice updated successfully');
+            showToast('Purchase Invoice updated successfully');
         } else {
             // Adding new record
             const newInvoice = {
@@ -368,22 +383,21 @@ const PurchaseInvoice = ({ defaultTab }) => {
                 status: 'Generated',
                 taxableAmount: '0.00',
                 taxAmount: '0.00',
-                grossAmount: '0.00',
-                type: activeTab
+                grossAmount: '0.00'
             };
             setData(prevData => [newInvoice, ...prevData]);
-            showToast('Invoice created successfully');
+            showToast('Purchase Invoice created successfully');
         }
 
         setCurrentView('list');
         setSelectedInvoice(null);
-        setActiveTab(defaultTab || 'Invoice');
+        setActiveTab('All');
         setCurrentPage(1);
     };
 
     const handleDelete = (id) => {
         setData(prevData => prevData.filter(item => item.id !== id));
-        showToast('Invoice deleted permanently');
+        showToast('Purchase Invoice deleted permanently');
         setCurrentView('list');
         setSelectedInvoice(null);
     };
@@ -391,10 +405,9 @@ const PurchaseInvoice = ({ defaultTab }) => {
     if (currentView === 'add' || currentView === 'edit') {
         return (
             <AddPurchaseInvoice 
-                onBack={() => navigate(`/seller/purchase/${activeTab.toLowerCase()}`)} 
+                onBack={() => navigate('/seller/purchase/invoice')} 
                 initialData={selectedInvoice}
                 onSave={handleSave}
-                type={activeTab}
             />
         );
     }
@@ -403,8 +416,8 @@ const PurchaseInvoice = ({ defaultTab }) => {
         return (
             <ViewPurchaseInvoice 
                 initialData={selectedInvoice} 
-                onBack={() => navigate(`/seller/purchase/${activeTab.toLowerCase()}`)} 
-                onEdit={() => navigate(`/seller/purchase/${activeTab.toLowerCase()}/edit/${selectedInvoice.id}`)} 
+                onBack={() => navigate('/seller/purchase/invoice')} 
+                onEdit={() => navigate(`/seller/purchase/invoice/edit/${selectedInvoice.id}`)} 
                 onDelete={handleDelete}
             />
         );
@@ -417,7 +430,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                 {/* Desktop Header */}
                 <div className="hidden md:flex flex-row items-center justify-between gap-4 w-full">
                     <h2 className="text-[20px] md:text-[24px] font-bold text-[#111827] tracking-tight">
-                        {activeTab === 'Invoice' ? 'Invoice' : 'GRN'}
+                        Purchase Invoice
                     </h2>
 
                     <button 
@@ -425,7 +438,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                         className="md:min-w-[160px] md:px-5 h-[42px] md:h-[38px] bg-[#073318] hover:bg-[#04200f] text-white rounded-[10px] md:rounded-[8px] text-[15px] md:text-[14px] font-semibold transition-all shadow-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
                         <Plus size={16} />
-                        {activeTab === 'Invoice' ? t('modules:add_invoice', 'Add Invoice') : 'Add GRN'}
+                        {t('modules:add_purchase_invoice', 'Add Purchase Invoice')}
                     </button>
                 </div>
 
@@ -436,37 +449,33 @@ const PurchaseInvoice = ({ defaultTab }) => {
                         className="w-full max-w-[358px] h-[42px] bg-[#073318] hover:bg-[#04200f] text-white rounded-[10px] text-[15px] font-semibold transition-all shadow-md flex items-center justify-center gap-2 active:scale-[0.98] self-center"
                     >
                         <Plus size={16} />
-                        {activeTab === 'Invoice' ? t('modules:add_invoice', 'Add Invoice') : 'Add GRN'}
+                        {t('modules:add_purchase_invoice', 'Add Purchase Invoice')}
                     </button>
                 </div>
                 
                 {/* Embedded Sub-tabs matching previous structure */}
-                <div className="flex justify-center gap-16 border-b border-[#E5E7EB] w-full mt-6">
-                  {['Invoice', 'GRN'].map((tab) => (
+                <div className="flex justify-center gap-8 border-b border-[#E5E7EB] w-full mt-6">
+                  {['All', 'Deleted'].map((tab) => (
                     <button
                       key={tab}
-                      onClick={() => {
-                        setActiveTab(tab);
-                        navigate(`/seller/purchase/${tab.toLowerCase()}`);
-                      }}
-                      className={`relative pb-4 text-[16px] md:text-[18px] font-bold transition-colors duration-300 ${
+                      onClick={() => setActiveTab(tab)}
+                      className={`relative pb-3 text-[14px] font-bold transition-colors duration-300 ${
                         activeTab === tab
                           ? 'text-[#073318]'
                           : 'text-[#6B7280] hover:text-[#111827]'
                       }`}
                     >
-                      {tab === 'Invoice' ? t('common:invoice', 'Invoice') : 'GRN'}
+                      {tab === 'All' ? t('common:all') : t('common:deleted', 'Deleted')}
                       {activeTab === tab && (
                         <motion.div
                           layoutId="activeSubTabUnderline"
-                          className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#073318] rounded-t-full"
+                          className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#073318]"
                           transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                         />
                       )}
                     </button>
                   ))}
                 </div>
-
             </div>
 
             {/* Main Card exactly like Account Master */}
@@ -633,7 +642,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                             <tr className="bg-emerald-900 border-b border-emerald-950 text-[15px] font-bold text-white tracking-wider">
                                 <th className="px-10 py-5 whitespace-nowrap border-r border-white/10 min-w-[150px]">
                                     <div className="flex items-center gap-2 cursor-pointer justify-between">
-                                        <span>{activeTab === 'Invoice' ? 'Invoice No' : 'GRN No'}</span>
+                                        <span>Invoice No</span>
                                         <ChevronsUpDown size={14} className="text-white/60" />
                                     </div>
                                 </th>
@@ -651,7 +660,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                 </th>
                                 <th className="px-10 py-5 whitespace-nowrap border-r border-white/10 min-w-[180px]">
                                     <div className="flex items-center gap-2 cursor-pointer justify-between">
-                                        <span>{activeTab === 'Invoice' ? 'Invoice Date' : 'GRN Date'}</span>
+                                        <span>Invoice Date</span>
                                         <ChevronsUpDown size={14} className="text-white/60" />
                                     </div>
                                 </th>

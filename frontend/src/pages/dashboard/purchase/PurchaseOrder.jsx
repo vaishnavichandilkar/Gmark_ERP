@@ -75,7 +75,6 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
 const PurchaseOrder = () => {
   const { t } = useTranslation(['modules', 'common']);
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -99,6 +98,9 @@ const PurchaseOrder = () => {
   // Local Storage Data Retrieval
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [totalItemsCount, setTotalItemsCount] = useState(0);
+  const [activeTab, setActiveTab] = useState("All");
+
+  const statusTabs = ["All", "Pending", "Expiring Soon", "Expired", "Completed", "Deleted"];
   const [isLoading, setIsLoading] = useState(true);
 
   // Helper date formatting
@@ -143,7 +145,7 @@ const PurchaseOrder = () => {
     };
 
     fetchData();
-  }, [currentPage, itemsPerPage, searchQuery, activeTab, isRefreshing]);
+  }, [currentPage, itemsPerPage, searchQuery, isRefreshing]);
 
   // Helper date parsing
   const parseDate = (dateStr) => {
@@ -192,9 +194,8 @@ const PurchaseOrder = () => {
       return { ...po, computedStatusLabel, bgClass };
     });
 
-    if (activeTab === "All") return mapped;
-    return mapped.filter(po => po.computedStatusLabel === activeTab);
-  }, [purchaseOrders, activeTab]);
+    return mapped;
+  }, [purchaseOrders]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -281,6 +282,12 @@ const PurchaseOrder = () => {
    */
   const handleExport = async (format) => {
     try {
+      if (purchaseOrders.length === 0) {
+        toast.error("No data available to export.");
+        setIsExportOpen(false);
+        return;
+      }
+      
       setIsExportOpen(false);
       setIsRefreshing(true);
 
@@ -293,18 +300,49 @@ const PurchaseOrder = () => {
       const response = await purchaseOrderService.exportPurchaseOrders(params);
 
       // Trigger download
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `purchase_orders_${activeTab.toLowerCase()}.${format === 'xlsx' ? 'xlsx' : 'pdf'}`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
 
-      toast.success(`Report exported as ${format.toUpperCase()}`);
+
+      if (response && response.data) {
+        // Axios with responseType: 'blob' returns raw blob in response.data
+        const blob = response.data;
+        if (!blob || blob.size === 0) {
+          throw new Error("Received empty export file.");
+        }
+
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `purchase_orders_${Date.now()}.${format === 'xlsx' ? 'xlsx' : 'pdf'}`);
+        document.body.appendChild(link);
+        link.click();
+
+        // Cleanup
+        setTimeout(() => {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+        }, 100);
+
+        toast.success(`Exported to ${format.toUpperCase()} successfully!`);
+      } else {
+        throw new Error("Invalid response from server.");
+      }
     } catch (error) {
       console.error("Export error:", error);
-      toast.error("Export failed. Please try again.");
+      let errorMessage = "Export failed. Please try again.";
+      
+      // If error is from axios and we have a response
+      if (error.response && error.response.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const errorData = JSON.parse(text);
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {}
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
+
     } finally {
       setIsRefreshing(false);
     }
@@ -316,15 +354,30 @@ const PurchaseOrder = () => {
   const handleDownloadSample = async () => {
     try {
       const response = await purchaseOrderService.downloadSample();
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      
+      // Axios with responseType: 'blob' returns raw blob in response.data
+      const blob = response.data;
+      if (!blob || blob.size === 0) {
+        throw new Error("Received empty sample file.");
+      }
+      
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', 'PO_Import_Sample.xlsx');
       document.body.appendChild(link);
       link.click();
-      link.remove();
+      
+      // Cleanup
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      toast.success("Sample file downloaded successfully!");
     } catch (error) {
       console.error("Error downloading sample:", error);
+      toast.error(error.response?.data?.message || "Error downloading sample file. Please try again.");
     }
   };
 
@@ -351,7 +404,6 @@ const PurchaseOrder = () => {
     }
   };
 
-  const statusTabs = ["All", "Pending", "Expiring Soon", "Expired", "Completed", "Deleted"];
 
   return (
     <div className="flex flex-col w-full relative">
@@ -415,7 +467,6 @@ const PurchaseOrder = () => {
           </button>
         ))}
       </div>
-
       {/* Table Area */}
       <div className="flex flex-col bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] w-full overflow-hidden mb-8">
         {/* Action Bar - Mobile Optimized */}
@@ -669,7 +720,7 @@ const PurchaseOrder = () => {
               ) : (
                 <tr>
                   <td colSpan="11" className="px-6 py-20 text-center text-gray-400 font-medium">
-                    No results found for {activeTab}
+                    No results found
                   </td>
                 </tr>
               )}

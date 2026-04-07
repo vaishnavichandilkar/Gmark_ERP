@@ -285,7 +285,28 @@ export const router = createBrowserRouter([
                                                  element: <PurchaseInvoice />
                                              }
                                          ]
-                                     }
+                                      },
+                                      {
+                                          path: 'grn',
+                                          children: [
+                                              {
+                                                  index: true,
+                                                  element: <PurchaseInvoice defaultTab="GRN" />
+                                              },
+                                              {
+                                                  path: 'add',
+                                                  element: <PurchaseInvoice defaultTab="GRN" />
+                                              },
+                                              {
+                                                  path: 'edit/:id',
+                                                  element: <PurchaseInvoice defaultTab="GRN" />
+                                              },
+                                              {
+                                                  path: 'view/:id',
+                                                  element: <PurchaseInvoice defaultTab="GRN" />
+                                              }
+                                          ]
+                                      }
                                  ]
                              },
                             {

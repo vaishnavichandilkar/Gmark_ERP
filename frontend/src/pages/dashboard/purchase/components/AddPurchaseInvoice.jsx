@@ -3,11 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Search, UploadCloud, ChevronDown, ChevronUp, X, FileText, Plus } from 'lucide-react';
 
-const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave }) => {
+const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave, type = 'Invoice' }) => {
     const navigate = useNavigate();
     const { id } = useParams();
     const { t } = useTranslation(['modules', 'common']);
     const isEditMode = !!propsInitialData || !!id;
+    const documentLabel = type === 'GRN' ? 'GRN' : 'Purchase Invoice';
     const supplierDropdownRef = useRef(null);
     const productDropdownRef = useRef(null);
     const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
@@ -264,15 +265,8 @@ const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave }) =
         <div className="flex flex-col w-full animate-in fade-in duration-300 font-['Plus_Jakarta_Sans'] px-4 md:px-0">
             <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm flex flex-col w-full relative mb-8">
                 <div className="flex flex-col sm:flex-row border-b border-[#E5E7EB] px-4 md:px-6 py-4 items-center justify-between bg-white rounded-t-[12px] gap-4">
-                    <h2 className="hidden md:block text-[18px] font-bold text-[#111827]">{isEditMode ? t('modules:edit_pi', 'Edit Purchase Invoice') : t('modules:add_purchase_invoice', 'Add Purchase Invoice')}</h2>
+                    <h2 className="hidden md:block text-[18px] font-bold text-[#111827]">{isEditMode ? `Edit ${documentLabel}` : `Add ${documentLabel}`}</h2>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
-                        <button
-                            type="button"
-                            onClick={handleSaveLocal}
-                            className="flex-1 sm:flex-none px-6 h-[40px] text-white rounded-[8px] text-[14px] font-bold bg-[#014A36] hover:bg-[#013b2b] transition-all shadow-sm active:scale-[0.98] min-w-[120px]"
-                        >
-                            {isEditMode ? t('common:save_changes', 'Save Changes') : t('common:save_invoice', 'Save Invoice')}
-                        </button>
                         <button
                             onClick={onBack}
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[40px] border border-[#E5E7EB] text-[#4B5563] rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
@@ -361,7 +355,7 @@ const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave }) =
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] font-semibold text-[#4B5563]">Supplier Invoice Date <span className="text-red-500">*</span></label>
+                            <label className="text-[13px] font-semibold text-[#4B5563]">Supplier {documentLabel} Date <span className="text-red-500">*</span></label>
                             <input
                                 type="date"
                                 className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-all text-gray-700 uppercase ${errors.supplierInvoiceDate ? 'border-red-500 bg-red-50/10 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10'}`}
@@ -394,10 +388,10 @@ const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave }) =
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] font-semibold text-[#4B5563]">Supplier Invoice Number <span className="text-red-500">*</span></label>
+                            <label className="text-[13px] font-semibold text-[#4B5563]">Supplier {documentLabel} Number <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
-                                placeholder="Enter supplier invoice number"
+                                placeholder={`Enter supplier ${documentLabel.toLowerCase()} number`}
                                 className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-all ${errors.supplierInvoiceNumber ? 'border-red-500 bg-red-50/10 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10'}`}
                                 value={formData.supplierInvoiceNumber}
                                 onChange={(e) => handleInputChange('supplierInvoiceNumber', e.target.value)}
@@ -449,7 +443,7 @@ const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave }) =
                                     />
                                     {showProductDropdown && (
                                         <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-gray-100 rounded-[8px] shadow-lg z-[120] py-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                                            <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                                            <div className="max-h-[240px] overflow-y-auto custom-scrollbar flex flex-col">
                                                 {dummyProducts
                                                     .filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.code.includes(searchTerm))
                                                     .map((product, idx) => (
@@ -473,18 +467,20 @@ const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave }) =
                                                 {dummyProducts.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.code.includes(searchTerm)).length === 0 && (
                                                     <div className="px-4 py-4 text-center text-[12px] text-gray-400">No products found</div>
                                                 )}
+                                                
+                                                {/* Add New Product Option inside dropdown */}
+                                                <div className="px-3 py-2 border-t border-gray-50 mt-1">
+                                                    <button 
+                                                        onClick={() => navigate('/seller/masters/product-master', { state: { openAdd: true } })}
+                                                        className="bg-[#014A36] hover:bg-[#013b2b] text-white px-4 py-2 rounded-[6px] text-[13px] font-semibold transition-all shadow-sm w-max inline-block"
+                                                    >
+                                                        Add new product
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/seller/masters/product-master', { state: { openAdd: true } })}
-                                    className="flex items-center justify-center gap-2 bg-[#014A36] hover:bg-[#013b2b] text-white px-4 h-[36px] rounded-[8px] text-[13px] font-bold transition-all shadow-sm active:scale-[0.98] w-full sm:w-auto"
-                                >
-                                    <Plus size={16} />
-                                    Add Product
-                                </button>
                             </div>
                             <div className="overflow-x-auto w-full custom-scrollbar">
                                 <style>{`
@@ -625,7 +621,7 @@ const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave }) =
 
                     {/* File Upload Section - Trigger Modal */}
                     <div className="flex flex-col gap-1.5 w-full mt-4 pb-4">
-                        <label className="text-[13px] font-semibold text-[#4B5563]">{t('modules:upload_purchase_invoice', 'Upload Purchase Invoice')}</label>
+                        <label className="text-[13px] font-semibold text-[#4B5563]">{`Upload ${documentLabel}`}</label>
                         <div 
                             onClick={() => setIsUploadModalOpen(true)}
                             className="border-2 border-dashed rounded-[10px] p-8 flex flex-col items-center justify-center cursor-pointer transition-all border-gray-300 hover:border-[#014A36] hover:bg-[#F9FAFB] group"
@@ -638,6 +634,22 @@ const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave }) =
                         </div>
                     </div>
                 </div>
+
+                {/* Footer Actions matching design */}
+                <div className="flex flex-col sm:flex-row items-center justify-end gap-3 px-4 md:px-8 py-6 border-t border-[#E5E7EB] bg-gray-50/30 rounded-b-[12px]">
+                    <button
+                        onClick={handleSaveLocal}
+                        className="w-full sm:w-auto px-10 h-[44px] bg-[#014A36] hover:bg-[#013527] text-white font-bold rounded-[8px] transition-all shadow-md active:scale-[0.98] min-w-[160px]"
+                    >
+                        {isEditMode ? 'Save Changes' : `Save ${documentLabel}`}
+                    </button>
+                    <button
+                        onClick={onBack}
+                        className="w-full sm:w-auto px-10 h-[44px] bg-white border border-[#E5E7EB] hover:bg-gray-50 text-[#4B5563] font-bold rounded-[8px] transition-all"
+                    >
+                        Cancel
+                    </button>
+                </div>
             </div>
 
             {/* Upload Modal matching Screenshot */}
@@ -646,7 +658,7 @@ const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave }) =
                     <div className="bg-white rounded-[16px] w-full max-w-[500px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                         {/* Modal Header */}
                         <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100">
-                            <h3 className="text-[17px] font-bold text-[#111827]">{t('modules:upload_purchase_invoice', 'Upload Purchase Invoice')}</h3>
+                            <h3 className="text-[17px] font-bold text-[#111827]">{`Upload ${documentLabel}`}</h3>
                             <button 
                                 onClick={() => setIsUploadModalOpen(false)}
                                 className="p-1.5 hover:bg-gray-100 rounded-full transition-colors text-gray-400"

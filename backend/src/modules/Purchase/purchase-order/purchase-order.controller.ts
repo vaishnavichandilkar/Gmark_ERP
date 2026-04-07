@@ -32,10 +32,10 @@ export class PurchaseOrderController {
     const { buffer, filename, mimetype } = await this.service.downloadSample();
     res.set({
       'Content-Type': mimetype,
-      'Content-Disposition': `attachment; filename=${filename}`,
+      'Content-Disposition': `attachment; filename="${filename}"`,
       'Content-Length': buffer.length,
     });
-    res.end(buffer);
+    res.send(buffer);
   }
 
   @Get('export')
@@ -52,10 +52,10 @@ export class PurchaseOrderController {
     const { buffer, filename, mimetype } = await this.service.exportPurchaseOrders(format, { filter, search });
     res.set({
       'Content-Type': mimetype,
-      'Content-Disposition': `attachment; filename=${filename}`,
+      'Content-Disposition': `attachment; filename="${filename}"`,
       'Content-Length': buffer.length,
     });
-    res.end(buffer);
+    res.send(buffer);
   }
 
   @Post('import')
@@ -110,10 +110,10 @@ export class PurchaseOrderController {
     const { buffer, filename, mimetype } = await this.service.printPurchaseOrder(id, req.user.userId);
     res.set({
       'Content-Type': mimetype,
-      'Content-Disposition': `attachment; filename=${filename}`,
+      'Content-Disposition': `attachment; filename="${filename}"`,
       'Content-Length': buffer.length,
     });
-    res.end(buffer);
+    res.send(buffer);
   }
 
   @Patch(':id')
