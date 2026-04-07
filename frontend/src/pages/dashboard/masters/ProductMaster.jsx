@@ -15,7 +15,6 @@ import {
   ArrowRight,
   ChevronsUpDown,
   CheckCircle2,
-  XCircle,
   RefreshCw,
   ChevronDown,
   Upload
@@ -224,21 +223,7 @@ const ProductMaster = () => {
     }
   };
 
-  const handleDeleteProduct = async (id) => {
-    if (!window.confirm(t("common:confirm_delete"))) return;
-    setLoading(true);
-    try {
-      await productService.deleteProduct(id);
-      showToast(t("common:deleted_successfully"));
-      fetchProducts();
-    } catch (error) {
-      console.error("Error deleting product:", error);
-      showToast(error.response?.data?.message || t("common:error_deleting_data"), "error");
-    } finally {
-      setLoading(false);
-      setActiveDropdown(null);
-    }
-  };
+
 
   const handleApplyFilter = () => {
     setAppliedFilters(filterInputs);
@@ -738,14 +723,6 @@ const ProductMaster = () => {
                                 {row.status.toUpperCase() === "ACTIVE"
                                   ? t("common:inactive")
                                   : t("common:active")}
-                              </button>
-                              <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
-                              <button
-                                onClick={() => handleDeleteProduct(row.id)}
-                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-red-600 hover:bg-[#FEF2F2] transition-colors whitespace-nowrap font-bold"
-                              >
-                                <XCircle size={18} className="text-red-400" />
-                                {t("common:delete") || "Delete"}
                               </button>
                             </div>
                           )}

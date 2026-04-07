@@ -535,7 +535,7 @@ model Product {
   uom_id          Int
   product_type    ProductType
   category_id     Int
-  sub_category_id     Int
+  sub_category_id     Int?
   sub_sub_category_id Int?
   hsn_code        String
   tax_rate        Float
@@ -548,7 +548,7 @@ model Product {
 
   uom             UnitMaster       @relation(fields: [uom_id], references: [id])
   category        Category         @relation(fields: [category_id], references: [id])
-  sub_category    SubCategory      @relation(fields: [sub_category_id], references: [id])
+  sub_category    SubCategory?      @relation(fields: [sub_category_id], references: [id])
   sub_sub_category SubSubCategory? @relation(fields: [sub_sub_category_id], references: [id])
   creator         User             @relation(fields: [created_by], references: [id])
   hsn             HsnMaster        @relation(fields: [hsn_code], references: [hsn_code])

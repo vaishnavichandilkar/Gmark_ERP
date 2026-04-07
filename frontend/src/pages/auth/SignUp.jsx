@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import AuthLayout from '../../layout/auth/AuthLayout';
-import { Upload, FileText, Trash2, ChevronDown, CloudUpload, ArrowLeft } from 'lucide-react';
+import { Upload, FileText, Trash2, ChevronDown, CloudUpload, ArrowLeft, Search } from 'lucide-react';
 import logo from '../../assets/images/ERP_Logo2.png';
 import { useTranslation } from 'react-i18next';
 
@@ -238,67 +238,43 @@ const SignUp = () => {
         pinCode: '',
         district: '',
         state: '',
+        areas: [],
     });
     const [isManualLocation, setIsManualLocation] = useState(false);
     const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+    const [showVillageDropdown, setShowVillageDropdown] = useState(false);
+    const villageRef = useRef(null);
 
     useEffect(() => {
         if (formData.pinCode.length === 6 && /^\d{6}$/.test(formData.pinCode)) {
-            // First try External API
-            fetch(`https://api.postalpincode.in/pincode/${formData.pinCode}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data && data[0] && data[0].Status === 'Success' && data[0].PostOffice && data[0].PostOffice.length > 0) {
-                        const details = data[0].PostOffice[0];
-                        setFormData(prev => ({
-                            ...prev,
-                            district: details.District,
-                            state: details.State
-                        }));
-                        setIsManualLocation(false);
-                        setFieldErrors(prev => {
-                            const { pinCode, ...rest } = prev;
-                            return rest;
-                        });
-                    } else {
-                        // API Failed, try Local Database
-                        import('../../services/onboardingService').then(({ getPincodeInfoApi }) => {
-                            getPincodeInfoApi(formData.pinCode)
-                                .then(localData => {
-                                    if (localData && localData.state && localData.district) {
-                                        setFormData(prev => ({
-                                            ...prev,
-                                            district: localData.district,
-                                            state: localData.state
-                                        }));
-                                        setIsManualLocation(false);
-                                        setFieldErrors(prev => {
-                                            const { pinCode, ...rest } = prev;
-                                            return rest;
-                                        });
-                                    } else {
-                                        // Both failed - allow manual entry
-                                        setIsManualLocation(true);
-                                        setFieldErrors(prev => {
-                                            const { pinCode, ...rest } = prev;
-                                            return rest;
-                                        });
-                                    }
-                                })
-                                .catch(() => {
-                                    setIsManualLocation(true);
-                                    setFieldErrors(prev => {
-                                        const { pinCode, ...rest } = prev;
-                                        return rest;
-                                    });
-                                });
-                        });
-                    }
-                })
-                .catch(err => {
-                    console.error('Pincode fetch error:', err);
-                    setIsManualLocation(true);
-                });
+            import('../../services/onboardingService').then(({ getPincodeInfoApi }) => {
+                getPincodeInfoApi(formData.pinCode)
+                    .then(data => {
+                        if (data && data.state && data.district) {
+                            setFormData(prev => ({
+                                ...prev,
+                                district: data.district,
+                                state: data.state,
+                                areas: data.areas || [],
+                                village: ''
+                            }));
+                            // Ensure unique names and open dropdown
+                            setShowVillageDropdown(true);
+                            setIsManualLocation(false);
+                            setFieldErrors(prev => {
+                                const { pinCode, ...rest } = prev;
+                                return rest;
+                            });
+                        } else {
+                            setIsManualLocation(true);
+                            setFieldErrors(prev => ({ ...prev, pinCode: 'Invalid Pincode or data not found' }));
+                        }
+                    })
+                    .catch(() => {
+                        setIsManualLocation(true);
+                        setFieldErrors(prev => ({ ...prev, pinCode: 'Invalid Pincode or data not found' }));
+                    });
+            });
         }
     }, [formData.pinCode]);
 
@@ -369,6 +345,17 @@ const SignUp = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [fieldErrors, setFieldErrors] = useState({});
+
+    // Add outside click listener for village dropdown
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (villageRef.current && !villageRef.current.contains(event.target)) {
+                setShowVillageDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleNext = async () => {
         if (step === 0) {
@@ -663,15 +650,6 @@ const SignUp = () => {
                                             error={fieldErrors.address}
                                         />
                                         <CustomInput
-                                            label={t('auth:village')}
-                                            placeholder={t('auth:placeholder_village')}
-                                            name="village"
-                                            value={formData.village}
-                                            onChange={handleChange}
-                                            onBlur={handleBlur}
-                                            error={fieldErrors.village}
-                                        />
-                                        <CustomInput
                                             label={t('auth:pincode')}
                                             placeholder={t('auth:placeholder_pincode')}
                                             name="pinCode"
@@ -682,6 +660,57 @@ const SignUp = () => {
                                             error={fieldErrors.pinCode}
                                             info={isManualLocation ? "Location not found. Please enter manually." : null}
                                         />
+                                        <div className="flex flex-col w-full relative" ref={villageRef}>
+                                            <label className="text-[14px] text-[#374151] mb-2 font-['Plus_Jakarta_Sans'] font-medium block">
+                                                {t('auth:village')} <span className="text-red-500">*</span>
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    name="village"
+                                                    autoComplete="off"
+                                                    value={formData.village}
+                                                    onChange={(e) => {
+                                                        handleChange(e);
+                                                        setShowVillageDropdown(true);
+                                                    }}
+                                                    onFocus={() => setShowVillageDropdown(true)}
+                                                    onBlur={(e) => {
+                                                        handleBlur(e);
+                                                    }}
+                                                    placeholder={t('auth:placeholder_village')}
+                                                    className={`w-full h-[56px] pl-[16px] pr-[40px] text-[15px] border ${fieldErrors.village ? 'border-red-500' : 'border-[#D1D5DB] focus:border-[#0F3D2E] focus:ring-[#0F3D2E]'} rounded-[8px] outline-none bg-[#FFFFFF] transition-all duration-300 focus:ring-1 placeholder:text-[#9CA3AF] text-[#111827]`}
+                                                />
+                                                <div
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280] cursor-pointer"
+                                                    onClick={() => setShowVillageDropdown(!showVillageDropdown)}
+                                                >
+                                                    <ChevronDown size={20} className={`transition-transform duration-300 ${showVillageDropdown ? 'rotate-180' : ''}`} />
+                                                </div>
+
+                                                {showVillageDropdown && (formData.areas || []).length > 0 && (
+                                                    <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[8px] shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)] z-[100] max-h-[220px] overflow-y-auto">
+                                                        <div className="py-1">
+                                                            {(formData.areas || []).map((area, idx) => (
+                                                                <div
+                                                                    key={idx}
+                                                                    className="px-4 py-2.5 hover:bg-[#F3F4F6] cursor-pointer text-[14px] font-['Plus_Jakarta_Sans'] text-[#374151] transition-colors flex items-center justify-between group"
+                                                                    onClick={() => {
+                                                                        setFormData(prev => ({ ...prev, village: area }));
+                                                                        setShowVillageDropdown(false);
+                                                                        setFieldErrors(prev => ({ ...prev, village: '' }));
+                                                                    }}
+                                                                >
+                                                                    <span>{area}</span>
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-[#0F3D2E] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {fieldErrors.village && <span className="mt-1.5 text-red-500 text-[13px] font-medium">{fieldErrors.village}</span>}
+                                        </div>
                                         <CustomInput
                                             label={t('auth:district')}
                                             placeholder={t('auth:district')}

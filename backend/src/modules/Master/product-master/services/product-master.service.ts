@@ -244,22 +244,25 @@ export class ProductMasterService {
         const category = await this.repository.getCategoryById(dto.category_id);
         if (!category) throw new BadRequestException('Invalid Category ID');
 
-        const subCategory = await this.repository.getSubCategoryById(dto.sub_category_id);
-        if (!subCategory || subCategory.category_id !== dto.category_id) {
-            throw new BadRequestException('Invalid Sub Category ID or it does not belong to the selected Category');
-        }
-
-        // Validate SubSubCategory if provided
-        if (dto.sub_sub_category_id) {
-            const subSub = await this.repository.getSubSubCategoryById(dto.sub_sub_category_id);
-            if (!subSub || subSub.sub_category_id !== dto.sub_category_id) {
-                throw new BadRequestException('Invalid Sub Sub Category ID or it does not belong to the selected Sub Category');
+        // Validate SubCategory if provided
+        if (dto.sub_category_id) {
+            const subCategory = await this.repository.getSubCategoryById(dto.sub_category_id);
+            if (!subCategory || subCategory.category_id !== dto.category_id) {
+                throw new BadRequestException('Invalid Sub Category ID or it does not belong to the selected Category');
             }
-        } else {
-            // Check if SubCategory HAS SubSubCategories. If so, selection is required.
-            const subSubs = await this.repository.getActiveSubSubCategoriesForDropdown(dto.sub_category_id, userId);
-            if (subSubs.length > 0) {
-                throw new BadRequestException('Sub-SubCategory is required for this SubCategory');
+
+            // Validate SubSubCategory if provided
+            if (dto.sub_sub_category_id) {
+                const subSub = await this.repository.getSubSubCategoryById(dto.sub_sub_category_id);
+                if (!subSub || subSub.sub_category_id !== dto.sub_category_id) {
+                    throw new BadRequestException('Invalid Sub Sub Category ID or it does not belong to the selected Sub Category');
+                }
+            } else {
+                // Check if SubCategory HAS SubSubCategories. If so, selection is required.
+                const subSubs = await this.repository.getActiveSubSubCategoriesForDropdown(dto.sub_category_id, userId);
+                if (subSubs.length > 0) {
+                    throw new BadRequestException('Sub-SubCategory is required for this SubCategory');
+                }
             }
         }
 
@@ -304,24 +307,29 @@ export class ProductMasterService {
         if (dto.category_id || dto.sub_category_id || dto.sub_sub_category_id) {
             const catId = dto.category_id || product.category_id;
             const subCatId = dto.sub_category_id || product.sub_category_id;
-            const subSubId = dto.sub_sub_category_id || product.sub_sub_category_id;
+            const subSubId = dto.sub_sub_category_id || (dto.sub_category_id ? null : product.sub_sub_category_id);
 
-            const subCategory = await this.repository.getSubCategoryById(subCatId);
-            if (!subCategory || subCategory.category_id !== catId) {
-                throw new BadRequestException('Invalid Category/Sub Category relation');
-            }
+            if (subCatId) {
+                const subCategory = await this.repository.getSubCategoryById(subCatId);
+                if (!subCategory || subCategory.category_id !== catId) {
+                    throw new BadRequestException('Invalid Category/Sub Category relation');
+                }
 
-            if (subSubId) {
-                const subSub = await this.repository.getSubSubCategoryById(subSubId);
-                if (!subSub || subSub.sub_category_id !== subCatId) {
-                    throw new BadRequestException('Invalid Sub Category/Sub Sub Category relation');
+                if (subSubId) {
+                    const subSub = await this.repository.getSubSubCategoryById(subSubId);
+                    if (!subSub || subSub.sub_category_id !== subCatId) {
+                        throw new BadRequestException('Invalid Sub Category/Sub Sub Category relation');
+                    }
+                } else {
+                    // Check if SubCategory has children. If yes, SubSub selection is required.
+                    const subSubs = await this.repository.getActiveSubSubCategoriesForDropdown(subCatId, userId);
+                    if (subSubs.length > 0) {
+                        throw new BadRequestException('Sub-SubCategory is required for this SubCategory');
+                    }
                 }
-            } else {
-                // Check if SubCategory has children. If yes, SubSub selection is required.
-                const subSubs = await this.repository.getActiveSubSubCategoriesForDropdown(subCatId, userId);
-                if (subSubs.length > 0) {
-                    throw new BadRequestException('Sub-SubCategory is required for this SubCategory');
-                }
+            } else if (subSubId) {
+                // If sub_category is removed but sub_sub is somehow present
+                 throw new BadRequestException('Cannot have Sub-SubCategory without SubCategory');
             }
         }
 

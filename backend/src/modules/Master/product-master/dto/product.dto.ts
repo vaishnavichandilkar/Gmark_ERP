@@ -23,10 +23,10 @@ export class CreateProductDto {
     @IsNotEmpty()
     category_id: number;
 
-    @ApiProperty()
+    @ApiProperty({ required: false })
     @IsNumber()
-    @IsNotEmpty()
-    sub_category_id: number;
+    @IsOptional()
+    sub_category_id?: number;
 
     @ApiProperty({ required: false })
     @IsNumber()

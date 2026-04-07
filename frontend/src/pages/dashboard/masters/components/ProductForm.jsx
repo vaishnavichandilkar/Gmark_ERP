@@ -252,7 +252,8 @@ const ProductForm = ({
     } else if (field === "category") {
       if (!value) error = "Please select Category";
     } else if (field === "subcategory") {
-      if (!value) error = "Please select Sub Category";
+      // Sub Category is now optional
+      error = "";
     } else if (field === "subsubcategory") {
       if (!value && subSubCategories.length > 0) error = "Please select Sub Sub Category";
     }
@@ -740,7 +741,7 @@ const ProductForm = ({
               value={formData.subcategory}
               onChange={(val) => handleSubCategoryChange(val)}
               getOptionLabel={(opt) => opt.name}
-              showAsterisk={true}
+              showAsterisk={false}
               disabled={isView || !formData.category}
               footerLabel="+ Add Sub Category"
               onFooterClick={() => setIsAddSubCategoryModalOpen(true)}

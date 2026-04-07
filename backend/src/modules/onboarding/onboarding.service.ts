@@ -18,10 +18,53 @@ export class OnboardingService {
     ) { }
 
     async getPincodeInfo(pincode: string) {
-        return this.prisma.pincode.findUnique({
+        // Step 1: Check Local DB first
+        const localData = await this.prisma.pincode.findUnique({
             where: { pincode },
-            select: { pincode: true, state: true, district: true, isActive: true }
+            select: { pincode: true, state: true, district: true, areas: true, country: true, isActive: true }
         });
+
+        if (localData) {
+            return localData;
+        }
+
+        // Step 2: If NOT found, fetch from API
+        try {
+            const response = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
+            const data = await response.json();
+
+            if (data && data[0] && data[0].Status === 'Success' && data[0].PostOffice && data[0].PostOffice.length > 0) {
+                const first = data[0].PostOffice[0];
+                // Extract Name from each object and collect into a unique list
+                const allAreas: string[] = [...new Set(data[0].PostOffice.map((po: any) => String(po.Name)))] as string[];
+
+                // Step 3: Save to DB for next time
+                const saved = await this.prisma.pincode.upsert({
+                    where: { pincode },
+                    update: {
+                        state: first.State,
+                        district: first.District,
+                        country: first.Country || 'India',
+                        areas: allAreas,
+                        isActive: true
+                    },
+                    create: {
+                        pincode,
+                        state: first.State,
+                        district: first.District,
+                        country: first.Country || 'India',
+                        areas: allAreas,
+                        isActive: true
+                    }
+                });
+
+                return saved;
+            }
+        } catch (error) {
+            console.error('Pincode fetch error:', error);
+        }
+
+        return null;
     }
 
     async getLanguages() {

@@ -114,32 +114,32 @@ const PurchaseOrder = () => {
   // Fetch logic from API
   useEffect(() => {
     const fetchData = async () => {
-        setIsLoading(true);
-        try {
-            const params = {
-                page: currentPage,
-                limit: itemsPerPage,
-                search: searchQuery,
-            };
-            
-            // Map tabs to backend statuses if needed
-            if (activeTab !== "All") {
-                if (activeTab === "Pending") params.filter = "pending";
-                if (activeTab === "Completed") params.filter = "completed";
-                if (activeTab === "Deleted") params.filter = "deleted";
-                if (activeTab === "Expiring Soon") params.filter = "expiring";
-                if (activeTab === "Expired") params.filter = "expired";
-            }
+      setIsLoading(true);
+      try {
+        const params = {
+          page: currentPage,
+          limit: itemsPerPage,
+          search: searchQuery,
+        };
 
-            const response = await purchaseOrderService.getPurchaseOrders(params);
-            const data = Array.isArray(response) ? response : (response.data || []);
-            setPurchaseOrders(data);
-            setTotalItemsCount(response.meta?.total || data.length);
-        } catch (error) {
-            console.error("Error fetching purchase orders:", error);
-        } finally {
-            setIsLoading(false);
+        // Map tabs to backend statuses if needed
+        if (activeTab !== "All") {
+          if (activeTab === "Pending") params.filter = "pending";
+          if (activeTab === "Completed") params.filter = "completed";
+          if (activeTab === "Deleted") params.filter = "deleted";
+          if (activeTab === "Expiring Soon") params.filter = "expiring";
+          if (activeTab === "Expired") params.filter = "expired";
         }
+
+        const response = await purchaseOrderService.getPurchaseOrders(params);
+        const data = Array.isArray(response) ? response : (response.data || []);
+        setPurchaseOrders(data);
+        setTotalItemsCount(response.meta?.total || data.length);
+      } catch (error) {
+        console.error("Error fetching purchase orders:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchData();
@@ -229,8 +229,8 @@ const PurchaseOrder = () => {
   const handleRefresh = () => {
     setIsRefreshing(true);
     setTimeout(() => {
-        setIsRefreshing(false);
-        toast.success("Data refreshed successfully");
+      setIsRefreshing(false);
+      toast.success("Data refreshed successfully");
     }, 400);
   };
 
@@ -258,18 +258,18 @@ const PurchaseOrder = () => {
     if (!poToDelete) return;
     setIsDeleting(true);
     try {
-        await purchaseOrderService.deletePurchaseOrder(poToDelete);
-        toast.success("Purchase order deleted successfully");
-        setIsDeleteModalOpen(false);
-        setPoToDelete(null);
-        // Refresh items:
-        setIsRefreshing(prev => !prev); // Toggle to trigger useEffect
+      await purchaseOrderService.deletePurchaseOrder(poToDelete);
+      toast.success("Purchase order deleted successfully");
+      setIsDeleteModalOpen(false);
+      setPoToDelete(null);
+      // Refresh items:
+      setIsRefreshing(prev => !prev); // Toggle to trigger useEffect
     } catch (error) {
-        console.error("Error deleting PO:", error);
-        const errorMsg = error.response?.data?.message || "Failed to delete Purchase Order";
-        toast.error(errorMsg);
+      console.error("Error deleting PO:", error);
+      const errorMsg = error.response?.data?.message || "Failed to delete Purchase Order";
+      toast.error(errorMsg);
     } finally {
-        setIsDeleting(false);
+      setIsDeleting(false);
     }
   };
 
@@ -281,32 +281,32 @@ const PurchaseOrder = () => {
    */
   const handleExport = async (format) => {
     try {
-        setIsExportOpen(false);
-        setIsRefreshing(true);
-        
-        const params = {
-            format,
-            filter: activeTab === "All" ? "all" : activeTab.toLowerCase(),
-            search: searchQuery
-        };
+      setIsExportOpen(false);
+      setIsRefreshing(true);
 
-        const response = await purchaseOrderService.exportPurchaseOrders(params);
-        
-        // Trigger download
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `purchase_orders_${activeTab.toLowerCase()}.${format === 'xlsx' ? 'xlsx' : 'pdf'}`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        
-        toast.success(`Report exported as ${format.toUpperCase()}`);
+      const params = {
+        format,
+        filter: activeTab === "All" ? "all" : activeTab.toLowerCase(),
+        search: searchQuery
+      };
+
+      const response = await purchaseOrderService.exportPurchaseOrders(params);
+
+      // Trigger download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `purchase_orders_${activeTab.toLowerCase()}.${format === 'xlsx' ? 'xlsx' : 'pdf'}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      toast.success(`Report exported as ${format.toUpperCase()}`);
     } catch (error) {
-        console.error("Export error:", error);
-        toast.error("Export failed. Please try again.");
+      console.error("Export error:", error);
+      toast.error("Export failed. Please try again.");
     } finally {
-        setIsRefreshing(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -331,23 +331,23 @@ const PurchaseOrder = () => {
   const handleSubmitImport = async () => {
     if (!selectedFile) return;
     try {
-        setIsRefreshing(true);
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-        await purchaseOrderService.importPurchaseOrders(formData);
-        setIsImportModalOpen(false);
-        setSelectedFile(null);
-        toast.success("Data imported successfully");
-        // Trigger data refresh from backend
-        // fetchData will run because isRefreshing changes or by directly calling it if needed.
-        // Actually handleRefresh simulates a small delay then calls it? No it just sets isRefreshing.
-        // I'll call handleRefresh.
-        handleRefresh();
+      setIsRefreshing(true);
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      await purchaseOrderService.importPurchaseOrders(formData);
+      setIsImportModalOpen(false);
+      setSelectedFile(null);
+      toast.success("Data imported successfully");
+      // Trigger data refresh from backend
+      // fetchData will run because isRefreshing changes or by directly calling it if needed.
+      // Actually handleRefresh simulates a small delay then calls it? No it just sets isRefreshing.
+      // I'll call handleRefresh.
+      handleRefresh();
     } catch (error) {
-        console.error("Error importing PO:", error);
-        toast.error(error.response?.data?.message || "Import failed. Please verify your columns.");
+      console.error("Error importing PO:", error);
+      toast.error(error.response?.data?.message || "Import failed. Please verify your columns.");
     } finally {
-        setIsRefreshing(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -377,24 +377,24 @@ const PurchaseOrder = () => {
             scrollbar-width: none;
         }
       `}</style>
-      
+
       {/* Title Section */}
       <div className="flex flex-col md:flex-row gap-4 mb-6 md:mb-8 justify-between items-start md:items-center">
-          <div className="flex flex-col gap-1">
-              <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">
-                {t('modules:purchase_order', 'Purchase Order')}
-              </h1>
-              <p className="text-[#6B7280] text-[14px] md:text-[15px]">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">
+            {t('modules:purchase_order', 'Purchase Order')}
+          </h1>
+          {/* <p className="text-[#6B7280] text-[14px] md:text-[15px]">
                 {t('modules:purchase_order_desc', 'View, verify, and monitor all purchase orders, supplier invoices, and stock procurement activities.')}
-              </p>
-          </div>
-          <button 
-            onClick={() => navigate('/seller/purchase/order/add')}
-            className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 flex-shrink-0"
-          >
-            <Plus size={18} />
-            {t('modules:add_po', 'Add PO')}
-          </button>
+              </p> */}
+        </div>
+        <button
+          onClick={() => navigate('/seller/purchase/order/add')}
+          className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 flex-shrink-0"
+        >
+          <Plus size={18} />
+          {t('modules:add_po', 'Add PO')}
+        </button>
       </div>
 
       {/* Sub-Tabs */}
@@ -407,8 +407,8 @@ const PurchaseOrder = () => {
               setCurrentPage(1);
             }}
             className={`pb-4 text-[14px] font-semibold transition-all duration-200 relative whitespace-nowrap
-              ${activeTab === tab 
-                ? 'text-[#073318] after:absolute after:bottom-[-1px] after:left-0 after:w-full after:h-[2px] after:bg-[#073318]' 
+              ${activeTab === tab
+                ? 'text-[#073318] after:absolute after:bottom-[-1px] after:left-0 after:w-full after:h-[2px] after:bg-[#073318]'
                 : 'text-[#6B7280] hover:text-[#111827]'}`}
           >
             {tab}
@@ -420,150 +420,150 @@ const PurchaseOrder = () => {
       <div className="flex flex-col bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] w-full overflow-hidden mb-8">
         {/* Action Bar - Mobile Optimized */}
         <div className="flex flex-col items-stretch p-4 md:p-6 border-b border-[#F3F4F6] bg-white gap-4">
-            {/* Desktop View Action Bar */}
-            <div className="hidden md:flex flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3 flex-1">
-                    <div className="relative flex-1 max-w-[320px]">
-                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                            type="text"
-                            placeholder={t('common:search_by_anything', 'Search By Anything...')}
-                            value={searchQuery}
-                            onChange={(e) => {setSearchQuery(e.target.value); setCurrentPage(1);}}
-                            className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all placeholder:text-gray-400 shadow-sm"
-                        />
-                        {searchQuery && (
-                            <button 
-                                onClick={() => setSearchQuery("")}
-                                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                            >
-                                <X size={16} />
-                            </button>
-                        )}
-                    </div>
-                    <button 
-                        onClick={handleRefresh}
-                        className={`flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] hover:bg-gray-50 bg-white shadow-sm transition-all flex-shrink-0 ${isRefreshing ? 'animate-spin border-[#073318] text-[#073318]' : ''}`}
-                        disabled={isRefreshing}
-                        title="Refresh"
-                    >
-                        <RefreshCw size={18} className={isRefreshing ? "text-[#073318]" : "text-gray-400"} />
-                    </button>
-                </div>
+          {/* Desktop View Action Bar */}
+          <div className="hidden md:flex flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-1">
+              <div className="relative flex-1 max-w-[320px]">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder={t('common:search_by_anything', 'Search By Anything...')}
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                  className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all placeholder:text-gray-400 shadow-sm"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={handleRefresh}
+                className={`flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] hover:bg-gray-50 bg-white shadow-sm transition-all flex-shrink-0 ${isRefreshing ? 'animate-spin border-[#073318] text-[#073318]' : ''}`}
+                disabled={isRefreshing}
+                title="Refresh"
+              >
+                <RefreshCw size={18} className={isRefreshing ? "text-[#073318]" : "text-gray-400"} />
+              </button>
+            </div>
 
-                <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsImportModalOpen(true)}
+                className="flex items-center justify-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 shadow-sm transition-all"
+              >
+                <Upload size={18} className="text-gray-400" />
+                {t('common:import', 'Import')}
+              </button>
+
+              <div className="relative" ref={exportRef}>
+                <button
+                  onClick={() => setIsExportOpen(!isExportOpen)}
+                  className={`flex items-center justify-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 shadow-sm transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : ''}`}
+                >
+                  <Download size={18} className="text-gray-400" />
+                  {t('common:export', 'Export')}
+                </button>
+                {isExportOpen && (
+                  <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
                     <button
-                        onClick={() => setIsImportModalOpen(true)}
-                        className="flex items-center justify-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 shadow-sm transition-all"
+                      onClick={handleExportPDF}
+                      className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors"
                     >
-                        <Upload size={18} className="text-gray-400" />
-                        {t('common:import', 'Import')}
+                      <FileText size={18} className="text-red-500" /> {t('common:pdf', 'PDF')}
                     </button>
-
-                    <div className="relative" ref={exportRef}>
-                        <button
-                            onClick={() => setIsExportOpen(!isExportOpen)}
-                            className={`flex items-center justify-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 shadow-sm transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : ''}`}
-                        >
-                            <Download size={18} className="text-gray-400" />
-                            {t('common:export', 'Export')}
-                        </button>
-                        {isExportOpen && (
-                            <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                                <button 
-                                    onClick={handleExportPDF}
-                                    className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors"
-                                >
-                                    <FileText size={18} className="text-red-500" /> {t('common:pdf', 'PDF')}
-                                </button>
-                                <button 
-                                    onClick={handleExportExcel}
-                                    className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors"
-                                >
-                                    <FileSpreadsheet size={18} className="text-green-600" /> {t('common:excel', 'Excel')}
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
+                    <button
+                      onClick={handleExportExcel}
+                      className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors"
+                    >
+                      <FileSpreadsheet size={18} className="text-green-600" /> {t('common:excel', 'Excel')}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
+          </div>
 
-            {/* Mobile View Action Bar (Standardized Layout) */}
-            <div className="flex md:hidden flex-col gap-3">
-                {/* Single Row: Search and Quick Actions */}
-                <div className="flex items-center gap-2">
-                    <div className={`relative transition-all duration-300 ease-in-out ${isSearchFocused || searchQuery ? 'flex-1' : 'w-[42px]'}`}>
-                        <Search className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${isSearchFocused || searchQuery ? 'text-[#073318]' : 'text-gray-500'}`} size={22} />
-                        <input
-                            type="text"
-                            placeholder={isSearchFocused || searchQuery ? "Search orders..." : ""}
-                            value={searchQuery}
-                            onFocus={() => setIsSearchFocused(true)}
-                            onChange={(e) => {setSearchQuery(e.target.value); setCurrentPage(1);}}
-                            className={`w-full h-[42px] bg-[#F9FAFB] rounded-[10px] pl-10 pr-8 text-[14px] outline-none transition-all duration-300
+          {/* Mobile View Action Bar (Standardized Layout) */}
+          <div className="flex md:hidden flex-col gap-3">
+            {/* Single Row: Search and Quick Actions */}
+            <div className="flex items-center gap-2">
+              <div className={`relative transition-all duration-300 ease-in-out ${isSearchFocused || searchQuery ? 'flex-1' : 'w-[42px]'}`}>
+                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${isSearchFocused || searchQuery ? 'text-[#073318]' : 'text-gray-500'}`} size={22} />
+                <input
+                  type="text"
+                  placeholder={isSearchFocused || searchQuery ? "Search orders..." : ""}
+                  value={searchQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                  className={`w-full h-[42px] bg-[#F9FAFB] rounded-[10px] pl-10 pr-8 text-[14px] outline-none transition-all duration-300
                                 ${isSearchFocused || searchQuery ? 'border border-[#073318]/20 ring-1 ring-[#073318]/5' : 'border-none bg-transparent cursor-pointer'}`}
-                        />
-                        {(isSearchFocused || searchQuery) && searchQuery && (
-                            <button 
-                                onClick={() => setSearchQuery("")}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
-                            >
-                                <X size={14} />
-                            </button>
-                        )}
-                    </div>
+                />
+                {(isSearchFocused || searchQuery) && searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
 
-                    {(isSearchFocused || searchQuery) && (
-                        <button 
-                            onClick={() => {
-                                setIsSearchFocused(false);
-                                setSearchQuery("");
-                            }}
-                            className="text-[#073318] text-[14px] font-bold px-1 animate-in fade-in slide-in-from-right-2 duration-200"
-                        >
-                            Cancel
+              {(isSearchFocused || searchQuery) && (
+                <button
+                  onClick={() => {
+                    setIsSearchFocused(false);
+                    setSearchQuery("");
+                  }}
+                  className="text-[#073318] text-[14px] font-bold px-1 animate-in fade-in slide-in-from-right-2 duration-200"
+                >
+                  Cancel
+                </button>
+              )}
+
+              {/* Action Icons - Hidden when searching on mobile */}
+              {!isSearchFocused && !searchQuery && (
+                <div className="flex items-center gap-1 ml-auto">
+                  <button
+                    onClick={handleRefresh}
+                    className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
+                  >
+                    <RefreshCw size={22} className={isRefreshing ? 'animate-spin text-[#073318]' : ''} />
+                  </button>
+
+                  <button
+                    onClick={() => setIsImportModalOpen(true)}
+                    className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
+                  >
+                    <Upload size={22} />
+                  </button>
+
+                  <div className="relative mobile-export-trigger px-0">
+                    <button
+                      onClick={() => setIsExportOpen(!isExportOpen)}
+                      className={`w-[42px] h-[42px] flex items-center justify-center transition-all ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}
+                    >
+                      <Download size={22} />
+                    </button>
+                    {isExportOpen && (
+                      <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[100] py-2 overflow-hidden">
+                        <button onClick={handleExportPDF} className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 active:bg-gray-50 border-none bg-transparent">
+                          <FileText size={18} className="text-red-500" /> PDF
                         </button>
+                        <button onClick={handleExportExcel} className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 active:bg-gray-50 border-none bg-transparent">
+                          <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                        </button>
+                      </div>
                     )}
-
-                    {/* Action Icons - Hidden when searching on mobile */}
-                    {!isSearchFocused && !searchQuery && (
-                        <div className="flex items-center gap-1 ml-auto">
-                            <button 
-                                onClick={handleRefresh}
-                                className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
-                            >
-                                <RefreshCw size={22} className={isRefreshing ? 'animate-spin text-[#073318]' : ''} />
-                            </button>
-                            
-                            <button 
-                                onClick={() => setIsImportModalOpen(true)}
-                                className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
-                            >
-                                <Upload size={22} />
-                            </button>
-
-                            <div className="relative mobile-export-trigger px-0">
-                                <button 
-                                    onClick={() => setIsExportOpen(!isExportOpen)}
-                                    className={`w-[42px] h-[42px] flex items-center justify-center transition-all ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}
-                                >
-                                    <Download size={22} />
-                                </button>
-                                {isExportOpen && (
-                                    <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[100] py-2 overflow-hidden">
-                                        <button onClick={handleExportPDF} className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 active:bg-gray-50 border-none bg-transparent">
-                                            <FileText size={18} className="text-red-500" /> PDF
-                                        </button>
-                                        <button onClick={handleExportExcel} className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 active:bg-gray-50 border-none bg-transparent">
-                                            <FileSpreadsheet size={18} className="text-green-600" /> Excel
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                  </div>
                 </div>
+              )}
             </div>
+          </div>
         </div>
 
         {/* Table Body */}
@@ -572,7 +572,7 @@ const PurchaseOrder = () => {
             <thead>
               <tr className="bg-emerald-900 border-b border-emerald-950 text-[15px] font-bold text-white tracking-tight">
                 {[
-                  "Po No", "Supplier Name", "Creation Date", "Expiry Date", "Amount", 
+                  "Po No", "Supplier Name", "Creation Date", "Expiry Date", "Amount",
                   "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status"
                 ].map((col) => (
                   <th key={col} className="px-6 py-5 border-r border-white/50 whitespace-nowrap tracking-tight">
@@ -590,36 +590,36 @@ const PurchaseOrder = () => {
                 (isLoading ? Array(5).fill({}) : currentItems).map((po, index) => (
                   <tr key={po.id || index} className={`border-b border-[#F3F4F6] last:border-b-0 hover:bg-[#F9FAFB] transition-colors group ${isLoading ? 'animate-pulse' : ''}`}>
                     <td className="px-6 py-5 font-bold border-r border-[#F3F4F6]">
-                        {isLoading ? <div className="h-4 bg-gray-200 rounded w-20"></div> : po.poNumber}
+                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-20"></div> : po.poNumber}
                     </td>
                     <td className="px-6 py-5 font-bold border-r border-[#F3F4F6]">
-                        {isLoading ? <div className="h-4 bg-gray-200 rounded w-40"></div> : po.supplierName}
+                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-40"></div> : po.supplierName}
                     </td>
                     <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                        {isLoading ? <div className="h-4 bg-gray-200 rounded w-24"></div> : formatDate(po.poCreationDate)}
+                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-24"></div> : formatDate(po.poCreationDate)}
                     </td>
                     <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                        {isLoading ? <div className="h-4 bg-gray-200 rounded w-24"></div> : formatDate(po.expiryDate)}
+                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-24"></div> : formatDate(po.expiryDate)}
                     </td>
                     <td className="px-6 py-5 font-medium border-r border-[#F3F4F6] text-[#4B5563]">
-                        {isLoading ? <div className="h-4 bg-gray-200 rounded w-16"></div> : (po.totalAmount || 0).toFixed(2)}
+                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-16"></div> : (po.totalAmount || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                        {isLoading ? <div className="h-4 bg-gray-200 rounded w-32"></div> : (po.gstNumber || '-')}
+                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-32"></div> : (po.gstNumber || '-')}
                     </td>
                     <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                        {isLoading ? <div className="h-4 bg-gray-200 rounded w-8"></div> : (po.creditDays || 0)}
+                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-8"></div> : (po.creditDays || 0)}
                     </td>
                     <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                        {isLoading ? <div className="h-4 bg-gray-200 rounded w-16"></div> : (po.taxAmount || 0).toFixed(2)}
+                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-16"></div> : (po.taxAmount || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-5 font-bold border-r border-[#F3F4F6] text-[#111827]">
-                        {isLoading ? <div className="h-4 bg-gray-200 rounded w-20"></div> : (po.grandTotal || 0).toFixed(2)}
+                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-20"></div> : (po.grandTotal || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                        {isLoading ? <div className="h-4 bg-gray-200 rounded w-20"></div> : (
-                          <span className={`px-3 py-1 ${po.bgClass} rounded-full text-[12px] font-bold uppercase shadow-sm whitespace-nowrap`}>{po.computedStatusLabel}</span>
-                        )}
+                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-20"></div> : (
+                        <span className={`px-3 py-1 ${po.bgClass} rounded-full text-[12px] font-bold uppercase shadow-sm whitespace-nowrap`}>{po.computedStatusLabel}</span>
+                      )}
                     </td>
                     <td className="px-6 py-5 text-center relative" ref={el => dropdownRefs.current[po.id] = el}>
                       <button
@@ -631,40 +631,40 @@ const PurchaseOrder = () => {
 
                       {activeDropdown === po.id && (
                         <div className={`absolute right-[calc(50%+1.25rem)] w-max min-w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in duration-200 text-left ${index >= currentItems.length - 2 ? 'bottom-0 mb-2' : 'top-0 mt-2'}`}>
-                           <button 
+                          <button
                             onClick={() => { setActiveDropdown(null); navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id)); }}
                             className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors font-bold border-b border-gray-50"
                           >
-                            <Eye size={18} className="text-gray-400" /> 
-                            {(po.computedStatusLabel === 'Pending' || po.computedStatusLabel === 'Expiring Soon') 
+                            <Eye size={18} className="text-gray-400" />
+                            {(po.computedStatusLabel === 'Pending' || po.computedStatusLabel === 'Expiring Soon')
                               ? t('common:view_and_edit_po', 'View and edit PO')
                               : t('common:view_po', 'View PO')
                             }
                           </button>
 
                           {(po.computedStatusLabel === 'Pending' || po.computedStatusLabel === 'Expiring Soon' || po.computedStatusLabel === 'Completed') && (
-                            <button 
+                            <button
                               onClick={() => { setActiveDropdown(null); handlePrint(po); }}
                               className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] transition-colors font-bold border-b border-gray-50"
                             >
-                              <Download size={18} className="text-gray-400" /> 
+                              <Download size={18} className="text-gray-400" />
                               Print PO
                             </button>
                           )}
 
                           {po.computedStatusLabel !== 'Deleted' && (
-                              <button 
-                                onClick={() => { setActiveDropdown(null); handleDeletePO(po.id); }}
-                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-red-600 hover:bg-red-50 transition-colors font-bold"
-                              >
-                                <XCircle size={18} className="text-red-500" /> 
-                                {t('common:delete', 'delete')}
-                              </button>
+                            <button
+                              onClick={() => { setActiveDropdown(null); handleDeletePO(po.id); }}
+                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-red-600 hover:bg-red-50 transition-colors font-bold"
+                            >
+                              <XCircle size={18} className="text-red-500" />
+                              {t('common:delete', 'delete')}
+                            </button>
                           )}
                         </div>
                       )}
-                    </td>
-                  </tr>
+                    </td >
+                  </tr >
                 ))
               ) : (
                 <tr>
@@ -673,35 +673,35 @@ const PurchaseOrder = () => {
                   </td>
                 </tr>
               )}
-            </tbody>
-          </table>
+            </tbody >
+          </table >
           {isRefreshing && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/20 backdrop-blur-[1px] transition-all">
-                <div className="w-10 h-10 border-4 border-[#073318]/10 border-t-[#073318] rounded-full animate-spin"></div>
+              <div className="w-10 h-10 border-4 border-[#073318]/10 border-t-[#073318] rounded-full animate-spin"></div>
             </div>
           )}
-        </div>
+        </div >
 
         {/* Pagination Section - Standardized Single Row */}
-        <div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-t border-[#F3F4F6] bg-white gap-2">
+        < div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-t border-[#F3F4F6] bg-white gap-2" >
           <div className="flex items-center gap-2 text-[13px] sm:text-[14px] text-[#6B7280] font-medium min-w-fit">
-              <span>Show</span>
-              <div className="relative group">
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {setItemsPerPage(Number(e.target.value)); setCurrentPage(1);}}
-                  className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-2 sm:pl-3 pr-6 sm:pr-8 py-1 sm:py-1.5 outline-none focus:border-[#073318] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white text-[13px] sm:text-[14px]"
-                >
-                  {[5, 10, 20, 50].map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-                <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]" />
-              </div>
-              <span className="hidden xs:inline">per page</span>
+            <span>Show</span>
+            <div className="relative group">
+              <select
+                value={itemsPerPage}
+                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-2 sm:pl-3 pr-6 sm:pr-8 py-1 sm:py-1.5 outline-none focus:border-[#073318] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white text-[13px] sm:text-[14px]"
+              >
+                {[5, 10, 20, 50].map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]" />
+            </div>
+            <span className="hidden xs:inline">per page</span>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-6">
             <span className="text-[#6B7280] text-[12px] sm:text-[14px] font-medium whitespace-nowrap">
-              {totalItems > 0 
+              {totalItems > 0
                 ? `${((currentPage - 1) * itemsPerPage) + 1}–${Math.min(currentPage * itemsPerPage, totalItems)} of ${totalItems}`
                 : '0-0 of 0'}
             </span>
@@ -719,8 +719,8 @@ const PurchaseOrder = () => {
                     key={i}
                     onClick={() => handlePageChange(i + 1)}
                     className={`min-w-[40px] h-[40px] rounded-[10px] flex items-center justify-center transition-all text-[14px] font-bold
-                      ${currentPage === i + 1 
-                        ? 'bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100' 
+                      ${currentPage === i + 1
+                        ? 'bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100'
                         : 'text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]'}`}
                   >
                     {i + 1}
@@ -736,85 +736,87 @@ const PurchaseOrder = () => {
               </button>
             </div>
           </div>
-        </div>
-      </div>
+        </div >
+      </div >
 
       {/* Import Modal */}
-      {isImportModalOpen && (
-          <div 
+      {
+        isImportModalOpen && (
+          <div
             className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-[4px] animate-in fade-in duration-300 p-4"
             onClick={() => setIsImportModalOpen(false)}
           >
-              <div 
-                className="bg-white w-full max-w-[500px] rounded-[16px] shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden animate-in zoom-in-95 duration-300"
-                onClick={(e) => e.stopPropagation()}
-              >
-                  {/* Modal Header */}
-                  <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100">
-                      <h3 className="text-[18px] font-bold text-[#111827]">Import Data</h3>
-                      <button 
-                        onClick={() => setIsImportModalOpen(false)}
-                        className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
-                      >
-                          <X size={20} className="text-gray-400" />
-                      </button>
-                  </div>
-
-                  {/* Modal Content */}
-                  <div className="p-6 sm:p-8 flex flex-col items-center gap-6 sm:gap-10">
-                      {/* Download Sample */}
-                      <button 
-                        onClick={handleDownloadSample}
-                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-[#AFC9BD]/40 text-[#073318] rounded-[10px] text-[14px] font-bold hover:bg-[#AFC9BD]/60 transition-all font-outfit"
-                      >
-                          <Download size={18} />
-                          Download Sample
-                      </button>
-
-                      {/* Upload Section */}
-                      <div className="w-full flex flex-col items-center gap-3">
-                          <span className="text-[15px] font-bold text-[#4B5563]">Upload File</span>
-                          <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
-                              <span className="hidden sm:inline text-[14px] text-gray-400 font-medium whitespace-nowrap">Select File</span>
-                              <div className="flex-1 flex items-center border border-dashed border-gray-300 rounded-[8px] h-[44px] overflow-hidden w-full">
-                                  <label className="h-full px-4 flex items-center justify-center bg-gray-50 border-r border-dashed border-gray-300 text-[13px] font-bold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors">
-                                      Choose
-                                      <input 
-                                        type="file" 
-                                        className="hidden" 
-                                        onChange={(e) => setSelectedFile(e.target.files[0])}
-                                      />
-                                  </label>
-                                  <span className="px-4 text-[13px] text-gray-400 truncate flex-1">
-                                      {selectedFile ? selectedFile.name : 'No file chosen'}
-                                  </span>
-                              </div>
-                          </div>
-                      </div>
-
-                      {/* Submit Action */}
-                      <button 
-                        onClick={handleSubmitImport}
-                        disabled={!selectedFile || isRefreshing}
-                        className={`w-full sm:w-auto flex items-center justify-center gap-2 px-10 py-3 rounded-[12px] text-[15px] font-bold transition-all shadow-sm font-outfit
-                          ${selectedFile && !isRefreshing
-                            ? 'bg-[#073318] text-white hover:bg-[#04200f] shadow-[#073318]/20' 
-                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
-                      >
-                          <CloudUpload size={20} />
-                          {isRefreshing ? 'Importing...' : 'Submit'}
-                      </button>
-                  </div>
+            <div
+              className="bg-white w-full max-w-[500px] rounded-[16px] shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden animate-in zoom-in-95 duration-300"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100">
+                <h3 className="text-[18px] font-bold text-[#111827]">Import Data</h3>
+                <button
+                  onClick={() => setIsImportModalOpen(false)}
+                  className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X size={20} className="text-gray-400" />
+                </button>
               </div>
+
+              {/* Modal Content */}
+              <div className="p-6 sm:p-8 flex flex-col items-center gap-6 sm:gap-10">
+                {/* Download Sample */}
+                <button
+                  onClick={handleDownloadSample}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-[#AFC9BD]/40 text-[#073318] rounded-[10px] text-[14px] font-bold hover:bg-[#AFC9BD]/60 transition-all font-outfit"
+                >
+                  <Download size={18} />
+                  Download Sample
+                </button>
+
+                {/* Upload Section */}
+                <div className="w-full flex flex-col items-center gap-3">
+                  <span className="text-[15px] font-bold text-[#4B5563]">Upload File</span>
+                  <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
+                    <span className="hidden sm:inline text-[14px] text-gray-400 font-medium whitespace-nowrap">Select File</span>
+                    <div className="flex-1 flex items-center border border-dashed border-gray-300 rounded-[8px] h-[44px] overflow-hidden w-full">
+                      <label className="h-full px-4 flex items-center justify-center bg-gray-50 border-r border-dashed border-gray-300 text-[13px] font-bold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors">
+                        Choose
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => setSelectedFile(e.target.files[0])}
+                        />
+                      </label>
+                      <span className="px-4 text-[13px] text-gray-400 truncate flex-1">
+                        {selectedFile ? selectedFile.name : 'No file chosen'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submit Action */}
+                <button
+                  onClick={handleSubmitImport}
+                  disabled={!selectedFile || isRefreshing}
+                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-10 py-3 rounded-[12px] text-[15px] font-bold transition-all shadow-sm font-outfit
+                          ${selectedFile && !isRefreshing
+                      ? 'bg-[#073318] text-white hover:bg-[#04200f] shadow-[#073318]/20'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                >
+                  <CloudUpload size={20} />
+                  {isRefreshing ? 'Importing...' : 'Submit'}
+                </button>
+              </div>
+            </div>
           </div>
-      )}
-      <DeleteConfirmModal 
+        )
+      }
+      <DeleteConfirmModal
         isOpen={isDeleteModalOpen}
         isDeleting={isDeleting}
         onCancel={() => { setIsDeleteModalOpen(false); setPoToDelete(null); }}
         onConfirm={confirmDelete}
       />
-    </div>
+    </div >
   );
 };
 
