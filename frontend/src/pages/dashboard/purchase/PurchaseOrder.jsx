@@ -411,8 +411,8 @@ const PurchaseOrder = () => {
 
 
       {/* Title Section */}
-      <div className="flex flex-col md:flex-row gap-4 mb-6 md:mb-8 justify-between items-start md:items-center">
-        <div className="flex flex-col gap-1">
+      <div className="flex flex-col md:flex-row gap-4 mb-6 md:mb-8 justify-between items-center md:items-center">
+        <div className="hidden md:flex flex-col gap-1">
           <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">
             {t('modules:purchase_order', 'Purchase Order')}
           </h1>
@@ -422,7 +422,7 @@ const PurchaseOrder = () => {
         </div>
         <button
           onClick={() => navigate('/seller/purchase/order/add')}
-          className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 flex-shrink-0"
+          className="w-[358px] md:w-auto px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 flex-shrink-0 mx-auto md:mx-0"
         >
           <Plus size={18} />
           {t('modules:add_po', 'Add PO')}

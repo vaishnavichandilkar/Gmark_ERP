@@ -24,6 +24,7 @@ import ProductForm from "./components/ProductForm";
 import ViewProduct from "./components/ViewProduct";
 import { translateDynamic } from "../../../utils/i18nUtils";
 import SuccessToast from "./components/SuccessToast";
+import FilterDropdown from "./components/FilterDropdown";
 import productService from "../../../services/productService";
 import toast from 'react-hot-toast';
 import ImportModal from './components/ImportModal';
@@ -823,7 +824,7 @@ const ProductMaster = () => {
 
           {/* Filter Sidebar Offcanvas */}
           <div
-            className={`fixed top-0 right-0 h-full w-full sm:w-[480px] bg-white shadow-2xl z-[70] transform transition-transform duration-300 ease-in-out flex flex-col ${isFilterOpen ? "translate-x-0" : "translate-x-full"}`}
+            className={`fixed top-0 right-0 h-full w-screen sm:w-[440px] bg-white shadow-2xl z-[70] transform transition-all duration-300 ease-in-out flex flex-col ${isFilterOpen ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"}`}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-[#04200f] bg-emerald-900">
@@ -839,92 +840,47 @@ const ProductMaster = () => {
             </div>
 
             {/* Body */}
-            <div className="flex-1 px-8 py-8 overflow-y-auto space-y-7">
-              {/* UOM Filter */}
-              <div className="space-y-2.5">
-                <label className="text-[14px] font-medium text-[#4B5563]">
-                  {t("uom")}
-                </label>
-                <div className="relative">
-                  <select
-                    value={filterInputs.uom}
-                    onChange={(e) =>
-                      setFilterInputs({ ...filterInputs, uom: e.target.value })
-                    }
-                    className="w-full h-[46px] border border-[#E5E7EB] rounded-[10px] pl-4 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] appearance-none bg-white font-medium transition-all"
-                  >
-                    <option value="">{t("common:all")}</option>
-                    {Array.from(
-                      new Map(
-                        uomOptions
-                          .filter((u) => u.gst_uom) // Ensure gst_uom exists
-                          .map((uom) => [uom.gst_uom, uom])
-                      ).values()
-                    ).map((uom) => (
-                      <option key={uom.id} value={uom.id}>
-                        {translateDynamic(uom.gst_uom, t)}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none text-gray-400">
-                    <ChevronDown size={20} />
-                  </div>
-                </div>
-              </div>
+            <div className="flex-1 px-5 sm:px-8 py-6 sm:py-8 overflow-y-auto space-y-6 sm:space-y-7 pb-32">
+              <FilterDropdown
+                label={t("uom")}
+                name="uom"
+                value={filterInputs.uom}
+                onChange={(e) => setFilterInputs({ ...filterInputs, uom: e.target.value })}
+                options={[
+                  { label: t("common:all"), value: "" },
+                  ...Array.from(
+                    new Map(
+                      uomOptions
+                        .filter((u) => u.gst_uom)
+                        .map((uom) => [uom.gst_uom, { label: translateDynamic(uom.gst_uom, t), value: uom.id }])
+                    ).values()
+                  )
+                ]}
+              />
 
-              {/* Status Filter */}
-              <div className="space-y-2.5">
-                <label className="text-[14px] font-medium text-[#4B5563]">
-                  {t("common:status")}
-                </label>
-                <div className="relative">
-                  <select
-                    value={filterInputs.status}
-                    onChange={(e) =>
-                      setFilterInputs({
-                        ...filterInputs,
-                        status: e.target.value,
-                      })
-                    }
-                    className="w-full h-[46px] border border-[#E5E7EB] rounded-[10px] pl-4 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] appearance-none bg-white font-medium transition-all"
-                  >
-                    <option value="">{t("common:all")}</option>
-                    <option value="ACTIVE">{t("common:active")}</option>
-                    <option value="INACTIVE">{t("common:inactive")}</option>
-                  </select>
-                  <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none text-gray-400">
-                    <ChevronDown size={20} />
-                  </div>
-                </div>
-              </div>
+              <FilterDropdown
+                label={t("common:status")}
+                name="status"
+                value={filterInputs.status}
+                onChange={(e) => setFilterInputs({ ...filterInputs, status: e.target.value })}
+                options={[
+                  { label: t("common:all"), value: "" },
+                  { label: t("common:active"), value: "ACTIVE" },
+                  { label: t("common:inactive"), value: "INACTIVE" }
+                ]}
+              />
 
-              {/* Product Type Filter */}
-              <div className="space-y-2.5">
-                <label className="text-[14px] font-medium text-[#4B5563]">
-                  {t("product_type")}
-                </label>
-                <div className="relative">
-                  <select
-                    value={filterInputs.productType}
-                    onChange={(e) =>
-                      setFilterInputs({
-                        ...filterInputs,
-                        productType: e.target.value,
-                      })
-                    }
-                    className="w-full h-[46px] border border-[#E5E7EB] rounded-[10px] pl-4 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] appearance-none bg-white font-medium transition-all"
-                  >
-                    <option value="">{t("common:all")}</option>
-                    <option value="GOODS">{t("modules:goods") || "Goods"}</option>
-                    <option value="SERVICES">
-                      {t("modules:services") || "Services"}
-                    </option>
-                  </select>
-                  <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none text-gray-400">
-                    <ChevronDown size={20} />
-                  </div>
-                </div>
-              </div>
+              <FilterDropdown
+                label={t("product_type")}
+                name="productType"
+                value={filterInputs.productType}
+                onChange={(e) => setFilterInputs({ ...filterInputs, productType: e.target.value })}
+                options={[
+                  { label: t("common:all"), value: "" },
+                  { label: t("modules:goods") || "Goods", value: "GOODS" },
+                  { label: t("modules:services") || "Services", value: "SERVICES" }
+                ]}
+              />
             </div>
 
             {/* Footer Buttons */}

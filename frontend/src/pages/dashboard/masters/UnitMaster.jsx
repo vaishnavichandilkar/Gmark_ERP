@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 
 import { translateDynamic } from '../../../utils/i18nUtils';
 import SuccessToast from './components/SuccessToast';
+import FilterDropdown from './components/FilterDropdown';
 import ImportModal from './components/ImportModal';
 import ScrollableTable from "../../../components/common/ScrollableTable";
 
@@ -633,7 +634,7 @@ const UnitMaster = () => {
                         />
                     )}
 
-                    <div className={`fixed top-0 right-0 h-full w-full sm:w-[480px] bg-white shadow-2xl z-[70] transform transition-transform duration-300 ease-in-out flex flex-col ${isFilterOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                    <div className={`fixed top-0 right-0 h-full w-screen sm:w-[440px] bg-white shadow-2xl z-[70] transform transition-all duration-300 ease-in-out flex flex-col ${isFilterOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'}`}>
                         <div className="flex items-center justify-between px-6 py-5 border-b border-[#04200f] bg-emerald-900">
                             <h2 className="text-[20px] font-bold text-white tracking-tight">{t('apply_filters')}</h2>
                             <button onClick={() => setIsFilterOpen(false)} className="text-emerald-100 hover:text-white transition-colors p-1">
@@ -641,43 +642,29 @@ const UnitMaster = () => {
                             </button>
                         </div>
 
-                        <div className="flex-1 px-8 py-8 overflow-y-auto space-y-7">
-                            <div className="space-y-2.5">
-                                <label className="text-[14px] font-medium text-[#4B5563]">{t('select_gst_uom')}</label>
-                                <div className="relative">
-                                    <select
-                                        value={filterInputs.gstUom}
-                                        onChange={(e) => setFilterInputs({ ...filterInputs, gstUom: e.target.value })}
-                                        className="w-full h-[46px] border border-[#E5E7EB] rounded-[10px] pl-4 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#014A36] appearance-none bg-white font-medium"
-                                    >
-                                        <option value="">{t('common:all')}</option>
-                                        {gstUomOptions.map(u => (
-                                            <option key={u} value={u}>{u}</option>
-                                        ))}
-                                    </select>
-                                    <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none text-gray-400">
-                                        <ChevronsUpDown size={14} />
-                                    </div>
-                                </div>
-                            </div>
+                        <div className="flex-1 px-5 sm:px-8 py-6 sm:py-8 overflow-y-auto space-y-6 sm:space-y-7 pb-32">
+                            <FilterDropdown
+                                label={t('select_gst_uom')}
+                                name="gstUom"
+                                value={filterInputs.gstUom}
+                                onChange={(e) => setFilterInputs({ ...filterInputs, gstUom: e.target.value })}
+                                options={[
+                                    { label: t('common:all'), value: "" },
+                                    ...gstUomOptions.map(u => ({ label: u, value: u }))
+                                ]}
+                            />
 
-                            <div className="space-y-2.5">
-                                <label className="text-[14px] font-medium text-[#4B5563]">{t('common:status')}</label>
-                                <div className="relative">
-                                    <select
-                                        value={filterInputs.status}
-                                        onChange={(e) => setFilterInputs({ ...filterInputs, status: e.target.value })}
-                                        className="w-full h-[46px] border border-[#E5E7EB] rounded-[10px] pl-4 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#014A36] appearance-none bg-white font-medium"
-                                    >
-                                        <option value="">{t('common:all')}</option>
-                                        <option value="ACTIVE">{t('common:active')}</option>
-                                        <option value="INACTIVE">{t('common:inactive')}</option>
-                                    </select>
-                                    <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none text-gray-400">
-                                        <ChevronsUpDown size={14} />
-                                    </div>
-                                </div>
-                            </div>
+                            <FilterDropdown
+                                label={t('common:status')}
+                                name="status"
+                                value={filterInputs.status}
+                                onChange={(e) => setFilterInputs({ ...filterInputs, status: e.target.value })}
+                                options={[
+                                    { label: t('common:all'), value: "" },
+                                    { label: t('common:active'), value: "ACTIVE" },
+                                    { label: t('common:inactive'), value: "INACTIVE" }
+                                ]}
+                            />
 
                             <div className="space-y-2.5">
                                 <label className="text-[14px] font-medium text-[#4B5563]">{t('unit_name')}</label>
