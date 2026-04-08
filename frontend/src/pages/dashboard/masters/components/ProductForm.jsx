@@ -656,35 +656,22 @@ const ProductForm = ({
               {mode === "add"
                 ? t('modules:addNewProduct')
                 : mode === "edit"
-                  ? "Edit Product"
-                  : "View Product"}
+                  ? t('modules:edit_product')
+                  : t('modules:view_product')}
             </h2>
           </div>
 
           {/* Header Actions */}
           <div className="flex items-center gap-3">
-            {isView ? (
+            {isView && (
               <button
                 type="button"
                 onClick={() => onEdit && onEdit(initialData)}
                 className="px-6 h-[40px] bg-[#073318] hover:bg-[#04200f] text-white rounded-[8px] text-[14px] font-bold transition-all shadow-sm flex items-center justify-center"
               >
-                {t("modules:edit_product") || "Edit Product"}
+                {t("modules:edit_product")}
               </button>
-            ) : mode === "edit" ? (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={loading}
-                className={`px-6 h-[40px] text-white rounded-[8px] text-[14px] font-bold transition-all shadow-sm flex items-center justify-center min-w-[140px] ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-[#073318] hover:bg-[#04200f]"}`}
-              >
-                {loading ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : (
-                  t('modules:saveProduct')
-                )}
-              </button>
-            ) : null}
+            )}
             <button
               type="button"
               onClick={onBack}
@@ -824,8 +811,8 @@ const ProductForm = ({
           </div>
         </div>
 
-        {/* Footer Buttons - Only for Add mode */}
-        {mode === "add" && (
+        {/* Footer Buttons - Add and Edit mode */}
+        {!isView && (
           <div className="px-8 py-6 bg-[#F9FAFB]/50 flex justify-end gap-3 border-t border-[#F3F4F6]">
             <button
               type="button"

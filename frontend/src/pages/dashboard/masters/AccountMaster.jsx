@@ -509,85 +509,85 @@ const AccountMaster = () => {
                     <table className="master-table min-w-[1200px]">
                         <thead>
                             <tr>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                <th className="border-r border-white/10">
                                     <div className="flex items-center gap-2">
                                         {t('modules:customer_code')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                <th className="border-r border-white/10">
                                     <div className="flex items-center gap-2">
                                         {t('modules:supplier_code')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                                    <div className="flex items-center gap-2 tracking-tight text-left">
+                                <th className="border-r border-white/10">
+                                    <div className="flex items-center gap-2">
                                         {t('modules:account')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                <th className="border-r border-white/10">
                                     <div className="flex items-center gap-2">
                                         {t('modules:account_type')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                <th className="border-r border-white/10">
                                     <div className="flex items-center gap-2">
                                         {t('modules:customer_type', 'Customer Type')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                <th className="border-r border-white/10">
                                     <div className="flex items-center gap-2">
                                         {t('modules:customer_credit_days')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                <th className="border-r border-white/10">
                                     <div className="flex items-center gap-2">
                                         {t('modules:supplier_credit_days')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                                    <div className="flex items-center gap-2 tracking-tight">
+                                <th className="border-r border-white/10">
+                                    <div className="flex items-center gap-2">
                                         {t('modules:gst_no')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                                    <div className="flex items-center gap-2 tracking-tight">
+                                <th className="border-r border-white/10">
+                                    <div className="flex items-center gap-2">
                                         {t('modules:pan_no')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                <th className="border-r border-white/10">
                                     <div className="flex items-center gap-2">
                                         {t('modules:customer_op_balance')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                <th className="border-r border-white/10">
                                     <div className="flex items-center gap-2">
                                         {t('modules:supplier_op_balance')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                                    <div className="flex items-center gap-2 tracking-tight">
+                                <th className="border-r border-white/10">
+                                    <div className="flex items-center gap-2">
                                         {t('common:address')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                                    <div className="flex items-center gap-2 tracking-tight">
+                                <th className="border-r border-white/10">
+                                    <div className="flex items-center gap-2">
                                         {t('common:status')}
-                                        <ChevronsUpDown size={14} className="text-gray-300" />
+                                        <ChevronsUpDown size={14} className="opacity-70" />
                                     </div>
                                 </th>
-                                <th className="px-3 md:px-6 py-3 md:py-4 text-center tracking-tight">{t('common:action')}</th>
+                                <th className="text-center">{t('common:action')}</th>
                             </tr>
                         </thead>
                         <tbody className="text-[14px] text-[#111827]">
@@ -601,33 +601,33 @@ const AccountMaster = () => {
                                     </td>
                                 </tr>
                             ) : paginatedData.length > 0 ? paginatedData.map((row, index) => (
-                                <tr key={index} className="border-b border-[#F3F4F6] last:border-b-0 hover:bg-[#F9FAFB] transition-all group">
-                                    <td className="px-3 md:px-6 py-3 md:py-4 text-gray-500 font-medium border-r border-[#F3F4F6]">{row.customerCode || '-'}</td>
-                                    <td className="px-3 md:px-6 py-3 md:py-4 text-gray-500 font-medium border-r border-[#F3F4F6]">{row.supplierCode || '-'}</td>
-                                    <td className="px-3 md:px-6 py-3 md:py-4 font-bold text-[#111827] border-r border-[#F3F4F6]">{row.accountName}</td>
-                                    <td className="px-3 md:px-6 py-3 md:py-4 border-r border-[#F3F4F6]">
+                                <tr key={index} className="group">
+                                    <td className="text-gray-500 font-medium border-r border-[#F3F4F6]">{row.customerCode || '-'}</td>
+                                    <td className="text-gray-500 font-medium border-r border-[#F3F4F6]">{row.supplierCode || '-'}</td>
+                                    <td className="font-bold text-[#111827] border-r border-[#F3F4F6]">{row.accountName}</td>
+                                    <td className="border-r border-[#F3F4F6]">
                                         <div className="flex gap-1.5 flex-wrap">
                                             {row.groupName?.includes('SUNDRY_DEBTORS') && <span className="px-2 py-0.5 bg-[#073318]/10 text-[#073318] rounded text-[11px] font-bold tracking-wider">{t('modules:customer')}</span>}
                                             {row.groupName?.includes('SUNDRY_CREDITORS') && <span className="px-2 py-0.5 bg-[#4B5563]/10 text-[#4B5563] rounded text-[11px] font-bold tracking-wider">{t('modules:sundry_creditors')}</span>}
                                         </div>
                                     </td>
-                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6] capitalize">
+                                    <td className="text-[#4B5563] font-medium border-r border-[#F3F4F6] capitalize">
                                         {row.customerType ? row.customerType.toLowerCase() : '-'}
                                     </td>
-                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.customerCreditDays || 0}</td>
-                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.supplierCreditDays || 0}</td>
-                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.gstNo || '-'}</td>
-                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.panNo || '-'}</td>
-                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.customerOpeningBalance || 0}</td>
-                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.supplierOpeningBalance || 0}</td>
-                                    <td className="px-3 md:px-6 py-3 md:py-4 text-[#6B7280] max-w-[200px] truncate border-r border-[#F3F4F6]" title={row.addressLine1}>{row.addressLine1 || '-'}</td>
-                                    <td className="px-3 md:px-6 py-3 md:py-4 border-r border-[#F3F4F6]">
+                                    <td className="text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.customerCreditDays || 0}</td>
+                                    <td className="text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.supplierCreditDays || 0}</td>
+                                    <td className="text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.gstNo || '-'}</td>
+                                    <td className="text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.panNo || '-'}</td>
+                                    <td className="text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.customerOpeningBalance || 0}</td>
+                                    <td className="text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.supplierOpeningBalance || 0}</td>
+                                    <td className="text-[#6B7280] max-w-[200px] truncate border-r border-[#F3F4F6]" title={row.addressLine1}>{row.addressLine1 || '-'}</td>
+                                    <td className="border-r border-[#F3F4F6]">
                                         <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${row.status === 'ACTIVE' ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
                                             <span className={`w-1.5 h-1.5 rounded-full ${row.status === 'ACTIVE' ? 'bg-[#059669]' : 'bg-[#DC2626]'}`}></span>
                                             {row.status === 'ACTIVE' ? t('common:active') : t('common:inactive')}
                                         </div>
                                     </td>
-                                    <td className={`px-3 md:px-6 py-3 md:py-4 text-center relative ${dropdownIndex === index ? 'z-[100]' : ''}`} ref={dropdownIndex === index ? dropdownRef : null}>
+                                    <td className={`text-center relative ${dropdownIndex === index ? 'z-[100]' : ''}`} ref={dropdownIndex === index ? dropdownRef : null}>
                                         <button
                                             onClick={(e) => toggleDropdown(index, e)}
                                             className={`p-2 rounded-lg transition-all ${dropdownIndex === index ? 'bg-gray-100 text-[#111827]' : 'text-gray-400 hover:bg-gray-100 hover:text-[#111827]'}`}

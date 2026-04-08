@@ -554,67 +554,67 @@ const ProductMaster = () => {
               <table className="master-table min-w-[1200px]">
                 <thead>
                   <tr>
-                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 tracking-tight">
+                    <th className="border-r border-white/10">
+                      <div className="flex items-center gap-2">
                         {t("product_code")}{" "}
-                        <ChevronsUpDown size={14} className="text-gray-300" />
+                        <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
-                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 tracking-tight">
+                    <th className="border-r border-white/10">
+                      <div className="flex items-center gap-2">
                         {t("product_name")}{" "}
-                        <ChevronsUpDown size={14} className="text-gray-300" />
+                        <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
-                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 tracking-tight">
+                    <th className="border-r border-white/10">
+                      <div className="flex items-center gap-2">
                         {t("modules:gst_uom", "GST UOM")}{" "}
-                        <ChevronsUpDown size={14} className="text-gray-300" />
+                        <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
-                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 tracking-tight">
+                    <th className="border-r border-white/10">
+                      <div className="flex items-center gap-2">
                         {t("product_type")}{" "}
-                        <ChevronsUpDown size={14} className="text-gray-300" />
+                        <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
-                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 tracking-tight">
+                    <th className="border-r border-white/10">
+                      <div className="flex items-center gap-2">
                         {t("category")}{" "}
-                        <ChevronsUpDown size={14} className="text-gray-300" />
+                        <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
-                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 tracking-tight">
+                    <th className="border-r border-white/10">
+                      <div className="flex items-center gap-2">
                         {t("sub_category", "Sub Category")}{" "}
-                        <ChevronsUpDown size={14} className="text-gray-300" />
+                        <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
-                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 tracking-tight">
+                    <th className="border-r border-white/10">
+                      <div className="flex items-center gap-2">
                         {t("sub_sub_category", "Sub-SubCategory")}{" "}
-                        <ChevronsUpDown size={14} className="text-gray-300" />
+                        <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
-                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 tracking-tight">
+                    <th className="border-r border-white/10">
+                      <div className="flex items-center gap-2">
                         {t("hsn_code")}{" "}
-                        <ChevronsUpDown size={14} className="text-gray-300" />
+                        <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
-                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 tracking-tight">
+                    <th className="border-r border-white/10">
+                      <div className="flex items-center gap-2">
                         {t("tax_percent")}{" "}
-                        <ChevronsUpDown size={14} className="text-gray-300" />
+                        <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
-                    <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 text-left">
-                      <div className="flex items-center gap-2 tracking-tight">
+                    <th className="border-r border-white/10">
+                      <div className="flex items-center gap-2">
                         {t("common:status")}{" "}
-                        <ChevronsUpDown size={14} className="text-gray-300" />
+                        <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
-                    <th className="px-3 md:px-6 py-3 md:py-4 text-center tracking-tight">
+                    <th className="text-center">
                       {t("common:action")}
                     </th>
                   </tr>
@@ -635,36 +635,36 @@ const ProductMaster = () => {
                     currentData.map((row, index) => (
                       <tr
                         key={row.id}
-                        className="border-b border-[#F3F4F6] last:border-b-0 hover:bg-[#F9FAFB] transition-all group"
+                        className="group"
                       >
-                        <td className="px-3 md:px-6 py-3 md:py-4 font-bold text-[#111827] border-r border-[#F3F4F6]">
+                        <td className="font-bold text-[#111827] border-r border-[#F3F4F6]">
                           {row.product_code}
                         </td>
-                        <td className="px-3 md:px-6 py-3 md:py-4 font-bold text-[#111827] border-r border-[#F3F4F6]">
+                        <td className="font-bold text-[#111827] border-r border-[#F3F4F6]">
                           {translateDynamic(row.product_name, t)}
                         </td>
-                        <td className="px-3 md:px-6 py-3 md:py-4 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
+                        <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">
                           {translateDynamic(row.uom?.gst_uom, t)}
                         </td>
-                        <td className="px-3 md:px-6 py-3 md:py-4 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
+                        <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">
                           {translateDynamic(row.product_type, t)}
                         </td>
-                        <td className="px-3 md:px-6 py-3 md:py-4 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
+                        <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">
                           {translateDynamic(row.category?.name, t)}
                         </td>
-                        <td className="px-3 md:px-6 py-3 md:py-4 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
+                        <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">
                           {translateDynamic(row.sub_category?.name, t)}
                         </td>
-                        <td className="px-3 md:px-6 py-3 md:py-4 font-medium text-[#4B5563] border-r border-[#F3F4F6]">
+                        <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">
                           {translateDynamic(row.sub_sub_category?.name, t) || "-"}
                         </td>
-                        <td className="px-3 md:px-6 py-3 md:py-4 text-[#6B7280] border-r border-[#F3F4F6]">
+                        <td className="text-[#6B7280] border-r border-[#F3F4F6]">
                           {row.hsn_code}
                         </td>
-                        <td className="px-3 md:px-6 py-3 md:py-4 text-[#6B7280] border-r border-[#F3F4F6]">
+                        <td className="text-[#6B7280] border-r border-[#F3F4F6]">
                           {row.tax_rate}%
                         </td>
-                        <td className="px-3 md:px-6 py-3 md:py-4 border-r border-[#F3F4F6]">
+                        <td className="border-r border-[#F3F4F6]">
                           <div
                             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${row.status.toUpperCase() === "ACTIVE" ? "bg-[#ECFDF5] text-[#059669]" : "bg-[#FEF2F2] text-[#DC2626]"}`}
                           >
@@ -677,7 +677,7 @@ const ProductMaster = () => {
                           </div>
                         </td>
                         <td
-                          className={`px-3 md:px-6 py-3 md:py-4 text-center relative ${activeDropdown === row.id ? "z-[100]" : ""}`}
+                          className={`text-center relative ${activeDropdown === row.id ? "z-[100]" : ""}`}
                           ref={activeDropdown === row.id ? dropdownRef : null}
                         >
                           <button

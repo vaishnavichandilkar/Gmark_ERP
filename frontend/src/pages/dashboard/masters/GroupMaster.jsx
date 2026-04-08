@@ -51,6 +51,11 @@ const GroupMaster = () => {
         }
     };
 
+    const handleRefresh = async () => {
+        await fetchGroups();
+        showToast("Data refreshed successfully");
+    };
+
     useEffect(() => {
         fetchGroups();
     }, []);
@@ -424,7 +429,7 @@ const GroupMaster = () => {
                             {isAllExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                             {isAllExpanded ? t('common:collapse_all') : t('common:expand_all')}
                         </button>
-                        <button onClick={() => fetchGroups()} className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] hover:bg-gray-50 bg-white">
+                        <button onClick={handleRefresh} className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] hover:bg-gray-50 bg-white">
                             <RefreshCw size={18} className="text-gray-400" />
                         </button>
                     </div>
@@ -505,7 +510,7 @@ const GroupMaster = () => {
                         {/* Action Icons - Hidden when search expanded */}
                         {!isSearchExpanded ? (
                             <div className="flex items-center gap-1 ml-auto animate-in fade-in duration-300">
-                                <button onClick={() => fetchGroups()} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                                <button onClick={handleRefresh} className="w-10 h-10 flex items-center justify-center text-gray-500">
                                     <RefreshCw size={20} />
                                 </button>
                                 <button onClick={() => setIsImportModalOpen(true)} className="w-10 h-10 flex items-center justify-center text-gray-500">
@@ -546,17 +551,17 @@ const GroupMaster = () => {
 
                 <ScrollableTable className="w-full">
                     <div className="min-w-[800px]">
-                    <div className="flex items-stretch justify-between bg-emerald-900 border-b border-emerald-950 text-[14px] font-bold text-white tracking-tight">
-                        <div className="flex-1 border-r border-white/50 pr-4 md:pr-6 py-3 md:py-5 pl-6 md:pl-9 flex items-center gap-2">
+                    <div className="master-table-header">
+                        <div className="flex-1 pl-9 gap-2">
                             {t('modules:group_master')}
-                            <ChevronsUpDown size={14} className="text-gray-300" />
+                            <ChevronsUpDown size={14} className="opacity-70" />
                         </div>
-                        <div className="flex items-stretch shrink-0">
-                            <div className="w-[110px] md:w-[120px] border-r border-white/50 flex items-center justify-center px-4 gap-2">
+                        <div className="flex shrink-0">
+                            <div className="w-[110px] md:w-[120px] justify-center px-4 gap-2 border-l border-white/10">
                                 {t('common:status')}
-                                <ChevronsUpDown size={14} className="text-gray-300" />
+                                <ChevronsUpDown size={14} className="opacity-70" />
                             </div>
-                            <div className="w-16 md:w-20 flex items-center justify-center px-4 py-3 md:py-5">{t('common:action')}</div>
+                            <div className="w-16 md:w-20 justify-center px-4 border-l border-white/10">{t('common:action')}</div>
                         </div>
                     </div>
                     <div className="flex flex-col divide-y divide-[#F3F4F6]">
@@ -579,6 +584,14 @@ const GroupMaster = () => {
                 </div>
             </ScrollableTable>
         </div>
+
+        {toastState && (
+            <SuccessToast 
+                message={toastState.message} 
+                type={toastState.type || 'success'}
+                onClose={() => setToastState(null)} 
+            />
+        )}
 
         {isImportModalOpen && (
             <ImportModal

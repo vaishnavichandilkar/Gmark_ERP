@@ -45,19 +45,39 @@ body {
     border-collapse: collapse;
 }
 
-.master-table thead tr {
+/* Standard Master Table Header Style */
+.master-table thead tr,
+.master-table-header {
     background-color: #064E3B; /* emerald-900 */
     border-bottom: 1px solid #064E3B; /* emerald-950 */
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
     color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    height: 56px; /* Standardize height */
 }
 
 .master-table th {
-    padding: 1.25rem 1.5rem; /* px-6 py-5 */
+    padding: 0 1.5rem;
+    height: 56px;
     white-space: nowrap;
     border-right: 1px solid rgba(255, 255, 255, 0.1);
-    letter-spacing: -0.025em; /* tracking-tight */
+    vertical-align: middle;
+    text-align: left;
+}
+
+.master-table-header {
+    display: flex;
+    align-items: stretch;
+}
+
+.master-table-header > div {
+    padding: 0 1.5rem;
+    white-space: nowrap;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
 }
 
 .master-table th:last-child {
@@ -107,6 +127,20 @@ body {
     .form-grid {
         grid-template-columns: 1fr;
     }
+}
+
+.master-table td {
+    padding: 0.75rem 1.5rem; /* Standardized cell padding */
+    vertical-align: middle;
+    border-bottom: 1px solid #F3F4F6;
+}
+
+.master-table tbody tr {
+    transition: background-color 0.2s;
+}
+
+.master-table tbody tr:hover {
+    background-color: #F9FAFB;
 }
 
 /* Scrollbar Hide Utility */

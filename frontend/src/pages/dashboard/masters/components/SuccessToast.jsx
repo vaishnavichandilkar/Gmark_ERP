@@ -10,9 +10,10 @@ const SuccessToast = ({ message, type = 'success', onClose }) => {
     const isError = type === 'error';
 
     return (
-        <div className="fixed bottom-6 right-6 z-[10000] animate-in fade-in slide-in-from-bottom-4 duration-300 pointer-events-none">
+        <div className="fixed top-[84px] left-0 right-0 z-[10000] flex flex-col items-center gap-3 pointer-events-none lg:pl-[280px] transition-all duration-300">
             <div className={`
-                px-6 py-4 rounded-[16px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex items-center gap-4 min-w-[320px] max-w-[400px] transition-all pointer-events-auto border
+                relative animate-in fade-in slide-in-from-top-4 duration-300 pointer-events-auto
+                px-6 py-4 rounded-[16px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex items-center gap-4 min-w-[320px] max-w-[400px] transition-all border
                 ${isError 
                     ? 'bg-white text-red-600 border-red-100' 
                     : 'bg-[#073318] text-white border-[#062a14]'}

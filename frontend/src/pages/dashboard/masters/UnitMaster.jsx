@@ -340,7 +340,7 @@ const UnitMaster = () => {
                                     <Filter size={18} className={isFilterApplied ? "text-red-500" : "text-gray-400"} />
                                     {isFilterApplied ? t('common:clear', 'Clear') : t('common:filter', 'Filter')}
                                 </button>
-                                <button onClick={fetchUnits} className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] hover:bg-gray-50 bg-white">
+                                <button onClick={handleRefresh} className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] hover:bg-gray-50 bg-white">
                                     <RefreshCw size={18} className="text-gray-400" />
                                 </button>
                             </div>
@@ -409,7 +409,7 @@ const UnitMaster = () => {
                                 {/* Action Icons - Hidden when search expanded */}
                                 {!isSearchExpanded ? (
                                     <div className="flex items-center gap-1 ml-auto animate-in fade-in duration-300">
-                                        <button onClick={fetchUnits} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                                        <button onClick={handleRefresh} className="w-10 h-10 flex items-center justify-center text-gray-500">
                                             <RefreshCw size={20} />
                                         </button>
                                         <button onClick={() => setIsImportModalOpen(true)} className="w-10 h-10 flex items-center justify-center text-gray-500">
@@ -456,37 +456,37 @@ const UnitMaster = () => {
                             <table className="master-table min-w-[1000px]">
                                 <thead>
                                     <tr>
-                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                        <th className="border-r border-white/10">
                                             <div className="flex items-center gap-2">
                                                 {t('common:sr_no')}
-                                                <ChevronsUpDown size={14} className="text-gray-300" />
+                                                <ChevronsUpDown size={14} className="opacity-70" />
                                             </div>
                                         </th>
-                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                        <th className="border-r border-white/10">
                                             <div className="flex items-center gap-2">
                                                 {t('modules:unit_name')}
-                                                <ChevronsUpDown size={14} className="text-gray-300" />
+                                                <ChevronsUpDown size={14} className="opacity-70" />
                                             </div>
                                         </th>
-                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                        <th className="border-r border-white/10">
                                             <div className="flex items-center gap-2">
                                                 {t('modules:gst_uom')}
-                                                <ChevronsUpDown size={14} className="text-gray-300" />
+                                                <ChevronsUpDown size={14} className="opacity-70" />
                                             </div>
                                         </th>
-                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                        <th className="border-r border-white/10">
                                             <div className="flex items-center gap-2">
                                                 {t('modules:full_name_of_measurement')}
-                                                <ChevronsUpDown size={14} className="text-gray-300" />
+                                                <ChevronsUpDown size={14} className="opacity-70" />
                                             </div>
                                         </th>
-                                        <th className="px-3 md:px-6 py-3 md:py-4 border-r border-white/10 tracking-tight text-left">
+                                        <th className="border-r border-white/10">
                                             <div className="flex items-center gap-2">
                                                 {t('common:status')}
-                                                <ChevronsUpDown size={14} className="text-gray-300" />
+                                                <ChevronsUpDown size={14} className="opacity-70" />
                                             </div>
                                         </th>
-                                        <th className="px-3 md:px-6 py-3 md:py-4 text-center tracking-tight">{t('common:action')}</th>
+                                        <th className="text-center">{t('common:action')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="text-[14px] text-[#111827]">
@@ -500,18 +500,18 @@ const UnitMaster = () => {
                                             </td>
                                         </tr>
                                     ) : tableData.length > 0 ? tableData.map((row, index) => (
-                                        <tr key={row.id} className="border-b border-[#F3F4F6] last:border-b-0 hover:bg-[#F9FAFB] transition-all group">
-                                            <td className="px-3 md:px-6 py-3 md:py-5 text-gray-500 font-medium border-r border-[#F3F4F6]">{startIndex + index + 1}</td>
-                                            <td className="px-3 md:px-6 py-3 md:py-5 font-bold text-[#111827] border-r border-[#F3F4F6]">{row.unit_name}</td>
-                                            <td className="px-3 md:px-6 py-3 md:py-5 text-[#6B7280] max-w-[300px] truncate border-r border-[#F3F4F6]">{row.full_name_of_measurement || '-'}</td>
-                                            <td className="px-3 md:px-6 py-3 md:py-5 font-medium text-[#4B5563] border-r border-[#F3F4F6]">{t(`modules:${row.gst_uom?.toLowerCase()}`, row.gst_uom)}</td>
-                                            <td className="px-3 md:px-6 py-3 md:py-5 border-r border-[#F3F4F6]">
+                                        <tr key={row.id} className="group">
+                                            <td className="text-gray-500 font-medium border-r border-[#F3F4F6]">{startIndex + index + 1}</td>
+                                            <td className="font-bold text-[#111827] border-r border-[#F3F4F6]">{row.unit_name}</td>
+                                            <td className="text-[#6B7280] max-w-[300px] truncate border-r border-[#F3F4F6]">{row.full_name_of_measurement || '-'}</td>
+                                            <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">{t(`modules:${row.gst_uom?.toLowerCase()}`, row.gst_uom)}</td>
+                                            <td className="border-r border-[#F3F4F6]">
                                                 <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${row.status === 'ACTIVE' ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
                                                     <span className={`w-1.5 h-1.5 rounded-full ${row.status === 'ACTIVE' ? 'bg-[#059669]' : 'bg-[#DC2626]'}`}></span>
                                                     {row.status === 'ACTIVE' ? t('common:active') : t('common:inactive')}
                                                 </div>
                                             </td>
-                                            <td className={`px-3 md:px-6 py-3 md:py-5 text-center relative ${activeDropdown === row.id ? 'z-[100]' : ''}`} ref={activeDropdown === row.id ? dropdownRef : null}>
+                                            <td className={`text-center relative ${activeDropdown === row.id ? 'z-[100]' : ''}`} ref={activeDropdown === row.id ? dropdownRef : null}>
                                                 <button
                                                     onClick={(e) => toggleDropdown(row.id, e)}
                                                     data-dropdown-btn="true"
@@ -706,6 +706,13 @@ const UnitMaster = () => {
                         showToast(message);
                         fetchUnits();
                     }}
+                />
+            )}
+            {showSuccessToast.show && (
+                <SuccessToast 
+                    message={showSuccessToast.message} 
+                    type={showSuccessToast.type}
+                    onClose={() => setShowSuccessToast({ ...showSuccessToast, show: false })} 
                 />
             )}
             {isImportModalOpen && (

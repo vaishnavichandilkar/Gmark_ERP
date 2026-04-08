@@ -8,7 +8,11 @@ function App() {
   return (
     <Provider store={store}>
       <Toaster
-        position="bottom-right"
+        position="top-center"
+        containerStyle={{
+          top: 84,
+        }}
+        containerClassName="lg:pl-[280px] transition-all duration-300"
         reverseOrder={false}
         toastOptions={{
           className: 'text-[14px] font-semibold font-["Plus_Jakarta_Sans"]',

@@ -157,16 +157,20 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast, initialStep
                                         key={opt.id}
                                         disabled={opt.disabled}
                                         onClick={() => setType(opt.id)}
-                                        className={`flex flex-col items-start p-4 rounded-xl border-2 transition-all text-left ${type === opt.id ? 'border-emerald-600 bg-emerald-50' : 'border-gray-100 hover:border-emerald-200'} ${opt.disabled ? 'opacity-40 grayscale cursor-not-allowed' : 'active:scale-98'}`}
+                                        className={`flex items-center justify-between w-full p-4 rounded-xl border-2 transition-all text-left ${type === opt.id ? 'border-emerald-600 bg-emerald-50' : 'border-gray-100 hover:border-emerald-200'} ${opt.disabled ? 'opacity-40 grayscale cursor-not-allowed' : 'active:scale-98'}`}
                                     >
-                                        <div className="flex items-center justify-between w-full">
+                                        <div className="flex flex-col items-start">
                                             <span className={`text-[15px] font-bold ${type === opt.id ? 'text-emerald-900' : 'text-gray-700'}`}>{opt.label}</span>
-                                            {type === opt.id && <div className="w-4 h-4 rounded-full bg-emerald-600" />}
+                                            <span className="text-[12px] text-gray-400 font-medium">{opt.desc}</span>
+                                            {opt.disabled && (
+                                                <span className="text-[10px] text-red-500 mt-1 font-bold italic flex items-center gap-1">
+                                                    <Info size={10} /> {opt.id === 'Sub Category' ? t('modules:addCategoryFirst') : t('modules:addSubCategoryFirst')}
+                                                </span>
+                                            )}
                                         </div>
-                                        <span className="text-[12px] text-gray-400 font-medium">{opt.desc}</span>
-                                        {opt.disabled && (
-                                            <span className="text-[10px] text-red-500 mt-1 font-bold italic flex items-center gap-1">
-                                                <Info size={10} /> {opt.id === 'Sub Category' ? t('modules:addCategoryFirst') : t('modules:addSubCategoryFirst')}
+                                        {type === opt.id && (
+                                            <span className="text-[13px] font-semibold text-emerald-600 tracking-wide ml-4 shrink-0">
+                                                {t('common:selected', 'Selected')}
                                             </span>
                                         )}
                                     </button>
@@ -284,17 +288,17 @@ const AddCategoryModal = ({ isOpen, onClose, onSuccess, onShowToast, initialStep
                         ) : (
                             <>
                                 <button
+                                    onClick={onClose}
+                                    className="w-[100px] h-[52px] border border-gray-200 rounded-xl text-[15px] font-bold text-gray-500 hover:bg-gray-50 transition-all"
+                                >
+                                    {initialStep === 2 ? t('common:exit', 'Exit') : t('common:cancel')}
+                                </button>
+                                <button
                                     onClick={handleSave}
                                     disabled={isLoading}
                                     className="flex-1 h-[52px] bg-emerald-900 text-white rounded-xl text-[16px] font-bold shadow-lg shadow-emerald-900/20 hover:bg-emerald-950 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
                                 >
                                     {isLoading ? <Loader2 size={20} className="animate-spin" /> : (initialStep === 2 ? t('common:save') : t('modules:save_category', 'Save Category'))}
-                                </button>
-                                <button
-                                    onClick={onClose}
-                                    className="w-[100px] h-[52px] border border-gray-200 rounded-xl text-[15px] font-bold text-gray-500 hover:bg-gray-50 transition-all"
-                                >
-                                    {initialStep === 2 ? t('common:exit', 'Exit') : t('common:cancel')}
                                 </button>
                             </>
                         )}

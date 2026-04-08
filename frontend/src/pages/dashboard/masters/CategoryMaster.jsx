@@ -699,17 +699,17 @@ const CategoryMaster = () => {
         </div>
 
         {/* Table Header */}
-        <div className="flex items-stretch justify-between border-b border-emerald-950 bg-emerald-900 text-[14px] font-bold text-white tracking-tight">
-          <div className="flex-1 border-r border-white/50 pr-4 md:pr-6 py-3 md:py-5 pl-6 md:pl-9 flex items-center gap-2">
+        <div className="master-table-header">
+          <div className="flex-1 pl-9 gap-2">
             {t("modules:category_sub_category")}
-            <ChevronsUpDown size={14} className="text-gray-300" />
+            <ChevronsUpDown size={14} className="opacity-70" />
           </div>
-          <div className="flex items-stretch shrink-0">
-            <div className="w-[110px] md:w-[120px] border-r border-white/50 flex items-center justify-center px-4 gap-2">
+          <div className="flex shrink-0">
+            <div className="w-[110px] md:w-[120px] justify-center px-4 gap-2 border-l border-white/10">
               {t("common:status")}
-              <ChevronsUpDown size={14} className="text-gray-300" />
+              <ChevronsUpDown size={14} className="opacity-70" />
             </div>
-            <div className="w-16 md:w-20 flex items-center justify-center px-4 py-3 md:py-5">
+            <div className="w-16 md:w-20 justify-center px-4 border-l border-white/10">
               {t("common:action")}
             </div>
           </div>
