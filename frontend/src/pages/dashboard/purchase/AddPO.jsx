@@ -15,7 +15,8 @@ import {
     FileText,
     Percent,
     Hash,
-    ChevronsUpDown
+    ChevronsUpDown,
+    AlertCircle
 } from 'lucide-react';
 import purchaseOrderService from '../../../services/purchaseOrderService';
 import accountService from '../../../services/accountService';
@@ -44,6 +45,7 @@ const AddPO = () => {
     });
 
     const [errors, setErrors] = useState({});
+    const [isRestoringDraft, setIsRestoringDraft] = useState(false);
 
     const [items, setItems] = useState([
         { 
@@ -66,6 +68,8 @@ const AddPO = () => {
 
     const [tableSearch, setTableSearch] = useState('');
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
+    const [activeRowIndex, setActiveRowIndex] = useState(null);
+    const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
     const [products, setProducts] = useState([]);
     
     const [showValidationPopup, setShowValidationPopup] = useState(false);
@@ -80,7 +84,7 @@ const AddPO = () => {
 
                 // Recover Draft if exists
                 const draftStr = sessionStorage.getItem('add_po_draft');
-                if (draftStr && !isEditMode) {
+                if (draftStr) {
                     try {
                         const draft = JSON.parse(draftStr);
                         let restoredFormData = draft.formData;
@@ -144,10 +148,11 @@ const AddPO = () => {
                         
                         setFormData(restoredFormData);
                         setItems(restoredItems);
+                        setSupplierSearch(restoredFormData.supplier_name || '');
+                        setIsRestoringDraft(true);
                     } catch (e) {
                         console.error('Draft parsing failed', e);
                     } finally {
-                        sessionStorage.removeItem('add_po_draft');
                         sessionStorage.removeItem('add_po_supplier_ids');
                         sessionStorage.removeItem('add_po_product_ids');
                     }
@@ -162,25 +167,27 @@ const AddPO = () => {
     // Fetch Products (Requirement 6: Search from Product Master)
     useEffect(() => {
         const fetchProducts = async () => {
-            if (!tableSearch.trim()) {
-                setProducts([]);
-                return;
-            }
             try {
-                const response = await productService.getProducts({ search: tableSearch });
-                // Product API returns: { products: [...], total: ... }
+                // If tableSearch is empty, fetch a default list of 20 products
+                const response = await productService.getProducts({ 
+                    search: tableSearch.trim() || '',
+                    limit: tableSearch.trim() ? 50 : 20 
+                });
                 setProducts(response.products || []); 
             } catch (error) {
                 console.error("Error fetching products:", error);
             }
         };
-        const timer = setTimeout(fetchProducts, 300);
+        const timer = setTimeout(fetchProducts, 150); // Faster response for better UX
         return () => clearTimeout(timer);
     }, [tableSearch]);
 
     // Initial load for Edit Mode or PO Number generation
     useEffect(() => {
         const loadInitialData = async () => {
+            // Skip initial data load if we've already restored a draft (from Preview or Master redirect)
+            if (isRestoringDraft) return;
+
             if (isEditMode) {
                 try {
                     const poToEdit = await purchaseOrderService.getPurchaseOrderById(id);
@@ -231,7 +238,15 @@ const AddPO = () => {
             }
         };
         loadInitialData();
-    }, [id, isEditMode]);
+    }, [id, isEditMode, isRestoringDraft]);
+
+    // BEST PRACTICE: Auto-save draft as user types (Requirement 6)
+    useEffect(() => {
+        const hasData = formData.supplier_id || items.some(i => i.product_name);
+        if (hasData) {
+            sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
+        }
+    }, [formData, items]);
 
     // Filtered suppliers for dropdown
     const filteredSuppliers = useMemo(() => {
@@ -240,10 +255,28 @@ const AddPO = () => {
         );
     }, [supplierSearch, suppliers]);
 
-    // Filter products for the main search bar
+    // Filter products for the main search bar - remove already added products
+    // Filter products for the search suggestions - remove already added products and filter by search term
     const filteredProducts = useMemo(() => {
-        return products; // Now fetched via API based on search term directly
-    }, [products]);
+        const addedProductIds = items.map(item => item.product_id).filter(id => id);
+        const searchLower = tableSearch.toLowerCase();
+        
+        return (products || []).filter(p => {
+            // Already added products should NOT be visible
+            if (addedProductIds.includes(p.id)) return false;
+            
+            // If search is empty, show all available (max 50)
+            if (!tableSearch) return true;
+            
+            // Search across multiple fields
+            return (
+                p.product_name?.toLowerCase().includes(searchLower) ||
+                p.product_code?.toLowerCase().includes(searchLower) ||
+                p.hsn_code?.toLowerCase().includes(searchLower) ||
+                p.category?.name?.toLowerCase().includes(searchLower)
+            );
+        });
+    }, [products, items, tableSearch]);
 
     const handleSelectSupplier = async (supplier) => {
         try {
@@ -275,8 +308,7 @@ const AddPO = () => {
         setIsSupplierDropdownOpen(false);
     };
 
-    const handleQuickAddProduct = (product) => {
-        // Requirement 7: Product Code, Product, UOM, hsn code auto field
+    const handleQuickAddProduct = (product, targetIndex = null) => {
         const newItem = {
             id: Date.now(), 
             product_id: product.id,
@@ -295,15 +327,79 @@ const AddPO = () => {
             description: product.description || product.printDescription || '' 
         };
         
-        // Remove empty row if it's the only one
-        if (items.length === 1 && !items[0].product_name) {
-            setItems([newItem]);
+        let updatedItems = [...items];
+        const finalTargetIndex = targetIndex !== null ? targetIndex : updatedItems.findIndex(i => !i.product_name);
+        
+        if (finalTargetIndex !== -1) {
+            updatedItems[finalTargetIndex] = newItem;
         } else {
-            setItems([...items, newItem]);
+            updatedItems = [...updatedItems, newItem];
         }
         
+        // AUTO-CREATE EMPTY ROW: Ensure there is always exactly one empty row at the end
+        const hasEmptyRow = updatedItems.some(i => !i.product_name);
+        if (!hasEmptyRow) {
+            updatedItems.push({
+                id: Date.now() + 1, 
+                product_id: null,
+                product_code: '', 
+                product_name: '', 
+                quantity: 0, 
+                rate: 0, 
+                uom: '', 
+                discount_amount: 0, 
+                discount_percent: 0, 
+                hsn: '', 
+                tax_percent: 0, 
+                before_tax: 0, 
+                tax_amount: 0, 
+                total_amount: 0,
+                description: '' 
+            });
+        }
+        
+        setItems(updatedItems);
         setTableSearch('');
         setIsProductSearchOpen(false);
+        setActiveRowIndex(null);
+        setSelectedSuggestionIndex(0);
+
+        // Move focus to Quantity field
+        setTimeout(() => {
+            const qtyInput = document.getElementById(`qty-${finalTargetIndex}`);
+            if (qtyInput) qtyInput.focus();
+        }, 100);
+    };
+
+    const handleSearchKeyDown = (e, index) => {
+        if (!isProductSearchOpen || activeRowIndex !== index) return;
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                setSelectedSuggestionIndex(prev => 
+                    prev < filteredProducts.length - 1 ? prev + 1 : prev
+                );
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : 0);
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (filteredProducts[selectedSuggestionIndex]) {
+                    handleQuickAddProduct(filteredProducts[selectedSuggestionIndex], index);
+                }
+                break;
+            case 'Tab':
+                if (filteredProducts[selectedSuggestionIndex]) {
+                    handleQuickAddProduct(filteredProducts[selectedSuggestionIndex], index);
+                }
+                break;
+            case 'Escape':
+                setIsProductSearchOpen(false);
+                break;
+        }
     };
 
     const handleItemChange = (index, field, value) => {
@@ -363,6 +459,18 @@ const AddPO = () => {
 
         newItems[index] = item;
         setItems(newItems);
+    };
+    
+    // Extracted navigation logic for adding new products while preserving PO draft
+    const handleAddNewProduct = async () => {
+        sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
+        try {
+            const res = await productService.getProducts({ limit: 100 });
+            sessionStorage.setItem('add_po_product_ids', JSON.stringify((res.products || []).map(p => p.id)));
+        } catch (e) {
+            sessionStorage.setItem('add_po_product_ids', '[]');
+        }
+        navigate(`/seller/masters/product-master/add?redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
     };
 
     // Validation Function
@@ -443,6 +551,8 @@ const AddPO = () => {
                 await purchaseOrderService.createPurchaseOrder(poPayload);
                 toast.success("Purchase Order saved successfully");
             }
+            // Clear draft only on successful submission
+            sessionStorage.removeItem('add_po_draft');
             navigate(ROUTES.PURCHASE_ORDER);
         } catch (error) {
             console.error("Error saving PO:", error);
@@ -518,6 +628,8 @@ const AddPO = () => {
                 };
             })
         };
+        // Save draft to session storage before navigating to preview
+        sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
         navigate(ROUTES.PURCHASE_ORDER_PRINT, { state: { poData: fullPOData } });
     };
 
@@ -606,7 +718,7 @@ const AddPO = () => {
                         </div>
 
                         <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">Credit Days</label>
+                            <label className="text-[14px] font-semibold text-[#374151]">Credit Days <span className="text-red-500">*</span></label>
                             <input
                                 type="number"
                                 placeholder="Auto-filled from supplier"
@@ -685,65 +797,57 @@ const AddPO = () => {
                 {/* Table Section */}
                 <div className="p-4 sm:p-6 md:p-8 border-b border-[#F3F4F6] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1">
-                        <div className="relative flex-1 max-w-full md:max-w-[320px]">
+                        <div className="relative flex-1 max-w-full md:max-w-[550px]">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" size={18} />
                             <input
                                 type="text"
                                 placeholder="Search By Anything..."
                                 value={tableSearch}
-                                onFocus={() => setIsProductSearchOpen(true)}
+                                onFocus={() => {
+                                    setActiveRowIndex(null); // Ensure top search is active
+                                    setIsProductSearchOpen(true);
+                                }}
                                 onChange={(e) => {
                                     setTableSearch(e.target.value);
+                                    setActiveRowIndex(null);
                                     setIsProductSearchOpen(true);
                                 }}
                                 className={`w-full h-[44px] bg-white border rounded-[12px] pl-11 pr-4 text-[14px] outline-none focus:ring-1 transition-all placeholder:text-[#9CA3AF] shadow-sm font-outfit ${errors.items ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
                             />
                             {errors.items && <p className="text-red-500 text-[12px] mt-1 font-medium italic font-outfit">*Please add at least one product</p>}
-                            
-                            {/* Product Search Suggestions Dropdown */}
-                            {isProductSearchOpen && filteredProducts.length > 0 && (
-                                <div className="absolute top-full left-0 w-full sm:w-[500px] mt-2 bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] z-[60] overflow-hidden py-1">
-                                    <div className="hidden sm:flex p-2 bg-gray-50 border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider justify-between">
-                                        <span>Product Details</span>
-                                        <span>Category</span>
-                                    </div>
-                                    <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
-                                        {filteredProducts.map(p => (
-                                            <button 
-                                                key={p.id}
-                                                onClick={() => handleQuickAddProduct(p)}
-                                                className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#073318]/5 transition-all outline-none border-b border-gray-50 last:border-0"
-                                            >
-                                                <div className="flex flex-col items-start gap-0.5 text-left">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-bold text-[#111827] text-[14px]">{p.product_name}</span>
-                                                        <span className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] font-bold text-gray-500 uppercase">{p.product_code}</span>
-                                                    </div>
-                                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-gray-400">
-                                                        <span>HSN: <span className="text-gray-600 font-medium">{p.hsn_code || p.hsn}</span></span>
-                                                        <span>Tax: <span className="text-gray-600 font-medium">{p.tax_rate || p.tax}%</span></span>
-                                                        <span>Rate: <span className="text-[#073318] font-bold">₹{p.purchaseRate || p.rate || 0}</span></span>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right shrink-0 hidden sm:block">
-                                                    <span className="text-[12px] font-semibold text-[#6B7280]">{p.category?.name || p.category}</span>
-                                                    <div className="text-[10px] text-gray-400 font-medium">{p.sub_category?.name || p.sub_category}</div>
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div className="p-3 bg-gray-50 border-t border-[#F3F4F6]">
+                                                  {/* Global Product Search Suggestions Dropdown - Only when NOT editing a specific row */}
+                            {isProductSearchOpen && activeRowIndex === null && (
+                                <div className="absolute top-full left-0 w-full sm:w-[550px] mt-2 bg-white border border-gray-100 rounded-[16px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] z-[60] overflow-hidden py-0 animate-in fade-in slide-in-from-top-2 duration-300 font-outfit border-t-4 border-t-emerald-800">
+                                            <div className="max-h-[320px] overflow-y-auto custom-scrollbar">
+                                                {filteredProducts.map(p => (
+                                                    <button 
+                                                        key={p.id}
+                                                        onClick={() => handleQuickAddProduct(p)}
+                                                        className="w-full px-5 py-4 flex items-center justify-between hover:bg-emerald-50/80 transition-all text-left outline-none border-b border-gray-50 last:border-0 group"
+                                                    >
+                                                        <div className="flex flex-col gap-1.5">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold text-[#111827] text-[15px] group-hover:text-emerald-900 transition-colors">{p.product_name}</span>
+                                                                <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px] font-extrabold text-gray-500 tracking-wider">#{p.product_code}</span>
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-gray-400">
+                                                                <span className="flex items-center gap-1">HSN: <span className="text-gray-700 font-bold">{p.hsn_code || p.hsn || 'N/A'}</span></span>
+                                                                <span className="flex items-center gap-1">Tax: <span className="text-gray-700 font-bold">{p.tax_rate || p.tax || 0}%</span></span>
+                                                                <span className="flex items-center gap-1">Price: <span className="text-emerald-700 font-black">₹{p.purchaseRate || p.rate || 0}</span></span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex flex-col items-end gap-1 shrink-0">
+                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter">{p.category?.name || p.category || 'NO CATEGORY'}</span>
+                                                            <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
+                                                                <Plus size={18} />
+                                                            </div>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                    <div className="p-3 bg-gray-50/50 border-t border-[#F3F4F6]">
                                         <button 
-                                            onClick={async () => {
-                                                sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
-                                                try {
-                                                    const res = await productService.getProducts({ limit: 100 });
-                                                    sessionStorage.setItem('add_po_product_ids', JSON.stringify((res.products || []).map(p => p.id)));
-                                                } catch (e) {
-                                                    sessionStorage.setItem('add_po_product_ids', '[]');
-                                                }
-                                                navigate(`/seller/masters/product-master/add?redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
-                                            }}
+                                            onClick={handleAddNewProduct}
                                             className="w-full h-[40px] bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-sm font-outfit"
                                         >
                                             <Plus size={16} className="group-hover:scale-110 transition-transform" /> 
@@ -777,7 +881,7 @@ const AddPO = () => {
                     }
                 `}</style>
 
-                <div className="overflow-x-auto custom-po-scrollbar">
+                <div className="overflow-x-auto custom-po-scrollbar min-h-[500px] bg-white pb-[300px]">
                     <table className="w-full min-w-[1800px] border-collapse bg-white">
                         <thead>
                             <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
@@ -806,35 +910,57 @@ const AddPO = () => {
                                 <th className="px-4 py-4 w-[80px] text-center text-[13px] font-semibold text-[#4B5563] border-l border-[#F3F4F6]">Action</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {items.map((item, index) => (
-                                <tr key={item.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-colors group">
-                                    <td className="px-4 py-3 text-center text-[#6B7280] text-[13px]">{index + 1}</td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input 
-                                            type="text" 
-                                            readOnly
-                                            value={item.product_code}
-                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none cursor-not-allowed"
-                                        />
-                                    </td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input 
-                                            type="text" 
-                                            readOnly
-                                            value={item.product_name}
-                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#111827] outline-none cursor-not-allowed"
-                                        />
-                                    </td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input 
-                                            type="number" 
-                                            min="0"
-                                            value={item.quantity || ''}
-                                            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                            className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] outline-none focus:ring-1 text-right transition-all shadow-sm ${errors.itemErrors?.[index]?.quantity ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
-                                        />
-                                    </td>
+                                <tbody>
+                                    {items.map((item, index) => (
+                                        <React.Fragment key={item.id}>
+                                        <tr className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-colors group">
+                                            <td className="px-4 py-3 text-center text-[#6B7280] text-[13px]">{index + 1}</td>
+                                            <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                                <input 
+                                                    type="text" 
+                                                    value={item.product_code}
+                                                    onKeyDown={(e) => handleSearchKeyDown(e, index)}
+                                                    onChange={(e) => {
+                                                        setTableSearch(e.target.value);
+                                                        setActiveRowIndex(index);
+                                                        setIsProductSearchOpen(true);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveRowIndex(index);
+                                                        setIsProductSearchOpen(true);
+                                                    }}
+                                                    placeholder="Code"
+                                                    className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none hover:bg-gray-50 rounded-md transition-all cursor-pointer font-bold"
+                                                />
+                                            </td>
+                                            <td className="px-2 py-2 border-l border-[#F3F4F6] relative">
+                                                <input 
+                                                    type="text" 
+                                                    value={item.product_name || (activeRowIndex === index ? tableSearch : '')}
+                                                    onKeyDown={(e) => handleSearchKeyDown(e, index)}
+                                                    onChange={(e) => {
+                                                        setTableSearch(e.target.value);
+                                                        setActiveRowIndex(index);
+                                                        setIsProductSearchOpen(true);
+                                                    }}
+                                                    onFocus={() => {
+                                                        setActiveRowIndex(index);
+                                                        setIsProductSearchOpen(true);
+                                                    }}
+                                                    placeholder={item.product_name ? "" : "Select product..."}
+                                                    className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#111827] outline-none hover:bg-gray-50 rounded-md transition-all cursor-pointer ${!item.product_name ? 'italic text-gray-400 font-normal' : ''}`}
+                                                />
+                                            </td>
+                                            <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                                <input 
+                                                    id={`qty-${index}`}
+                                                    type="number" 
+                                                    min="0"
+                                                    value={item.quantity || ''}
+                                                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                                                    className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] outline-none focus:ring-1 text-right transition-all shadow-sm ${errors.itemErrors?.[index]?.quantity ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
+                                                />
+                                            </td>
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input 
                                             type="number" 
@@ -847,9 +973,14 @@ const AddPO = () => {
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input 
                                             type="text" 
-                                            readOnly
                                             value={item.uom}
-                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] text-center outline-none cursor-not-allowed"
+                                            readOnly={!!item.product_name}
+                                            onKeyDown={(e) => handleSearchKeyDown(e, index)}
+                                            onFocus={() => {
+                                                setActiveRowIndex(index);
+                                                setIsProductSearchOpen(true);
+                                            }}
+                                            className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] text-center outline-none font-medium ${!item.product_name ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed'}`}
                                         />
                                     </td>
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
@@ -879,17 +1010,28 @@ const AddPO = () => {
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input 
                                             type="text" 
-                                            readOnly
                                             value={item.hsn}
-                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none cursor-not-allowed"
+                                            readOnly={!!item.product_name}
+                                            onKeyDown={(e) => handleSearchKeyDown(e, index)}
+                                            onFocus={() => {
+                                                setActiveRowIndex(index);
+                                                setIsProductSearchOpen(true);
+                                            }}
+                                            className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none font-medium ${!item.product_name ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed'}`}
+                                            placeholder="HSN"
                                         />
                                     </td>
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input 
-                                            type="number" 
-                                            readOnly
-                                            value={item.tax_percent || ''}
-                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-right text-[#6B7280] outline-none cursor-not-allowed"
+                                            type="text" 
+                                            value={item.tax_percent ? `${item.tax_percent}%` : ''}
+                                            readOnly={!!item.product_name}
+                                            onKeyDown={(e) => handleSearchKeyDown(e, index)}
+                                            onFocus={() => {
+                                                setActiveRowIndex(index);
+                                                setIsProductSearchOpen(true);
+                                            }}
+                                            className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-right outline-none font-bold text-[#073318] ${!item.product_name ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed'}`}
                                         />
                                     </td>
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
@@ -925,15 +1067,104 @@ const AddPO = () => {
                                             placeholder="Description"
                                         />
                                     </td>
-                                    <td className="px-2 py-2 text-center border-l border-[#F3F4F6]">
-                                        <button 
-                                            onClick={() => removeItem(index)}
-                                            className="p-1.5 text-[#9CA3AF] hover:text-[#DC2626] hover:bg-red-50 rounded-lg transition-all"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </td>
-                                </tr>
+                                                <td className="px-2 py-2 border-l border-[#F3F4F6] text-center">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const newItems = items.filter((_, i) => i !== index);
+                                                            if (newItems.length === 0) {
+                                                                newItems.push({
+                                                                    id: Date.now(), product_id: null, product_code: '', product_name: '', 
+                                                                    quantity: 0, rate: 0, uom: '', discount_amount: 0, discount_percent: 0, 
+                                                                    hsn: '', tax_percent: 0, before_tax: 0, tax_amount: 0, total_amount: 0, description: ''
+                                                                });
+                                                            }
+                                                            setItems(newItems);
+                                                        }}
+                                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                    >
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+
+                                            {/* 🔥 ERP-Style Inline Product Selection */}
+                                            {isProductSearchOpen && activeRowIndex === index && (
+                                                <>
+                                                    {filteredProducts.slice(0, 10).map((p, pIndex) => (
+                                                        <tr 
+                                                            key={p.id}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleQuickAddProduct(p, index);
+                                                            }}
+                                                            onMouseEnter={() => setSelectedSuggestionIndex(pIndex)}
+                                                            className={`border-b border-emerald-50 cursor-pointer transition-all duration-200 relative z-[100] ${selectedSuggestionIndex === pIndex ? 'bg-emerald-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.1)]' : 'bg-emerald-50/40 hover:bg-emerald-100/60'}`}
+                                                        >
+                                                            <td className="px-4 py-3 text-center">
+                                                                {selectedSuggestionIndex === pIndex ? (
+                                                                    <div className="flex items-center justify-center">
+                                                                        <div className="w-2.5 h-2.5 bg-white rounded-full ring-4 ring-white/20"></div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="w-1.5 h-1.5 bg-emerald-200 rounded-full mx-auto"></div>
+                                                                )}
+                                                            </td>
+                                                            <td className={`px-4 py-3 border-l border-emerald-100 ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-800'}`}>
+                                                                <span className="font-mono text-[13px] font-black">{p.product_code}</span>
+                                                            </td>
+                                                            <td className={`px-4 py-3 border-l border-emerald-100 ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-900 font-bold'}`}>
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[14px] font-black tracking-tight uppercase">{p.product_name}</span>
+                                                                    <span className={`text-[10px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-600/70'}`}>{p.category?.name || 'STOCK ITEM'}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td colSpan={1} className="px-4 py-3 border-l border-emerald-100 text-center">
+                                                                <div className={`text-[11px] font-black italic uppercase tracking-tighter ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-600/50'}`}>
+                                                                    {selectedSuggestionIndex === pIndex ? 'Hit Enter' : '---'}
+                                                                </div>
+                                                            </td>
+                                                            <td className={`px-4 py-3 border-l border-emerald-100 text-right ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-900 font-black'}`}>
+                                                                ₹{p.purchaseRate || p.rate || 0}
+                                                            </td>
+                                                            <td className={`px-4 py-3 border-l border-emerald-100 text-center ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-800 font-bold'}`}>
+                                                                {p.uom?.unit_name || p.uom || 'NOS'}
+                                                            </td>
+                                                            <td colSpan={2} className={`px-4 py-3 border-l border-emerald-100 text-center italic text-[11px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-400'}`}>
+                                                                Select this item to continue
+                                                            </td>
+                                                            <td className={`px-4 py-3 border-l border-emerald-100 text-center ${selectedSuggestionIndex === pIndex ? 'text-white font-black' : 'text-emerald-900 font-bold'}`}>
+                                                                {p.hsn_code || p.hsn || 'N/A'}
+                                                            </td>
+                                                            <td className={`px-4 py-3 border-l border-emerald-100 text-center ${selectedSuggestionIndex === pIndex ? 'text-white font-black' : 'text-emerald-900 font-bold'}`}>
+                                                                {p.tax_rate || p.tax || 0}%
+                                                            </td>
+                                                            <td colSpan={5} className="px-4 py-8 border-l border-emerald-100">
+                                                                {/* Action cell empty - selection handled by row click */}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+
+                                                    {/* Standardized Add New Product Button */}
+                                                    <tr className="bg-white border-t border-gray-100">
+                                                        <td colSpan={15} className="px-4 py-5 bg-emerald-50/10">
+                                                            <div className="flex justify-center">
+                                                                <button 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleAddNewProduct();
+                                                                    }}
+                                                                    className="h-[42px] px-10 bg-[#073318] text-white text-[13px] font-bold rounded-[10px] hover:bg-[#052611] transition-all flex items-center justify-center gap-3 group shadow-lg shadow-emerald-900/10 font-outfit relative z-[101]"
+                                                                >
+                                                                    <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" strokeWidth={3} /> 
+                                                                    Add New Product
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                </>
+                                            )}
+                                        </React.Fragment>
                             ))}
                         </tbody>
                         <tfoot>
@@ -990,25 +1221,31 @@ const AddPO = () => {
                 </div>
             </div>
 
-            {/* Validation Popup Modal */}
+            {/* Validation Popup Modal - Error Format */}
             {showValidationPopup && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-[16px] shadow-2xl w-full max-w-[400px] overflow-hidden flex flex-col scale-100 animate-in zoom-in-95 duration-200 font-outfit">
-                        <div className="px-6 py-5 border-b border-[#F3F4F6] flex items-center justify-between bg-white">
-                            <h3 className="text-[18px] font-bold text-[#111827]">Missing Required Fields</h3>
-                            <button onClick={() => setShowValidationPopup(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-300" onClick={() => setShowValidationPopup(false)} />
+                    <div className="relative bg-white rounded-[24px] shadow-2xl w-full max-w-[400px] overflow-hidden flex flex-col scale-100 animate-in zoom-in-95 duration-200 font-outfit">
+                        <div className="px-8 py-5 flex items-center justify-between bg-red-600 text-white">
+                            <div className="flex items-center gap-3">
+                                <AlertCircle size={22} className="text-white" />
+                                <h3 className="text-[18px] font-bold tracking-tight">Missing Required Fields</h3>
+                            </div>
+                            <button onClick={() => setShowValidationPopup(false)} className="p-1 hover:bg-white/10 rounded-full transition-colors">
                                 <X size={20} />
                             </button>
                         </div>
-                        <div className="p-6">
-                            <p className="text-[15px] text-[#4B5563]">Please fill all required fields before previewing.</p>
+                        <div className="p-8">
+                            <p className="text-[15px] text-[#4B5563] font-medium leading-relaxed">
+                                Please ensure all mandatory fields (marked with <span className="text-red-500 font-bold">*</span>) are filled correctly before proceeding to preview.
+                            </p>
                         </div>
-                        <div className="px-6 py-4 bg-gray-50 border-t border-[#F3F4F6] flex justify-end">
+                        <div className="px-8 py-5 bg-gray-50 flex justify-end">
                             <button
                                 onClick={() => setShowValidationPopup(false)}
-                                className="px-6 h-[40px] bg-[#073318] text-white rounded-[8px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-sm"
+                                className="px-8 h-[48px] bg-red-600 text-white rounded-[12px] text-[15px] font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200 active:scale-95"
                             >
-                                OK
+                                Got it
                             </button>
                         </div>
                     </div>

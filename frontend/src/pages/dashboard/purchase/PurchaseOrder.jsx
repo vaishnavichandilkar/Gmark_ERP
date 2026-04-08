@@ -10,7 +10,6 @@ import {
   FileText,
   FileSpreadsheet,
   Eye,
-  FileEdit,
   ArrowLeft,
   ArrowRight,
   ChevronDown,
@@ -23,9 +22,6 @@ import {
   XCircle
 } from "lucide-react";
 import toast from 'react-hot-toast';
-import * as XLSX from "xlsx";
-import { jsPDF } from "jspdf";
-import "jspdf-autotable";
 import { ROUTES } from "../../../constants/routes";
 import { useTranslation } from 'react-i18next';
 
@@ -35,30 +31,31 @@ import ScrollableTable from "../../../components/common/ScrollableTable";
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-300" onClick={onCancel} />
+      <div className="relative bg-white rounded-[24px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="p-8 text-center">
           <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <Trash2 size={32} className="text-red-500" />
           </div>
-          <h3 className="text-[20px] font-bold text-[#111827] mb-2 font-outfit">
+          <h3 className="text-[20px] font-bold text-[#111827] mb-2 font-outfit uppercase tracking-tight">
             Delete Purchase Order
           </h3>
-          <p className="text-[#6B7280] text-[15px] font-medium mb-8">
+          <p className="text-[#6B7280] text-[15px] font-medium mb-8 font-outfit">
             Are you sure you want to delete this purchase order? This action will mark the status as deleted.
           </p>
           <div className="flex gap-4">
             <button
               onClick={onCancel}
               disabled={isDeleting}
-              className="flex-1 h-[52px] rounded-[14px] border border-[#E5E7EB] text-[15px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all font-outfit"
+              className="flex-1 h-[52px] rounded-[14px] border border-[#E5E7EB] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all font-outfit uppercase tracking-widest"
             >
               No, Keep it
             </button>
             <button
               onClick={onConfirm}
               disabled={isDeleting}
-              className="flex-1 h-[52px] rounded-[14px] bg-red-600 hover:bg-red-700 text-white text-[15px] font-bold transition-all shadow-lg shadow-red-200 flex items-center justify-center gap-2 font-outfit"
+              className="flex-1 h-[52px] rounded-[14px] bg-red-600 hover:bg-red-700 text-white text-[14px] font-bold transition-all shadow-lg shadow-red-200 flex items-center justify-center gap-2 font-outfit uppercase tracking-widest"
             >
               {isDeleting ? (
                 <RefreshCw size={18} className="animate-spin" />
@@ -74,8 +71,11 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
 };
 
 const PurchaseOrder = () => {
+  const statusTabs = ["All", "Pending", "Expiring Soon", "Expired", "Completed", "Deleted"];
   const { t } = useTranslation(['modules', 'common']);
   const navigate = useNavigate();
+  
+  // States
   const [searchQuery, setSearchQuery] = useState("");
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -86,25 +86,28 @@ const PurchaseOrder = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [poToDelete, setPoToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const dropdownRefs = useRef({});
-  const exportRef = useRef(null);
-
-  // Pagination state
-  const [itemsPerPage, setItemsPerPage] = useState(5);
-  const [currentPage, setCurrentPage] = useState(1);
-
-  // Current date
-  const currentDate = new Date();
-
-  // Local Storage Data Retrieval
+  const [isLoading, setIsLoading] = useState(true);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [totalItemsCount, setTotalItemsCount] = useState(0);
   const [activeTab, setActiveTab] = useState("All");
 
-  const statusTabs = ["All", "Pending", "Expiring Soon", "Expired", "Completed", "Deleted"];
-  const [isLoading, setIsLoading] = useState(true);
+  // Filter State
+  const defaultFilters = { status: "All" };
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [filterInputs, setFilterInputs] = useState(defaultFilters);
+  const [appliedFilters, setAppliedFilters] = useState(defaultFilters);
+  const isFilterApplied = appliedFilters.status !== "All";
 
-  // Helper date formatting
+  // Pagination State
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Refs
+  const dropdownRefs = useRef({});
+  const exportRef = useRef(null);
+  const filterRef = useRef(null);
+
+  // Helper: Date Format
   const formatDate = (dateStr) => {
     if (!dateStr) return "-";
     const date = new Date(dateStr);
@@ -114,7 +117,20 @@ const PurchaseOrder = () => {
     return `${d}-${m}-${y}`;
   };
 
-  // Fetch logic from API
+  // Helper: Date Parse
+  const parseDate = (dateStr) => {
+    if (!dateStr) return new Date();
+    if (dateStr.includes("T")) return new Date(dateStr);
+    const parts = dateStr.split("-");
+    if (parts.length === 3) {
+      const [yearOrDay, month, dayOrYear] = parts;
+      if (yearOrDay.length === 4) return new Date(dateStr);
+      return new Date(Number(dayOrYear), Number(month) - 1, Number(yearOrDay));
+    }
+    return new Date(dateStr);
+  };
+
+  // Logic: Fetch Data
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -124,14 +140,17 @@ const PurchaseOrder = () => {
           limit: itemsPerPage,
           search: searchQuery,
         };
-
-        // Map tabs to backend statuses if needed
-        if (activeTab !== "All") {
-          if (activeTab === "Pending") params.filter = "pending";
-          if (activeTab === "Completed") params.filter = "completed";
-          if (activeTab === "Deleted") params.filter = "deleted";
-          if (activeTab === "Expiring Soon") params.filter = "expiring";
-          if (activeTab === "Expired") params.filter = "expired";
+        
+        const statusFilter = appliedFilters.status;
+        if (statusFilter !== "All") {
+          const statusMap = {
+            "Pending": "pending",
+            "Completed": "completed",
+            "Deleted": "deleted",
+            "Expiring Soon": "expiring",
+            "Expired": "expired"
+          };
+          params.filter = statusMap[statusFilter];
         }
 
         const response = await purchaseOrderService.getPurchaseOrders(params);
@@ -146,30 +165,28 @@ const PurchaseOrder = () => {
     };
 
     fetchData();
-  }, [currentPage, itemsPerPage, searchQuery, isRefreshing]);
+  }, [currentPage, itemsPerPage, searchQuery, appliedFilters, isRefreshing]);
 
-  // Helper date parsing
-  const parseDate = (dateStr) => {
-    if (!dateStr) return new Date();
-    if (dateStr.includes("T")) {
-      return new Date(dateStr);
-    }
-    const parts = dateStr.split("-");
-    if (parts.length === 3) {
-      const [yearOrDay, month, dayOrYear] = parts;
-      if (yearOrDay.length === 4) {
-        return new Date(dateStr);
+  // Logic: Click Outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (exportRef.current && !exportRef.current.contains(event.target)) {
+        setIsExportOpen(false);
       }
-      return new Date(Number(dayOrYear), Number(month) - 1, Number(yearOrDay));
-    }
-    return new Date(dateStr);
-  };
+      if (activeDropdown !== null) {
+        const ref = dropdownRefs.current[activeDropdown];
+        if (ref && !ref.contains(event.target)) {
+          setActiveDropdown(null);
+        }
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [activeDropdown]);
 
-  /**
-   * Filter Logic
-   */
+  // Memoized: Computed Data
   const filteredData = useMemo(() => {
-    const mapped = purchaseOrders.map(po => {
+    return purchaseOrders.map(po => {
       const status = po.status;
       const expDate = parseDate(po.expiryDate);
       const now = new Date();
@@ -194,40 +211,16 @@ const PurchaseOrder = () => {
 
       return { ...po, computedStatusLabel, bgClass };
     });
-
-    return mapped;
   }, [purchaseOrders]);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (exportRef.current && !exportRef.current.contains(event.target)) {
-        setIsExportOpen(false);
-      }
-      if (activeDropdown !== null) {
-        const ref = dropdownRefs.current[activeDropdown];
-        if (ref && !ref.contains(event.target)) {
-          setActiveDropdown(null);
-        }
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [activeDropdown]);
+  const totalPages = Math.ceil(totalItemsCount / itemsPerPage);
+  const currentItems = filteredData;
 
-  // Derived pagination data
-  // Derived pagination data
-  const totalItems = totalItemsCount;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentItems = filteredData; // API handles pagination slice
-
+  // Handlers
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
 
-  /**
-   * Action: Refresh (Quick + Toast)
-   */
   const handleRefresh = () => {
     setIsRefreshing(true);
     setTimeout(() => {
@@ -236,24 +229,22 @@ const PurchaseOrder = () => {
     }, 400);
   };
 
+  const handleApplyFilter = () => {
+    setAppliedFilters(filterInputs);
+    setIsFilterOpen(false);
+    setCurrentPage(1);
+  };
+
+  const handleClearFilter = () => {
+    setFilterInputs(defaultFilters);
+    setAppliedFilters(defaultFilters);
+    setIsFilterOpen(false);
+    setCurrentPage(1);
+  };
+
   const handleDeletePO = (id) => {
     setPoToDelete(id);
     setIsDeleteModalOpen(true);
-  };
-
-  const handlePrint = async (poData) => {
-    try {
-      setIsRefreshing(true);
-      // We already have some data in poData, but it's better to fetch full details if items are missing
-      // However, if the row already has what we need or we can fetch it:
-      const fullPo = await purchaseOrderService.getPurchaseOrderById(poData.id);
-      navigate(ROUTES.PURCHASE_ORDER_PRINT, { state: { poData: fullPo } });
-    } catch (error) {
-      console.error("Print error:", error);
-      toast.error("Failed to load print preview");
-    } finally {
-      setIsRefreshing(false);
-    }
   };
 
   const confirmDelete = async () => {
@@ -264,23 +255,28 @@ const PurchaseOrder = () => {
       toast.success("Purchase order deleted successfully");
       setIsDeleteModalOpen(false);
       setPoToDelete(null);
-      // Refresh items:
-      setIsRefreshing(prev => !prev); // Toggle to trigger useEffect
+      setIsRefreshing(prev => !prev);
     } catch (error) {
-      console.error("Error deleting PO:", error);
-      const errorMsg = error.response?.data?.message || "Failed to delete Purchase Order";
-      toast.error(errorMsg);
+      console.error("Delete error:", error);
+      toast.error(error.response?.data?.message || "Failed to delete PO");
     } finally {
       setIsDeleting(false);
     }
   };
 
-  /**
-   * Export Logic
-   */
-  /**
-   * Universal Export Handler (Backend Driven)
-   */
+  const handlePrint = async (poData) => {
+    try {
+      setIsRefreshing(true);
+      const fullPo = await purchaseOrderService.getPurchaseOrderById(poData.id);
+      navigate(ROUTES.PURCHASE_ORDER_PRINT, { state: { poData: fullPo } });
+    } catch (error) {
+      console.error("Print error:", error);
+      toast.error("Failed to load print preview");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const handleExport = async (format) => {
     try {
       if (purchaseOrders.length === 0) {
@@ -288,97 +284,52 @@ const PurchaseOrder = () => {
         setIsExportOpen(false);
         return;
       }
-
       setIsExportOpen(false);
       setIsRefreshing(true);
-
       const params = {
         format,
-        filter: activeTab === "All" ? "all" : activeTab.toLowerCase(),
+        filter: appliedFilters.status === "All" ? "all" : appliedFilters.status.toLowerCase(),
         search: searchQuery
       };
-
       const response = await purchaseOrderService.exportPurchaseOrders(params);
-
-      // Trigger download
-
-
       if (response && response.data) {
-        // Axios with responseType: 'blob' returns raw blob in response.data
-        const blob = response.data;
-        if (!blob || blob.size === 0) {
-          throw new Error("Received empty export file.");
-        }
-
-        const url = window.URL.createObjectURL(blob);
+        const url = window.URL.createObjectURL(response.data);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `purchase_orders_${Date.now()}.${format === 'xlsx' ? 'xlsx' : 'pdf'}`);
+        link.setAttribute('download', `purchase_orders.${format}`);
         document.body.appendChild(link);
         link.click();
-
-        // Cleanup
         setTimeout(() => {
           document.body.removeChild(link);
           window.URL.revokeObjectURL(url);
         }, 100);
-
         toast.success(`Exported to ${format.toUpperCase()} successfully!`);
-      } else {
-        throw new Error("Invalid response from server.");
       }
     } catch (error) {
       console.error("Export error:", error);
-      let errorMessage = "Export failed. Please try again.";
-
-      // If error is from axios and we have a response
-      if (error.response && error.response.data instanceof Blob) {
-        try {
-          const text = await error.response.data.text();
-          const errorData = JSON.parse(text);
-          errorMessage = errorData.message || errorMessage;
-        } catch (e) { }
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
-      toast.error(errorMessage);
-
+      toast.error("Export failed. Please try again.");
     } finally {
       setIsRefreshing(false);
     }
   };
 
-  const handleExportPDF = () => handleExport('pdf');
-  const handleExportExcel = () => handleExport('xlsx');
-
   const handleDownloadSample = async () => {
     try {
       const response = await purchaseOrderService.downloadSample();
-
-      // Axios with responseType: 'blob' returns raw blob in response.data
-      const blob = response.data;
-      if (!blob || blob.size === 0) {
-        throw new Error("Received empty sample file.");
-      }
-
-      const url = window.URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'PO_Import_Sample.xlsx');
+      link.setAttribute('download', 'PO_Sample.xlsx');
       document.body.appendChild(link);
       link.click();
-
-      // Cleanup
       setTimeout(() => {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
       }, 100);
-
-      toast.success("Sample file downloaded successfully!");
+      toast.success("Sample file downloaded!");
     } catch (error) {
-      console.error("Error downloading sample:", error);
-      toast.error(error.response?.data?.message || "Error downloading sample file. Please try again.");
+      console.error("Download error:", error);
+      toast.error("Error downloading sample file.");
     }
   };
 
@@ -392,462 +343,193 @@ const PurchaseOrder = () => {
       setIsImportModalOpen(false);
       setSelectedFile(null);
       toast.success("Data imported successfully");
-      // Trigger data refresh from backend
-      // fetchData will run because isRefreshing changes or by directly calling it if needed.
-      // Actually handleRefresh simulates a small delay then calls it? No it just sets isRefreshing.
-      // I'll call handleRefresh.
       handleRefresh();
     } catch (error) {
-      console.error("Error importing PO:", error);
-      toast.error(error.response?.data?.message || "Import failed. Please verify your columns.");
+      console.error("Import error:", error);
+      toast.error(error.response?.data?.message || "Import failed");
     } finally {
       setIsRefreshing(false);
     }
   };
 
-
   return (
     <div className="flex flex-col w-full relative">
-
-
-      {/* Title Section */}
-      <div className="flex flex-col md:flex-row gap-4 mb-6 md:mb-8 justify-between items-center md:items-center">
-        <div className="hidden md:flex flex-col gap-1">
-          <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">
-            {t('modules:purchase_order', 'Purchase Order')}
-          </h1>
-          {/* <p className="text-[#6B7280] text-[14px] md:text-[15px]">
-                {t('modules:purchase_order_desc', 'View, verify, and monitor all purchase orders, supplier invoices, and stock procurement activities.')}
-              </p> */}
-        </div>
+      {/* Title & Action Bar */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6 md:mb-8 justify-between items-center font-outfit uppercase">
+        <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">{t('modules:purchase_order', 'Purchase Order')}</h1>
         <button
           onClick={() => navigate('/seller/purchase/order/add')}
-          className="w-[358px] md:w-auto px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 flex-shrink-0 mx-auto md:mx-0"
+          className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 duration-200"
         >
-          <Plus size={18} />
-          {t('modules:add_po', 'Add PO')}
+          <Plus size={18} /> {t('modules:add_po', 'Add PO')}
         </button>
       </div>
 
-      {/* Sub-Tabs */}
-      <div className="flex gap-8 border-b border-[#E5E7EB] mb-8 overflow-x-auto no-scrollbar scrollbar-hide md:justify-center">
-        {statusTabs.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => {
-              setActiveTab(tab);
-              setCurrentPage(1);
-            }}
-            className={`pb-4 text-[14px] font-semibold transition-all duration-200 relative whitespace-nowrap
-              ${activeTab === tab
-                ? 'text-[#073318] after:absolute after:bottom-[-1px] after:left-0 after:w-full after:h-[2px] after:bg-[#073318]'
-                : 'text-[#6B7280] hover:text-[#111827]'}`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-      {/* Table Area */}
-      <div className="flex flex-col bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] w-full overflow-hidden mb-8">
-        {/* Action Bar - Mobile Optimized */}
-        <div className="flex flex-col items-stretch p-4 md:p-6 border-b border-[#F3F4F6] bg-white gap-4">
-          {/* Desktop View Action Bar */}
-          <div className="hidden md:flex flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-1">
-              <div className="relative flex-1 max-w-[320px]">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder={t('common:search_by_anything', 'Search By Anything...')}
-                  value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all placeholder:text-gray-400 shadow-sm"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={handleRefresh}
-                className={`flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] hover:bg-gray-50 bg-white shadow-sm transition-all flex-shrink-0 ${isRefreshing ? 'animate-spin border-[#073318] text-[#073318]' : ''}`}
-                disabled={isRefreshing}
-                title="Refresh"
-              >
-                <RefreshCw size={18} className={isRefreshing ? "text-[#073318]" : "text-gray-400"} />
-              </button>
+      {/* Main Card */}
+      <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden mb-8 font-outfit">
+        {/* Action Bar */}
+        <div className="p-4 md:p-6 border-b border-[#F3F4F6] flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="relative flex-1 max-w-[320px]">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder={t('common:search_by_anything', 'Search By Anything...')}
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 font-bold"
+              />
+              {searchQuery && <X size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer" onClick={() => setSearchQuery("")} />}
             </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setIsImportModalOpen(true)}
-                className="flex items-center justify-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 shadow-sm transition-all"
-              >
-                <Upload size={18} className="text-gray-400" />
-                {t('common:import', 'Import')}
-              </button>
-
-              <div className="relative" ref={exportRef}>
-                <button
-                  onClick={() => setIsExportOpen(!isExportOpen)}
-                  className={`flex items-center justify-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 shadow-sm transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : ''}`}
-                >
-                  <Download size={18} className="text-gray-400" />
-                  {t('common:export', 'Export')}
-                </button>
-                {isExportOpen && (
-                  <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <button
-                      onClick={handleExportPDF}
-                      className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors"
-                    >
-                      <FileText size={18} className="text-red-500" /> {t('common:pdf', 'PDF')}
-                    </button>
-                    <button
-                      onClick={handleExportExcel}
-                      className="w-full px-4 py-2.5 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors"
-                    >
-                      <FileSpreadsheet size={18} className="text-green-600" /> {t('common:excel', 'Excel')}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+            <button onClick={handleRefresh} className={`w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] flex items-center justify-center hover:bg-gray-50 transition-all ${isRefreshing ? 'animate-spin border-[#073318]' : ''}`}>
+              <RefreshCw size={18} className={isRefreshing ? "text-[#073318]" : "text-gray-400"} />
+            </button>
+            <button
+              onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
+              className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all uppercase ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-[#E5E7EB] text-[#4B5563]'}`}
+            >
+              <Filter size={18} className={isFilterApplied ? "text-red-500" : "text-gray-400"} />
+              {isFilterApplied ? "Clear" : "Apply Filters"}
+            </button>
           </div>
 
-          {/* Mobile View Action Bar (Standardized Layout) */}
-          <div className="flex md:hidden flex-col gap-3">
-            {/* Single Row: Search and Quick Actions */}
-            <div className="flex items-center gap-2">
-              <div className={`relative transition-all duration-300 ease-in-out ${isSearchFocused || searchQuery ? 'flex-1' : 'w-[42px]'}`}>
-                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${isSearchFocused || searchQuery ? 'text-[#073318]' : 'text-gray-500'}`} size={22} />
-                <input
-                  type="text"
-                  placeholder={isSearchFocused || searchQuery ? "Search orders..." : ""}
-                  value={searchQuery}
-                  onFocus={() => setIsSearchFocused(true)}
-                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  className={`w-full h-[42px] bg-[#F9FAFB] rounded-[10px] pl-10 pr-8 text-[14px] outline-none transition-all duration-300
-                                ${isSearchFocused || searchQuery ? 'border border-[#073318]/20 ring-1 ring-[#073318]/5' : 'border-none bg-transparent cursor-pointer'}`}
-                />
-                {(isSearchFocused || searchQuery) && searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-
-              {(isSearchFocused || searchQuery) && (
-                <button
-                  onClick={() => {
-                    setIsSearchFocused(false);
-                    setSearchQuery("");
-                  }}
-                  className="text-[#073318] text-[14px] font-bold px-1 animate-in fade-in slide-in-from-right-2 duration-200"
-                >
-                  Cancel
-                </button>
-              )}
-
-              {/* Action Icons - Hidden when searching on mobile */}
-              {!isSearchFocused && !searchQuery && (
-                <div className="flex items-center gap-1 ml-auto">
-                  <button
-                    onClick={handleRefresh}
-                    className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
-                  >
-                    <RefreshCw size={22} className={isRefreshing ? 'animate-spin text-[#073318]' : ''} />
-                  </button>
-
-                  <button
-                    onClick={() => setIsImportModalOpen(true)}
-                    className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
-                  >
-                    <Upload size={22} />
-                  </button>
-
-                  <div className="relative mobile-export-trigger px-0">
-                    <button
-                      onClick={() => setIsExportOpen(!isExportOpen)}
-                      className={`w-[42px] h-[42px] flex items-center justify-center transition-all ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}
-                    >
-                      <Download size={22} />
-                    </button>
-                    {isExportOpen && (
-                      <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[100] py-2 overflow-hidden">
-                        <button onClick={handleExportPDF} className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 active:bg-gray-50 border-none bg-transparent">
-                          <FileText size={18} className="text-red-500" /> PDF
-                        </button>
-                        <button onClick={handleExportExcel} className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 active:bg-gray-50 border-none bg-transparent">
-                          <FileSpreadsheet size={18} className="text-green-600" /> Excel
-                        </button>
-                      </div>
-                    )}
-                  </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 uppercase">
+              <Upload size={18} className="text-gray-400" /> Import
+            </button>
+            <div className="relative" ref={exportRef}>
+              <button onClick={() => setIsExportOpen(!isExportOpen)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 uppercase">
+                <Download size={18} className="text-gray-400" /> Export
+              </button>
+              {isExportOpen && (
+                <div className="absolute top-full right-0 mt-2 w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-50 py-2 animate-in slide-in-from-top-2 duration-200 uppercase font-bold">
+                  <button onClick={() => handleExport('pdf')} className="w-full px-5 py-3 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB]"><FileText size={18} className="text-red-500" /> PDF</button>
+                  <button onClick={() => handleExport('xlsx')} className="w-full px-5 py-3 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB]"><FileSpreadsheet size={18} className="text-emerald-600" /> Excel</button>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Table Body */}
-        <ScrollableTable className="w-full min-h-[400px]">
-          <table className="w-full min-w-[1500px] border-collapse text-left">
+        {/* Table */}
+        <ScrollableTable>
+          <table className="w-full min-w-[1500px] border-collapse text-left font-outfit">
             <thead>
-              <tr className="bg-emerald-900 border-b border-emerald-950 text-[15px] font-bold text-white tracking-tight">
-                {[
-                  "Po No", "Supplier Name", "Creation Date", "Expiry Date", "Amount",
-                  "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status"
-                ].map((col) => (
-                  <th key={col} className="px-6 py-5 border-r border-white/50 whitespace-nowrap tracking-tight">
-                    <div className="flex items-center gap-1.5 cursor-pointer hover:text-white/80 transition-colors tracking-tight">
-                      {col}
-                      <ChevronsUpDown size={14} className="text-white opacity-80" />
-                    </div>
-                  </th>
+              <tr className="bg-emerald-900 text-white font-bold text-[15px] uppercase">
+                {["Po No", "Supplier Name", "Creation Date", "Expiry Date", "Amount", "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status", "Action"].map(h => (
+                  <th key={h} className="px-6 py-5 border-r border-white/10">{h}</th>
                 ))}
-                <th className="px-6 py-5 text-center w-[100px] whitespace-nowrap tracking-tight">Action</th>
               </tr>
             </thead>
-            <tbody className={`text-[14px] text-[#111827] transition-opacity duration-300 ${isRefreshing ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-              {(isLoading ? Array(5).fill({}) : currentItems).length > 0 ? (
-                (isLoading ? Array(5).fill({}) : currentItems).map((po, index) => (
-                  <tr key={po.id || index} className={`border-b border-[#F3F4F6] last:border-b-0 hover:bg-[#F9FAFB] transition-colors group ${isLoading ? 'animate-pulse' : ''}`}>
-                    <td className="px-6 py-5 font-bold border-r border-[#F3F4F6]">
-                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-20"></div> : po.poNumber}
-                    </td>
-                    <td className="px-6 py-5 font-bold border-r border-[#F3F4F6]">
-                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-40"></div> : po.supplierName}
-                    </td>
-                    <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-24"></div> : formatDate(po.poCreationDate)}
-                    </td>
-                    <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-24"></div> : formatDate(po.expiryDate)}
-                    </td>
-                    <td className="px-6 py-5 font-medium border-r border-[#F3F4F6] text-[#4B5563]">
-                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-16"></div> : (po.totalAmount || 0).toFixed(2)}
-                    </td>
-                    <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-32"></div> : (po.gstNumber || '-')}
-                    </td>
-                    <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-8"></div> : (po.creditDays || 0)}
-                    </td>
-                    <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-16"></div> : (po.taxAmount || 0).toFixed(2)}
-                    </td>
-                    <td className="px-6 py-5 font-bold border-r border-[#F3F4F6] text-[#111827]">
-                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-20"></div> : (po.grandTotal || 0).toFixed(2)}
-                    </td>
-                    <td className="px-6 py-5 text-[#4B5563] border-r border-[#F3F4F6]">
-                      {isLoading ? <div className="h-4 bg-gray-200 rounded w-20"></div> : (
-                        <span className={`px-3 py-1 ${po.bgClass} rounded-full text-[12px] font-bold uppercase shadow-sm whitespace-nowrap`}>{po.computedStatusLabel}</span>
-                      )}
+            <tbody className={`text-[14px] text-[#111827] ${isRefreshing ? 'opacity-40' : 'opacity-100'}`}>
+              {currentItems.length > 0 ? (
+                currentItems.map((po, idx) => (
+                  <tr key={po.id || idx} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
+                    <td className="px-6 py-5 font-bold">{po.poNumber}</td>
+                    <td className="px-6 py-5 font-bold uppercase">{po.supplierName}</td>
+                    <td className="px-6 py-5 font-bold text-[#4B5563]">{formatDate(po.poCreationDate)}</td>
+                    <td className="px-6 py-5 font-bold text-[#4B5563]">{formatDate(po.expiryDate)}</td>
+                    <td className="px-6 py-5 font-bold">{(po.totalAmount || 0).toFixed(2)}</td>
+                    <td className="px-6 py-5 font-bold text-center">{po.gstNumber || '-'}</td>
+                    <td className="px-6 py-5 font-bold text-center">{po.creditDays || 0}</td>
+                    <td className="px-6 py-5 font-bold text-center">{(po.taxAmount || 0).toFixed(2)}</td>
+                    <td className="px-6 py-5 font-bold text-[#073318]">{(po.grandTotal || 0).toFixed(2)}</td>
+                    <td className="px-6 py-5 text-center">
+                      <span className={`px-4 py-1.5 ${po.bgClass} rounded-full text-[12px] font-bold uppercase shadow-sm inline-flex min-w-[100px] justify-center`}>{po.computedStatusLabel}</span>
                     </td>
                     <td className="px-6 py-5 text-center relative" ref={el => dropdownRefs.current[po.id] = el}>
-                      <button
-                        onClick={() => setActiveDropdown(activeDropdown === po.id ? null : po.id)}
-                        className={`p-2 rounded-lg transition-all ${activeDropdown === po.id ? 'bg-gray-100 text-[#111827]' : 'text-gray-400 hover:bg-gray-100 hover:text-[#111827]'}`}
-                      >
-                        <MoreVertical size={20} />
-                      </button>
-
+                      <button onClick={() => setActiveDropdown(activeDropdown === po.id ? null : po.id)} className={`p-2 rounded-lg ${activeDropdown === po.id ? 'bg-[#073318] text-white' : 'text-gray-400 hover:bg-gray-100'}`}><MoreVertical size={20} /></button>
                       {activeDropdown === po.id && (
-                        <div className={`absolute right-[calc(50%+1.25rem)] w-max min-w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in duration-200 text-left ${index >= currentItems.length - 2 ? 'bottom-0 mb-2' : 'top-0 mt-2'}`}>
-                          <button
-                            onClick={() => { setActiveDropdown(null); navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id)); }}
-                            className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors font-bold border-b border-gray-50"
-                          >
-                            <Eye size={18} className="text-gray-400" />
-                            {(po.computedStatusLabel === 'Pending' || po.computedStatusLabel === 'Expiring Soon')
-                              ? t('common:view_and_edit_po', 'View and edit PO')
-                              : t('common:view_po', 'View PO')
-                            }
-                          </button>
-
-                          {(po.computedStatusLabel === 'Pending' || po.computedStatusLabel === 'Expiring Soon' || po.computedStatusLabel === 'Completed') && (
-                            <button
-                              onClick={() => { setActiveDropdown(null); handlePrint(po); }}
-                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] transition-colors font-bold border-b border-gray-50"
-                            >
-                              <Download size={18} className="text-gray-400" />
-                              Print PO
-                            </button>
-                          )}
-
+                        <div className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= currentItems.length - 2 ? 'bottom-0' : 'top-0'}`}>
+                          <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50"><Eye size={18} /> View / Edit PO</button>
+                          <button onClick={() => handlePrint(po)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50"><Download size={18} /> Print PO</button>
                           {po.computedStatusLabel !== 'Deleted' && (
-                            <button
-                              onClick={() => { setActiveDropdown(null); handleDeletePO(po.id); }}
-                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-red-600 hover:bg-red-50 transition-colors font-bold"
-                            >
-                              <XCircle size={18} className="text-red-500" />
-                              {t('common:delete', 'delete')}
-                            </button>
+                            <button onClick={() => handleDeletePO(po.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50 uppercase"><Trash2 size={18} /> Delete</button>
                           )}
                         </div>
                       )}
-                    </td >
-                  </tr >
+                    </td>
+                  </tr>
                 ))
               ) : (
-                <tr>
-                  <td colSpan="11" className="px-6 py-20 text-center text-gray-400 font-medium">
-                    No results found
-                  </td>
-                </tr>
+                <tr><td colSpan="11" className="px-6 py-24 text-center text-gray-400 uppercase font-bold tracking-widest">No results found</td></tr>
               )}
-            </tbody >
+            </tbody>
           </table>
-          {isRefreshing && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/20 backdrop-blur-[1px] transition-all">
-              <div className="w-10 h-10 border-4 border-[#073318]/10 border-t-[#073318] rounded-full animate-spin"></div>
-            </div>
-          )}
         </ScrollableTable>
 
-        {/* Pagination Section - Standardized Single Row */}
-        < div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-t border-[#F3F4F6] bg-white gap-2" >
-          <div className="flex items-center gap-2 text-[13px] sm:text-[14px] text-[#6B7280] font-medium min-w-fit">
+        {/* Pagination */}
+        <div className="px-8 py-5 border-t border-[#F3F4F6] bg-[#F9FAFB] flex flex-row items-center justify-between uppercase">
+          <div className="flex items-center gap-2 text-[14px] font-bold text-[#6B7280]">
             <span>Show</span>
-            <div className="relative group">
-              <select
-                value={itemsPerPage}
-                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-2 sm:pl-3 pr-6 sm:pr-8 py-1 sm:py-1.5 outline-none focus:border-[#073318] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white text-[13px] sm:text-[14px]"
-              >
-                {[5, 10, 20, 50].map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
-              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]" />
-            </div>
-            <span className="hidden xs:inline">per page</span>
+            <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="border border-[#E5E7EB] rounded-[8px] px-3 py-1.5 outline-none bg-white text-black font-bold">
+              {[5, 10, 20, 50].map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
           </div>
-
-          <div className="flex items-center gap-2 sm:gap-6">
-            <span className="text-[#6B7280] text-[12px] sm:text-[14px] font-medium whitespace-nowrap">
-              {totalItems > 0
-                ? `${((currentPage - 1) * itemsPerPage) + 1}–${Math.min(currentPage * itemsPerPage, totalItems)} of ${totalItems}`
-                : '0-0 of 0'}
-            </span>
-            <div className="flex items-center gap-1 sm:gap-1.5">
-              <button
-                disabled={currentPage === 1}
-                onClick={() => handlePageChange(currentPage - 1)}
-                className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
-              >
-                <ArrowLeft size={18} />
-              </button>
-              <div className="hidden sm:flex items-center gap-1.5 overflow-x-auto no-scrollbar px-1">
-                {[...Array(totalPages)].map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handlePageChange(i + 1)}
-                    className={`min-w-[40px] h-[40px] rounded-[10px] flex items-center justify-center transition-all text-[14px] font-bold
-                      ${currentPage === i + 1
-                        ? 'bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100'
-                        : 'text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]'}`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-              </div>
-              <button
-                disabled={currentPage === totalPages || totalPages === 0}
-                onClick={() => handlePageChange(currentPage + 1)}
-                className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
-              >
-                <ArrowRight size={18} />
-              </button>
+          <div className="flex items-center gap-4">
+            <span className="text-[#6B7280] text-[14px] font-bold lowercase">{totalItemsCount > 0 ? `${((currentPage - 1) * itemsPerPage) + 1}–${Math.min(currentPage * itemsPerPage, totalItemsCount)} of ${totalItemsCount}` : '0-0 of 0'}</span>
+            <div className="flex items-center gap-2">
+              <button disabled={currentPage === 1} onClick={() => handlePageChange(currentPage - 1)} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowLeft size={18} /></button>
+              <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => handlePageChange(currentPage + 1)} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowRight size={18} /></button>
             </div>
           </div>
-        </div >
-      </div >
+        </div>
+      </div>
 
-      {/* Import Modal */}
-      {
-        isImportModalOpen && (
-          <div
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-[4px] animate-in fade-in duration-300 p-4"
-            onClick={() => setIsImportModalOpen(false)}
-          >
-            <div
-              className="bg-white w-full max-w-[500px] rounded-[16px] shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden animate-in zoom-in-95 duration-300"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Modal Header */}
-              <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100">
-                <h3 className="text-[18px] font-bold text-[#111827]">Import Data</h3>
-                <button
-                  onClick={() => setIsImportModalOpen(false)}
-                  className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  <X size={20} className="text-gray-400" />
-                </button>
-              </div>
+      {/* Modals */}
+      <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} />
 
-              {/* Modal Content */}
-              <div className="p-6 sm:p-8 flex flex-col items-center gap-6 sm:gap-10">
-                {/* Download Sample */}
-                <button
-                  onClick={handleDownloadSample}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-[#AFC9BD]/40 text-[#073318] rounded-[10px] text-[14px] font-bold hover:bg-[#AFC9BD]/60 transition-all font-outfit"
-                >
-                  <Download size={18} />
-                  Download Sample
-                </button>
-
-                {/* Upload Section */}
-                <div className="w-full flex flex-col items-center gap-3">
-                  <span className="text-[15px] font-bold text-[#4B5563]">Upload File</span>
-                  <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
-                    <span className="hidden sm:inline text-[14px] text-gray-400 font-medium whitespace-nowrap">Select File</span>
-                    <div className="flex-1 flex items-center border border-dashed border-gray-300 rounded-[8px] h-[44px] overflow-hidden w-full">
-                      <label className="h-full px-4 flex items-center justify-center bg-gray-50 border-r border-dashed border-gray-300 text-[13px] font-bold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors">
-                        Choose
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => setSelectedFile(e.target.files[0])}
-                        />
-                      </label>
-                      <span className="px-4 text-[13px] text-gray-400 truncate flex-1">
-                        {selectedFile ? selectedFile.name : 'No file chosen'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Submit Action */}
-                <button
-                  onClick={handleSubmitImport}
-                  disabled={!selectedFile || isRefreshing}
-                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-10 py-3 rounded-[12px] text-[15px] font-bold transition-all shadow-sm font-outfit
-                          ${selectedFile && !isRefreshing
-                      ? 'bg-[#073318] text-white hover:bg-[#04200f] shadow-[#073318]/20'
-                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
-                >
-                  <CloudUpload size={20} />
-                  {isRefreshing ? 'Importing...' : 'Submit'}
-                </button>
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" onClick={() => setIsImportModalOpen(false)} />
+          <div className="relative bg-white w-full max-w-[500px] rounded-[24px] shadow-2xl p-10 space-y-8 animate-in zoom-in-95 duration-300">
+            <h3 className="text-[20px] font-bold text-[#111827] uppercase text-center tracking-tight font-outfit">Import Data</h3>
+            <button onClick={handleDownloadSample} className="w-full py-4 border-2 border-emerald-100 bg-emerald-50 text-emerald-700 rounded-[14px] font-bold uppercase transition-all hover:bg-emerald-100 flex items-center justify-center gap-3"><Download size={20} /> Download Sample</button>
+            <div className="space-y-4 font-outfit">
+              <span className="text-[13px] font-bold text-gray-500 uppercase tracking-widest block text-center">Upload File</span>
+              <div className="border-2 border-dashed border-gray-200 rounded-[14px] h-[56px] flex items-center overflow-hidden bg-gray-50">
+                <label className="h-full px-6 flex items-center justify-center bg-gray-100 border-r-2 border-dashed border-gray-200 font-bold uppercase text-[14px] cursor-pointer hover:bg-gray-200 transition-all font-outfit">Browse<input type="file" className="hidden" onChange={(e) => setSelectedFile(e.target.files[0])} /></label>
+                <span className="px-6 text-[14px] font-bold text-gray-400 truncate flex-1 uppercase tracking-tight">{selectedFile ? selectedFile.name : 'No file chosen...'}</span>
               </div>
             </div>
+            <button onClick={handleSubmitImport} disabled={!selectedFile || isRefreshing} className={`w-full py-4 rounded-[14px] font-bold uppercase shadow-lg transition-all ${selectedFile ? 'bg-[#073318] text-white hover:bg-[#04200f]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>{isRefreshing ? 'Importing...' : 'Submit Data'}</button>
           </div>
-        )
-      }
-      <DeleteConfirmModal
-        isOpen={isDeleteModalOpen}
-        isDeleting={isDeleting}
-        onCancel={() => { setIsDeleteModalOpen(false); setPoToDelete(null); }}
-        onConfirm={confirmDelete}
-      />
-    </div >
+        </div>
+      )}
+
+      {isRefreshing && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" />
+          <div className="relative bg-white/95 px-12 py-10 rounded-[32px] shadow-2xl flex flex-col items-center gap-5 animate-in zoom-in-95 duration-400">
+            <RefreshCw size={48} className="text-[#073318] animate-spin" />
+            <p className="font-bold text-[#073318] uppercase tracking-widest font-outfit">Processing...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Filter Sidebar */}
+      {isFilterOpen && <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-[4px]" onClick={() => setIsFilterOpen(false)} />}
+      <div className={`fixed top-0 right-0 h-full w-[440px] bg-white shadow-2xl z-[110] transform transition-transform duration-500 ${isFilterOpen ? "translate-x-0" : "translate-x-full"}`}>
+        <div className="bg-[#073318] p-8 flex items-center justify-between">
+          <h2 className="text-white font-bold uppercase text-[20px] tracking-tight font-outfit">Apply Filters</h2>
+          <button onClick={() => setIsFilterOpen(false)} className="text-white/50 hover:text-white transition-all bg-white/10 p-2 rounded-full"><X size={20} /></button>
+        </div>
+        <div className="p-8 space-y-10 flex flex-col h-full bg-white font-outfit">
+          <div className="space-y-4">
+            <label className="text-[14px] font-bold text-gray-400 uppercase tracking-widest block">Status Filter</label>
+            <div className="grid grid-cols-2 gap-3">
+              {statusTabs.map(s => (
+                <button key={s} onClick={() => setFilterInputs({ ...filterInputs, status: s })} className={`h-12 rounded-[12px] font-bold text-[14px] transition-all border uppercase tracking-tight ${filterInputs.status === s ? 'bg-[#073318] border-[#073318] text-white shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'}`}>{s}</button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-auto pb-16 flex gap-4">
+            <button onClick={handleClearFilter} className="flex-1 h-14 border border-[#E5E7EB] rounded-[14px] font-bold uppercase tracking-widest text-gray-600 hover:bg-gray-50 transition-all font-outfit">Clear</button>
+            <button onClick={handleApplyFilter} className="flex-1 h-14 bg-[#073318] text-white rounded-[14px] font-bold uppercase tracking-widest hover:bg-[#04200f] shadow-lg transition-all font-outfit">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 
