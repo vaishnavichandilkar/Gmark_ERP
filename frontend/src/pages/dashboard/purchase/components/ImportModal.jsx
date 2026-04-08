@@ -2,17 +2,21 @@ import React, { useState } from 'react';
 import { X, Download, Upload, CloudUpload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-const ImportModal = ({ isOpen, onClose, onImport, title }) => {
+const ImportModal = ({ isOpen, onClose, onImport, onDownloadSample, title }) => {
     const { t } = useTranslation(['common', 'modules']);
     const [fileName, setFileName] = useState('');
+    const [file, setFile] = useState(null);
 
     if (!isOpen) return null;
 
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
-            setFileName(e.target.files[0].name);
+            const selectedFile = e.target.files[0];
+            setFileName(selectedFile.name);
+            setFile(selectedFile);
         } else {
             setFileName('');
+            setFile(null);
         }
     };
 
@@ -33,7 +37,10 @@ const ImportModal = ({ isOpen, onClose, onImport, title }) => {
                 <div className="p-8 flex flex-col items-center gap-8">
                     {/* Centered Download Sample */}
                     <div className="w-full flex justify-center">
-                        <button className="flex items-center gap-2 bg-[#A7C0B8]/20 hover:bg-[#A7C0B8]/30 text-[#073318] px-8 py-3 rounded-[8px] text-[14px] font-bold transition-all">
+                        <button 
+                            onClick={onDownloadSample}
+                            className="flex items-center gap-2 bg-[#A7C0B8]/20 hover:bg-[#A7C0B8]/30 text-[#073318] px-8 py-3 rounded-[8px] text-[14px] font-bold transition-all"
+                        >
                             <Download size={18} />
                             {t('common:download_sample', 'Download Sample')}
                         </button>
@@ -71,13 +78,13 @@ const ImportModal = ({ isOpen, onClose, onImport, title }) => {
                     <div className="w-full flex justify-center mt-2">
                         <button
                             onClick={() => {
-                                if (fileName) {
-                                    onImport(fileName);
+                                if (file) {
+                                    onImport(file);
                                     onClose();
                                 }
                             }}
                             className={`flex items-center justify-center gap-2 w-[160px] h-[40px] rounded-[8px] text-[14px] font-bold transition-all shadow-sm
-                                ${fileName 
+                                ${file 
                                     ? 'bg-[#A7C0B8] text-white hover:bg-[#8eb0a4]' 
                                     : 'bg-[#A7C0B8] opacity-60 text-white cursor-not-allowed'}`}
                         >

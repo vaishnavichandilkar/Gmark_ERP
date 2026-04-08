@@ -36,6 +36,7 @@ model User {
   products             Product[]
   purchaseInvoices     PurchaseInvoice[]
   purchaseOrders       PurchaseOrder[]
+  grns                 Grn[]
   sub_categories       SubCategory[]
   subGroups            SubGroup[]
   sub_sub_categories   SubSubCategory[]
@@ -461,6 +462,7 @@ model PurchaseOrder {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
   purchaseInvoice PurchaseInvoice?
+  grn             Grn?
   items           PurchaseOrderItem[]
   user            User                @relation(fields: [userId], references: [id])
 
@@ -530,6 +532,48 @@ model PurchaseInvoiceItem {
   purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
 
   @@map("purchase_invoice_items")
+}
+
+model Grn {
+  id                    Int                   @id @default(autoincrement())
+  grnNumber             String                @unique
+  grnDate               DateTime              @default(now())
+  poId                  Int?                  @unique
+  supplierName          String
+  address               String
+  creditDays            Int
+  grandTotal            Float                 @default(0)
+  userId                Int
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  bookingDate           DateTime              @default(now())
+  cgstAmount            Float                 @default(0)
+  challanNumber         String
+  cumulativeBalance     Float                 @default(0)
+  poNumber              String?
+  sgstAmount            Float                 @default(0)
+  taxableAmount         Float                 @default(0)
+  totalQuantity         Float                 @default(0)
+  uploadedFilePath      String?
+  status                GrnStatus             @default(GENERATED)
+  items                 GrnItem[]
+  purchaseOrder         PurchaseOrder?        @relation(fields: [poId], references: [id])
+  user                  User                  @relation(fields: [userId], references: [id])
+
+  @@map("grns")
+}
+
+model GrnItem {
+  id                Int      @id @default(autoincrement())
+  grnId             Int
+  productCode       String
+  productName       String
+  quantity          Float
+  rate              Float
+  uom               String
+  grn               Grn      @relation(fields: [grnId], references: [id], onDelete: Cascade)
+
+  @@map("grn_items")
 }
 
 enum AdminStatus {
@@ -626,6 +670,11 @@ enum POStatus {
 }
 
 enum PIStatus {
+  GENERATED
+  DELETED
+}
+
+enum GrnStatus {
   GENERATED
   DELETED
 }

@@ -10,7 +10,7 @@ const purchaseInvoiceService = {
       formData.append('file', file);
     }
 
-    const response = await axiosInstance.post('/purchase-invoice', formData, {
+    const response = await axiosInstance.post('/purchase-invoices', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -19,24 +19,24 @@ const purchaseInvoiceService = {
   },
 
   getAllInvoices: async () => {
-    const response = await axiosInstance.get('/purchase-invoice');
+    const response = await axiosInstance.get('/purchase-invoices');
     return response.data;
   },
 
   getInvoice: async (id) => {
-    const response = await axiosInstance.get(`/purchase-invoice/${id}`);
+    const response = await axiosInstance.get(`/purchase-invoices/${id}`);
     return response.data;
   },
 
   exportInvoices: async (format, search = '') => {
-    const response = await axiosInstance.get(`/purchase-invoice/export?format=${format}&search=${search}`, {
+    const response = await axiosInstance.get(`/purchase-invoices/export?format=${format}&search=${search}`, {
       responseType: 'blob',
     });
     return response.data;
   },
 
   downloadSample: async () => {
-    const response = await axiosInstance.get('/purchase-invoice/import/sample', {
+    const response = await axiosInstance.get('/purchase-invoices/sample-excel', {
       responseType: 'blob',
     });
     return response.data;
@@ -45,14 +45,14 @@ const purchaseInvoiceService = {
   importInvoices: async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await axiosInstance.post('/purchase-invoice/import', formData, {
+    const response = await axiosInstance.post('/purchase-invoices/import', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
   },
 
   printInvoice: async (id) => {
-    const response = await axiosInstance.get(`/purchase-invoice/${id}/print`, {
+    const response = await axiosInstance.get(`/purchase-invoices/${id}/print`, {
       responseType: 'blob',
     });
     return response.data;

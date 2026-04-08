@@ -450,21 +450,34 @@ export class PurchaseInvoiceService {
     let failed = 0;
     const errors: string[] = [];
 
+    const parseDate = (val: any): string | undefined => {
+      if (!val) return undefined;
+      const date = new Date(val);
+      if (isNaN(date.getTime())) return undefined;
+      return date.toISOString().split('T')[0];
+    };
+
     for (let i = 2; i <= rowCount; i++) {
       const row = worksheet.getRow(i);
       try {
         const supplierName = String(row.getCell(1).value || '').trim();
         const supplierInvoiceNumber = String(row.getCell(2).value || '').trim();
-        const supplierInvoiceDate = String(row.getCell(3).value || '').trim();
-        if (!supplierInvoiceNumber || supplierInvoiceNumber === 'Supplier Invoice No*') continue;
+        const supplierInvoiceDateRaw = row.getCell(3).value;
+        
+        if (!supplierInvoiceNumber || !supplierName || supplierInvoiceNumber === 'Supplier Invoice No*') continue;
+
+        const supplierInvoiceDate = parseDate(supplierInvoiceDateRaw);
+        if (!supplierInvoiceDate) {
+           throw new Error(`Invalid Supplier Invoice Date at row ${i}`);
+        }
 
         const dto: CreatePurchaseInvoiceDto = {
           supplierName,
           supplierInvoiceNumber,
-          supplierInvoiceDate: new Date(supplierInvoiceDate).toISOString().split('T')[0],
-          bookingDate: row.getCell(4).value ? new Date(String(row.getCell(4).value)).toISOString().split('T')[0] : undefined,
+          supplierInvoiceDate,
+          bookingDate: parseDate(row.getCell(4).value),
           address: String(row.getCell(5).value || '').trim(),
-          creditDays: parseInt(String(row.getCell(6).value || 0), 10),
+          creditDays: Math.max(1, parseInt(String(row.getCell(6).value || 0), 10)),
           challanNumber: String(row.getCell(7).value || '').trim(),
           poNumber: String(row.getCell(8).value || '').trim(),
           items: [{
@@ -475,6 +488,8 @@ export class PurchaseInvoiceService {
             uom: String(row.getCell(12).value || 'NOS').trim(),
           }]
         };
+
+        if (!dto.address) dto.address = 'Imported Address';
 
         await this.create(dto, userId);
         imported++;
@@ -549,6 +564,29 @@ export class PurchaseInvoiceService {
       doc.fontSize(10).text(`Amount in Words: ${amountInWords}`, 30, y);
 
       doc.end();
+    });
+  }
+
+  async remove(id: number, userId: number) {
+    const existing = await this.prisma.purchaseInvoice.findUnique({
+      where: { id },
+    });
+
+    if (!existing) throw new NotFoundException(`Invoice ID ${id} not found`);
+    if (existing.userId !== userId) throw new ForbiddenException('You do not have permission to delete this invoice');
+
+    return this.prisma.$transaction(async (tx) => {
+      // If linked to a PO, reset PO status
+      if (existing.poId) {
+        await tx.purchaseOrder.update({
+          where: { id: existing.poId },
+          data: { status: 'PENDING' }
+        });
+      }
+
+      return tx.purchaseInvoice.delete({
+        where: { id },
+      });
     });
   }
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Request, ParseIntPipe, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Request, ParseIntPipe, UseInterceptors, UploadedFile, Res, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiConsumes, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { PurchaseInvoiceService } from './purchase-invoice.service';
 import { CreatePurchaseInvoiceDto, UpdatePurchaseInvoiceDto } from './dto/purchase-invoice.dto';
@@ -185,5 +185,11 @@ export class PurchaseInvoiceController {
     };
     
     return this.service.update(id, updateDto, file?.path);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete Purchase Invoice' })
+  async remove(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    return this.service.remove(id, req.user.id);
   }
 }

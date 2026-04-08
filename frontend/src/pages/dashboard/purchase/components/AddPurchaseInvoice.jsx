@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Search, UploadCloud, ChevronDown, ChevronUp, X, FileText, Plus } from 'lucide-react';
 
 const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave, type = 'Invoice' }) => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { id } = useParams();
     const { t } = useTranslation(['modules', 'common']);
     const isEditMode = !!propsInitialData || !!id;
-    const documentLabel = type === 'GRN' ? 'GRN' : 'Purchase Invoice';
+    const documentLabel = type === 'GRN' ? 'GRN' : 'Invoice';
     const supplierDropdownRef = useRef(null);
     const productDropdownRef = useRef(null);
     const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
@@ -319,7 +320,7 @@ const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave, typ
                                         {/* Add New Supplier Button placed inline like Screenshot */}
                                         <div className="px-3 py-2 border-t border-gray-50 mt-1">
                                             <button 
-                                                onClick={() => navigate('/seller/masters/account-master', { state: { openAdd: true } })}
+                                                onClick={() => navigate(`/seller/masters/account-master/add?redirect=${encodeURIComponent(location.pathname)}`)}
                                                 className="bg-[#014A36] hover:bg-[#013b2b] text-white px-4 py-2 rounded-[6px] text-[13px] font-semibold transition-all shadow-sm w-max inline-block"
                                             >
                                                 Add new supplier
@@ -442,41 +443,45 @@ const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave, typ
                                         onFocus={() => setShowProductDropdown(true)}
                                     />
                                     {showProductDropdown && (
-                                        <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-gray-100 rounded-[8px] shadow-lg z-[120] py-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                                            <div className="max-h-[240px] overflow-y-auto custom-scrollbar flex flex-col">
+                                        <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.12)] z-[120] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                            {/* Scrollable Results Area */}
+                                            <div className="max-h-[260px] overflow-y-auto custom-scrollbar py-1">
                                                 {dummyProducts
                                                     .filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.code.includes(searchTerm))
                                                     .map((product, idx) => (
                                                         <div
                                                             key={idx}
-                                                            className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer flex flex-col gap-0.5 border-b border-gray-50 last:border-0"
+                                                            className="px-5 py-3 hover:bg-gray-50 cursor-pointer flex flex-col gap-0.5 border-b border-gray-50 last:border-0 transition-colors"
                                                             onClick={() => handleAddProductFromSearch(product)}
                                                         >
                                                             <div className="flex items-center justify-between">
-                                                                <span className="text-[13px] font-bold text-[#111827]">{product.name}</span>
-                                                                <span className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-medium">{product.code}</span>
+                                                                <span className="text-[14px] font-bold text-[#111827]">{product.name}</span>
+                                                                <span className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-400 font-bold uppercase">{product.code}</span>
                                                             </div>
-                                                            <div className="flex items-center gap-3 text-[11px] text-gray-400">
+                                                            <div className="flex items-center gap-3 text-[12px] text-gray-400 font-medium">
                                                                 <span>HSN: {product.hsnCode}</span>
+                                                                <span className="w-1 h-1 bg-gray-200 rounded-full"></span>
                                                                 <span>Tax: {product.taxPercent}%</span>
+                                                                <span className="w-1 h-1 bg-gray-200 rounded-full"></span>
                                                                 <span>UOM: {product.uom}</span>
                                                             </div>
                                                         </div>
                                                     ))
                                                 }
                                                 {dummyProducts.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.code.includes(searchTerm)).length === 0 && (
-                                                    <div className="px-4 py-4 text-center text-[12px] text-gray-400">No products found</div>
+                                                    <div className="px-5 py-8 text-center text-[13px] text-gray-400 italic">No products found for "{searchTerm}"</div>
                                                 )}
-                                                
-                                                {/* Add New Product Option inside dropdown */}
-                                                <div className="px-3 py-2 border-t border-gray-50 mt-1">
-                                                    <button 
-                                                        onClick={() => navigate('/seller/masters/product-master', { state: { openAdd: true } })}
-                                                        className="bg-[#014A36] hover:bg-[#013b2b] text-white px-4 py-2 rounded-[6px] text-[13px] font-semibold transition-all shadow-sm w-max inline-block"
-                                                    >
-                                                        Add new product
-                                                    </button>
-                                                </div>
+                                            </div>
+
+                                            {/* Fixed Footer for Action Button */}
+                                            <div className="p-3 bg-gray-50 border-t border-gray-100 mt-auto shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+                                                <button 
+                                                    onClick={() => navigate(`/seller/masters/product-master/add?redirect=${encodeURIComponent(location.pathname)}`)}
+                                                    className="w-full h-[40px] bg-[#014A36] hover:bg-[#013b2b] text-white rounded-[8px] text-[14px] font-bold transition-all shadow-sm flex items-center justify-center gap-2 group"
+                                                >
+                                                    <Plus size={16} className="group-hover:scale-110 transition-transform" />
+                                                    Add new product
+                                                </button>
                                             </div>
                                         </div>
                                     )}

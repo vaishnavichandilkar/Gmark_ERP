@@ -10,6 +10,8 @@ import SuccessToast from '../masters/components/SuccessToast';
 import { exportToPDF, exportToExcel } from '../../../utils/exportUtils';
 import { toast } from '../../../utils/toast-mock';
 import ScrollableTable from '../../../components/common/ScrollableTable';
+import purchaseInvoiceService from '../../../services/purchaseInvoiceService';
+import grnService from '../../../services/grnService';
 
 const INITIAL_MOCK_DATA = [
     {
@@ -171,6 +173,25 @@ const PurchaseInvoice = ({ defaultTab }) => {
 
     const showToast = (message, type = 'success') => {
         setToastMessage({ show: true, message, type });
+    };
+
+    const handleDownloadSample = async () => {
+        try {
+            const isGrn = activeTab === 'GRN';
+            const blob = await (isGrn ? grnService.downloadSample() : purchaseInvoiceService.downloadSample());
+            const url = window.URL.createObjectURL(new Blob([blob]));
+            const link = document.createElement('a');
+            link.href = url;
+            const filename = isGrn ? 'grn_sample.xlsx' : 'purchase_invoice_sample.xlsx';
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            showToast('Sample file downloaded');
+        } catch (error) {
+            console.error('Download failed:', error);
+            showToast('Failed to download sample file', 'error');
+        }
     };
 
     const [rowsPerPage, setRowsPerPage] = useState(5);
@@ -862,8 +883,21 @@ const PurchaseInvoice = ({ defaultTab }) => {
             <ImportModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
-                onImport={(fileName) => {
-                    showToast(`Data imported successfully from ${fileName}`);
+                onDownloadSample={handleDownloadSample}
+                onImport={async (file) => {
+                    try {
+                        const isGrn = activeTab === 'GRN';
+                        const result = await (isGrn ? grnService.importGrns(file) : purchaseInvoiceService.importInvoices(file));
+                        if (result.success) {
+                            showToast(result.message);
+                            handleRefresh(); // Reload data
+                        } else {
+                            showToast(result.message || 'Import partially failed', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Import failed:', error);
+                        showToast(error.response?.data?.message || 'Import failed', 'error');
+                    }
                 }}
                 title={t('modules:import_data', 'Import Data')}
             />

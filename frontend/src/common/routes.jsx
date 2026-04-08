@@ -28,6 +28,7 @@ import PurchaseOrder from '../pages/dashboard/purchase/PurchaseOrder';
 import AddPO from '../pages/dashboard/purchase/AddPO';
 import ViewPO from '../pages/dashboard/purchase/ViewPO';
 import PurchaseInvoice from '../pages/dashboard/purchase/PurchaseInvoice';
+import GRN from '../pages/dashboard/purchase/GRN';
 import AddPurchaseInvoice from '../pages/dashboard/purchase/AddPurchaseInvoice';
 import POPrintPreview from '../pages/dashboard/purchase/POPrintPreview';
 
@@ -291,19 +292,19 @@ export const router = createBrowserRouter([
                                           children: [
                                               {
                                                   index: true,
-                                                  element: <PurchaseInvoice defaultTab="GRN" />
+                                                  element: <GRN />
                                               },
                                               {
                                                   path: 'add',
-                                                  element: <PurchaseInvoice defaultTab="GRN" />
+                                                  element: <GRN />
                                               },
                                               {
                                                   path: 'edit/:id',
-                                                  element: <PurchaseInvoice defaultTab="GRN" />
+                                                  element: <GRN />
                                               },
                                               {
                                                   path: 'view/:id',
-                                                  element: <PurchaseInvoice defaultTab="GRN" />
+                                                  element: <GRN />
                                               }
                                           ]
                                       }

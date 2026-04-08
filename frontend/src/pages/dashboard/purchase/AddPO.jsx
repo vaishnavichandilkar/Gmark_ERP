@@ -815,9 +815,11 @@ const AddPO = () => {
                                 className={`w-full h-[44px] bg-white border rounded-[12px] pl-11 pr-4 text-[14px] outline-none focus:ring-1 transition-all placeholder:text-[#9CA3AF] shadow-sm font-outfit ${errors.items ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
                             />
                             {errors.items && <p className="text-red-500 text-[12px] mt-1 font-medium italic font-outfit">*Please add at least one product</p>}
-                                                  {/* Global Product Search Suggestions Dropdown - Only when NOT editing a specific row */}
+                            
+                            {/* Global Product Search Suggestions Dropdown - Only when NOT editing a specific row */}
                             {isProductSearchOpen && activeRowIndex === null && (
-                                <div className="absolute top-full left-0 w-full sm:w-[550px] mt-2 bg-white border border-gray-100 rounded-[16px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] z-[60] overflow-hidden py-0 animate-in fade-in slide-in-from-top-2 duration-300 font-outfit border-t-4 border-t-emerald-800">
+                                <div className="absolute top-full left-0 w-full sm:w-[550px] mt-2 bg-white border border-gray-100 rounded-[16px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] z-[60] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 font-outfit border-t-4 border-t-emerald-800">
+                                            {/* Scrollable Results Area */}
                                             <div className="max-h-[320px] overflow-y-auto custom-scrollbar">
                                                 {filteredProducts.map(p => (
                                                     <button 
@@ -844,11 +846,16 @@ const AddPO = () => {
                                                         </div>
                                                     </button>
                                                 ))}
+                                                {filteredProducts.length === 0 && (
+                                                    <div className="px-5 py-10 text-center text-[13px] text-gray-400 italic">No products found for "{tableSearch}"</div>
+                                                )}
                                             </div>
-                                    <div className="p-3 bg-gray-50/50 border-t border-[#F3F4F6]">
+
+                                    {/* Fixed Footer for Action Button */}
+                                    <div className="p-3 bg-gray-50 border-t border-[#F3F4F6] mt-auto shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
                                         <button 
                                             onClick={handleAddNewProduct}
-                                            className="w-full h-[40px] bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-sm font-outfit"
+                                            className="w-full h-[44px] bg-[#073318] text-white text-[14px] font-bold rounded-[10px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-md"
                                         >
                                             <Plus size={16} className="group-hover:scale-110 transition-transform" /> 
                                             Add new product

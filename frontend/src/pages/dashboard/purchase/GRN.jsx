@@ -9,6 +9,8 @@ import ImportModal from './components/ImportModal';
 import SuccessToast from '../masters/components/SuccessToast';
 import { exportToPDF, exportToExcel } from '../../../utils/exportUtils';
 import { toast } from '../../../utils/toast-mock';
+import ScrollableTable from '../../../components/common/ScrollableTable';
+import grnService from '../../../services/grnService';
 
 const INITIAL_MOCK_DATA = [
   {
@@ -163,7 +165,7 @@ const INITIAL_MOCK_DATA = [
   }
 ];
 
-const PurchaseInvoice = () => {
+const GRN = () => {
     const { t } = useTranslation(['modules', 'common']);
     const navigate = useNavigate();
     const location = useLocation();
@@ -188,6 +190,23 @@ const PurchaseInvoice = () => {
 
     const showToast = (message, type = 'success') => {
         setToastMessage({ show: true, message, type });
+    };
+
+    const handleDownloadSample = async () => {
+        try {
+            const blob = await grnService.downloadSample();
+            const url = window.URL.createObjectURL(new Blob([blob]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'grn_sample.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            showToast('Sample file downloaded');
+        } catch (error) {
+            console.error('Download failed:', error);
+            showToast('Failed to download sample file', 'error');
+        }
     };
 
     const [rowsPerPage, setRowsPerPage] = useState(5);
@@ -430,7 +449,7 @@ const PurchaseInvoice = () => {
                 {/* Desktop Header */}
                 <div className="hidden md:flex flex-row items-center justify-between gap-4 w-full">
                     <h2 className="text-[20px] md:text-[24px] font-bold text-[#111827] tracking-tight">
-                        Purchase Invoice
+                        GRN
                     </h2>
 
                     <button 
@@ -438,7 +457,7 @@ const PurchaseInvoice = () => {
                         className="md:min-w-[160px] md:px-5 h-[42px] md:h-[38px] bg-[#073318] hover:bg-[#04200f] text-white rounded-[10px] md:rounded-[8px] text-[15px] md:text-[14px] font-semibold transition-all shadow-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
                         <Plus size={16} />
-                        {t('modules:add_purchase_invoice', 'Add Purchase Invoice')}
+                        {t('modules:add_grn', 'Add GRN')}
                     </button>
                 </div>
 
@@ -449,32 +468,36 @@ const PurchaseInvoice = () => {
                         className="w-full max-w-[358px] h-[42px] bg-[#073318] hover:bg-[#04200f] text-white rounded-[10px] text-[15px] font-semibold transition-all shadow-md flex items-center justify-center gap-2 active:scale-[0.98] self-center"
                     >
                         <Plus size={16} />
-                        {t('modules:add_purchase_invoice', 'Add Purchase Invoice')}
+                        {t('modules:add_grn', 'Add GRN')}
                     </button>
                 </div>
                 
                 {/* Embedded Sub-tabs matching previous structure */}
-                <div className="flex justify-center gap-8 border-b border-[#E5E7EB] w-full mt-6">
-                  {['All', 'Deleted'].map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className={`relative pb-3 text-[14px] font-bold transition-colors duration-300 ${
-                        activeTab === tab
-                          ? 'text-[#073318]'
-                          : 'text-[#6B7280] hover:text-[#111827]'
-                      }`}
-                    >
-                      {tab === 'All' ? t('common:all') : t('common:deleted', 'Deleted')}
-                      {activeTab === tab && (
-                        <motion.div
-                          layoutId="activeSubTabUnderline"
-                          className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#073318]"
-                          transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                        />
-                      )}
-                    </button>
-                  ))}
+                <div className="flex justify-center gap-16 border-b border-[#E5E7EB] w-full mt-6">
+                    {['Invoice', 'GRN'].map((tab) => (
+                        <button
+                            key={tab}
+                            onClick={() => {
+                                // Since we are in the GRN component, clicking Invoice should navigate to its route
+                                if (tab === 'Invoice') {
+                                    navigate('/seller/purchase/invoice');
+                                }
+                            }}
+                            className={`relative pb-4 text-[16px] md:text-[18px] font-bold transition-colors duration-300 ${tab === 'GRN'
+                                    ? 'text-[#073318]'
+                                    : 'text-[#6B7280] hover:text-[#111827]'
+                                }`}
+                        >
+                            {tab === 'Invoice' ? t('common:invoice', 'Invoice') : 'GRN'}
+                            {tab === 'GRN' && (
+                                <motion.div
+                                    layoutId="activeSubTabUnderline"
+                                    className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#073318] rounded-t-full"
+                                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                />
+                            )}
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -878,8 +901,20 @@ const PurchaseInvoice = () => {
             <ImportModal 
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
-                onImport={(fileName) => {
-                    showToast(`Data imported successfully from ${fileName}`);
+                onDownloadSample={handleDownloadSample}
+                onImport={async (file) => {
+                    try {
+                        const result = await grnService.importGrns(file);
+                        if (result.success) {
+                            showToast(result.message);
+                            handleRefresh(); // Reload data
+                        } else {
+                            showToast(result.message || 'Import partially failed', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Import failed:', error);
+                        showToast(error.response?.data?.message || 'Import failed', 'error');
+                    }
                 }}
                 title={t('modules:import_data', 'Import Data')}
             />
@@ -887,4 +922,4 @@ const PurchaseInvoice = () => {
     );
 };
 
-export default PurchaseInvoice;
+export default GRN;
