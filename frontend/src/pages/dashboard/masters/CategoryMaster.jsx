@@ -700,7 +700,7 @@ const CategoryMaster = () => {
 
         {/* Table Header */}
         <div className="flex items-stretch justify-between border-b border-emerald-950 bg-emerald-900 text-[14px] font-bold text-white tracking-tight">
-          <div className="flex-1 border-r border-white/50 px-4 md:px-6 py-3 md:py-5 flex items-center gap-2">
+          <div className="flex-1 border-r border-white/50 pr-4 md:pr-6 py-3 md:py-5 pl-6 md:pl-9 flex items-center gap-2">
             {t("modules:category_sub_category")}
             <ChevronsUpDown size={14} className="text-gray-300" />
           </div>
@@ -740,32 +740,32 @@ const CategoryMaster = () => {
                 expandedGroups[section.id] || isSearchExpanding;
 
               return (
-                <div
-                  key={section.id}
-                  className="flex flex-col border-b border-[#E5E7EB] last:border-b-0 relative"
-                >
+                <React.Fragment key={section.id}>
                   {/* Category Row */}
-                  <div className="flex items-center justify-between py-2 md:py-4 bg-white hover:bg-gray-50/30 transition-colors group">
+                  <div className="flex items-center justify-between py-2 md:py-4 border-b border-[#F3F4F6] transition-all duration-200 group-row bg-[#F9FAFB]/50 hover:bg-gray-50">
                     <div
-                      className="flex items-center flex-1 cursor-pointer select-none gap-3 pl-4 md:pl-6"
+                      className="flex items-center flex-1 cursor-pointer select-none gap-3"
+                      style={{ paddingLeft: '12px' }}
                       onClick={() => toggleGroup(section.id)}
                     >
-                      <div className="flex items-center justify-center w-5 h-5">
-                        {isExpanded ? (
-                          <Minus
-                            size={14}
-                            className="text-[#111827] stroke-[3px]"
-                          />
+                      <div className="w-6 h-6 flex items-center justify-center">
+                        {(section.sub_categories && section.sub_categories.length > 0) ? (
+                          <div className={`p-0.5 rounded transition-colors duration-200 ${isExpanded ? 'bg-red-50 text-red-600' : 'bg-[#073318]/5 text-[#111827]'}`}>
+                            {isExpanded ? (
+                              <Minus size={14} strokeWidth={3} />
+                            ) : (
+                              <Plus size={14} strokeWidth={3} />
+                            )}
+                          </div>
                         ) : (
-                          <Plus
-                            size={14}
-                            className="text-[#111827] stroke-[3px]"
-                          />
+                          <div className="w-1.5 h-1.5 bg-[#4B5563] rounded-full ml-0.5" />
                         )}
                       </div>
-                      <span className="text-[14px] font-bold text-[#111827]">
-                        {section.name}
-                      </span>
+                      <div className="flex flex-col">
+                        <span className={`text-[14px] transition-colors font-bold ${section.status === 'INACTIVE' ? 'text-gray-400' : 'text-[#111827]'}`}>
+                          {section.name}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="flex items-stretch shrink-0">
@@ -791,13 +791,13 @@ const CategoryMaster = () => {
                                 : `group-${section.id}`,
                             );
                           }}
-                          className={`dropdown-trigger p-1.5 rounded-md text-gray-400 hover:text-[#073318] hover:bg-gray-100 ${activeRowDropdown === `group-${section.id}` ? "bg-gray-100 text-[#111827]" : ""}`}
+                          className={`dropdown-trigger p-1.5 rounded-md transition-all duration-200 ${activeRowDropdown === `group-${section.id}` ? "bg-gray-100 text-[#111827]" : "text-gray-400 hover:text-[#073318] hover:bg-white border border-transparent"}`}
                         >
                           <MoreVertical size={18} />
                         </button>
                         {activeRowDropdown === `group-${section.id}` && (
                           <div
-                            className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-xl z-[110] py-2 animate-in zoom-in-95 ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
+                            className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in zoom-in-95 duration-200 text-left ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
                           >
                             <button
                               onClick={(e) => {
@@ -809,7 +809,7 @@ const CategoryMaster = () => {
                                 setIsEditModalOpen(true);
                                 setActiveRowDropdown(null);
                               }}
-                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318] transition-colors whitespace-nowrap"
+                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
                             >
                               <Eye size={18} className="text-gray-400" />{" "}
                               {t("modules:view_and_edit_category")}
@@ -823,10 +823,10 @@ const CategoryMaster = () => {
                                   "category",
                                 );
                               }}
-                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318] transition-colors whitespace-nowrap"
+                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
                             >
                               {section.status === "INACTIVE" ? (
-                                <CheckCircle2 size={18} />
+                                <CheckCircle2 size={18} className="text-[#073318]" />
                               ) : (
                                 <XCircle size={18} />
                               )}
@@ -842,7 +842,7 @@ const CategoryMaster = () => {
 
                   {/* SubCategories & SubSubCategories Container */}
                   {isExpanded && (
-                    <div className="flex flex-col bg-gray-50/50 border-t border-gray-100">
+                    <div className="animate-in slide-in-from-top-2 duration-300">
                       {(section.sub_categories || []).map((item) => {
                         const subDropdownId = `sub-${item.id}`;
                         const hasSubSubs =
@@ -858,52 +858,49 @@ const CategoryMaster = () => {
                             ));
 
                         return (
-                          <div
-                            key={item.id}
-                            className="flex flex-col border-b border-gray-100/80 last:border-b-0"
-                          >
+                          <React.Fragment key={item.id}>
                             <div
-                              className="flex items-center justify-between py-3 hover:bg-white transition-colors cursor-pointer group"
-                              onClick={() =>
-                                hasSubSubs && toggleSubGroup(item.id)
-                              }
+                              className="flex items-center justify-between py-2 md:py-4 border-b border-[#F3F4F6] transition-all duration-200 group-row bg-white hover:bg-gray-50"
                             >
-                              <div className="flex items-center gap-3 pl-12">
-                                <div className="w-5 h-5 flex items-center justify-center">
+                              <div
+                                className="flex items-center flex-1 cursor-pointer select-none gap-3"
+                                onClick={() => hasSubSubs && toggleSubGroup(item.id)}
+                                style={{ paddingLeft: '32px' }}
+                              >
+                                <div className="w-6 h-6 flex items-center justify-center">
                                   {hasSubSubs ? (
-                                    isSubExpanded ? (
-                                      <ChevronDown
-                                        size={14}
-                                        className="text-[#073318]"
-                                      />
-                                    ) : (
-                                      <ArrowRight
-                                        size={14}
-                                        className="text-gray-400"
-                                      />
-                                    )
+                                    <div className={`p-0.5 rounded transition-colors duration-200 ${isSubExpanded ? 'bg-red-50 text-red-600' : 'bg-[#073318]/5 text-[#111827]'}`}>
+                                      {isSubExpanded ? (
+                                        <Minus size={14} strokeWidth={3} />
+                                      ) : (
+                                        <Plus size={14} strokeWidth={3} />
+                                      )}
+                                    </div>
                                   ) : (
-                                    <div className="w-1 h-1 rounded-full bg-gray-300" />
+                                    <div className="w-1.5 h-1.5 bg-[#4B5563] rounded-full ml-0.5" />
                                   )}
                                 </div>
-                                <span
-                                  className={`text-[13px] font-medium ${isSubExpanded ? "text-[#073318] font-bold" : "text-gray-600"}`}
-                                >
-                                  {item.name}
-                                </span>
+                                <div className="flex flex-col">
+                                  <span
+                                    className={`text-[14px] transition-colors font-medium ${item.status === "INACTIVE" ? "text-gray-400" : "text-[#374151]"}`}
+                                  >
+                                    {item.name}
+                                  </span>
+                                </div>
                               </div>
 
                               <div className="flex items-stretch shrink-0">
-                                <div className="w-[120px] flex items-center justify-center px-4">
+                                <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4">
                                   <div
-                                    className={`px-2 py-0.5 rounded-full text-[12px] font-bold ${item.status === "INACTIVE" ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600"}`}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${item.status === "INACTIVE" ? "bg-[#FEF2F2] text-[#DC2626]" : "bg-[#ECFDF5] text-[#059669]"}`}
                                   >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${item.status === "INACTIVE" ? "bg-[#DC2626]" : "bg-[#059669]"}`}></span>
                                     {item.status === "INACTIVE"
                                       ? t("common:inactive")
                                       : t("common:active")}
                                   </div>
                                 </div>
-                                <div className="w-20 flex items-center justify-center px-4 relative">
+                                <div className="w-16 md:w-20 flex items-center justify-center px-4 relative">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -913,13 +910,13 @@ const CategoryMaster = () => {
                                           : subDropdownId,
                                       );
                                     }}
-                                    className={`dropdown-trigger p-1.5 rounded-md text-gray-400 hover:text-[#073318] ${activeRowDropdown === subDropdownId ? "text-[#111827] bg-gray-100" : ""}`}
+                                    className={`dropdown-trigger p-1.5 rounded-md transition-all duration-200 ${activeRowDropdown === subDropdownId ? "bg-gray-100 text-[#111827]" : "text-gray-400 hover:text-[#073318] hover:bg-white border border-transparent"}`}
                                   >
-                                    <MoreVertical size={16} />
+                                    <MoreVertical size={18} />
                                   </button>
                                   {activeRowDropdown === subDropdownId && (
                                     <div
-                                      className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-xl shadow-xl z-[120] py-2 ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0 mb-1" : "top-0 mt-1"}`}
+                                      className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in zoom-in-95 duration-200 text-left ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
                                     >
                                       <button
                                         onClick={(e) => {
@@ -931,10 +928,10 @@ const CategoryMaster = () => {
                                           setIsEditModalOpen(true);
                                           setActiveRowDropdown(null);
                                         }}
-                                        className="w-full px-5 py-2.5 flex items-center gap-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318]"
+                                        className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
                                       >
                                         <Eye
-                                          size={16}
+                                          size={18}
                                           className="text-gray-400"
                                         />{" "}
                                         {t("modules:view_and_edit_category")}
@@ -948,12 +945,12 @@ const CategoryMaster = () => {
                                             "sub_category",
                                           );
                                         }}
-                                        className="w-full px-5 py-2.5 flex items-center gap-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#073318]"
+                                        className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
                                       >
                                         {item.status === "INACTIVE" ? (
-                                          <CheckCircle2 size={16} />
+                                          <CheckCircle2 size={18} className="text-[#073318]" />
                                         ) : (
-                                          <XCircle size={16} />
+                                          <XCircle size={18} />
                                         )}
                                         {item.status === "INACTIVE"
                                           ? t("common:active")
@@ -967,31 +964,39 @@ const CategoryMaster = () => {
 
                             {/* SubSubCategories List */}
                             {hasSubSubs && isSubExpanded && (
-                              <div className="flex flex-col bg-gray-100/40 pb-2">
+                              <div className="animate-in slide-in-from-top-2 duration-300">
                                 {item.sub_sub_categories.map((subSub) => {
                                   const ssDropdownId = `ss-${subSub.id}`;
                                   return (
                                     <div
                                       key={subSub.id}
-                                      className="flex items-center justify-between py-2 pl-[76px] text-[12px] hover:bg-white transition-colors group"
+                                      className="flex items-center justify-between py-2 md:py-4 border-b border-[#F3F4F6] transition-all duration-200 group-row bg-white hover:bg-gray-50"
                                     >
-                                      <div className="flex items-center gap-3">
-                                        <div className="w-3 h-[1px] bg-gray-300" />
-                                        <span className="font-medium text-gray-500">
-                                          {subSub.name}
-                                        </span>
+                                      <div
+                                        className="flex items-center flex-1 select-none gap-3"
+                                        style={{ paddingLeft: '52px' }}
+                                      >
+                                        <div className="w-6 h-6 flex items-center justify-center">
+                                          <div className="w-1.5 h-1.5 bg-[#4B5563] rounded-full ml-0.5" />
+                                        </div>
+                                        <div className="flex flex-col">
+                                          <span className={`text-[14px] transition-colors font-medium ${subSub.status === "INACTIVE" ? "text-gray-400" : "text-[#374151]"}`}>
+                                            {subSub.name}
+                                          </span>
+                                        </div>
                                       </div>
                                       <div className="flex items-stretch shrink-0">
-                                        <div className="w-[120px] flex items-center justify-center px-4">
+                                        <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4">
                                           <div
-                                            className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${subSub.status === "INACTIVE" ? "bg-red-50 text-red-500" : "bg-emerald-50 text-emerald-500"}`}
+                                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${subSub.status === "INACTIVE" ? "bg-[#FEF2F2] text-[#DC2626]" : "bg-[#ECFDF5] text-[#059669]"}`}
                                           >
+                                            <span className={`w-1.5 h-1.5 rounded-full ${subSub.status === "INACTIVE" ? "bg-[#DC2626]" : "bg-[#059669]"}`}></span>
                                             {subSub.status === "INACTIVE"
                                               ? t("common:inactive")
                                               : t("common:active")}
                                           </div>
                                         </div>
-                                        <div className="w-20 flex items-center justify-center px-4 relative">
+                                        <div className="w-16 md:w-20 flex items-center justify-center px-4 relative">
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
@@ -1002,14 +1007,14 @@ const CategoryMaster = () => {
                                                   : ssDropdownId,
                                               );
                                             }}
-                                            className={`dropdown-trigger p-1 rounded-md text-gray-400 hover:text-[#073318] ${activeRowDropdown === ssDropdownId ? "text-[#111827] bg-gray-200" : ""}`}
+                                            className={`dropdown-trigger p-1.5 rounded-md transition-all duration-200 ${activeRowDropdown === ssDropdownId ? "bg-gray-100 text-[#111827]" : "text-gray-400 hover:text-[#073318] hover:bg-white border border-transparent"}`}
                                           >
-                                            <MoreVertical size={14} />
+                                            <MoreVertical size={18} />
                                           </button>
                                           {activeRowDropdown ===
                                             ssDropdownId && (
                                             <div
-                                              className={`dropdown-menu absolute right-[80%] w-max min-w-[180px] bg-white border border-gray-100 rounded-xl shadow-lg z-[130] py-2 ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0" : "top-0"}`}
+                                              className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in zoom-in-95 duration-200 text-left ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
                                             >
                                               <button
                                                 onClick={(e) => {
@@ -1021,10 +1026,10 @@ const CategoryMaster = () => {
                                                   setIsEditModalOpen(true);
                                                   setActiveRowDropdown(null);
                                                 }}
-                                                className="w-full px-4 py-2 flex items-center gap-2.5 text-[12px] font-bold text-gray-600 hover:bg-gray-50"
+                                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
                                               >
                                                 <Eye
-                                                  size={14}
+                                                  size={18}
                                                   className="text-gray-400"
                                                 />{" "}
                                                 {t(
@@ -1040,13 +1045,13 @@ const CategoryMaster = () => {
                                                     "sub_sub_category",
                                                   );
                                                 }}
-                                                className="w-full px-4 py-2 flex items-center gap-2.5 text-[12px] font-bold text-gray-600 hover:bg-gray-50"
+                                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
                                               >
                                                 {subSub.status ===
                                                 "INACTIVE" ? (
-                                                  <CheckCircle2 size={14} />
+                                                  <CheckCircle2 size={18} className="text-[#073318]" />
                                                 ) : (
-                                                  <XCircle size={14} />
+                                                  <XCircle size={18} />
                                                 )}
                                                 {subSub.status === "INACTIVE"
                                                   ? t("common:active")
@@ -1061,12 +1066,12 @@ const CategoryMaster = () => {
                                 })}
                               </div>
                             )}
-                          </div>
+                          </React.Fragment>
                         );
                       })}
                     </div>
                   )}
-                </div>
+                </React.Fragment>
               );
             })
           ) : (

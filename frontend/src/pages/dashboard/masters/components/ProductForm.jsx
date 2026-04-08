@@ -31,9 +31,9 @@ const CustomSelect = ({
   const filteredOptions =
     isSearchable && searchTerm
       ? options.filter((opt) => {
-        const label = getOptionLabel ? getOptionLabel(opt) : opt;
-        return label?.toLowerCase().includes(searchTerm.toLowerCase());
-      })
+          const label = getOptionLabel ? getOptionLabel(opt) : opt;
+          return label?.toLowerCase().includes(searchTerm.toLowerCase());
+        })
       : options;
 
   useEffect(() => {
@@ -176,8 +176,10 @@ const ProductForm = ({
   const [nameError, setNameError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
-  const [isAddSubCategoryModalOpen, setIsAddSubCategoryModalOpen] = useState(false);
-  const [isAddSubSubCategoryModalOpen, setIsAddSubSubCategoryModalOpen] = useState(false);
+  const [isAddSubCategoryModalOpen, setIsAddSubCategoryModalOpen] =
+    useState(false);
+  const [isAddSubSubCategoryModalOpen, setIsAddSubSubCategoryModalOpen] =
+    useState(false);
   const [isAddUomModalOpen, setIsAddUomModalOpen] = useState(false);
   const suggestionsRef = useRef(null);
 
@@ -255,7 +257,8 @@ const ProductForm = ({
       // Sub Category is now optional
       error = "";
     } else if (field === "subsubcategory") {
-      if (!value && subSubCategories.length > 0) error = "Please select Sub Sub Category";
+      if (!value && subSubCategories.length > 0)
+        error = "Please select Sub Sub Category";
     }
 
     setErrors((prev) => {
@@ -291,15 +294,15 @@ const ProductForm = ({
   const isDirty =
     mode === "edit"
       ? formData.productName !== initialFormData.productName ||
-      formData.productCode !== initialFormData.productCode ||
-      formData.uom !== initialFormData.uom ||
-      formData.productType !== initialFormData.productType ||
-      formData.category !== initialFormData.category ||
-      formData.subcategory !== initialFormData.subcategory ||
-      formData.subsubcategory !== initialFormData.subsubcategory ||
-      formData.hsnCode !== initialFormData.hsnCode ||
-      formData.tax !== initialFormData.tax ||
-      formData.description !== initialFormData.description
+        formData.productCode !== initialFormData.productCode ||
+        formData.uom !== initialFormData.uom ||
+        formData.productType !== initialFormData.productType ||
+        formData.category !== initialFormData.category ||
+        formData.subcategory !== initialFormData.subcategory ||
+        formData.subsubcategory !== initialFormData.subsubcategory ||
+        formData.hsnCode !== initialFormData.hsnCode ||
+        formData.tax !== initialFormData.tax ||
+        formData.description !== initialFormData.description
       : true;
 
   useEffect(() => {
@@ -368,7 +371,8 @@ const ProductForm = ({
 
   const fetchSubSubCategoriesDropdown = async (subCatId) => {
     try {
-      const subSubs = await productService.getSubSubCategoriesDropdown(subCatId);
+      const subSubs =
+        await productService.getSubSubCategoriesDropdown(subCatId);
       setSubSubCategories(subSubs);
     } catch (error) {
       console.error("Error fetching subsubcategories:", error);
@@ -422,7 +426,9 @@ const ProductForm = ({
     setSubSubCategories([]);
     if (val?.id) {
       try {
-        const subSubs = await productService.getSubSubCategoriesDropdown(val.id);
+        const subSubs = await productService.getSubSubCategoriesDropdown(
+          val.id,
+        );
         setSubSubCategories(subSubs);
       } catch (error) {
         console.error("Error fetching subsubcategories:", error);
@@ -501,7 +507,9 @@ const ProductForm = ({
                             ${isView || readOnly ? "cursor-not-allowed bg-gray-50 text-gray-500" : "bg-white text-[#111827] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10 hover:border-gray-300"}`}
             value={formData[field]}
             onFocus={() =>
-              isProductName && suggestions.length > 0 && setShowSuggestions(true)
+              isProductName &&
+              suggestions.length > 0 &&
+              setShowSuggestions(true)
             }
             onChange={(e) => {
               let val = e.target.value;
@@ -514,30 +522,33 @@ const ProductForm = ({
             }}
           />
 
-          {isProductName && showSuggestions && !isView && suggestions.length > 0 && (
-            <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-gray-100 rounded-[8px] shadow-lg z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="max-h-[200px] overflow-y-auto w-full py-1 custom-scrollbar">
-                {suggestions.map((suggestion, idx) => (
-                  <div
-                    key={idx}
-                    className="px-4 py-2.5 text-[14px] text-[#4B5563] hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => {
-                      handleInputChange("productName", suggestion);
-                      setShowSuggestions(false);
-                      setNameError(
-                        t(
-                          "modules:duplicate_product_name",
-                          "Product name already exists",
-                        ),
-                      );
-                    }}
-                  >
-                    {suggestion}
-                  </div>
-                ))}
+          {isProductName &&
+            showSuggestions &&
+            !isView &&
+            suggestions.length > 0 && (
+              <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-gray-100 rounded-[8px] shadow-lg z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="max-h-[200px] overflow-y-auto w-full py-1 custom-scrollbar">
+                  {suggestions.map((suggestion, idx) => (
+                    <div
+                      key={idx}
+                      className="px-4 py-2.5 text-[14px] text-[#4B5563] hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => {
+                        handleInputChange("productName", suggestion);
+                        setShowSuggestions(false);
+                        setNameError(
+                          t(
+                            "modules:duplicate_product_name",
+                            "Product name already exists",
+                          ),
+                        );
+                      }}
+                    >
+                      {suggestion}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </div>
         {(errors[field] || (isProductName && nameError)) && (
           <p className="text-[12px] text-red-500 mt-0.5">
@@ -571,17 +582,23 @@ const ProductForm = ({
           { label: t("modules:product_code"), value: formData.productCode },
           {
             label: t("modules:uom"),
-            value: formData.uom ? `${formData.uom.gst_uom} – ${formData.uom.full_name_of_measurement}` : "-"
+            value: formData.uom
+              ? `${translateDynamic(formData.uom.gst_uom, t)} – ${translateDynamic(formData.uom.full_name_of_measurement, t)}`
+              : "-",
           },
           { label: t("modules:product_type"), value: formData.productType },
           {
             label: t("modules:sub_category"),
             value: formData.subcategory?.name,
           },
-          ...(formData.subsubcategory ? [{
-            label: t("modules:sub_sub_category", "Sub-SubCategory"),
-            value: formData.subsubcategory?.name,
-          }] : []),
+          ...(formData.subsubcategory
+            ? [
+                {
+                  label: t("modules:sub_sub_category", "Sub-SubCategory"),
+                  value: formData.subsubcategory?.name,
+                },
+              ]
+            : []),
           { label: t("modules:hsn_code"), value: formData.hsnCode },
           { label: t("modules:tax_percent"), value: formData.tax },
           {
@@ -619,7 +636,7 @@ const ProductForm = ({
           onClick={() => onEdit && onEdit(initialData)}
           className="px-8 h-[46px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center min-w-[140px]"
         >
-          Save Product
+          {t('modules:saveProduct')}
         </button>
       </div>
     </div>
@@ -637,7 +654,7 @@ const ProductForm = ({
           <div>
             <h2 className="text-[20px] font-bold text-[#111827] tracking-tight">
               {mode === "add"
-                ? "Add New Product"
+                ? t('modules:addNewProduct')
                 : mode === "edit"
                   ? "Edit Product"
                   : "View Product"}
@@ -663,7 +680,9 @@ const ProductForm = ({
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : 'Save Product'}
+                ) : (
+                  t('modules:saveProduct')
+                )}
               </button>
             ) : null}
             <button
@@ -696,11 +715,15 @@ const ProductForm = ({
 
             <CustomSelect
               label={t("modules:uom")}
-              placeholder={t("common:select") + " " + t("modules:uom")}
+              placeholder={t("modules:selectUOM")}
               options={uomList}
               value={formData.uom}
               onChange={(val) => handleInputChange("uom", val)}
-              getOptionLabel={(opt) => opt.gst_uom && opt.full_name_of_measurement ? `${opt.gst_uom} – ${opt.full_name_of_measurement}` : opt.gst_uom}
+              getOptionLabel={(opt) =>
+                opt.gst_uom && opt.full_name_of_measurement
+                  ? `${translateDynamic(opt.gst_uom, t)} – ${translateDynamic(opt.full_name_of_measurement, t)}`
+                  : translateDynamic(opt.gst_uom, t)
+              }
               isSearchable={true}
               showAsterisk={true}
               disabled={isView}
@@ -711,7 +734,7 @@ const ProductForm = ({
 
             <CustomSelect
               label={t("modules:product_type")}
-              placeholder={t("common:select") + " " + t("modules:product_type")}
+              placeholder={t("modules:selectProductType")}
               options={PRODUCT_TYPES}
               value={formData.productType}
               onChange={(val) => handleInputChange("productType", val)}
@@ -722,7 +745,7 @@ const ProductForm = ({
 
             <CustomSelect
               label={t("modules:category")}
-              placeholder={t("common:select") + " " + t("modules:category")}
+              placeholder={t("modules:selectCategory")}
               options={categories}
               value={formData.category}
               onChange={(val) => handleCategoryChange(val)}
@@ -736,7 +759,7 @@ const ProductForm = ({
 
             <CustomSelect
               label={t("modules:sub_category")}
-              placeholder={t("common:select") + " " + t("modules:sub_category")}
+              placeholder={t("modules:selectSubCategory")}
               options={subCategories}
               value={formData.subcategory}
               onChange={(val) => handleSubCategoryChange(val)}
@@ -750,7 +773,18 @@ const ProductForm = ({
 
             <CustomSelect
               label={t("modules:sub_sub_category", "Sub-SubCategory")}
-              placeholder={!formData.subcategory ? t("modules:select_subcategory_first", "Select Subcategory first") : subSubCategories.length === 0 ? t("modules:no_sub_sub_available", "No Sub-Sub Categories available") : t("common:select") + " " + t("modules:sub_sub_category", "Sub-SubCategory")}
+              placeholder={
+                !formData.subcategory
+                  ? t("modules:selectSubSubCategory")
+                  : subSubCategories.length === 0
+                    ? t(
+                        "modules:no_sub_sub_available",
+                        "No Sub-Sub Categories available",
+                      )
+                    : t("common:select") +
+                      " " +
+                      t("modules:sub_sub_category", "Sub-SubCategory")
+              }
               options={subSubCategories}
               value={formData.subsubcategory}
               onChange={(val) => handleInputChange("subsubcategory", val)}
@@ -765,7 +799,7 @@ const ProductForm = ({
             {renderInput(
               t("modules:hsn_code"),
               "hsnCode",
-              t("common:enter") + " " + t("modules:hsn_code"),
+              t("modules:enterHSNCode"),
             )}
             <div className="flex flex-col gap-1.5 w-full">
               <label className="text-[13px] font-semibold text-[#4B5563]">
@@ -809,7 +843,9 @@ const ProductForm = ({
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : t('modules:save_product', 'Save Product')}
+              ) : (
+                t("modules:saveProduct")
+              )}
             </button>
           </div>
         )}
@@ -827,7 +863,7 @@ const ProductForm = ({
           }
         }}
         onShowToast={(msg, type) => {
-          if (type === 'error') toast.error(msg);
+          if (type === "error") toast.error(msg);
           else toast.success(msg);
         }}
       />
@@ -847,7 +883,7 @@ const ProductForm = ({
           }
         }}
         onShowToast={(msg, type) => {
-          if (type === 'error') toast.error(msg);
+          if (type === "error") toast.error(msg);
           else toast.success(msg);
         }}
       />
@@ -867,7 +903,7 @@ const ProductForm = ({
           }
         }}
         onShowToast={(msg, type) => {
-          if (type === 'error') toast.error(msg);
+          if (type === "error") toast.error(msg);
           else toast.success(msg);
         }}
       />
@@ -882,7 +918,7 @@ const ProductForm = ({
           }
         }}
         onShowToast={(msg, type) => {
-          if (type === 'error') toast.error(msg);
+          if (type === "error") toast.error(msg);
           else toast.success(msg);
         }}
       />

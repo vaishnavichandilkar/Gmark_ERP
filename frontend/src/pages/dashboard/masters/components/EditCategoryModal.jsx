@@ -194,7 +194,7 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
                     {/* Name Input */}
                     <div className="space-y-2">
                         <label className="text-[13px] font-semibold text-[#4B5563]">
-                            {isSubSubCategory ? t('modules:sub_sub_category_name') : isSubCategory ? t('modules:sub_category_name') : t('modules:category_name')}
+                            {isSubSubCategory ? t('modules:sub_sub_category_name') : isSubCategory ? t('modules:sub_category_name') : t('modules:categoryName')}
                         </label>
                         <input
                             type="text"
@@ -214,7 +214,7 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
                     {/* Move Level Selection */}
                     <div className="space-y-3">
                         <label className="text-[13px] font-semibold text-[#4B5563]">
-                            {t('modules:relocate_hierarchy', 'Relocate Hierarchy')}
+                            {t('modules:relocateHierarchy')}
                         </label>
 
                         <div className="grid grid-cols-1 gap-2">
@@ -225,7 +225,7 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
                                     <div className={`w-2 h-2 bg-white rounded-full transition-opacity ${targetLevel === 'none' ? 'opacity-100' : 'opacity-0'}`} />
                                 </div>
                                 <span className={`text-[14px] font-bold tracking-tight ${targetLevel === 'none' ? 'text-emerald-900' : 'text-[#111827]'}`}>
-                                    {t('modules:keep_current_level', 'Keep Current Level')}
+                                    {t('modules:keepCurrentLevel')}
                                 </span>
                             </label>
 
@@ -238,9 +238,9 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className={`text-[14px] font-bold tracking-tight ${targetLevel === 'category' ? 'text-emerald-900' : 'text-[#111827]'}`}>
-                                            {t('modules:move_to_category', 'Move to Category')}
+                                            {t('modules:moveToCategory')}
                                         </span>
-                                        <SimpleTooltip message="Move to Category → Bring this to top level" />
+                                        <SimpleTooltip message={t('modules:moveToCategoryTooltip')} />
                                     </div>
                                 </label>
                             )}
@@ -254,9 +254,9 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className={`text-[14px] font-bold tracking-tight ${targetLevel === 'sub_category' ? 'text-emerald-900' : 'text-[#111827]'}`}>
-                                            {t('modules:move_to_subcategory', 'Move to Sub-Category')}
+                                            {t('modules:moveToSubCategory')}
                                         </span>
-                                        <SimpleTooltip message={isCategory && isCategoryMoveToSubBlocked ? "Cannot move. It has items inside." : "Move to SubCategory → Place this under another category"} />
+                                        <SimpleTooltip message={isCategory && isCategoryMoveToSubBlocked ? t('modules:cannotMoveItemsInside') : t('modules:moveToSubCategoryTooltip')} />
                                     </div>
                                     {(isCategory && isCategoryMoveToSubBlocked) && (
                                         <div className="ml-auto flex items-center gap-2 text-red-500 bg-red-50 px-2 py-1 rounded-md border border-red-100">
@@ -276,9 +276,9 @@ const EditCategoryModal = ({ isOpen, onClose, data, onSuccess, onShowToast }) =>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className={`text-[14px] font-bold tracking-tight ${targetLevel === 'sub_sub_category' ? 'text-emerald-900' : 'text-[#111827]'}`}>
-                                            {t('modules:move_to_sub_sub', 'Move to Sub-SubCategory')}
+                                            {t('modules:moveToSubSubCategory')}
                                         </span>
-                                        <SimpleTooltip message={(isCategory ? isCategoryMoveToSubSubBlocked : hasSubSubCategories) ? "Cannot move. It has items inside." : "Move to SubSubCategory → Place this under a subcategory"} />
+                                        <SimpleTooltip message={(isCategory ? isCategoryMoveToSubSubBlocked : hasSubSubCategories) ? t('modules:cannotMoveItemsInside') : t('modules:moveToSubSubCategoryTooltip')} />
                                     </div>
                                     {(isCategory ? isCategoryMoveToSubSubBlocked : hasSubSubCategories) && (
                                         <div className="ml-auto flex items-center gap-2 text-red-500 bg-red-50 px-2 py-1 rounded-md border border-red-100">

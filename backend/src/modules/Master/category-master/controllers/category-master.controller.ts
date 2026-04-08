@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, ParseIntPipe, Query, UseGuards, Request, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, ParseIntPipe, Query, UseGuards, Request, Res, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CategoryMasterService } from '../services/category-master.service';
@@ -205,5 +206,23 @@ export class CategoryMasterController {
         @Param('id', ParseIntPipe) id: number,
     ) {
         return this.service.promoteSubSubToCategory(id, req.user.userId);
+    }
+
+    @Get('export')
+    @ApiOperation({ summary: 'Export categories list to XLSX or PDF format' })
+    async exportCategories(
+        @Request() req,
+        @Res() res: Response,
+        @Query('format') format: string,
+    ) {
+        const file = await this.service.exportCategories(format.toLowerCase(), req.user.userId);
+
+        res.set({
+            'Content-Type': file.mimetype,
+            'Content-Disposition': `attachment; filename="${file.filename}"`,
+            'Content-Length': file.buffer.length,
+        });
+
+        res.send(file.buffer);
     }
 }

@@ -3,6 +3,7 @@ import { MasterStatus } from '@prisma/client';
 import { CategoryMasterRepository } from '../repositories/category-master.repository';
 import { CreateCategoryDto, CreateSubCategoryDto, CreateSubSubCategoryDto, ToggleStatusDto, UpdateCategoryDto, UpdateSubCategoryDto, UpdateSubSubCategoryDto } from '../dto/category.dto';
 import * as ExcelJS from 'exceljs';
+import * as PDFDocument from 'pdfkit';
 
 @Injectable()
 export class CategoryMasterService {
@@ -371,5 +372,147 @@ export class CategoryMasterService {
         } catch (error) {
             throw new BadRequestException(error.message);
         }
+    }
+
+    async exportCategories(format: string, userId: number) {
+        const categories = await this.repository.getCategoryWithSubCategories(userId);
+
+        if (categories.length === 0) {
+            throw new BadRequestException('No data available to export');
+        }
+
+        const flattenedData = [];
+        categories.forEach(cat => {
+            flattenedData.push({
+                name: cat.name,
+                level: 'Category',
+                parent: '-',
+                status: cat.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive'
+            });
+
+            (cat.sub_categories || []).forEach(sub => {
+                flattenedData.push({
+                    name: sub.name,
+                    level: 'Sub Category',
+                    parent: cat.name,
+                    status: sub.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive'
+                });
+
+                (sub.sub_sub_categories || []).forEach(ss => {
+                    flattenedData.push({
+                        name: ss.name,
+                        level: 'Sub-SubCategory',
+                        parent: sub.name,
+                        status: ss.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive'
+                    });
+                });
+            });
+        });
+
+        const now = new Date();
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const timestamp = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}, ${pad(now.getHours() % 12 || 12)}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${now.getHours() >= 12 ? 'pm' : 'am'}`;
+
+        if (format === 'xlsx') {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Categories');
+
+            worksheet.columns = [
+                { header: 'Sr. No', key: 'srNo', width: 10 },
+                { header: 'Name', key: 'name', width: 35 },
+                { header: 'Hierarchy Level', key: 'level', width: 20 },
+                { header: 'Parent Name', key: 'parent', width: 30 },
+                { header: 'Status', key: 'status', width: 12 }
+            ];
+
+            flattenedData.forEach((item, index) => {
+                worksheet.addRow({
+                    srNo: index + 1,
+                    ...item
+                });
+            });
+
+            worksheet.spliceRows(1, 0, [], [], [], []);
+            worksheet.mergeCells('A1:E1');
+            worksheet.getCell('A1').value = 'ERP';
+            worksheet.getCell('A1').font = { size: 18, bold: true };
+            worksheet.getCell('A1').alignment = { horizontal: 'center' };
+
+            worksheet.mergeCells('A2:E2');
+            worksheet.getCell('A2').value = 'Category Master Report';
+            worksheet.getCell('A2').font = { size: 14 };
+            worksheet.getCell('A2').alignment = { horizontal: 'center' };
+
+            worksheet.mergeCells('A3:E3');
+            worksheet.getCell('A3').value = `Exported on: ${timestamp}`;
+            worksheet.getCell('A3').alignment = { horizontal: 'right' };
+
+            const headerRow = worksheet.getRow(5);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            return {
+                buffer: Buffer.from(buffer),
+                filename: `category_master_${Date.now()}.xlsx`,
+                mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            };
+        }
+
+        if (format === 'pdf') {
+            return new Promise<any>((resolve) => {
+                const doc = new PDFDocument({ margin: 30, size: 'A4' });
+                const buffers: Buffer[] = [];
+                doc.on('data', buffers.push.bind(buffers));
+                doc.on('end', () => {
+                    resolve({
+                        buffer: Buffer.concat(buffers),
+                        filename: `category_master_${Date.now()}.pdf`,
+                        mimetype: 'application/pdf'
+                    });
+                });
+
+                doc.fontSize(18).font('Helvetica-Bold').text('ERP', { align: 'center' });
+                doc.fontSize(14).font('Helvetica').text('Category Master Report', { align: 'center' });
+                doc.fontSize(10).text(`Exported on: ${timestamp}`, { align: 'right' });
+                doc.moveDown();
+
+                const tableTop = 100;
+                const colX = [40, 80, 240, 380, 480];
+                const headers = ['Sr.', 'Name', 'Hierarchy Level', 'Parent Name', 'Status'];
+
+                doc.rect(30, tableTop - 5, 535, 20).fill('#4472C4');
+                doc.fontSize(10).font('Helvetica-Bold').fillColor('#FFFFFF');
+                headers.forEach((h, i) => doc.text(h, colX[i], tableTop));
+
+                let y = tableTop + 20;
+                doc.fillColor('#000000').font('Helvetica').fontSize(9);
+
+                flattenedData.forEach((item, i) => {
+                    if (y > 750) {
+                        doc.addPage();
+                        y = 50;
+                        doc.rect(30, y - 5, 535, 20).fill('#4472C4');
+                        doc.fillColor('#FFFFFF').font('Helvetica-Bold');
+                        headers.forEach((h, idx) => doc.text(h, colX[idx], y));
+                        y += 20;
+                        doc.fillColor('#000000').font('Helvetica');
+                    }
+
+                    if (i % 2 === 1) doc.rect(30, y - 3, 535, 15).fill('#F2F2F2').fillColor('#000000');
+
+                    doc.text((i + 1).toString(), colX[0], y);
+                    doc.text(item.name, colX[1], y, { width: 150 });
+                    doc.text(item.level, colX[2], y);
+                    doc.text(item.parent, colX[3], y, { width: 90 });
+                    doc.text(item.status, colX[4], y);
+                    y += 18;
+                });
+
+                doc.end();
+            });
+        }
+
+        throw new BadRequestException('Invalid export format. Use xlsx or pdf.');
     }
 }

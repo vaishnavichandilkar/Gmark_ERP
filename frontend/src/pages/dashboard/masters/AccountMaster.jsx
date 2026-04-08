@@ -669,7 +669,7 @@ const AccountMaster = () => {
                                             <div className="p-4 bg-gray-50 rounded-full">
                                                 <Database size={32} className="text-gray-300" />
                                             </div>
-                                            <p className="text-[#6B7280] font-medium">{t('modules:no_accounts_found', 'No accounts found')}</p>
+                                            <p className="text-[#6B7280] font-medium">{t('modules:noAccountsFound')}</p>
                                         </div>
                                     </td>
                                 </tr>

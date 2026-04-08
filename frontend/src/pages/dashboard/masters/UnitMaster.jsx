@@ -504,7 +504,7 @@ const UnitMaster = () => {
                                             <td className="px-3 md:px-6 py-3 md:py-5 text-gray-500 font-medium border-r border-[#F3F4F6]">{startIndex + index + 1}</td>
                                             <td className="px-3 md:px-6 py-3 md:py-5 font-bold text-[#111827] border-r border-[#F3F4F6]">{row.unit_name}</td>
                                             <td className="px-3 md:px-6 py-3 md:py-5 text-[#6B7280] max-w-[300px] truncate border-r border-[#F3F4F6]">{row.full_name_of_measurement || '-'}</td>
-                                            <td className="px-3 md:px-6 py-3 md:py-5 font-medium text-[#4B5563] border-r border-[#F3F4F6]">{row.gst_uom}</td>
+                                            <td className="px-3 md:px-6 py-3 md:py-5 font-medium text-[#4B5563] border-r border-[#F3F4F6]">{t(`modules:${row.gst_uom?.toLowerCase()}`, row.gst_uom)}</td>
                                             <td className="px-3 md:px-6 py-3 md:py-5 border-r border-[#F3F4F6]">
                                                 <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${row.status === 'ACTIVE' ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
                                                     <span className={`w-1.5 h-1.5 rounded-full ${row.status === 'ACTIVE' ? 'bg-[#059669]' : 'bg-[#DC2626]'}`}></span>
@@ -650,7 +650,7 @@ const UnitMaster = () => {
                                 onChange={(e) => setFilterInputs({ ...filterInputs, gstUom: e.target.value })}
                                 options={[
                                     { label: t('common:all'), value: "" },
-                                    ...gstUomOptions.map(u => ({ label: u, value: u }))
+                                    ...gstUomOptions.map(u => ({ label: t(`modules:${u.toLowerCase()}`, u), value: u }))
                                 ]}
                             />
 
@@ -672,7 +672,7 @@ const UnitMaster = () => {
                                     type="text"
                                     value={filterInputs.unitName}
                                     onChange={(e) => setFilterInputs({ ...filterInputs, unitName: e.target.value })}
-                                    placeholder="Enter unit name"
+                                    placeholder={t('modules:enterUnitName')}
                                     className="w-full h-[46px] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-[#111827] outline-none focus:border-[#014A36] bg-white font-medium"
                                 />
                             </div>
@@ -683,7 +683,7 @@ const UnitMaster = () => {
                                 onClick={handleClearFilter}
                                 className="flex-1 h-[46px] bg-white border border-[#E5E7EB] text-[#374151] text-[15px] font-semibold rounded-[10px] hover:bg-gray-50 transition-colors shadow-sm"
                             >
-                                Clear
+                                {t('modules:clear')}
                             </button>
                             <button
                                 onClick={handleApplyFilter}

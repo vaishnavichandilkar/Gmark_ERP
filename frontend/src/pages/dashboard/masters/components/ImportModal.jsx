@@ -114,10 +114,10 @@ const ImportModal = ({ isOpen, onClose, onImport, sampleFileName, sampleHeaders,
                                 />
                                 <div className="flex items-center w-full border border-dashed border-[#D1D5DB] rounded-[8px] bg-[#F9FAFB] overflow-hidden group hover:border-[#0A3622] transition-colors cursor-pointer" onClick={() => document.getElementById('modal-import-file').click()}>
                                     <div className="bg-[#F3F4F6] px-4 h-[42px] flex items-center justify-center border-r border-dashed border-[#D1D5DB] group-hover:border-[#0A3622] transition-colors">
-                                        <span className="text-[13px] font-bold text-[#4B5563] whitespace-nowrap">{t('common:choose_file', 'Choose File')}</span>
+                                        <span className="text-[13px] font-bold text-[#4B5563] whitespace-nowrap">{t('modules:chooseFile')}</span>
                                     </div>
                                     <div className="flex-1 px-4 truncate text-[13px] text-[#6B7280]">
-                                        {selectedFile ? selectedFile.name : t('common:no_file_chosen', 'No file chosen')}
+                                        {selectedFile ? selectedFile.name : t('modules:noFileChosen')}
                                     </div>
                                 </div>
                             </div>

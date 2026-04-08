@@ -57,10 +57,10 @@ const ImportModal = ({ isOpen, onClose, onImport, title }) => {
                                 />
                                 <div className="flex items-center w-full h-full">
                                     <div className="h-full px-4 flex items-center bg-transparent border-r border-[#E5E7EB] text-[13px] font-bold text-[#4B5563]">
-                                        {t('common:choose_file', 'Choose File')}
+                                        {t('modules:chooseFile')}
                                     </div>
                                     <div className="px-4 text-[13px] text-[#9CA3AF] truncate italic">
-                                        {fileName || t('common:no_file_chosen', 'No file chosen')}
+                                        {fileName || t('modules:noFileChosen')}
                                     </div>
                                 </div>
                             </label>

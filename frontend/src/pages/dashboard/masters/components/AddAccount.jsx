@@ -1537,11 +1537,12 @@ const AddAccount = ({
                           <label className="text-[13px] font-semibold text-[#4B5563]">
                             {t("modules:uploadFile")} <span className="text-red-500">*</span>
                           </label>
-                          <div className="flex items-center">
+                          <div className="relative flex items-center">
                             <input
                               type="file"
+                              id={`file-${idx}`}
                               accept=".pdf, .jpg, .jpeg, .png"
-                              className="w-full text-[14px] text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-[13px] file:font-semibold file:bg-[#E5F0ED] file:text-[#0A3622] hover:file:bg-[#d6e7e2] cursor-pointer"
+                              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                               onChange={(e) => {
                                 const file = e.target.files[0];
                                 if (file && file.size > 10 * 1024 * 1024)
@@ -1551,6 +1552,14 @@ const AddAccount = ({
                                 setOtherDocs(newDocs);
                               }}
                             />
+                            <div className="flex items-center gap-3 w-full border border-[#E5F0ED] rounded-md bg-[#F9FAFB] overflow-hidden">
+                              <span className="px-4 py-2 bg-[#E5F0ED] text-[#0A3622] text-[13px] font-semibold hover:bg-[#d6e7e2] transition-colors whitespace-nowrap">
+                                {t('modules:chooseFile')}
+                              </span>
+                              <span className="px-3 text-[14px] text-gray-500 truncate flex-1">
+                                {doc.file ? doc.file.name : t('modules:noFileChosen')}
+                              </span>
+                            </div>
                           </div>
                           {/* Replaced implicit filename showing with the native file input which handles string generation automatically alongside chosen file */}
                         </div>
