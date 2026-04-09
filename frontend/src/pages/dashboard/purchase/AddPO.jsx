@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ROUTES } from '../../../constants/routes';
 import { toast } from 'react-hot-toast';
@@ -28,10 +28,21 @@ const AddPO = () => {
     const navigate = useNavigate();
     const { id } = useParams();
     const isEditMode = Boolean(id);
+    const creationDateRef = useRef(null);
+    const expiryDateRef = useRef(null);
 
     const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
     const [supplierSearch, setSupplierSearch] = useState('');
     const [suppliers, setSuppliers] = useState([]);
+    // Helper: Get Local Today String
+    const getLocalToday = () => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     const [formData, setFormData] = useState({
         supplier_id: '',
         supplier_name: '',
@@ -39,7 +50,7 @@ const AddPO = () => {
         po_number: '', 
         gst_number: '',
         credit_days: '',
-        creation_date: new Date().toISOString().split('T')[0],
+        creation_date: getLocalToday(),
         expiry_date: '',
         pan_number: ''
     });
@@ -78,13 +89,19 @@ const AddPO = () => {
     useEffect(() => {
         const fetchInitialLists = async () => {
             try {
-                const response = await accountService.getAllAccounts({ groupName: 'SUNDRY_CREDITORS' });
+                const response = await accountService.getAllAccounts({ 
+                    groupName: 'SUNDRY_CREDITORS',
+                    limit: 1000 
+                });
                 const fetchedSuppliers = response.data || [];
                 setSuppliers(fetchedSuppliers);
 
-                // Recover Draft if exists
+                // 🛠️ Selective Draft Recovery: Only restore if explicitly requested via URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const isExplicitRestore = urlParams.get('restore') === 'true' || urlParams.get('redirect');
+                
                 const draftStr = sessionStorage.getItem('add_po_draft');
-                if (draftStr) {
+                if (draftStr && isExplicitRestore) {
                     try {
                         const draft = JSON.parse(draftStr);
                         let restoredFormData = draft.formData;
@@ -156,6 +173,9 @@ const AddPO = () => {
                         sessionStorage.removeItem('add_po_supplier_ids');
                         sessionStorage.removeItem('add_po_product_ids');
                     }
+                } else if (draftStr && !isExplicitRestore && !isEditMode) {
+                    // If we found a draft but we're starting fresh, clear it to avoid confusion
+                    sessionStorage.removeItem('add_po_draft');
                 }
             } catch (error) {
                 console.error("Error fetching suppliers:", error);
@@ -185,8 +205,10 @@ const AddPO = () => {
     // Initial load for Edit Mode or PO Number generation
     useEffect(() => {
         const loadInitialData = async () => {
-            // Skip initial data load if we've already restored a draft (from Preview or Master redirect)
-            if (isRestoringDraft) return;
+            // Skip initial data load if we're already restoring a draft 
+            // or if a restoration is intended (restore=true in URL)
+            const urlParams = new URLSearchParams(window.location.search);
+            if (isRestoringDraft || urlParams.get('restore') === 'true') return;
 
             if (isEditMode) {
                 try {
@@ -248,6 +270,41 @@ const AddPO = () => {
         }
     }, [formData, items]);
 
+    // Helper: Smart Date Formatter
+    const toDisplayDate = (dateStr) => {
+        if (!dateStr) return "";
+        // If it's in ISO format YYYY-MM-DD
+        if (dateStr.length === 10 && dateStr.charAt(4) === '-') {
+            const [y, m, d] = dateStr.split("-");
+            return `${d}-${m}-${y}`;
+        }
+        return dateStr;
+    };
+
+    // Helper: DD-MM-YYYY to YYYY-MM-DD
+    const toIsoDate = (displayDate) => {
+        if (!displayDate || !displayDate.includes("-")) return displayDate;
+        const parts = displayDate.split("-");
+        // Only convert if it looks like DD-MM-YYYY
+        if (parts.length === 3 && parts[0].length === 2 && parts[2].length === 4) {
+            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        return displayDate;
+    };
+
+    const handleDateTextChange = (e, field) => {
+        const inputVal = e.target.value;
+        const digits = inputVal.replace(/\D/g, "").substring(0, 8);
+        
+        // Auto-format as they type
+        let formatted = digits;
+        if (digits.length >= 3) formatted = digits.substring(0, 2) + "-" + digits.substring(2);
+        if (digits.length >= 5) formatted = formatted.substring(0, 5) + "-" + digits.substring(5);
+
+        // Update formData immediately with the formatted string to allow typing
+        setFormData(prev => ({ ...prev, [field]: formatted }));
+    };
+
     // Filtered suppliers for dropdown
     const filteredSuppliers = useMemo(() => {
         return (suppliers || []).filter(s => 
@@ -282,30 +339,35 @@ const AddPO = () => {
         try {
             // Requirement 1: Optionally fetch fresh details for PO creation
             const details = await purchaseOrderService.getSupplierDetails(supplier.id);
-            setFormData({
-                ...formData,
+            setFormData(prev => ({
+                ...prev,
                 supplier_id: supplier.id,
                 supplier_name: details.supplierName,
                 address: details.address,
                 gst_number: details.gstNumber || '',
-                credit_days: details.creditDays || '',
+                credit_days: details.creditDays || 0, // Default to 0 instead of empty string if needed
                 pan_number: details.panNumber || ''
-            });
+            }));
             setSupplierSearch(details.supplierName);
         } catch (error) {
+            console.error("Error fetching supplier details:", error);
             // Fallback to local data if fresh fetch fails
-            setFormData({
-                ...formData,
+            setFormData(prev => ({
+                ...prev,
                 supplier_id: supplier.id,
                 supplier_name: supplier.accountName,
                 address: supplier.addressLine1 + (supplier.addressLine2 ? ', ' + supplier.addressLine2 : ''),
                 gst_number: supplier.gstNo || '',
-                credit_days: supplier.supplierCreditDays || supplier.creditDays || '',
+                credit_days: supplier.supplierCreditDays || supplier.creditDays || 0,
                 pan_number: supplier.panNo || ''
-            });
+            }));
             setSupplierSearch(supplier.accountName);
         }
         setIsSupplierDropdownOpen(false);
+        // Clear restore param once actioned
+        if (window.location.search.includes('restore=true')) {
+            navigate(window.location.pathname, { replace: true });
+        }
     };
 
     const handleQuickAddProduct = (product, targetIndex = null) => {
@@ -316,7 +378,7 @@ const AddPO = () => {
             product_name: product.product_name || product.productName || '', 
             quantity: 1, 
             rate: product.purchaseRate || product.purchase_rate || product.rate || 0, 
-            uom: product.uom?.unit_name || product.uom?.gst_uom || product.uom || 'NOS', 
+            uom: product.uom ? `${product.uom.unit_name} - ${product.uom.full_name_of_measurement}` : 'NOS', 
             discount_amount: 0, 
             discount_percent: 0, 
             hsn: product.hsn_code || product.hsn || '', 
@@ -483,9 +545,21 @@ const AddPO = () => {
             // Optional but recommended, let's keep it non-blocking if user cleared it but maybe set a default or just allow it.
             // Requirement says fetched and editable. If they clear it, we might want to warn or just allow.
         }
-        if (!formData.creation_date) newErrors.creation_date = "Creation date is required";
+        const isValidIso = (d) => d && d.length === 10 && d.split("-").length === 3 && d.split("-")[0].length === 4;
+
+        if (!formData.creation_date) {
+            newErrors.creation_date = "Required";
+        } else if (!isValidIso(toIsoDate(formData.creation_date))) {
+            newErrors.creation_date = "Enter valid date (DD-MM-YYYY)";
+        }
+
         if (!formData.po_number) newErrors.po_number = "PO number is required";
-        if (!formData.expiry_date) newErrors.expiry_date = "Expiry date is required";
+
+        if (!formData.expiry_date) {
+            newErrors.expiry_date = "Required";
+        } else if (!isValidIso(toIsoDate(formData.expiry_date))) {
+            newErrors.expiry_date = "Enter valid date (DD-MM-YYYY)";
+        }
 
         // Validate items
         const validItems = items.filter(item => item.product_name);
@@ -525,8 +599,8 @@ const AddPO = () => {
             gstNo: formData.gst_number,
             panNo: formData.pan_number,
             poNumber: formData.po_number,
-            poCreationDate: formData.creation_date,
-            expiryDate: formData.expiry_date,
+            poCreationDate: toIsoDate(formData.creation_date),
+            expiryDate: toIsoDate(formData.expiry_date),
             items: items.filter(item => item.product_name).map(item => ({
                 productId: item.product_id,
                 productCode: item.product_code,
@@ -630,7 +704,12 @@ const AddPO = () => {
         };
         // Save draft to session storage before navigating to preview
         sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
-        navigate(ROUTES.PURCHASE_ORDER_PRINT, { state: { poData: fullPOData } });
+        navigate(ROUTES.PURCHASE_ORDER_PRINT, { 
+            state: { 
+                poData: fullPOData, 
+                from: isEditMode ? ROUTES.PURCHASE_ORDER_EDIT.replace(':id', id) : ROUTES.PURCHASE_ORDER_ADD 
+            } 
+        });
     };
 
     const totalBillAmount = items.reduce((sum, item) => sum + (Number(item.total_amount) || 0), 0);
@@ -646,7 +725,7 @@ const AddPO = () => {
                     </div>
                     
                     <button 
-                        onClick={() => navigate(-1)}
+                        onClick={() => navigate(ROUTES.PURCHASE_ORDER)}
                         className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[40px] sm:h-[44px] border border-[#E5E7EB] rounded-[10px] text-[14px] md:text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all font-outfit shadow-sm"
                     >
                         <ArrowLeft size={18} /> 
@@ -744,13 +823,30 @@ const AddPO = () => {
 
                         <div className="space-y-2 font-outfit">
                             <label className="text-[14px] font-semibold text-[#374151]">PO Creation Date</label>
-                            <input
-                                type="date"
-                                placeholder="Enter Date"
-                                value={formData.creation_date}
-                                readOnly
-                                className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.creation_date ? 'border-red-500' : 'border-[#E5E7EB]'}`}
-                            />
+                            <div className="relative">
+                                <input
+                                    type="date"
+                                    ref={creationDateRef}
+                                    className="absolute opacity-0 pointer-events-none w-0 h-0"
+                                    value={formData.creation_date}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, creation_date: e.target.value }))}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="DD-MM-YYYY"
+                                    value={toDisplayDate(formData.creation_date)}
+                                    // Change to read/write if they want to type, but the previous instruction said "directly"
+                                    // Let's keep it readOnly for now as per previous session, 
+                                    // but allow the calendar icon to trigger the picker.
+                                    readOnly
+                                    className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 pr-11 text-[14px] outline-none cursor-not-allowed ${errors.creation_date ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                                />
+                                <Calendar 
+                                    size={18} 
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto" 
+                                    onClick={() => creationDateRef.current?.showPicker?.() || creationDateRef.current?.focus()}
+                                />
+                            </div>
                             {errors.creation_date && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.creation_date}</p>}
                         </div>
 
@@ -769,13 +865,27 @@ const AddPO = () => {
 
                         <div className="space-y-2 font-outfit">
                             <label className="text-[14px] font-semibold text-[#374151]">Expiry Date <span className="text-red-500">*</span></label>
-                            <input
-                                type="date"
-                                placeholder="Enter expire date"
-                                value={formData.expiry_date}
-                                onChange={(e) => setFormData({ ...formData, expiry_date: e.target.value })}
-                                className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none transition-all ${errors.expiry_date ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
-                            />
+                            <div className="relative">
+                                <input
+                                    type="date"
+                                    ref={expiryDateRef}
+                                    className="absolute opacity-0 pointer-events-none w-0 h-0"
+                                    value={formData.expiry_date}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, expiry_date: e.target.value }))}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="DD-MM-YYYY"
+                                    value={toDisplayDate(formData.expiry_date)}
+                                    onChange={(e) => handleDateTextChange(e, 'expiry_date')}
+                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-11 text-[14px] outline-none transition-all ${errors.expiry_date ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
+                                />
+                                <Calendar 
+                                    size={18} 
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto shadow-sm hover:text-[#073318]" 
+                                    onClick={() => expiryDateRef.current?.showPicker?.() || expiryDateRef.current?.focus()}
+                                />
+                            </div>
                             {errors.expiry_date && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.expiry_date}</p>}
                         </div>
 
@@ -897,10 +1007,10 @@ const AddPO = () => {
                                 </th>
                                 {[
                                     { label: "Product Code", width: "160px" },
-                                    { label: "Product", width: "350px" },
+                                    { label: "Product Name", width: "350px" },
                                     { label: "Quantity", width: "120px" },
                                     { label: "Rate", width: "120px" },
-                                    { label: "UOM", width: "100px" },
+                                    { label: "UOM", width: "140px" },
                                     { label: "Discount Amount", width: "160px" },
                                     { label: "Discount (%)", width: "140px" },
                                     { label: "HSN Code", width: "140px" },
@@ -987,7 +1097,7 @@ const AddPO = () => {
                                                 setActiveRowIndex(index);
                                                 setIsProductSearchOpen(true);
                                             }}
-                                            className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] text-center outline-none font-medium ${!item.product_name ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed'}`}
+                                            className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none font-medium ${!item.product_name ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed'}`}
                                         />
                                     </td>
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
@@ -1134,8 +1244,8 @@ const AddPO = () => {
                                                             <td className={`px-4 py-3 border-l border-emerald-100 text-right ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-900 font-black'}`}>
                                                                 ₹{p.purchaseRate || p.rate || 0}
                                                             </td>
-                                                            <td className={`px-4 py-3 border-l border-emerald-100 text-center ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-800 font-bold'}`}>
-                                                                {p.uom?.unit_name || p.uom || 'NOS'}
+                                                            <td className={`px-4 py-3 border-l border-emerald-100 text-center whitespace-nowrap ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-800 font-bold'}`}>
+                                                                {p.uom ? `${p.uom.unit_name} - ${p.uom.full_name_of_measurement}` : 'NOS'}
                                                             </td>
                                                             <td colSpan={2} className={`px-4 py-3 border-l border-emerald-100 text-center italic text-[11px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-400'}`}>
                                                                 Select this item to continue
@@ -1220,7 +1330,7 @@ const AddPO = () => {
                         Save PO
                     </button>
                     <button 
-                        onClick={() => navigate(-1)}
+                        onClick={() => navigate(ROUTES.PURCHASE_ORDER)}
                         className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 md:px-10 h-[48px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all shadow-sm order-3"
                     >
                         Cancel

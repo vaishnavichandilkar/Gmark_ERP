@@ -40,7 +40,7 @@ const POPrintPreview = () => {
             <div className="flex flex-col items-center justify-center h-screen gap-4">
                 <p className="text-gray-500 font-outfit text-[13px]">No PO data found for preview.</p>
                 <button
-                    onClick={() => navigate(-1)}
+                    onClick={() => navigate('/seller/purchase/order/add?restore=true')}
                     className="px-6 py-2 bg-[#073318] text-white rounded-[10px] font-bold text-[13px]"
                 >
                     Go Back
@@ -245,7 +245,20 @@ const POPrintPreview = () => {
                     <button onClick={() => window.print()} className="px-6 h-[40px] bg-[#073318] text-white rounded-[10px] font-bold text-[14px] flex items-center justify-center">
                         Print PO
                     </button>
-                    <button onClick={() => navigate(-1)} className="px-6 h-[40px] border border-gray-300 rounded-[10px] font-bold text-[14px] flex items-center justify-center gap-2">
+                    <button 
+                        onClick={() => {
+                            if (location.state?.from) {
+                                // Add restore=true if we're going back to Add or Edit page
+                                const targetUrl = location.state.from;
+                                const needsRestore = targetUrl.includes('/add') || targetUrl.includes('/edit');
+                                navigate(targetUrl + (needsRestore ? (targetUrl.includes('?') ? '&' : '?') + 'restore=true' : ''));
+                            } else {
+                                const url = poData?.id ? `/seller/purchase/order/add/${poData.id}` : '/seller/purchase/order/add';
+                                navigate(`${url}?restore=true`);
+                            }
+                        }} 
+                        className="px-6 h-[40px] border border-gray-300 rounded-[10px] font-bold text-[14px] flex items-center justify-center gap-2"
+                    >
                         <ArrowLeft size={16} /> Back
                     </button>
                 </div>
@@ -334,9 +347,14 @@ const POPrintPreview = () => {
                                 </thead>
                                 <tbody>
                                     {items.map((item, idx) => (
-                                        <tr key={item.id || idx} className="text-[12px] font-semibold h-[40px]">
+                                        <tr key={item.id || idx} className="text-[12px] font-semibold min-h-[40px]">
                                             <td className="border-b border-r border-black text-center">{idx + 1}</td>
-                                            <td className="border-b border-r border-black px-4 font-black">{item.productName || item.product_name}</td>
+                                            <td className="border-b border-r border-black px-4 py-2 leading-tight">
+                                                <div className="font-bold text-[13px]">{item.productName || item.product_name}</div>
+                                                {(item.description || item.printDescription) && (
+                                                    <div className="font-normal text-[11px] mt-1 text-gray-700 whitespace-pre-wrap">{item.description || item.printDescription}</div>
+                                                )}
+                                            </td>
                                             <td className="border-b border-r border-black text-center">{item.hsnCode || item.hsn}</td>
                                             <td className="border-b border-r border-black text-center">{item.taxPercent || item.tax_percent}</td>
                                             <td className="border-b border-r border-black text-center">{item.quantity}</td>

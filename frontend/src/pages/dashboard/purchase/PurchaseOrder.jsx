@@ -19,7 +19,8 @@ import {
   Upload,
   CloudUpload,
   Trash2,
-  XCircle
+  XCircle,
+  Check
 } from "lucide-react";
 import toast from 'react-hot-toast';
 import { ROUTES } from "../../../constants/routes";
@@ -27,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 
 import purchaseOrderService from "../../../services/purchaseOrderService";
 import ScrollableTable from "../../../components/common/ScrollableTable";
+import FilterDropdown from "../../../pages/dashboard/masters/components/FilterDropdown";
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
   if (!isOpen) return null;
@@ -131,48 +133,53 @@ const PurchaseOrder = () => {
   };
 
   // Logic: Fetch Data
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const params = {
-          page: currentPage,
-          limit: itemsPerPage,
-          search: searchQuery,
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage,
+        search: searchQuery,
+      };
+      
+      const statusFilter = appliedFilters.status;
+      if (statusFilter !== "All") {
+        const statusMap = {
+          "Pending": "pending",
+          "Completed": "completed",
+          "Deleted": "deleted",
+          "Expiring Soon": "expiring",
+          "Expired": "expired"
         };
-        
-        const statusFilter = appliedFilters.status;
-        if (statusFilter !== "All") {
-          const statusMap = {
-            "Pending": "pending",
-            "Completed": "completed",
-            "Deleted": "deleted",
-            "Expiring Soon": "expiring",
-            "Expired": "expired"
-          };
-          params.filter = statusMap[statusFilter];
-        }
-
-        const response = await purchaseOrderService.getPurchaseOrders(params);
-        const data = Array.isArray(response) ? response : (response.data || []);
-        setPurchaseOrders(data);
-        setTotalItemsCount(response.meta?.total || data.length);
-      } catch (error) {
-        console.error("Error fetching purchase orders:", error);
-      } finally {
-        setIsLoading(false);
+        params.filter = statusMap[statusFilter];
       }
-    };
 
+      const response = await purchaseOrderService.getPurchaseOrders(params);
+      const data = Array.isArray(response) ? response : (response.data || []);
+      setPurchaseOrders(data);
+      setTotalItemsCount(response.meta?.total || data.length);
+    } catch (error) {
+      console.error("Error fetching purchase orders:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
-  }, [currentPage, itemsPerPage, searchQuery, appliedFilters, isRefreshing]);
+  }, [currentPage, itemsPerPage, searchQuery, appliedFilters]);
 
   // Logic: Click Outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (exportRef.current && !exportRef.current.contains(event.target)) {
-        setIsExportOpen(false);
+      // Check if click was outside export trigger/menu
+      const isOutsideExport = 
+          (!exportRef.current || !exportRef.current.contains(event.target));
+      
+      if (isOutsideExport) {
+          setIsExportOpen(false);
       }
+
       if (activeDropdown !== null) {
         const ref = dropdownRefs.current[activeDropdown];
         if (ref && !ref.contains(event.target)) {
@@ -186,7 +193,7 @@ const PurchaseOrder = () => {
 
   // Memoized: Computed Data
   const filteredData = useMemo(() => {
-    return purchaseOrders.map(po => {
+    const rawMapped = purchaseOrders.map(po => {
       const status = po.status;
       const expDate = parseDate(po.expiryDate);
       const now = new Date();
@@ -198,35 +205,46 @@ const PurchaseOrder = () => {
       let bgClass = "bg-orange-100 text-orange-600";
 
       if (status === 'INVOICE_GENERATED') {
-        computedStatusLabel = "Completed"; bgClass = "bg-emerald-100 text-emerald-600";
+        computedStatusLabel = "Completed"; bgClass = "bg-emerald-50 text-emerald-600 border border-emerald-100";
       } else if (status === 'DELETED') {
-        computedStatusLabel = "Deleted"; bgClass = "bg-red-100 text-red-600";
+        computedStatusLabel = "Deleted"; bgClass = "bg-red-50 text-red-600 border border-red-100";
       } else if (expiryEndOfDay < now) {
-        computedStatusLabel = "Expired"; bgClass = "bg-red-100 text-red-600";
+        computedStatusLabel = "Expired"; bgClass = "bg-red-50 text-red-600 border border-red-100";
       } else if (diffHrs > 0 && diffHrs <= 48) {
-        computedStatusLabel = "Expiring Soon"; bgClass = "bg-amber-100 text-amber-600";
+        computedStatusLabel = "Expiring Soon"; bgClass = "bg-amber-50 text-amber-600 border border-amber-100";
       } else {
-        computedStatusLabel = "Pending"; bgClass = "bg-gray-100 text-gray-600";
+        computedStatusLabel = "Pending"; bgClass = "bg-blue-50 text-blue-600 border border-blue-100";
       }
 
       return { ...po, computedStatusLabel, bgClass };
     });
-  }, [purchaseOrders]);
 
-  const totalPages = Math.ceil(totalItemsCount / itemsPerPage);
-  const currentItems = filteredData;
+    // Refine based on applied filter
+    if (!appliedFilters.status || appliedFilters.status === "All") return rawMapped;
+    return rawMapped.filter(item => item.computedStatusLabel === appliedFilters.status);
+  }, [purchaseOrders, appliedFilters.status]);
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const currentItems = filteredData.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+  );
 
   // Handlers
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
+    try {
+      await fetchData();
       toast.success("Data refreshed successfully");
-    }, 400);
+    } catch (error) {
+      toast.error("Failed to refresh data");
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleApplyFilter = () => {
@@ -255,7 +273,7 @@ const PurchaseOrder = () => {
       toast.success("Purchase order deleted successfully");
       setIsDeleteModalOpen(false);
       setPoToDelete(null);
-      setIsRefreshing(prev => !prev);
+      await fetchData();
     } catch (error) {
       console.error("Delete error:", error);
       toast.error(error.response?.data?.message || "Failed to delete PO");
@@ -268,7 +286,12 @@ const PurchaseOrder = () => {
     try {
       setIsRefreshing(true);
       const fullPo = await purchaseOrderService.getPurchaseOrderById(poData.id);
-      navigate(ROUTES.PURCHASE_ORDER_PRINT, { state: { poData: fullPo } });
+      navigate(ROUTES.PURCHASE_ORDER_PRINT, { 
+        state: { 
+          poData: fullPo, 
+          from: '/seller/purchase/order' 
+        } 
+      });
     } catch (error) {
       console.error("Print error:", error);
       toast.error("Failed to load print preview");
@@ -355,10 +378,13 @@ const PurchaseOrder = () => {
   return (
     <div className="flex flex-col w-full relative">
       {/* Title & Action Bar */}
-      <div className="flex flex-col md:flex-row gap-4 mb-6 md:mb-8 justify-between items-center font-outfit uppercase">
+      <div className="flex flex-col md:flex-row gap-4 mb-6 md:mb-8 justify-between items-center font-outfit">
         <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">{t('modules:purchase_order', 'Purchase Order')}</h1>
         <button
-          onClick={() => navigate('/seller/purchase/order/add')}
+          onClick={() => {
+            sessionStorage.removeItem('add_po_draft');
+            navigate('/seller/purchase/order/add');
+          }}
           className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 duration-200"
         >
           <Plus size={18} /> {t('modules:add_po', 'Add PO')}
@@ -374,22 +400,22 @@ const PurchaseOrder = () => {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
                 type="text"
-                placeholder={t('common:search_by_anything', 'Search By Anything...')}
+                placeholder={t('common:search_by_anything', 'Search by anything...')}
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 font-bold"
+                className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10"
               />
               {searchQuery && <X size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer" onClick={() => setSearchQuery("")} />}
             </div>
-            <button onClick={handleRefresh} className={`w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] flex items-center justify-center hover:bg-gray-50 transition-all ${isRefreshing ? 'animate-spin border-[#073318]' : ''}`}>
-              <RefreshCw size={18} className={isRefreshing ? "text-[#073318]" : "text-gray-400"} />
-            </button>
-            <button
-              onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
-              className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all uppercase ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-[#E5E7EB] text-[#4B5563]'}`}
+            <button 
+              onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)} 
+              className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all shadow-sm ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-white border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
             >
               <Filter size={18} className={isFilterApplied ? "text-red-500" : "text-gray-400"} />
-              {isFilterApplied ? "Clear" : "Apply Filters"}
+              {isFilterApplied ? t('common:clear', 'Clear') : t('common:filter', 'Filter')}
+            </button>
+            <button onClick={handleRefresh} className="flex items-center justify-center w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] hover:bg-gray-50 bg-white">
+              <RefreshCw size={18} className={`text-gray-400 ${isRefreshing ? 'animate-spin border-[#073318]' : ''}`} />
             </button>
           </div>
 
@@ -417,7 +443,7 @@ const PurchaseOrder = () => {
             <thead>
               <tr className="bg-emerald-900 text-white font-bold text-[15px] uppercase">
                 {["Po No", "Supplier Name", "Creation Date", "Expiry Date", "Amount", "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status", "Action"].map(h => (
-                  <th key={h} className="px-6 py-5 border-r border-white/10">{h}</th>
+                  <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -425,26 +451,39 @@ const PurchaseOrder = () => {
               {currentItems.length > 0 ? (
                 currentItems.map((po, idx) => (
                   <tr key={po.id || idx} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
-                    <td className="px-6 py-5 font-bold">{po.poNumber}</td>
-                    <td className="px-6 py-5 font-bold uppercase">{po.supplierName}</td>
-                    <td className="px-6 py-5 font-bold text-[#4B5563]">{formatDate(po.poCreationDate)}</td>
-                    <td className="px-6 py-5 font-bold text-[#4B5563]">{formatDate(po.expiryDate)}</td>
-                    <td className="px-6 py-5 font-bold">{(po.totalAmount || 0).toFixed(2)}</td>
-                    <td className="px-6 py-5 font-bold text-center">{po.gstNumber || '-'}</td>
-                    <td className="px-6 py-5 font-bold text-center">{po.creditDays || 0}</td>
-                    <td className="px-6 py-5 font-bold text-center">{(po.taxAmount || 0).toFixed(2)}</td>
-                    <td className="px-6 py-5 font-bold text-[#073318]">{(po.grandTotal || 0).toFixed(2)}</td>
+                    <td className="px-6 py-5">{po.poNumber}</td>
+                    <td className="px-6 py-5 font-bold">
+                      {po.supplierName ? po.supplierName.toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) : '-'}
+                    </td>
+                    <td className="px-6 py-5 text-[#4B5563]">{formatDate(po.poCreationDate)}</td>
+                    <td className="px-6 py-5 text-[#4B5563]">{formatDate(po.expiryDate)}</td>
+                    <td className="px-6 py-5">{(po.totalAmount || 0).toFixed(2)}</td>
+                    <td className="px-6 py-5 text-center">{po.gstNumber || '-'}</td>
+                    <td className="px-6 py-5 text-center">{po.creditDays || 0}</td>
+                    <td className="px-6 py-5 text-center">{(po.taxAmount || 0).toFixed(2)}</td>
+                    <td className="px-6 py-5 text-[#073318]">{(po.grandTotal || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 text-center">
-                      <span className={`px-4 py-1.5 ${po.bgClass} rounded-full text-[12px] font-bold uppercase shadow-sm inline-flex min-w-[100px] justify-center`}>{po.computedStatusLabel}</span>
+                      <span className={`px-4 py-1.5 ${po.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{po.computedStatusLabel}</span>
                     </td>
                     <td className="px-6 py-5 text-center relative" ref={el => dropdownRefs.current[po.id] = el}>
                       <button onClick={() => setActiveDropdown(activeDropdown === po.id ? null : po.id)} className={`p-2 rounded-lg ${activeDropdown === po.id ? 'bg-[#073318] text-white' : 'text-gray-400 hover:bg-gray-100'}`}><MoreVertical size={20} /></button>
                       {activeDropdown === po.id && (
                         <div className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= currentItems.length - 2 ? 'bottom-0' : 'top-0'}`}>
-                          <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50"><Eye size={18} /> View / Edit PO</button>
-                          <button onClick={() => handlePrint(po)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50"><Download size={18} /> Print PO</button>
-                          {po.computedStatusLabel !== 'Deleted' && (
-                            <button onClick={() => handleDeletePO(po.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50 uppercase"><Trash2 size={18} /> Delete</button>
+                          {/* VIEW / VIEW & EDIT */}
+                          {['Pending', 'Expiring Soon'].includes(po.computedStatusLabel) ? (
+                            <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50 underline-offset-4 decoration-emerald-500 hover:text-emerald-700"><Eye size={18} /> View and Edit PO</button>
+                          ) : (
+                            <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Eye size={18} /> View PO</button>
+                          )}
+
+                          {/* PRINT */}
+                          {['Pending', 'Expiring Soon', 'Completed', 'Expired'].includes(po.computedStatusLabel) && (
+                            <button onClick={() => handlePrint(po)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Download size={18} /> Print PO</button>
+                          )}
+
+                          {/* DELETE */}
+                          {['Expired'].includes(po.computedStatusLabel) && (
+                            <button onClick={() => handleDeletePO(po.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50"><Trash2 size={18} /> Delete</button>
                           )}
                         </div>
                       )}
@@ -482,17 +521,55 @@ const PurchaseOrder = () => {
       {isImportModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" onClick={() => setIsImportModalOpen(false)} />
-          <div className="relative bg-white w-full max-w-[500px] rounded-[24px] shadow-2xl p-10 space-y-8 animate-in zoom-in-95 duration-300">
-            <h3 className="text-[20px] font-bold text-[#111827] uppercase text-center tracking-tight font-outfit">Import Data</h3>
-            <button onClick={handleDownloadSample} className="w-full py-4 border-2 border-emerald-100 bg-emerald-50 text-emerald-700 rounded-[14px] font-bold uppercase transition-all hover:bg-emerald-100 flex items-center justify-center gap-3"><Download size={20} /> Download Sample</button>
-            <div className="space-y-4 font-outfit">
-              <span className="text-[13px] font-bold text-gray-500 uppercase tracking-widest block text-center">Upload File</span>
-              <div className="border-2 border-dashed border-gray-200 rounded-[14px] h-[56px] flex items-center overflow-hidden bg-gray-50">
-                <label className="h-full px-6 flex items-center justify-center bg-gray-100 border-r-2 border-dashed border-gray-200 font-bold uppercase text-[14px] cursor-pointer hover:bg-gray-200 transition-all font-outfit">Browse<input type="file" className="hidden" onChange={(e) => setSelectedFile(e.target.files[0])} /></label>
-                <span className="px-6 text-[14px] font-bold text-gray-400 truncate flex-1 uppercase tracking-tight">{selectedFile ? selectedFile.name : 'No file chosen...'}</span>
+          <div className="relative bg-white w-full max-w-[450px] rounded-[16px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 font-outfit">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-[18px] font-bold text-[#111827]">Import Data</h3>
+              <button onClick={() => setIsImportModalOpen(false)} className="text-gray-400 hover:text-gray-600 border border-gray-100 p-1 rounded-full"><X size={18} /></button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Download Sample */}
+              <div className="flex justify-center">
+                <button 
+                  onClick={handleDownloadSample} 
+                  className="flex items-center gap-2 px-6 py-2.5 bg-[#E8F5E9] text-[#1B5E20] rounded-[10px] text-[14px] font-bold hover:bg-[#C8E6C9] transition-all shadow-sm"
+                >
+                  <Download size={18} /> Download Sample
+                </button>
+              </div>
+
+              {/* Divider */}
+              <div className="h-[1px] bg-gray-100 w-full" />
+
+              {/* Upload Section */}
+              <div className="space-y-4">
+                <p className="text-center text-[15px] font-bold text-[#4B5563]">Upload File</p>
+                <div className="flex items-center gap-4">
+                  <span className="text-[14px] text-gray-400 font-medium whitespace-nowrap">Select File</span>
+                  <div className="flex-1 border border-dashed border-[#CBD5E1] rounded-[10px] h-[48px] flex items-center overflow-hidden">
+                    <label className="h-full px-4 flex items-center justify-center bg-[#F8FAFC] border-r border-dashed border-[#CBD5E1] text-[13px] font-bold text-[#475569] cursor-pointer hover:bg-gray-100 transition-all">
+                      Choose File
+                      <input type="file" className="hidden" onChange={(e) => setSelectedFile(e.target.files[0])} />
+                    </label>
+                    <span className="px-4 text-[13px] text-gray-400 truncate flex-1 font-medium">
+                      {selectedFile ? selectedFile.name : 'No file chosen'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="pt-2">
+                <button 
+                  onClick={handleSubmitImport} 
+                  disabled={!selectedFile || isRefreshing} 
+                  className={`w-full h-[48px] rounded-[12px] font-bold flex items-center justify-center gap-2 shadow-md transition-all ${selectedFile ? 'bg-[#7E9F8E] text-white hover:bg-[#6A8B7A]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                >
+                  <CloudUpload size={20} /> {isRefreshing ? 'Importing...' : 'Submit'}
+                </button>
               </div>
             </div>
-            <button onClick={handleSubmitImport} disabled={!selectedFile || isRefreshing} className={`w-full py-4 rounded-[14px] font-bold uppercase shadow-lg transition-all ${selectedFile ? 'bg-[#073318] text-white hover:bg-[#04200f]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>{isRefreshing ? 'Importing...' : 'Submit Data'}</button>
           </div>
         </div>
       )}
@@ -507,27 +584,49 @@ const PurchaseOrder = () => {
         </div>
       )}
 
-      {/* Filter Sidebar */}
-      {isFilterOpen && <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-[4px]" onClick={() => setIsFilterOpen(false)} />}
-      <div className={`fixed top-0 right-0 h-full w-[440px] bg-white shadow-2xl z-[110] transform transition-transform duration-500 ${isFilterOpen ? "translate-x-0" : "translate-x-full"}`}>
-        <div className="bg-[#073318] p-8 flex items-center justify-between">
-          <h2 className="text-white font-bold uppercase text-[20px] tracking-tight font-outfit">Apply Filters</h2>
-          <button onClick={() => setIsFilterOpen(false)} className="text-white/50 hover:text-white transition-all bg-white/10 p-2 rounded-full"><X size={20} /></button>
-        </div>
-        <div className="p-8 space-y-10 flex flex-col h-full bg-white font-outfit">
-          <div className="space-y-4">
-            <label className="text-[14px] font-bold text-gray-400 uppercase tracking-widest block">Status Filter</label>
-            <div className="grid grid-cols-2 gap-3">
-              {statusTabs.map(s => (
-                <button key={s} onClick={() => setFilterInputs({ ...filterInputs, status: s })} className={`h-12 rounded-[12px] font-bold text-[14px] transition-all border uppercase tracking-tight ${filterInputs.status === s ? 'bg-[#073318] border-[#073318] text-white shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'}`}>{s}</button>
-              ))}
-            </div>
+
+      {isFilterOpen && (
+          <div
+              className="fixed inset-0 z-[60] bg-slate-900/20 backdrop-blur-[2px] transition-all duration-300 ease-in-out"
+              onClick={() => setIsFilterOpen(false)}
+          />
+      )}
+
+      <div className={`fixed top-0 right-0 h-full w-screen sm:w-[440px] bg-white shadow-2xl z-[710] transform transition-all duration-300 ease-in-out flex flex-col ${isFilterOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'}`}>
+          <div className="flex items-center justify-between px-6 py-5 border-b border-[#04200f] bg-emerald-900">
+              <h2 className="text-[20px] font-bold text-white tracking-tight">{t('apply_filters', 'Apply Filters')}</h2>
+              <button onClick={() => setIsFilterOpen(false)} className="text-emerald-100 hover:text-white transition-colors p-1">
+                  <X size={20} />
+              </button>
           </div>
-          <div className="mt-auto pb-16 flex gap-4">
-            <button onClick={handleClearFilter} className="flex-1 h-14 border border-[#E5E7EB] rounded-[14px] font-bold uppercase tracking-widest text-gray-600 hover:bg-gray-50 transition-all font-outfit">Clear</button>
-            <button onClick={handleApplyFilter} className="flex-1 h-14 bg-[#073318] text-white rounded-[14px] font-bold uppercase tracking-widest hover:bg-[#04200f] shadow-lg transition-all font-outfit">Apply</button>
+
+          <div className="flex-1 px-5 sm:px-8 py-6 sm:py-8 overflow-y-auto space-y-6 sm:space-y-7 pb-32">
+              <FilterDropdown
+                  label={t('common:status', 'Status')}
+                  name="status"
+                  value={filterInputs.status}
+                  onChange={(e) => setFilterInputs({ ...filterInputs, status: e.target.value })}
+                  options={[
+                    { label: "All", value: "" },
+                    ...statusTabs.map(s => ({ label: s, value: s }))
+                  ]}
+              />
           </div>
-        </div>
+
+          <div className="absolute bottom-0 left-0 w-full px-8 py-6 border-t border-[#E5E7EB] flex items-center gap-4 bg-white">
+              <button
+                  onClick={handleClearFilter}
+                  className="flex-1 h-[46px] bg-white border border-[#E5E7EB] text-[#374151] text-[15px] font-semibold rounded-[10px] hover:bg-gray-50 transition-colors shadow-sm"
+              >
+                  {t('modules:clear', 'Clear')}
+              </button>
+              <button
+                  onClick={handleApplyFilter}
+                  className="flex-1 h-[46px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-colors shadow-sm"
+              >
+                  {t('common:apply_filter', 'Apply Filter')}
+              </button>
+          </div>
       </div>
     </div>
   );

@@ -113,7 +113,12 @@ const ViewPO = () => {
             ...formData,
             items: items
         };
-        navigate(ROUTES.PURCHASE_ORDER_PRINT, { state: { poData: fullPOData } });
+        navigate(ROUTES.PURCHASE_ORDER_PRINT, { 
+            state: { 
+                poData: fullPOData, 
+                from: ROUTES.PURCHASE_ORDER_VIEW.replace(':id', id) 
+            } 
+        });
     };
 
     return (
@@ -163,7 +168,7 @@ const ViewPO = () => {
                         })()}
 
                         <button 
-                            onClick={() => navigate(-1)}
+                            onClick={() => navigate(ROUTES.PURCHASE_ORDER)}
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[44px] border border-[#E5E7EB] rounded-[10px] text-[14px] md:text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all font-outfit"
                         >
                             <ArrowLeft size={18} /> 
@@ -347,15 +352,17 @@ const ViewPO = () => {
                 </div>
 
                 {/* Card Footer Actions */}
-                <div className="flex flex-col sm:flex-row items-center justify-end gap-3 sm:gap-4 px-4 sm:px-8 py-6 border-t border-[#F3F4F6] bg-gray-50/10">
-                    <button 
-                        onClick={handlePrintPreview}
-                        className="w-full sm:w-auto px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all shadow-md flex items-center justify-center gap-2"
-                    >
-                        <Printer size={18} />
-                        Preview & Print
-                    </button>
-                </div>
+                {formData.status !== 'DELETED' && (
+                    <div className="flex flex-col sm:flex-row items-center justify-end gap-3 sm:gap-4 px-4 sm:px-8 py-6 border-t border-[#F3F4F6] bg-gray-50/10">
+                        <button 
+                            onClick={handlePrintPreview}
+                            className="w-full sm:w-auto px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all shadow-md flex items-center justify-center gap-2"
+                        >
+                            <Printer size={18} />
+                            Preview & Print
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
