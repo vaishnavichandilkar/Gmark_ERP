@@ -60,18 +60,25 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
 
         if (pathSegments.length > 0) {
             const formattedSegments = pathSegments.map((segment, index) => {
+                const isSales = pathSegments[0] === 'sales';
+
                 // Special handling for 'add' and 'edit' segments to show verbose labels
-                if (segment === 'add' || segment === 'edit') {
+                if (segment === 'add' || segment === 'edit' || segment === 'view') {
                     const parent = pathSegments[index - 1];
                     if (parent) {
                         let parentKey = parent.replace(/-/g, '_');
                         if (parentKey === 'category') parentKey = 'category_master';
                         
-                        const action = segment === 'add' ? 'add' : 'edit';
+                        const action = segment === 'add' ? 'add' : (segment === 'edit' ? 'edit' : 'view');
                         // Map entity names (e.g., group_master -> group, order -> po/order)
                         let entity = parentKey.replace('_master', '');
-                        if (entity === 'order') entity = 'po';
-                        if (entity === 'invoice') entity = 'purchase_invoice';
+                        
+                        if (entity === 'order') {
+                            entity = isSales ? 'so' : 'po';
+                        }
+                        if (entity === 'invoice') {
+                            entity = isSales ? 'sales_invoice' : 'purchase_invoice';
+                        }
                         
                         const verboseKey = `${action}_${entity}`;
                         const translated = t(`modules:${verboseKey}`, { defaultValue: '' });
@@ -81,6 +88,12 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
 
                 let key = segment.replace(/-/g, '_');
                 if (key === 'category') key = 'category_master';
+                
+                // If it's the 'order' segment under 'sales', use 'sales_order'
+                if (key === 'order' && isSales) {
+                    key = 'sales_order';
+                }
+
                 const translated = t(`modules:${key}`, { defaultValue: '' }) || t(`common:${key}`, { defaultValue: '' });
                 if (translated) return translated;
                 return segment.split(/[_-]/).map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');

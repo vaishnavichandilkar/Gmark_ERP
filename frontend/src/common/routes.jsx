@@ -32,6 +32,13 @@ import GRN from '../pages/dashboard/purchase/GRN';
 import AddPurchaseInvoice from '../pages/dashboard/purchase/AddPurchaseInvoice';
 import POPrintPreview from '../pages/dashboard/purchase/POPrintPreview';
 
+// Sales Pages
+import SalesLayout from '../pages/dashboard/sales/SalesLayout';
+import SalesOrder from '../pages/dashboard/sales/SalesOrder';
+import AddSO from '../pages/dashboard/sales/AddSO';
+import ViewSO from '../pages/dashboard/sales/ViewSO';
+import SalesInvoice from '../pages/dashboard/sales/SalesInvoice';
+
 import SystemSettings from '../features/settings/pages/SystemSettings';
 
 import { ROUTES } from '../constants/routes';
@@ -310,10 +317,31 @@ export const router = createBrowserRouter([
                                       }
                                  ]
                              },
-                            {
-                                path: 'sales',
-                                element: <Placeholder title="Sales" />
-                            },
+                             {
+                                 path: 'sales',
+                                 element: <SalesLayout />,
+                                 children: [
+                                     {
+                                         index: true,
+                                         element: <SalesOrder />
+                                     },
+                                     {
+                                         path: 'order',
+                                         children: [
+                                             { index: true, element: <SalesOrder /> },
+                                             { path: 'add', element: <AddSO /> },
+                                             { path: 'edit/:id', element: <AddSO /> },
+                                             { path: 'view/:id', element: <ViewSO /> }
+                                         ]
+                                     },
+                                     {
+                                         path: 'invoice',
+                                         children: [
+                                             { index: true, element: <SalesInvoice /> }
+                                         ]
+                                     }
+                                 ]
+                             },
                             {
                                 path: 'settings',
                                 element: <SystemSettings />
