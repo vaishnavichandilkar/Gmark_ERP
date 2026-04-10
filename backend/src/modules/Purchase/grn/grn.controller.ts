@@ -56,22 +56,6 @@ export class GrnController {
     res.send(buffer);
   }
 
-  @Get('sample-excel')
-  @ApiOperation({ summary: 'Download GRN Sample Excel File' })
-  async downloadSample(@Res() res: Response) {
-    const { buffer, filename, mimetype } = await this.grnService.downloadSample();
-    res.set({ 'Content-Type': mimetype, 'Content-Disposition': `attachment; filename=${filename}`, 'Content-Length': buffer.length });
-    res.send(buffer);
-  }
-
-  @Post('import')
-  @ApiOperation({ summary: 'Import GRNs from XLSX' })
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('file'))
-  async import(@UploadedFile() file: any, @Request() req) {
-    return this.grnService.importGrns(file.buffer, req.user.id);
-  }
-
   @Get(':id')
   @ApiOperation({ summary: 'Get GRN details by ID' })
   async findOne(@Param('id', ParseIntPipe) id: number) {

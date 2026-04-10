@@ -2,10 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Search, Download, Upload, MoreVertical, Eye, Edit3, CheckCircle2, ChevronDown, RefreshCw, ArrowLeft, ArrowRight, ChevronsUpDown, X, FileText, FileSpreadsheet, Database, FileEdit, Plus } from 'lucide-react';
+import { Search, Download, Upload, MoreVertical, Eye, Edit3, CheckCircle2, ChevronDown, RefreshCw, ArrowLeft, ArrowRight, ChevronsUpDown, X, FileText, FileSpreadsheet, Database, FileEdit, Plus, Printer } from 'lucide-react';
 import AddPurchaseInvoice from './components/AddPurchaseInvoice';
 import ViewPurchaseInvoice from './components/ViewPurchaseInvoice';
-import ImportModal from './components/ImportModal';
 import SuccessToast from '../masters/components/SuccessToast';
 import { exportToPDF, exportToExcel } from '../../../utils/exportUtils';
 import { toast } from '../../../utils/toast-mock';
@@ -26,7 +25,7 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '180',
     grossAmount: '1180',
     status: 'Deleted',
-    actionText: 'View PI',
+    actionText: 'View GRN',
   },
   {
     id: 2,
@@ -41,7 +40,7 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '450',
     grossAmount: '2950',
     status: 'Generated',
-    actionText: 'View & Edit PI',
+    actionText: 'View and Edit GRN',
   },
   {
     id: 3,
@@ -56,7 +55,7 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '630',
     grossAmount: '4130',
     status: 'Deleted',
-    actionText: 'View PI',
+    actionText: 'View GRN',
   },
   {
     id: 4,
@@ -71,7 +70,7 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '900',
     grossAmount: '5900',
     status: 'Generated',
-    actionText: 'View & Edit PI',
+    actionText: 'View and Edit GRN',
   },
   {
     id: 5,
@@ -86,7 +85,7 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '2160',
     grossAmount: '14160',
     status: 'Generated',
-    actionText: 'View & Edit PI',
+    actionText: 'View and Edit GRN',
   },
   {
     id: 6,
@@ -101,7 +100,7 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '1530',
     grossAmount: '10030',
     status: 'Generated',
-    actionText: 'View & Edit PI',
+    actionText: 'View and Edit GRN',
   },
   {
     id: 7,
@@ -116,7 +115,7 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '756',
     grossAmount: '4956',
     status: 'Deleted',
-    actionText: 'View PI',
+    actionText: 'View GRN',
   },
   {
     id: 8,
@@ -131,7 +130,7 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '1206',
     grossAmount: '7906',
     status: 'Generated',
-    actionText: 'View & Edit PI',
+    actionText: 'View and Edit GRN',
   },
   {
     id: 9,
@@ -146,7 +145,7 @@ const INITIAL_MOCK_DATA = [
     taxAmount: '540',
     grossAmount: '3540',
     status: 'Generated',
-    actionText: 'View & Edit PI',
+    actionText: 'View and Edit GRN',
   },
   {
     id: 10,
@@ -179,7 +178,6 @@ const GRN = () => {
 
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [isSearchFocused, setIsSearchFocused] = useState(false);
-    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const exportRef = useRef(null);
 
@@ -190,23 +188,6 @@ const GRN = () => {
 
     const showToast = (message, type = 'success') => {
         setToastMessage({ show: true, message, type });
-    };
-
-    const handleDownloadSample = async () => {
-        try {
-            const blob = await grnService.downloadSample();
-            const url = window.URL.createObjectURL(new Blob([blob]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', 'grn_sample.xlsx');
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            showToast('Sample file downloaded');
-        } catch (error) {
-            console.error('Download failed:', error);
-            showToast('Failed to download sample file', 'error');
-        }
     };
 
     const [rowsPerPage, setRowsPerPage] = useState(5);
@@ -424,9 +405,10 @@ const GRN = () => {
     if (currentView === 'add' || currentView === 'edit') {
         return (
             <AddPurchaseInvoice 
-                onBack={() => navigate('/seller/purchase/invoice')} 
+                onBack={() => navigate('/seller/purchase/grn')} 
                 initialData={selectedInvoice}
                 onSave={handleSave}
+                type="GRN"
             />
         );
     }
@@ -474,7 +456,7 @@ const GRN = () => {
                 
                 {/* Embedded Sub-tabs matching previous structure */}
                 <div className="flex justify-center gap-16 border-b border-[#E5E7EB] w-full mt-6">
-                    {['Invoice', 'GRN'].map((tab) => (
+                    {['GRN', 'Invoice'].map((tab) => (
                         <button
                             key={tab}
                             onClick={() => {
@@ -538,14 +520,6 @@ const GRN = () => {
                         </div>
 
                         <div className="flex flex-row items-center gap-3 w-full sm:w-auto" ref={exportRef}>
-                            <button 
-                                onClick={() => setIsImportModalOpen(true)}
-                                className="flex items-center justify-center gap-2 w-full sm:w-auto px-5 h-[42px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
-                            >
-                                <Upload size={18} className="text-gray-400" />
-                                {t('common:import', 'Import')}
-                            </button>
-
                             <div className="relative w-full sm:w-auto">
                                 <button 
                                     onClick={() => setIsExportOpen(!isExportOpen)}
@@ -622,13 +596,6 @@ const GRN = () => {
                                     <RefreshCw size={22} className={isRefreshing ? 'animate-spin text-[#073318]' : ''} />
                                 </button>
                                 
-                                <button 
-                                    onClick={() => setIsImportModalOpen(true)}
-                                    className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
-                                >
-                                    <Upload size={22} />
-                                </button>
-
                                 <div className="relative mobile-export-trigger px-0">
                                     <button 
                                         onClick={() => setIsExportOpen(!isExportOpen)}
@@ -767,17 +734,30 @@ const GRN = () => {
                                                 }`}
                                             >
                                                 {row.status === 'Generated' ? (
-                                                    <button 
-                                                        onClick={(e) => { 
-                                                            e.stopPropagation(); 
-                                                            navigate(`view/${row.id}`);
-                                                            setDropdownIndex(null); 
-                                                        }} 
-                                                        className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
-                                                    >
-                                                        <FileEdit size={18} className="text-gray-400" />
-                                                        {t('common:view_and_edit_pi', 'View & Edit PI')}
-                                                    </button>
+                                                    <>
+                                                        <button 
+                                                            onClick={(e) => { 
+                                                                e.stopPropagation(); 
+                                                                navigate(`view/${row.id}`);
+                                                                setDropdownIndex(null); 
+                                                            }} 
+                                                            className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
+                                                        >
+                                                            <FileEdit size={18} className="text-gray-400" />
+                                                            View and Edit GRN
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => { 
+                                                                e.stopPropagation(); 
+                                                                navigate('print', { state: { invoiceData: row, type: 'GRN', from: location.pathname } });
+                                                                setDropdownIndex(null); 
+                                                            }} 
+                                                            className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
+                                                        >
+                                                            <Printer size={18} className="text-gray-400" />
+                                                            Print GRN
+                                                        </button>
+                                                    </>
                                                 ) : (
                                                     <>
                                                         <button 
@@ -897,27 +877,6 @@ const GRN = () => {
                 />
             )}
 
-            {/* Import Modal matching the design in the image */}
-            <ImportModal 
-                isOpen={isImportModalOpen}
-                onClose={() => setIsImportModalOpen(false)}
-                onDownloadSample={handleDownloadSample}
-                onImport={async (file) => {
-                    try {
-                        const result = await grnService.importGrns(file);
-                        if (result.success) {
-                            showToast(result.message);
-                            handleRefresh(); // Reload data
-                        } else {
-                            showToast(result.message || 'Import partially failed', 'error');
-                        }
-                    } catch (error) {
-                        console.error('Import failed:', error);
-                        showToast(error.response?.data?.message || 'Import failed', 'error');
-                    }
-                }}
-                title={t('modules:import_data', 'Import Data')}
-            />
         </div>
     );
 };

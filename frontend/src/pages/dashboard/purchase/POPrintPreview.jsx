@@ -253,8 +253,8 @@ const POPrintPreview = () => {
                                 const needsRestore = targetUrl.includes('/add') || targetUrl.includes('/edit');
                                 navigate(targetUrl + (needsRestore ? (targetUrl.includes('?') ? '&' : '?') + 'restore=true' : ''));
                             } else {
-                                const url = poData?.id ? `/seller/purchase/order/add/${poData.id}` : '/seller/purchase/order/add';
-                                navigate(`${url}?restore=true`);
+                                // Fallback to list page instead of dashboard or add
+                                navigate('/seller/purchase/order');
                             }
                         }} 
                         className="px-6 h-[40px] border border-gray-300 rounded-[10px] font-bold text-[14px] flex items-center justify-center gap-2"

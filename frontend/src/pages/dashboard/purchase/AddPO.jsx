@@ -758,17 +758,17 @@ const AddPO = () => {
                                 {isSupplierDropdownOpen && (
                                     <>
                                         <div className="fixed inset-0 z-[65]" onClick={() => setIsSupplierDropdownOpen(false)}></div>
-                                        <div className="absolute top-full left-0 w-full mt-1 bg-white border border-[#E5E7EB] rounded-[10px] shadow-lg z-[70] overflow-hidden font-outfit">
-                                            <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                                        <div className="absolute top-full left-0 w-full mt-1 bg-white border border-[#E5E7EB] rounded-[16px] shadow-2xl z-[70] overflow-hidden font-outfit">
+                                            <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                                                 {filteredSuppliers.length > 0 ? (
                                                     filteredSuppliers.map(s => (
                                                         <button
                                                             key={s.id}
                                                             onClick={() => handleSelectSupplier(s)}
-                                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 text-[14px] transition-colors border-b border-[#F3F4F6] last:border-0"
+                                                            className="w-full text-left px-5 py-3.5 hover:bg-emerald-50 transition-all border-b border-[#F3F4F6] last:border-0 group"
                                                         >
-                                                            <div className="font-bold text-[#111827] font-outfit">{s.accountName}</div>
-                                                            <div className="text-[12px] text-gray-400 font-outfit">{s.gstNo}</div>
+                                                            <div className="font-bold text-[#111827] text-[15px] group-hover:text-emerald-900 transition-colors">{s.accountName}</div>
+                                                            <div className="text-[12px] text-gray-400 mt-0.5">{s.gstNo || 'No GST Number'}</div>
                                                         </button>
                                                     ))
                                                 ) : (
@@ -784,9 +784,9 @@ const AddPO = () => {
                                                         sessionStorage.setItem('add_po_supplier_ids', JSON.stringify(suppliers.map(s => s.id)));
                                                         navigate(`/seller/masters/account-master/add?redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
                                                     }}
-                                                    className="w-full h-[40px] bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-sm font-outfit"
+                                                    className="w-full flex items-center justify-center gap-2 py-3 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-md group font-outfit"
                                                 >
-                                                    <Plus size={16} className="group-hover:scale-110 transition-transform" /> 
+                                                    <Plus size={16} className="group-hover:scale-125 transition-all" /> 
                                                     Add new supplier
                                                 </button>
                                             </div>

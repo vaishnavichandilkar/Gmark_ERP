@@ -1,7 +1,18 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Search, UploadCloud, ChevronDown, ChevronUp, X, FileText, Plus } from 'lucide-react';
+import { 
+    ArrowLeft, Search, Trash2, Plus, Save, Printer, X,
+    ChevronDown, Calendar, FileText, Percent, Hash,
+    ChevronsUpDown, AlertCircle
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { ROUTES } from '../../../../constants/routes';
+
+import accountService from '../../../../services/accountService';
+import productService from '../../../../services/productService';
+import purchaseInvoiceService from '../../../../services/purchaseInvoiceService';
+import grnService from '../../../../services/grnService';
 
 const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave, type = 'Invoice' }) => {
     const navigate = useNavigate();
@@ -10,733 +21,836 @@ const AddPurchaseInvoice = ({ onBack, initialData: propsInitialData, onSave, typ
     const { t } = useTranslation(['modules', 'common']);
     const isEditMode = !!propsInitialData || !!id;
     const documentLabel = type === 'GRN' ? 'GRN' : 'Invoice';
-    const supplierDropdownRef = useRef(null);
-    const productDropdownRef = useRef(null);
-    const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
-    const [showProductDropdown, setShowProductDropdown] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [errors, setErrors] = useState({});
-    
-    // Mini-database for product search
-    const [dummyProducts] = useState([
-        { code: '101', name: 'Premium Maize Silage', uom: 'Ton', hsnCode: '1234', taxPercent: 18 },
-        { code: '102', name: 'Organic Fertilizer Mix', uom: 'Bag', hsnCode: '5678', taxPercent: 18 },
-        { code: '103', name: 'Cattle Feed Elite', uom: 'Ton', hsnCode: '9012', taxPercent: 12 },
-        { code: '104', name: 'Urea Premium', uom: 'Bag', hsnCode: '3456', taxPercent: 5 },
-        { code: '105', name: 'Potash Fertilizer', uom: 'Bag', hsnCode: '7890', taxPercent: 12 }
-    ]);
-    
-    // Manage dynamic supplier options with masters-style data and PO links
-    const [supplierOptions, setSupplierOptions] = useState([
-        { name: 'SilverPeak Traders', creditDays: '15', address: 'Plot 42, GIDC, Surat, Gujarat', poNumber: 'PO-2026-001', gstNo: '24AAAAA0000A1Z5' },
-        { name: 'BlueStone Supplies', creditDays: '30', address: '24 Market Street, Mumbai, Maharashtra', poNumber: 'PO-2026-002', gstNo: '27BBBBB1111B1Z2' },
-        { name: 'GreenLeaf Distributors', creditDays: '45', address: 'Sector 12, Industrial Hub, Gandhinagar', poNumber: 'PO-2026-003', gstNo: '24CCCCC2222C1Z9' },
-        { name: 'Sunrise Global Vendors', creditDays: '60', address: 'Old Station Road, Rajkot, Gujarat', poNumber: 'PO-2026-004', gstNo: '24DDDDD3333D1Z1' }
-    ]);
-    const [isAddSupplierModalOpen, setIsAddSupplierModalOpen] = useState(false);
-    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-    const [newSupplierName, setNewSupplierName] = useState('');
 
-    const handleAddNewSupplier = () => {
-        if (newSupplierName.trim()) {
-            const newSupp = { name: newSupplierName.trim(), creditDays: '0', address: 'New Supplier Address', poNumber: 'PO-NEW-001', gstNo: '' };
-            setSupplierOptions([...supplierOptions, newSupp]);
-            setFormData(prev => ({ 
-                ...prev, 
-                supplierName: newSupp.name,
-                creditDays: newSupp.creditDays,
-                address: newSupp.address,
-                poNumber: newSupp.poNumber,
-                gstNo: newSupp.gstNo
-            }));
-            setNewSupplierName('');
-            setIsAddSupplierModalOpen(false);
-            setSupplierDropdownOpen(false);
-        }
+    // Refs for date pickers
+    const documentDateRef = useRef(null);
+    const bookingDateRef = useRef(null);
+
+    const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
+    const [supplierSearch, setSupplierSearch] = useState('');
+    const [suppliers, setSuppliers] = useState([]);
+    
+    // Helper: Get Local Today String
+    const getLocalToday = () => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     };
 
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (supplierDropdownRef.current && !supplierDropdownRef.current.contains(event.target)) {
-                setSupplierDropdownOpen(false);
-            }
-            if (productDropdownRef.current && !productDropdownRef.current.contains(event.target)) {
-                setShowProductDropdown(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const [formData, setFormData] = useState(propsInitialData ? {
-        supplierName: propsInitialData.supplierName || '',
-        creditDays: propsInitialData.cred || '',
-        address: '24 Market Street, Gujarat', // Example address as mockData currently doesn't have it
-        supplierInvoiceDate: propsInitialData.invoiceDate ? propsInitialData.invoiceDate.split('-').reverse().join('-') : '',
-        poNumber: propsInitialData.poNo || '',
-        bookingDate: propsInitialData.bookingDate ? propsInitialData.bookingDate.split('-').reverse().join('-') : '',
-        supplierInvoiceNumber: propsInitialData.invoiceNo || '',
-        supplierChallanNumber: '',
-        gstNo: propsInitialData.gstNo || ''
-    } : {
-        supplierName: '',
-        creditDays: '',
+    // Basic Form State
+    const [formData, setFormData] = useState({
+        supplier_id: '',
+        supplier_name: '',
         address: '',
-        supplierInvoiceDate: '',
-        poNumber: '',
-        bookingDate: new Date().toISOString().split('T')[0],
-        supplierInvoiceNumber: '',
-        supplierChallanNumber: '',
-        gstNo: ''
+        document_number: '', // Invoice or GRN No
+        gst_no: '',
+        credit_days: '',
+        document_date: getLocalToday(),
+        booking_date: getLocalToday(),
+        po_number: '',
+        attachment: null
     });
 
-    const [products, setProducts] = useState([
+    // Items Table State
+    const [items, setItems] = useState([
         { 
-            id: 1, 
-            code: '101', 
-            name: 'Premium Maize Silage', 
-            quantity: 5, 
-            rate: 200, 
-            uom: 'Ton', 
-            discountAmount: 0, 
-            discountPercent: 0, 
-            hsnCode: '1234', 
-            taxPercent: 18, 
-            beforeTaxAmount: 1000, 
-            taxAmount: 180, 
-            total: 1180 
-        },
-        { 
-            id: 2, 
-            code: '102', 
-            name: 'Organic Fertilizer Mix', 
-            quantity: 12, 
-            rate: 250, 
-            uom: 'Bag', 
-            discountAmount: 0, 
-            discountPercent: 0, 
-            hsnCode: '5678', 
-            taxPercent: 18, 
-            beforeTaxAmount: 3000, 
-            taxAmount: 540, 
-            total: 3540 
+            id: Date.now(), 
+            product_id: null,
+            product_code: '', 
+            product_name: '', 
+            quantity: 0, 
+            rate: 0, 
+            uom: '', 
+            discount_amount: 0, 
+            discount_percent: 0, 
+            hsn: '', 
+            tax_percent: 0, 
+            before_tax: 0, 
+            tax_amount: 0, 
+            total_amount: 0, 
+            description: '' 
         }
     ]);
 
-    const [accounts, setAccounts] = useState([
-        { id: 1, account: 'Material Purchase (G.S.T.)', amount: '4000.00', cumBalance: '4000.00' },
-        { id: 2, account: 'c-gst 9%', amount: '360.00', cumBalance: '4360.00' },
-        { id: 3, account: 's-gst 9%', amount: '360.00', cumBalance: '4720.00' }
-    ]);
+    // UI States
+    const [errors, setErrors] = useState({});
+    const [showValidationPopup, setShowValidationPopup] = useState(false);
+    const [tableSearch, setTableSearch] = useState('');
+    const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
+    const [activeRowIndex, setActiveRowIndex] = useState(null);
+    const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+    const [products, setProducts] = useState([]);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
-    const handleProductChange = (id, field, value) => {
-        setProducts(prev => prev.map(p => {
-            if (p.id === id) {
-                let updated = { ...p, [field]: value };
-                const qty = parseFloat(updated.quantity) || 0;
-                const rate = parseFloat(updated.rate) || 0;
-
-                if (field === 'discountPercent') {
-                    const percent = parseFloat(value) || 0;
-                    updated.discountAmount = ((qty * rate * percent) / 100).toFixed(2);
-                } else if (field === 'discountAmount') {
-                    const amount = parseFloat(value) || 0;
-                    if (qty * rate !== 0) {
-                        updated.discountPercent = ((amount / (qty * rate)) * 100).toFixed(2);
-                    } else {
-                        updated.discountPercent = 0;
-                    }
-                } else if (field === 'quantity' || field === 'rate') {
-                    const percent = parseFloat(updated.discountPercent) || 0;
-                    updated.discountAmount = ((qty * rate * percent) / 100).toFixed(2);
-                }
-
-                // Recalculate totals
-                const baseAmount = qty * rate;
-                const discAmt = parseFloat(updated.discountAmount) || 0;
-                const beforeTax = baseAmount - discAmt;
-                const taxPercent = parseFloat(updated.taxPercent) || 0;
-                const taxAmt = (beforeTax * taxPercent) / 100;
-                const total = beforeTax + taxAmt;
-
-                updated.beforeTaxAmount = beforeTax.toFixed(2);
-                updated.taxAmount = taxAmt.toFixed(2);
-                updated.total = total.toFixed(2);
-
-                return updated;
-            }
-            return p;
-        }));
-    };
-
-    const handleAddProductFromSearch = (product) => {
-        const newProduct = {
-            id: Date.now(),
-            code: product.code,
-            name: product.name,
-            quantity: 1,
-            rate: 100,
-            uom: product.uom,
-            discountAmount: 0,
-            discountPercent: 0,
-            hsnCode: product.hsnCode,
-            taxPercent: product.taxPercent,
-            beforeTaxAmount: 100,
-            taxAmount: (100 * product.taxPercent) / 100,
-            total: 100 + (100 * product.taxPercent) / 100
-        };
-        setProducts(prev => [...prev, newProduct]);
-        setSearchTerm('');
-        setShowProductDropdown(false);
-    };
-
+    // Fetch Suppliers
     useEffect(() => {
-        const totalBeforeTax = products.reduce((sum, p) => sum + (parseFloat(p.beforeTaxAmount) || 0), 0);
-        const totalTax = products.reduce((sum, p) => sum + (parseFloat(p.taxAmount) || 0), 0);
-        const cgst = totalTax / 2;
-        const sgst = totalTax / 2;
-
-        setAccounts([
-            { 
-                id: 1, 
-                account: 'Material Purchase (G.S.T.)', 
-                amount: totalBeforeTax.toFixed(2), 
-                cumBalance: totalBeforeTax.toFixed(2) 
-            },
-            { 
-                id: 2, 
-                account: 'c-gst 9%', 
-                amount: cgst.toFixed(2), 
-                cumBalance: (totalBeforeTax + cgst).toFixed(2) 
-            },
-            { 
-                id: 3, 
-                account: 's-gst 9%', 
-                amount: sgst.toFixed(2), 
-                cumBalance: (totalBeforeTax + cgst + sgst).toFixed(2) 
+        const fetchSuppliers = async () => {
+            try {
+                const response = await accountService.getAllAccounts({ 
+                    groupName: 'SUNDRY_CREDITORS',
+                    limit: 1000 
+                });
+                setSuppliers(response.data || []);
+            } catch (error) {
+                console.error("Error fetching suppliers:", error);
             }
-        ]);
-    }, [products]);
+        };
+        fetchSuppliers();
+    }, []);
 
-    const handleInputChange = (field, value) => {
-        setFormData(prev => {
-            const newState = { ...prev, [field]: value };
-            // Auto-fill Challan Number from Invoice Number if that's what's changing
-            if (field === 'supplierInvoiceNumber') {
-                newState.supplierChallanNumber = value;
+    // Fetch Products
+    useEffect(() => {
+        const fetchProducts = async () => {
+            try {
+                const response = await productService.getProducts({ 
+                    search: tableSearch.trim() || '',
+                    limit: tableSearch.trim() ? 50 : 20 
+                });
+                setProducts(response.products || []);
+            } catch (error) {
+                console.error("Error fetching products:", error);
             }
-            return newState;
+        };
+        const timer = setTimeout(fetchProducts, 150);
+        return () => clearTimeout(timer);
+    }, [tableSearch]);
+
+    // Initialize Edit Mode / Initial Data
+    useEffect(() => {
+        if (propsInitialData) {
+            setFormData({
+                supplier_id: propsInitialData.supplier_id || '',
+                supplier_name: propsInitialData.supplierName || '',
+                credit_days: propsInitialData.cred || '',
+                address: propsInitialData.address || '',
+                document_date: propsInitialData.invoiceDate ? propsInitialData.invoiceDate.split('-').reverse().join('-') : getLocalToday(),
+                booking_date: propsInitialData.bookingDate ? propsInitialData.bookingDate.split('-').reverse().join('-') : getLocalToday(),
+                document_number: propsInitialData.invoiceNo || '',
+                po_number: propsInitialData.poNo || '',
+                gst_no: propsInitialData.gstNo || '',
+                attachment: propsInitialData.attachment || null
+            });
+            setSupplierSearch(propsInitialData.supplierName || '');
+            
+            if (propsInitialData.items) {
+                setItems(propsInitialData.items);
+            }
+        }
+    }, [propsInitialData]);
+
+    const filteredSuppliers = useMemo(() => {
+        return (suppliers || []).filter(s => 
+            s.accountName?.toLowerCase().includes(supplierSearch.toLowerCase())
+        );
+    }, [supplierSearch, suppliers]);
+
+    const filteredProducts = useMemo(() => {
+        const addedProductIds = items.map(item => item.product_id).filter(id => id);
+        const searchLower = tableSearch.toLowerCase();
+        
+        return (products || []).filter(p => {
+            if (addedProductIds.includes(p.id)) return false;
+            if (!tableSearch) return true;
+            return (
+                p.product_name?.toLowerCase().includes(searchLower) ||
+                p.product_code?.toLowerCase().includes(searchLower) ||
+                p.hsn_code?.toLowerCase().includes(searchLower)
+            );
         });
-        // Clear error when user types
-        if (errors[field]) {
-            setErrors(prev => {
-                const newErrors = { ...prev };
-                delete newErrors[field];
-                return newErrors;
+    }, [products, items, tableSearch]);
+
+    const handleSelectSupplier = (supplier) => {
+        setFormData(prev => ({
+            ...prev,
+            supplier_id: supplier.id,
+            supplier_name: supplier.accountName,
+            address: (supplier.addressLine1 || '') + (supplier.addressLine2 ? ', ' + supplier.addressLine2 : ''),
+            gst_no: supplier.gstNo || '',
+            credit_days: supplier.supplierCreditDays || 0
+        }));
+        setSupplierSearch(supplier.accountName);
+        setIsSupplierDropdownOpen(false);
+        setErrors(prev => ({ ...prev, supplier_name: null }));
+    };
+
+    const handleQuickAddProduct = (product, targetIndex = null) => {
+        const newItem = {
+            id: Date.now(),
+            product_id: product.id,
+            product_code: product.product_code || '',
+            product_name: product.product_name || '',
+            rate: product.purchaseRate || 0,
+            uom: product.uom?.unit_name || product.uom?.gst_uom || 'Nos',
+            hsn: product.hsn_code || '',
+            tax_percent: product.tax_rate || 0,
+            quantity: 1,
+            discount_amount: 0,
+            discount_percent: 0,
+            before_tax: (product.purchaseRate || 0).toFixed(2),
+            tax_amount: ((product.purchaseRate || 0) * (product.tax_rate || 0) / 100).toFixed(2),
+            total_amount: ((product.purchaseRate || 0) * (1 + (product.tax_rate || 0) / 100)).toFixed(2),
+            description: product.description || ''
+        };
+
+        let updatedItems = [...items];
+        const finalTargetIndex = targetIndex !== null ? targetIndex : updatedItems.findIndex(i => !i.product_name);
+        
+        if (finalTargetIndex !== -1) {
+            updatedItems[finalTargetIndex] = newItem;
+        } else {
+            updatedItems = [...updatedItems, newItem];
+        }
+
+        const hasEmptyRow = updatedItems.some(i => !i.product_name);
+        if (!hasEmptyRow) {
+            updatedItems.push({
+                id: Date.now() + 1,
+                product_id: null,
+                product_code: '',
+                product_name: '',
+                quantity: 0,
+                rate: 0,
+                uom: '',
+                discount_amount: 0,
+                discount_percent: 0,
+                hsn: '',
+                tax_percent: 0,
+                before_tax: 0,
+                tax_amount: 0,
+                total_amount: 0,
+                description: ''
             });
         }
+
+        setItems(updatedItems);
+        setTableSearch('');
+        setIsProductSearchOpen(false);
+        setActiveRowIndex(null);
+        setSelectedSuggestionIndex(0);
+
+        setTimeout(() => {
+            const qtyInput = document.getElementById(`qty-${finalTargetIndex}`);
+            if (qtyInput) qtyInput.focus();
+        }, 100);
     };
+
+    const handleSearchKeyDown = (e, index) => {
+        if (!isProductSearchOpen || activeRowIndex !== index) return;
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                setSelectedSuggestionIndex(prev => prev < filteredProducts.length - 1 ? prev + 1 : prev);
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : 0);
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (filteredProducts[selectedSuggestionIndex]) handleQuickAddProduct(filteredProducts[selectedSuggestionIndex], index);
+                break;
+            case 'Escape':
+                setIsProductSearchOpen(false);
+                break;
+        }
+    };
+
+    const handleItemChange = (index, field, value) => {
+        const newItems = [...items];
+        const item = { ...newItems[index] };
+        item[field] = value;
+
+        const qty = parseFloat(item.quantity) || 0;
+        const rate = parseFloat(item.rate) || 0;
+        const taxPct = parseFloat(item.tax_percent) || 0;
+        let discAmt = parseFloat(item.discount_amount) || 0;
+        let discPct = parseFloat(item.discount_percent) || 0;
+        const baseAmount = qty * rate;
+
+        if (baseAmount > 0) {
+            if (field === 'discount_percent') {
+                if (discPct > 100) discPct = 100;
+                discAmt = (baseAmount * discPct) / 100;
+                item.discount_percent = discPct;
+                item.discount_amount = parseFloat(discAmt.toFixed(2));
+            } else if (field === 'discount_amount') {
+                if (discAmt > baseAmount) discAmt = baseAmount;
+                discPct = (discAmt / baseAmount) * 100;
+                item.discount_amount = discAmt;
+                item.discount_percent = parseFloat(discPct.toFixed(2));
+            } else {
+                discAmt = (baseAmount * discPct) / 100;
+                item.discount_amount = parseFloat(discAmt.toFixed(2));
+            }
+        } else {
+            item.discount_amount = 0;
+            item.discount_percent = 0;
+        }
+
+        const beforeTax = baseAmount - item.discount_amount;
+        item.before_tax = parseFloat(beforeTax.toFixed(2));
+        item.tax_amount = parseFloat(((beforeTax * taxPct) / 100).toFixed(2));
+        item.total_amount = parseFloat((beforeTax + item.tax_amount).toFixed(2));
+
+        newItems[index] = item;
+        setItems(newItems);
+    };
+
+    const totalQty = items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+    const totalBefTax = items.reduce((sum, item) => sum + (parseFloat(item.before_tax) || 0), 0);
+    const totalTaxAmt = items.reduce((sum, item) => sum + (parseFloat(item.tax_amount) || 0), 0);
+    const totalBillAmount = items.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
 
     const validateForm = () => {
         const newErrors = {};
-        if (!formData.supplierName) newErrors.supplierName = 'Supplier Name is required';
-        if (!formData.creditDays) newErrors.creditDays = 'Credit Days is required';
-        if (!formData.address) newErrors.address = 'Address is required';
-        if (!formData.supplierInvoiceDate) newErrors.supplierInvoiceDate = 'Supplier Invoice Date is required';
-        if (!formData.bookingDate) newErrors.bookingDate = 'Booking Date is required';
-        if (!formData.supplierInvoiceNumber) newErrors.supplierInvoiceNumber = 'Supplier Invoice Number is required';
-        
+        if (!formData.supplier_name) newErrors.supplier_name = "Supplier name is required";
+        if (!formData.document_number) newErrors.document_number = `${documentLabel} number is required`;
+        if (!formData.document_date) newErrors.document_date = "Date is required";
+
+        const validItems = items.filter(item => item.product_name);
+        if (validItems.length === 0) newErrors.items = true;
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSaveLocal = (e) => {
-        e.preventDefault();
-        if (validateForm()) {
-            if (onSave) onSave(formData);
+    const handleSaveInternal = async () => {
+        if (!validateForm()) {
+            setShowValidationPopup(true);
+            return;
+        }
+
+        setIsRefreshing(true);
+        try {
+            const finalItems = items.filter(i => i.product_id && i.product_name);
+            const payload = { ...formData, items: finalItems };
+            
+            if (type === 'Invoice') {
+                await purchaseInvoiceService.createInvoice(payload, formData.attachment);
+                toast.success('Purchase invoice created successfully');
+            } else {
+                await grnService.createGrn(payload, formData.attachment);
+                toast.success('GRN record created successfully');
+            }
+            
+            if (onSave) onSave(payload);
+        } catch (error) {
+            console.error("Save error:", error);
+            toast.error(error.response?.data?.message || `Failed to save ${documentLabel}`);
+        } finally {
+            setIsRefreshing(false);
         }
     };
 
-    const totalQuantity = products.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
-    const totalBefTax = products.reduce((sum, p) => sum + (parseFloat(p.beforeTaxAmount) || 0), 0);
-    const totalTaxAmt = products.reduce((sum, p) => sum + (parseFloat(p.taxAmount) || 0), 0);
-    const totalInvoiceAmt = products.reduce((sum, p) => sum + (parseFloat(p.total) || 0), 0);
+    const handlePrint = () => {
+        if (!validateForm()) {
+            setShowValidationPopup(true);
+            return;
+        }
+        const finalItems = items.filter(i => i.product_id && i.product_name);
+        const payload = { ...formData, items: finalItems };
+        navigate(ROUTES.PURCHASE_INVOICE_PRINT, { 
+            state: { 
+                invoiceData: payload, 
+                type,
+                from: location.pathname
+            } 
+        });
+    };
+
+    const toDisplayDate = (dateStr) => {
+        if (!dateStr) return '';
+        if (dateStr.length === 10 && dateStr.charAt(4) === '-') {
+            const [y, m, d] = dateStr.split('-');
+            return `${d}-${m}-${y}`;
+        }
+        return dateStr;
+    };
 
     return (
-        <div className="flex flex-col w-full animate-in fade-in duration-300 font-['Plus_Jakarta_Sans'] px-4 md:px-0">
-            <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm flex flex-col w-full relative mb-8">
-                <div className="flex flex-col sm:flex-row border-b border-[#E5E7EB] px-4 md:px-6 py-4 items-center justify-between bg-white rounded-t-[12px] gap-4">
-                    <h2 className="hidden md:block text-[18px] font-bold text-[#111827]">{isEditMode ? `Edit ${documentLabel}` : `Add ${documentLabel}`}</h2>
-                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                        <button
-                            onClick={onBack}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[40px] border border-[#E5E7EB] text-[#4B5563] rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
-                        >
-                            <ArrowLeft size={16} />
-                            {t('common:back')}
-                        </button>
+        <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-500 pb-20 font-outfit">
+            {/* Main Integrated Form Card */}
+            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
+                {/* Header Section */}
+                <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-[#F3F4F6] bg-white flex items-center justify-between">
+                    <div>
+                        <h2 className="text-[18px] md:text-[20px] font-bold text-[#111827]">Add {documentLabel}</h2>
                     </div>
+                    
+                    <button 
+                        onClick={onBack}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[40px] sm:h-[44px] border border-[#E5E7EB] rounded-[10px] text-[14px] md:text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all shadow-sm"
+                    >
+                        <ArrowLeft size={18} strokeWidth={2.5} /> 
+                        <span>Back</span>
+                    </button>
                 </div>
 
-                <div className="p-4 md:p-8 flex flex-col gap-10">
-                    {/* Form Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
-                        <div className="flex flex-col gap-1.5 relative w-full" ref={supplierDropdownRef}>
-                            <label className="text-[13px] font-semibold text-[#4B5563]">Supplier Name <span className="text-red-500">*</span></label>
-                            <div
-                                className={`w-full h-[44px] flex items-center justify-between px-4 border rounded-[8px] transition-colors bg-white cursor-pointer ${errors.supplierName ? 'border-red-500 bg-red-50/10' : supplierDropdownOpen ? 'border-[#014A36] ring-1 ring-[#014A36]/10' : 'border-[#E5E7EB] hover:border-gray-300'}`}
-                                onClick={() => setSupplierDropdownOpen(!supplierDropdownOpen)}
-                            >
-                                <span className={`text-[14px] truncate ${formData.supplierName ? 'text-[#111827]' : 'text-gray-500'}`}>
-                                    {formData.supplierName || 'Select supplier name'}
-                                </span>
-                                <div>
-                                    {supplierDropdownOpen ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
-                                </div>
-                            </div>
-                            {errors.supplierName && <span className="text-red-500 text-[11px] mt-1 font-medium">{errors.supplierName}</span>}
-                            {supplierDropdownOpen && (
-                                <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-gray-100 rounded-[8px] shadow-lg z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                                    <div className="max-h-[240px] overflow-y-auto w-full py-1 custom-scrollbar flex flex-col">
-                                        {supplierOptions.map((opt, idx) => (
-                                            <div
-                                                key={idx}
-                                                className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors ${formData.supplierName === opt.name ? 'bg-[#F9FAFB] text-[#014A36] font-medium' : 'text-[#4B5563] hover:bg-gray-50'}`}
-                                                onClick={() => {
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        supplierName: opt.name,
-                                                        creditDays: opt.creditDays,
-                                                        address: opt.address,
-                                                        poNumber: opt.poNumber,
-                                                        gstNo: opt.gstNo
-                                                    }));
-                                                    setSupplierDropdownOpen(false);
-                                                }}
-                                            >
-                                                {opt.name}
-                                            </div>
-                                        ))}
-                                        {/* Add New Supplier Button placed inline like Screenshot */}
-                                        <div className="px-3 py-2 border-t border-gray-50 mt-1">
-                                            <button 
-                                                onClick={() => navigate(`/seller/masters/account-master/add?redirect=${encodeURIComponent(location.pathname)}`)}
-                                                className="bg-[#014A36] hover:bg-[#013b2b] text-white px-4 py-2 rounded-[6px] text-[13px] font-semibold transition-all shadow-sm w-max inline-block"
-                                            >
-                                                Add new supplier
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] font-semibold text-[#4B5563]">Credit Days <span className="text-red-500">*</span></label>
-                            <input
-                                type="text"
-                                placeholder="Enter credit days"
-                                className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-all ${errors.creditDays ? 'border-red-500 bg-red-50/10 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10'}`}
-                                value={formData.creditDays}
-                                onChange={(e) => handleInputChange('creditDays', e.target.value)}
-                            />
-                            {errors.creditDays && <span className="text-red-500 text-[11px] mt-1 font-medium">{errors.creditDays}</span>}
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] font-semibold text-[#4B5563]">Address <span className="text-red-500">*</span></label>
-                            <input
-                                type="text"
-                                placeholder="Enter address"
-                                className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-all ${errors.address ? 'border-red-500 bg-red-50/10 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10'}`}
-                                value={formData.address}
-                                onChange={(e) => handleInputChange('address', e.target.value)}
-                            />
-                            {errors.address && <span className="text-red-500 text-[11px] mt-1 font-medium">{errors.address}</span>}
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] font-semibold text-[#4B5563]">Supplier {documentLabel} Date <span className="text-red-500">*</span></label>
-                            <input
-                                type="date"
-                                className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-all text-gray-700 uppercase ${errors.supplierInvoiceDate ? 'border-red-500 bg-red-50/10 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10'}`}
-                                value={formData.supplierInvoiceDate}
-                                onChange={(e) => handleInputChange('supplierInvoiceDate', e.target.value)}
-                            />
-                            {errors.supplierInvoiceDate && <span className="text-red-500 text-[11px] mt-1 font-medium">{errors.supplierInvoiceDate}</span>}
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] font-semibold text-[#4B5563]">PO Number (Optional)</label>
-                            <input
-                                type="text"
-                                placeholder="Enter PO number"
-                                className="w-full h-[44px] border border-[#E5E7EB] rounded-[8px] px-4 text-[14px] outline-none focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"
-                                value={formData.poNumber}
-                                onChange={(e) => handleInputChange('poNumber', e.target.value)}
-                            />
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] font-semibold text-[#4B5563]">Booking Date <span className="text-red-500">*</span></label>
-                            <input
-                                type="date"
-                                className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-all text-gray-700 uppercase ${errors.bookingDate ? 'border-red-500 bg-red-50/10 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10'}`}
-                                value={formData.bookingDate}
-                                onChange={(e) => handleInputChange('bookingDate', e.target.value)}
-                            />
-                            {errors.bookingDate && <span className="text-red-500 text-[11px] mt-1 font-medium">{errors.bookingDate}</span>}
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] font-semibold text-[#4B5563]">Supplier {documentLabel} Number <span className="text-red-500">*</span></label>
-                            <input
-                                type="text"
-                                placeholder={`Enter supplier ${documentLabel.toLowerCase()} number`}
-                                className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-all ${errors.supplierInvoiceNumber ? 'border-red-500 bg-red-50/10 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10'}`}
-                                value={formData.supplierInvoiceNumber}
-                                onChange={(e) => handleInputChange('supplierInvoiceNumber', e.target.value)}
-                            />
-                            {errors.supplierInvoiceNumber && <span className="text-red-500 text-[11px] mt-1 font-medium">{errors.supplierInvoiceNumber}</span>}
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] font-semibold text-[#4B5563]">Supplier Challan Number (Optional)</label>
-                            <input
-                                type="text"
-                                placeholder="Enter supplier challan number"
-                                className="w-full h-[44px] border border-[#E5E7EB] rounded-[8px] px-4 text-[14px] outline-none focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"
-                                value={formData.supplierChallanNumber}
-                                onChange={(e) => handleInputChange('supplierChallanNumber', e.target.value)}
-                            />
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] font-semibold text-[#4B5563]">GST NO (Optional)</label>
-                            <input
-                                type="text"
-                                placeholder="Enter GST number"
-                                className="w-full h-[44px] border border-[#E5E7EB] rounded-[8px] px-4 text-[14px] outline-none focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"
-                                value={formData.gstNo}
-                                onChange={(e) => handleInputChange('gstNo', e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="h-[1px] bg-[#E5E7EB] w-full" />
-
-                    {/* Product Table Area */}
-                    <div className="flex flex-col">
-                        <div className="border border-[#E5E7EB] rounded-t-[10px] overflow-hidden">
-                            <div className="p-3 bg-white border-b border-[#E5E7EB] flex flex-col sm:flex-row sm:items-center gap-3">
-                                <div className="relative w-full sm:w-[320px]" ref={productDropdownRef}>
-                                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                    <input
-                                        type="text"
-                                        placeholder="Search by anything"
-                                        className={`w-full h-[36px] bg-gray-50 border rounded-[8px] pl-10 pr-4 text-[13px] outline-none transition-all ${showProductDropdown ? 'border-[#014A36] ring-1 ring-[#014A36]/10' : 'border-[#E5E7EB]'}`}
-                                        value={searchTerm}
-                                        onChange={(e) => {
-                                            setSearchTerm(e.target.value);
-                                            setShowProductDropdown(true);
-                                        }}
-                                        onFocus={() => setShowProductDropdown(true)}
-                                    />
-                                    {showProductDropdown && (
-                                        <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.12)] z-[120] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                                            {/* Scrollable Results Area */}
-                                            <div className="max-h-[260px] overflow-y-auto custom-scrollbar py-1">
-                                                {dummyProducts
-                                                    .filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.code.includes(searchTerm))
-                                                    .map((product, idx) => (
-                                                        <div
-                                                            key={idx}
-                                                            className="px-5 py-3 hover:bg-gray-50 cursor-pointer flex flex-col gap-0.5 border-b border-gray-50 last:border-0 transition-colors"
-                                                            onClick={() => handleAddProductFromSearch(product)}
+                {/* Form Fields Section matching Add PO exactly */}
+                <div className="p-4 sm:p-8 border-b border-[#F3F4F6]">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Row 1 */}
+                        <div className="space-y-2 relative">
+                            <label className="text-[14px] font-semibold text-[#374151]">Supplier Name <span className="text-red-500">*</span></label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Select supplier name"
+                                    value={supplierSearch}
+                                    onFocus={() => setIsSupplierDropdownOpen(true)}
+                                    onChange={(e) => {
+                                        setSupplierSearch(e.target.value);
+                                        setIsSupplierDropdownOpen(true);
+                                    }}
+                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none transition-all ${errors.supplier_name ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
+                                />
+                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+                                
+                                {isSupplierDropdownOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-[65]" onClick={() => setIsSupplierDropdownOpen(false)}></div>
+                                        <div className="absolute top-full left-0 w-full mt-1 bg-white border border-[#E5E7EB] rounded-[16px] shadow-2xl z-[70] overflow-hidden">
+                                            <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                                                {filteredSuppliers.length > 0 ? (
+                                                    filteredSuppliers.map(s => (
+                                                        <button
+                                                            key={s.id}
+                                                            onClick={() => handleSelectSupplier(s)}
+                                                            className="w-full text-left px-5 py-3.5 hover:bg-emerald-50 transition-all border-b border-[#F3F4F6] last:border-0 group"
                                                         >
-                                                            <div className="flex items-center justify-between">
-                                                                <span className="text-[14px] font-bold text-[#111827]">{product.name}</span>
-                                                                <span className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-400 font-bold uppercase">{product.code}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-3 text-[12px] text-gray-400 font-medium">
-                                                                <span>HSN: {product.hsnCode}</span>
-                                                                <span className="w-1 h-1 bg-gray-200 rounded-full"></span>
-                                                                <span>Tax: {product.taxPercent}%</span>
-                                                                <span className="w-1 h-1 bg-gray-200 rounded-full"></span>
-                                                                <span>UOM: {product.uom}</span>
-                                                            </div>
-                                                        </div>
+                                                            <div className="font-bold text-[#111827] text-[15px] group-hover:text-emerald-900">{s.accountName}</div>
+                                                            <div className="text-[12px] text-gray-400 mt-0.5">{s.gstNo || 'No GST Number'}</div>
+                                                        </button>
                                                     ))
-                                                }
-                                                {dummyProducts.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.code.includes(searchTerm)).length === 0 && (
-                                                    <div className="px-5 py-8 text-center text-[13px] text-gray-400 italic">No products found for "{searchTerm}"</div>
+                                                ) : (
+                                                    <div className="px-4 py-8 text-[13px] text-gray-400 italic text-center">No results for "{supplierSearch}"</div>
                                                 )}
                                             </div>
-
-                                            {/* Fixed Footer for Action Button */}
-                                            <div className="p-3 bg-gray-50 border-t border-gray-100 mt-auto shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+                                            <div className="p-3 bg-gray-50 border-t border-[#F3F4F6]">
                                                 <button 
-                                                    onClick={() => navigate(`/seller/masters/product-master/add?redirect=${encodeURIComponent(location.pathname)}`)}
-                                                    className="w-full h-[40px] bg-[#014A36] hover:bg-[#013b2b] text-white rounded-[8px] text-[14px] font-bold transition-all shadow-sm flex items-center justify-center gap-2 group"
+                                                    onClick={() => navigate('/seller/masters/account-master/add')}
+                                                    className="w-full flex items-center justify-center gap-2 py-3 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-md group"
                                                 >
-                                                    <Plus size={16} className="group-hover:scale-110 transition-transform" />
-                                                    Add new product
+                                                    <Plus size={16} className="group-hover:scale-125 transition-all" />
+                                                    Add new supplier
                                                 </button>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="overflow-x-auto w-full custom-scrollbar">
-                                <style>{`
-                                    .custom-scrollbar::-webkit-scrollbar { height: 6px; }
-                                    .custom-scrollbar::-webkit-scrollbar-track { background: #E5E7EB; }
-                                    .custom-scrollbar::-webkit-scrollbar-thumb { background: #A7C0B8; border-radius: 4px; }
-                                    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #014A36; }
-                                `}</style>
-                                <table className="w-full min-w-[1200px] text-left border-collapse">
-                                    <thead className="bg-[#014A36] border-b border-[#013527]">
-                                        <tr className="text-white text-[12px] font-bold uppercase tracking-wide">
-                                            <th className="px-5 py-3 border-r border-white/10 whitespace-nowrap">Product Code <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-5 py-3 border-r border-white/10 whitespace-nowrap">Product <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-5 py-3 border-r border-white/10 whitespace-nowrap">Quantity <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-5 py-3 border-r border-white/10 whitespace-nowrap">Rate <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-5 py-3 border-r border-white/10 whitespace-nowrap">UMO <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-5 py-3 border-r border-white/10 whitespace-nowrap">Discount Amount <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-5 py-3 border-r border-white/10 whitespace-nowrap">Discount (%) <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-5 py-3 border-r border-white/10 whitespace-nowrap">HSN Code <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-5 py-3 border-r border-white/10 whitespace-nowrap">Tax (%) <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-5 py-3 border-r border-white/10 whitespace-nowrap">Bef. Tax Amount <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-5 py-3 border-r border-white/10 whitespace-nowrap">Tax Amount <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-5 py-3 border-r border-white/10 whitespace-nowrap">Amount <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {products.map((row) => (
-                                            <tr key={row.id} className="border-b border-[#E5E7EB] hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-5 py-4 border-r border-[#E5E7EB]">
-                                                    <input 
-                                                        type="text" 
-                                                        className="w-full bg-transparent outline-none text-[13px] text-[#4B5563]" 
-                                                        value={row.code}
-                                                        onChange={(e) => handleProductChange(row.id, 'code', e.target.value)}
-                                                    />
-                                                </td>
-                                                <td className="px-5 py-4 border-r border-[#E5E7EB]">
-                                                    <input 
-                                                        type="text" 
-                                                        className="w-full bg-transparent outline-none text-[13px] font-bold text-[#111827]" 
-                                                        value={row.name}
-                                                        onChange={(e) => handleProductChange(row.id, 'name', e.target.value)}
-                                                    />
-                                                </td>
-                                                <td className="px-5 py-4 border-r border-[#E5E7EB]">
-                                                    <input 
-                                                        type="number" 
-                                                        className="w-full bg-transparent outline-none text-[13px] font-medium text-[#4B5563]" 
-                                                        value={row.quantity}
-                                                        onChange={(e) => handleProductChange(row.id, 'quantity', e.target.value)}
-                                                    />
-                                                </td>
-                                                <td className="px-5 py-4 border-r border-[#E5E7EB]">
-                                                    <input 
-                                                        type="number" 
-                                                        className="w-full bg-transparent outline-none text-[13px] font-medium text-[#4B5563]" 
-                                                        value={row.rate}
-                                                        onChange={(e) => handleProductChange(row.id, 'rate', e.target.value)}
-                                                    />
-                                                </td>
-                                                <td className="px-5 py-4 border-r border-[#E5E7EB] text-[13px] text-[#4B5563] font-medium uppercase">{row.uom}</td>
-                                                <td className="px-5 py-4 border-r border-[#E5E7EB]">
-                                                    <input 
-                                                        type="number" 
-                                                        className="w-full bg-transparent outline-none text-[13px] font-medium text-[#4B5563]" 
-                                                        value={row.discountAmount}
-                                                        onChange={(e) => handleProductChange(row.id, 'discountAmount', e.target.value)}
-                                                    />
-                                                </td>
-                                                <td className="px-5 py-4 border-r border-[#E5E7EB]">
-                                                    <input 
-                                                        type="number" 
-                                                        className="w-full bg-transparent outline-none text-[13px] font-medium text-[#4B5563]" 
-                                                        value={row.discountPercent}
-                                                        onChange={(e) => handleProductChange(row.id, 'discountPercent', e.target.value)}
-                                                    />
-                                                </td>
-                                                <td className="px-5 py-4 border-r border-[#E5E7EB] text-[13px] text-[#4B5563] font-medium">{row.hsnCode}</td>
-                                                <td className="px-5 py-4 border-r border-[#E5E7EB] text-[13px] text-[#4B5563] font-bold">{row.taxPercent}%</td>
-                                                <td className="px-5 py-4 border-r border-[#E5E7EB] text-[13px] text-[#4B5563] font-bold">{row.beforeTaxAmount}</td>
-                                                <td className="px-5 py-4 border-r border-[#E5E7EB] text-[13px] text-[#4B5563] font-bold">{row.taxAmount}</td>
-                                                <td className="px-5 py-4 border-r border-[#E5E7EB] text-[13px] text-[#111827] font-bold">{row.total}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                    <tfoot>
-                                        <tr className="bg-gray-50/50">
-                                            <td colSpan={2} className="px-5 py-3 border-r border-b border-[#E5E7EB] font-bold text-[#111827] text-[14px]">Total</td>
-                                            <td className="px-5 py-3 border-r border-b border-[#E5E7EB] text-[13px] font-bold text-[#4B5563]">{totalQuantity.toFixed(2)}</td>
-                                            <td className="px-5 py-3 border-r border-b border-[#E5E7EB]"></td>
-                                            <td className="px-5 py-3 border-r border-b border-[#E5E7EB]"></td>
-                                            <td className="px-5 py-3 border-r border-b border-[#E5E7EB]"></td>
-                                            <td className="px-5 py-3 border-r border-b border-[#E5E7EB]"></td>
-                                            <td className="px-5 py-3 border-r border-b border-[#E5E7EB]"></td>
-                                            <td className="px-5 py-3 border-r border-b border-[#E5E7EB]"></td>
-                                            <td className="px-5 py-3 border-r border-b border-[#E5E7EB] text-[13px] font-bold text-[#4B5563]">{totalBefTax.toFixed(2)}</td>
-                                            <td className="px-5 py-3 border-r border-b border-[#E5E7EB] text-[13px] font-bold text-[#4B5563]">{totalTaxAmt.toFixed(2)}</td>
-                                            <td className="px-5 py-3 border-r border-b border-[#E5E7EB] text-[13px] font-bold text-[#111827]">{totalInvoiceAmt.toFixed(2)}</td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
+                                    </>
+                                )}
                             </div>
                         </div>
-                        {/* Green accent line matching design */}
-                        <div className="w-[150px] h-[4px] bg-[#A7C0B8] rounded-b-md mt-[-2px] ml-[2px]"></div>
-                    </div>
 
-                    {/* Account Grid */}
-                    <div className="flex flex-col mt-2">
-                        <div className="border border-[#E5E7EB] rounded-[10px] overflow-hidden">
-                            <div className="overflow-x-auto w-full custom-scrollbar">
-                                <table className="w-full min-w-[800px] text-center border-collapse">
-                                    <thead className="bg-[#014A36] border-b border-[#013527]">
-                                        <tr className="text-white text-[12px] font-bold uppercase tracking-wide">
-                                            <th className="px-6 py-4 border-r border-white/10 w-1/3">Account <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-6 py-4 border-r border-white/10 w-1/3">Amount <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                            <th className="px-6 py-4 w-1/3">Cum. Balance <ChevronDown size={14} className="inline ml-1 text-[#8bb4a3]"/></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {accounts.map((row) => (
-                                            <tr key={row.id} className="border-b border-[#E5E7EB]">
-                                                <td className="px-6 py-6 border-r border-[#E5E7EB] text-[14px] font-medium text-[#4B5563]">{row.account}</td>
-                                                <td className="px-6 py-6 border-r border-[#E5E7EB] text-[14px] font-bold text-[#111827]">{row.amount}</td>
-                                                <td className="px-6 py-6 text-[14px] font-bold text-[#111827]">{row.cumBalance}</td>
-                                            </tr>
-                                        ))}
-                                        <tr className="bg-gray-50/80 border-t border-[#E5E7EB]">
-                                            <td className="px-6 py-4 border-r border-[#E5E7EB] text-[13px] font-bold text-[#111827] uppercase tracking-wide">Grand Total</td>
-                                            <td className="px-6 py-4 border-r border-[#E5E7EB] text-[15px] font-bold text-[#014A36]">{totalInvoiceAmt.toFixed(2)}</td>
-                                            <td className="px-6 py-4"></td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                        <div className="space-y-2">
+                            <label className="text-[14px] font-semibold text-[#374151]">Credit Days <span className="text-red-500">*</span></label>
+                            <input
+                                type="number"
+                                placeholder="Auto-filled from supplier"
+                                value={formData.credit_days}
+                                onChange={(e) => setFormData({ ...formData, credit_days: e.target.value })}
+                                className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318]"
+                            />
+                        </div>
+
+                        {/* Row 2 */}
+                        <div className="space-y-2">
+                            <label className="text-[14px] font-semibold text-[#374151]">Address</label>
+                            <input
+                                type="text"
+                                placeholder="Auto-filled from supplier"
+                                value={formData.address}
+                                readOnly
+                                className="w-full h-[48px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[14px] font-semibold text-[#374151] font-outfit">{documentLabel} Date</label>
+                            <div className="relative">
+                                <input
+                                    type="date"
+                                    ref={documentDateRef}
+                                    className="absolute opacity-0 pointer-events-none w-0 h-0"
+                                    value={formData.document_date}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, document_date: e.target.value }))}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="DD-MM-YYYY"
+                                    value={toDisplayDate(formData.document_date)}
+                                    readOnly
+                                    className="w-full h-[48px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 pr-11 text-[14px] outline-none cursor-not-allowed"
+                                />
+                                <Calendar 
+                                    size={18} 
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer" 
+                                    onClick={() => documentDateRef.current?.showPicker?.()}
+                                />
                             </div>
                         </div>
-                    </div>
 
-                    {/* File Upload Section - Trigger Modal */}
-                    <div className="flex flex-col gap-1.5 w-full mt-4 pb-4">
-                        <label className="text-[13px] font-semibold text-[#4B5563]">{`Upload ${documentLabel}`}</label>
-                        <div 
-                            onClick={() => setIsUploadModalOpen(true)}
-                            className="border-2 border-dashed rounded-[10px] p-8 flex flex-col items-center justify-center cursor-pointer transition-all border-gray-300 hover:border-[#014A36] hover:bg-[#F9FAFB] group"
-                        >
-                            <div className="w-12 h-12 bg-[#F3F4F6] rounded-full flex items-center justify-center mb-3 group-hover:bg-[#E7F0EE] transition-colors">
-                                <UploadCloud size={24} className="text-gray-400 group-hover:text-[#014A36] transition-colors" />
+                        {/* Row 3 */}
+                        <div className="space-y-2">
+                            <label className="text-[14px] font-semibold text-[#374151]">{documentLabel} Number <span className="text-red-500">*</span></label>
+                            <input
+                                type="text"
+                                placeholder={`Enter ${documentLabel.toLowerCase()} number`}
+                                value={formData.document_number}
+                                onChange={(e) => setFormData({ ...formData, document_number: e.target.value })}
+                                className={`w-full h-[48px] border rounded-[10px] px-4 text-[14px] outline-none ${errors.document_number ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[14px] font-semibold text-[#374151]">Booking Date <span className="text-red-500">*</span></label>
+                            <div className="relative">
+                                <input
+                                    type="date"
+                                    ref={bookingDateRef}
+                                    className="absolute opacity-0 pointer-events-none w-0 h-0"
+                                    value={formData.booking_date}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, booking_date: e.target.value }))}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="DD-MM-YYYY"
+                                    value={toDisplayDate(formData.booking_date)}
+                                    readOnly
+                                    className="w-full h-[48px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 pr-11 text-[14px] outline-none cursor-not-allowed"
+                                />
+                                <Calendar 
+                                    size={18} 
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer" 
+                                    onClick={() => bookingDateRef.current?.showPicker?.()}
+                                />
                             </div>
-                            <p className="text-[15px] font-bold text-[#111827] mb-1">{t('common:click_to_upload', 'Click to upload')}</p>
-                            <p className="text-[13px] text-[#6B7280]">{t('common:file_limit_info', 'PDF or JPG (max. 10MB)', { max: 10 })}</p>
+                        </div>
+
+                        {/* Row 4 */}
+                        <div className="space-y-2">
+                            <label className="text-[14px] font-semibold text-[#374151]">GST Number</label>
+                            <input
+                                type="text"
+                                placeholder="Optional"
+                                value={formData.gst_no}
+                                readOnly
+                                className="w-full h-[48px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[14px] font-semibold text-[#374151]">Linked PO (Optional)</label>
+                            <input
+                                type="text"
+                                placeholder="PO Number"
+                                value={formData.po_number}
+                                onChange={(e) => setFormData({ ...formData, po_number: e.target.value })}
+                                className="w-full h-[48px] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318]"
+                            />
                         </div>
                     </div>
                 </div>
 
-                {/* Footer Actions matching design */}
-                <div className="flex flex-col sm:flex-row items-center justify-end gap-3 px-4 md:px-8 py-6 border-t border-[#E5E7EB] bg-gray-50/30 rounded-b-[12px]">
-                    <button
-                        onClick={handleSaveLocal}
-                        className="w-full sm:w-auto px-10 h-[44px] bg-[#014A36] hover:bg-[#013527] text-white font-bold rounded-[8px] transition-all shadow-md active:scale-[0.98] min-w-[160px]"
+                {/* Table Section */}
+                <div className="p-4 sm:p-6 md:p-8 border-b border-[#F3F4F6]">
+                    <div className="relative max-w-[550px]">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" size={18} />
+                        <input
+                            type="text"
+                            placeholder="Search By Anything..."
+                            value={tableSearch}
+                            onFocus={() => { setActiveRowIndex(null); setIsProductSearchOpen(true); }}
+                            onChange={(e) => { setTableSearch(e.target.value); setActiveRowIndex(null); setIsProductSearchOpen(true); }}
+                            className={`w-full h-[44px] bg-white border border-[#E5E7EB] rounded-[12px] pl-11 pr-4 text-[14px] outline-none focus:border-[#073318] placeholder:text-[#9CA3AF] shadow-sm font-outfit ${errors.items ? 'border-red-500 font-bold' : ''}`}
+                        />
+                        
+                        {isProductSearchOpen && activeRowIndex === null && (
+                            <div className="absolute top-full left-0 w-full mt-2 bg-white border border-gray-100 rounded-[20px] shadow-2xl z-[80] overflow-hidden border-t-4 border-emerald-800 animate-in slide-in-from-top-2 duration-300">
+                                <div className="max-h-[380px] overflow-y-auto custom-scrollbar">
+                                    {filteredProducts.map((p, pIdx) => (
+                                        <button 
+                                            key={p.id} 
+                                            onClick={() => handleQuickAddProduct(p)} 
+                                            className="w-full px-6 py-5 flex items-center justify-between hover:bg-emerald-50 transition-all text-left border-b border-gray-100 last:border-0 group relative overflow-hidden"
+                                        >
+                                            <div className="flex flex-col gap-2 relative z-10">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="font-extrabold text-[#111827] text-[16px] group-hover:text-emerald-950">{p.product_name}</span>
+                                                    <span className="px-2.5 py-0.5 bg-gray-100 rounded-[6px] text-[11px] font-black text-gray-500 uppercase tracking-tighter shadow-sm">#{p.product_code}</span>
+                                                </div>
+                                                <div className="flex text-[13px] text-gray-400 gap-x-6">
+                                                    <span className="flex items-center gap-1.5"><span className="text-gray-300 font-medium">HSN:</span> <span className="text-gray-700 font-bold">{p.hsn_code || '---'}</span></span>
+                                                    <span className="flex items-center gap-1.5"><span className="text-gray-300 font-medium">Tax:</span> <span className="text-emerald-700 font-black">{p.tax_rate}%</span></span>
+                                                    <span className="flex items-center gap-1.5"><span className="text-gray-300 font-medium">Price:</span> <span className="text-[#073318] font-black">₹{p.purchaseRate || 0}</span></span>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-2 relative z-10">
+                                                <span className="text-[10px] font-black text-emerald-800 bg-emerald-100/50 px-2 py-0.5 rounded-full uppercase tracking-tighter">Seed</span>
+                                                <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 transition-all group-hover:bg-emerald-600 group-hover:text-white group-hover:rotate-90 group-hover:shadow-lg"><Plus size={20} strokeWidth={3} /></div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                    {filteredProducts.length === 0 && (
+                                        <div className="py-12 text-center text-gray-400 italic">No products found for "{tableSearch}"</div>
+                                    )}
+                                </div>
+                                <div className="p-4 bg-gray-50 border-t border-gray-100">
+                                    <button 
+                                        onClick={() => navigate('/seller/masters/product-master/add')}
+                                        className="w-full h-[52px] bg-[#073318] text-white rounded-[14px] text-[15px] font-black flex items-center justify-center gap-3 hover:bg-[#052611] transition-all shadow-lg active:scale-95 group"
+                                    >
+                                        <Plus size={20} className="group-hover:rotate-90 transition-all duration-300" />
+                                        Add new product
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        {isProductSearchOpen && <div className="fixed inset-0 z-50 cursor-pointer" onClick={() => setIsProductSearchOpen(false)}></div>}
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto min-h-[400px] bg-white pb-[100px] custom-scrollbar">
+                    <table className="w-full min-w-[1800px] border-collapse bg-white">
+                        <thead>
+                            <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
+                                <th className="px-4 py-4 w-[60px] text-center text-[13px] font-semibold text-[#4B5563]">#</th>
+                                {[
+                                    { label: "Product Code", width: "160px" },
+                                    { label: "Product Name", width: "350px" },
+                                    { label: "Quantity", width: "120px" },
+                                    { label: "Rate", width: "120px" },
+                                    { label: "UOM", width: "140px" },
+                                    { label: "Discount Amount", width: "160px" },
+                                    { label: "Discount (%)", width: "140px" },
+                                    { label: "HSN Code", width: "140px" },
+                                    { label: "Tax (%)", width: "120px" },
+                                    { label: "Bef. Tax Amount", width: "160px" },
+                                    { label: "Tax Amount", width: "140px" },
+                                    { label: "Amount", width: "160px" },
+                                    { label: "Description", width: "300px" },
+                                    { label: "Action", width: "80px" }
+                                ].map((col, i) => (
+                                    <th key={i} className="px-4 py-4 text-left text-[13px] font-medium text-[#6B7280] border-l border-[#F3F4F6]" style={{ width: col.width }}>{col.label}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {items.map((item, index) => (
+                                <React.Fragment key={item.id}>
+                                    <tr className={`border-b border-[#F3F4F6] transition-all duration-200 ${activeRowIndex === index ? 'bg-emerald-50/20' : 'hover:bg-[#F9FAFB]'}`}>
+                                        <td className="px-4 py-3 text-center text-[#6B7280] text-[13px]">{index + 1}</td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input 
+                                                type="text" 
+                                                value={item.product_code} 
+                                                placeholder="Code" 
+                                                onFocus={() => { setActiveRowIndex(index); setIsProductSearchOpen(true); }}
+                                                onChange={(e) => { setTableSearch(e.target.value); setActiveRowIndex(index); setIsProductSearchOpen(true); }}
+                                                className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none font-bold transition-all ${activeRowIndex === index ? 'bg-white shadow-sm ring-1 ring-emerald-500 rounded-md' : 'hover:bg-gray-50'}`} 
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input 
+                                                type="text" 
+                                                value={item.product_name} 
+                                                placeholder="Select product..." 
+                                                onFocus={() => { setActiveRowIndex(index); setIsProductSearchOpen(true); }}
+                                                onChange={(e) => { setTableSearch(e.target.value); setActiveRowIndex(index); setIsProductSearchOpen(true); }}
+                                                className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#111827] outline-none cursor-pointer transition-all ${activeRowIndex === index ? 'bg-white shadow-sm ring-1 ring-emerald-500 rounded-md' : 'hover:bg-gray-50'}`} 
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input id={`qty-${index}`} type="number" value={item.quantity || ''} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] outline-none focus:border-[#073318] text-right shadow-sm" />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input type="number" value={item.rate || ''} onChange={(e) => handleItemChange(index, 'rate', e.target.value)} className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] outline-none focus:border-[#073318] text-right shadow-sm" />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input 
+                                                type="text" 
+                                                value={item.uom} 
+                                                readOnly 
+                                                onFocus={() => { setActiveRowIndex(index); setIsProductSearchOpen(true); }}
+                                                className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none font-medium transition-all ${activeRowIndex === index ? 'bg-white shadow-sm ring-1 ring-emerald-500 rounded-md' : 'hover:bg-gray-50'}`}
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <div className="relative">
+                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[12px] text-gray-400 font-bold">₹</span>
+                                                <input type="number" value={item.discount_amount || ''} onChange={(e) => handleItemChange(index, 'discount_amount', e.target.value)} className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] pl-5 pr-2 text-[13px] outline-none focus:border-[#073318] text-right transition-all shadow-sm" />
+                                            </div>
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <div className="relative">
+                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[12px] text-[#073318] font-bold">%</span>
+                                                <input type="number" value={item.discount_percent || ''} onChange={(e) => handleItemChange(index, 'discount_percent', e.target.value)} className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] pl-2 pr-5 text-[13px] outline-none focus:border-[#073318] text-right font-medium text-[#073318] transition-all shadow-sm" />
+                                            </div>
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input 
+                                                type="text" 
+                                                value={item.hsn}
+                                                onFocus={() => { setActiveRowIndex(index); setIsProductSearchOpen(true); }}
+                                                readOnly={!!item.product_name}
+                                                className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none font-medium transition-all ${activeRowIndex === index && !item.product_name ? 'bg-white shadow-sm ring-1 ring-emerald-500 rounded-md' : 'hover:bg-gray-50'}`} 
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input 
+                                                type="text" 
+                                                value={item.tax_percent ? `${item.tax_percent}%` : ''}
+                                                onFocus={() => { setActiveRowIndex(index); setIsProductSearchOpen(true); }}
+                                                readOnly={!!item.product_name}
+                                                className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-center outline-none font-bold text-[#073318] transition-all ${activeRowIndex === index && !item.product_name ? 'bg-white shadow-sm ring-1 ring-emerald-500 rounded-md' : 'hover:bg-gray-50'}`} 
+                                            />
+                                        </td>
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                        <input 
+                                            type="text" 
+                                            readOnly 
+                                            value={item.before_tax || '0.00'}
+                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-right text-[#6B7280] outline-none cursor-not-allowed" 
+                                        />
+                                    </td>
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                        <input 
+                                            type="text" 
+                                            readOnly 
+                                            value={item.tax_amount || '0.00'}
+                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-right text-[#6B7280] outline-none cursor-not-allowed" 
+                                        />
+                                    </td>
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                        <input 
+                                            type="text" 
+                                            readOnly 
+                                            value={item.total_amount || '0.00'}
+                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-right font-bold text-[#073318] outline-none cursor-not-allowed" 
+                                        />
+                                    </td>
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                        <input 
+                                            type="text" 
+                                            value={item.description || ''}
+                                            onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                                            placeholder="Brief details..."
+                                            className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all shadow-sm" 
+                                        />
+                                    </td>
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6] text-center">
+                                        <button onClick={() => setItems(items.filter((_, i) => i !== index))} className="p-2 text-gray-400 hover:text-red-500 transition-all"><Trash2 size={18} /></button>
+                                    </td>
+                                </tr>
+
+                                {/* 🔥 Inline Table Suggestions mirroring Screenshot 3 */}
+                                {isProductSearchOpen && activeRowIndex === index && filteredProducts.length > 0 && (
+                                    <React.Fragment>
+                                        {filteredProducts.slice(0, 8).map((p, pIdx) => (
+                                            <tr 
+                                                key={`suggest-${p.id}`} 
+                                                onClick={() => handleQuickAddProduct(p, index)}
+                                                className="bg-[#059669] text-white cursor-pointer hover:bg-[#047857] transition-all border-b border-white/20 group animate-in slide-in-from-left duration-200"
+                                            >
+                                                <td className="px-4 py-3 text-center">
+                                                    <div className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center mx-auto transition-transform group-hover:scale-110">
+                                                        <div className="w-2.5 h-2.5 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-left font-bold text-[13px] tracking-tight">{p.product_code}</td>
+                                                <td className="px-4 py-3 text-left">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-[14px] leading-tight group-hover:underline decoration-white/30 underline-offset-4">{p.product_name}</span>
+                                                        <span className="text-[10px] opacity-70 font-black uppercase tracking-widest mt-0.5 italic">Seed</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <span className="text-[11px] font-black opacity-80 bg-white/10 px-2 py-0.5 rounded italic">HITENTER</span>
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-[14px] font-black">₹{p.purchaseRate || 0}</td>
+                                                <td className="px-4 py-3 text-left">
+                                                    <span className="font-bold text-[13px] whitespace-nowrap">Quantity - {p.uom?.unit_name || 'BOTTLES'}</span>
+                                                </td>
+                                                <td className="px-4 py-3 text-center italic text-[12px] opacity-80 font-medium" colSpan={2}>Select this item to continue</td>
+                                                <td className="px-4 py-3 text-center font-bold text-[13px]">{p.hsn_code || '1001'}</td>
+                                                <td className="px-4 py-3 text-center font-bold text-[13px]">{p.tax_rate}%</td>
+                                                <td colSpan={5} className="bg-[#047857]/30"></td>
+                                            </tr>
+                                        ))}
+                                        <tr className="bg-emerald-950/90 hover:bg-emerald-950 transition-colors">
+                                            <td colSpan={15} className="px-6 py-4">
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); navigate('/seller/masters/product-master/add'); }}
+                                                    className="w-full h-[52px] bg-emerald-900 border border-emerald-700/50 text-white rounded-[14px] flex items-center justify-center gap-3 font-black text-[15px] hover:bg-emerald-800 transition-all shadow-xl active:scale-[0.98] group"
+                                                >
+                                                    <Plus size={20} className="group-hover:rotate-90 transition-all" />
+                                                    Add New Product
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </React.Fragment>
+                                )}
+                            </React.Fragment>
+                        ))}
+                        </tbody>
+                        <tfoot>
+                            <tr className="bg-[#F9FAFB] border-t border-[#E5E7EB] font-bold h-[60px]">
+                                <td className="px-4 text-[13px] text-[#111827]">Total</td>
+                                <td colSpan={2} className="border-l border-[#F3F4F6]"></td>
+                                <td className="px-4 text-right text-[13px] text-[#111827] border-l border-[#F3F4F6] font-bold">{totalQty}</td>
+                                <td colSpan={6} className="border-l border-[#F3F4F6]"></td>
+                                <td className="px-4 text-right text-[13px] text-[#111827] border-l border-[#F3F4F6] pr-4 font-bold">{totalBefTax.toFixed(2)}</td>
+                                <td className="px-4 text-right text-[13px] text-[#111827] border-l border-[#F3F4F6] pr-4 font-bold">{totalTaxAmt.toFixed(2)}</td>
+                                <td className="px-4 text-right text-[13px] text-[#073318] border-l border-[#F3F4F6] pr-4 font-black">₹ {totalBillAmount.toFixed(2)}</td>
+                                <td colSpan={2} className="border-l border-[#F3F4F6]"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                {/* Footer Section matching Add PO exactly */}
+                <div className="flex flex-col sm:flex-row items-center justify-end gap-3 sm:gap-4 px-4 sm:px-8 py-6 border-t border-[#F3F4F6] bg-gray-50/10">
+                    <button 
+                        onClick={handlePrint}
+                        className="w-full sm:w-auto px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all shadow-md flex items-center justify-center gap-2"
                     >
-                        {isEditMode ? 'Save Changes' : `Save ${documentLabel}`}
+                        <Printer size={18} />
+                        Preview & Print
                     </button>
-                    <button
+                    <button 
+                        onClick={handleSaveInternal}
+                        disabled={isRefreshing}
+                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 md:px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-md disabled:opacity-70"
+                    >
+                        {isRefreshing ? 'Saving...' : `Save ${documentLabel}`}
+                    </button>
+                    <button 
                         onClick={onBack}
-                        className="w-full sm:w-auto px-10 h-[44px] bg-white border border-[#E5E7EB] hover:bg-gray-50 text-[#4B5563] font-bold rounded-[8px] transition-all"
+                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 md:px-10 h-[48px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all shadow-sm"
                     >
                         Cancel
                     </button>
                 </div>
             </div>
 
-            {/* Upload Modal matching Screenshot */}
-            {isUploadModalOpen && (
-                <div className="fixed inset-0 bg-black/60 z-[999] flex items-center justify-center p-4 backdrop-blur-[2px] animate-in fade-in duration-200">
-                    <div className="bg-white rounded-[16px] w-full max-w-[500px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                        {/* Modal Header */}
-                        <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100">
-                            <h3 className="text-[17px] font-bold text-[#111827]">{`Upload ${documentLabel}`}</h3>
-                            <button 
-                                onClick={() => setIsUploadModalOpen(false)}
-                                className="p-1.5 hover:bg-gray-100 rounded-full transition-colors text-gray-400"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        <div className="p-8">
-                            <div 
-                                className="border-2 border-dashed border-[#E5E7EB] rounded-[12px] p-10 flex flex-col items-center justify-center bg-white hover:border-[#014A36] transition-colors cursor-pointer group"
-                            >
-                                <div className="mb-4">
-                                    <FileText size={40} className="text-[#9CA3AF] group-hover:text-[#014A36] transition-colors" />
-                                </div>
-                                <p className="text-[14px] font-bold text-[#111827] mb-1">{t('common:click_to_upload', 'Click to upload')}</p>
-                                <p className="text-[12px] text-[#9CA3AF]">PDF or JPG (max. 10MB)</p>
+            {showValidationPopup && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={() => setShowValidationPopup(false)} />
+                    <div className="relative bg-white rounded-[24px] shadow-2xl w-full max-w-[400px] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                        <div className="px-8 py-5 flex items-center justify-between bg-emerald-800 text-white">
+                            <div className="flex items-center gap-3">
+                                <AlertCircle size={22} className="text-white" />
+                                <h3 className="text-[18px] font-bold">Attention Required</h3>
                             </div>
-
-                            {/* Modal Footer Actions */}
-                            <div className="flex items-center justify-center gap-3 mt-8">
-                                <button
-                                    onClick={() => {
-                                        // Handle upload logic here
-                                        setIsUploadModalOpen(false);
-                                    }}
-                                    className="px-10 h-[44px] bg-[#A7C0B8] hover:bg-[#8eb0a4] text-white font-bold rounded-[8px] transition-all shadow-sm"
-                                >
-                                    {t('common:upload', 'Upload')}
-                                </button>
-                                <button
-                                    onClick={() => setIsUploadModalOpen(false)}
-                                    className="px-10 h-[44px] bg-white border border-[#E5E7EB] hover:bg-gray-50 text-[#111827] font-bold rounded-[8px] transition-all"
-                                >
-                                    {t('common:exit', 'Exit')}
-                                </button>
-                            </div>
+                            <X size={20} className="cursor-pointer" onClick={() => setShowValidationPopup(false)} />
                         </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Add Supplier Modal */}
-            {isAddSupplierModalOpen && (
-                <div className="fixed inset-0 bg-black/50 z-[999] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-[12px] w-full max-w-md shadow-2xl p-6 relative animate-in fade-in zoom-in-95 duration-200">
-                        <h3 className="text-[18px] font-bold text-[#111827] mb-4">Add New Supplier</h3>
-                        <div className="flex flex-col gap-1.5 mb-6">
-                            <label className="text-[13px] font-semibold text-[#4B5563]">Supplier Name <span className="text-red-500">*</span></label>
-                            <input
-                                type="text"
-                                autoFocus
-                                placeholder="Enter supplier name"
-                                className="w-full h-[40px] px-4 border border-[#E5E7EB] rounded-[8px] text-[14px] outline-none focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"
-                                value={newSupplierName}
-                                onChange={(e) => setNewSupplierName(e.target.value)}
-                            />
+                        <div className="p-8 font-medium">
+                            <p className="text-[15px] text-[#4B5563] leading-relaxed">Please ensure all mandatory fields (marked with <span className="text-red-500 font-bold">*</span>) are filled correctly before proceeding.</p>
                         </div>
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={() => { setIsAddSupplierModalOpen(false); setNewSupplierName(''); }}
-                                className="px-5 h-[38px] rounded-[6px] text-[#4B5563] font-bold bg-white border border-[#E5E7EB] hover:bg-gray-50 text-[14px] transition-all"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleAddNewSupplier}
-                                disabled={!newSupplierName.trim()}
-                                className="px-5 h-[38px] rounded-[6px] text-white font-bold bg-[#014A36] hover:bg-[#013b2b] text-[14px] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                            >
-                                Add Supplier
-                            </button>
+                        <div className="px-8 py-5 bg-gray-50 flex justify-end">
+                            <button onClick={() => setShowValidationPopup(false)} className="px-8 h-[48px] bg-emerald-800 text-white rounded-[12px] text-[15px] font-bold hover:bg-emerald-900 transition-all shadow-lg active:scale-95">Understood</button>
                         </div>
                     </div>
                 </div>

@@ -20,7 +20,8 @@ import {
   CloudUpload,
   Trash2,
   XCircle,
-  Check
+  Check,
+  Printer
 } from "lucide-react";
 import toast from 'react-hot-toast';
 import { ROUTES } from "../../../constants/routes";
@@ -268,15 +269,26 @@ const PurchaseOrder = () => {
   const confirmDelete = async () => {
     if (!poToDelete) return;
     setIsDeleting(true);
+    
+    // Close modal immediately for snappy feel
+    setIsDeleteModalOpen(false);
+    const deletedId = poToDelete;
+    setPoToDelete(null);
+
+    // Optimistic Update: Remove from local state immediately
+    const previousOrders = [...purchaseOrders];
+    setPurchaseOrders(prev => prev.filter(po => po.id !== deletedId));
+    
     try {
-      await purchaseOrderService.deletePurchaseOrder(poToDelete);
+      await purchaseOrderService.deletePurchaseOrder(deletedId);
       toast.success("Purchase order deleted successfully");
-      setIsDeleteModalOpen(false);
-      setPoToDelete(null);
-      await fetchData();
+      // Optional: Refetch after a small delay to sync with server
+      setTimeout(fetchData, 500);
     } catch (error) {
       console.error("Delete error:", error);
       toast.error(error.response?.data?.message || "Failed to delete PO");
+      // Revert if error
+      setPurchaseOrders(previousOrders);
     } finally {
       setIsDeleting(false);
     }
@@ -420,15 +432,15 @@ const PurchaseOrder = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 uppercase">
+            <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50">
               <Upload size={18} className="text-gray-400" /> Import
             </button>
             <div className="relative" ref={exportRef}>
-              <button onClick={() => setIsExportOpen(!isExportOpen)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 uppercase">
+              <button onClick={() => setIsExportOpen(!isExportOpen)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50">
                 <Download size={18} className="text-gray-400" /> Export
               </button>
               {isExportOpen && (
-                <div className="absolute top-full right-0 mt-2 w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-50 py-2 animate-in slide-in-from-top-2 duration-200 uppercase font-bold">
+                <div className="absolute top-full right-0 mt-2 w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-50 py-2 animate-in slide-in-from-top-2 duration-200 font-bold">
                   <button onClick={() => handleExport('pdf')} className="w-full px-5 py-3 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB]"><FileText size={18} className="text-red-500" /> PDF</button>
                   <button onClick={() => handleExport('xlsx')} className="w-full px-5 py-3 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB]"><FileSpreadsheet size={18} className="text-emerald-600" /> Excel</button>
                 </div>
@@ -441,7 +453,7 @@ const PurchaseOrder = () => {
         <ScrollableTable>
           <table className="w-full min-w-[1500px] border-collapse text-left font-outfit">
             <thead>
-              <tr className="bg-emerald-900 text-white font-bold text-[15px] uppercase">
+              <tr className="bg-emerald-900 text-white font-bold text-[15px]">
                 {["Po No", "Supplier Name", "Creation Date", "Expiry Date", "Amount", "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status", "Action"].map(h => (
                   <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
                 ))}
@@ -467,26 +479,26 @@ const PurchaseOrder = () => {
                     </td>
                     <td className="px-6 py-5 text-center relative" ref={el => dropdownRefs.current[po.id] = el}>
                       <button onClick={() => setActiveDropdown(activeDropdown === po.id ? null : po.id)} className={`p-2 rounded-lg ${activeDropdown === po.id ? 'bg-[#073318] text-white' : 'text-gray-400 hover:bg-gray-100'}`}><MoreVertical size={20} /></button>
-                      {activeDropdown === po.id && (
-                        <div className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= currentItems.length - 2 ? 'bottom-0' : 'top-0'}`}>
-                          {/* VIEW / VIEW & EDIT */}
-                          {['Pending', 'Expiring Soon'].includes(po.computedStatusLabel) ? (
-                            <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50 underline-offset-4 decoration-emerald-500 hover:text-emerald-700"><Eye size={18} /> View and Edit PO</button>
-                          ) : (
-                            <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Eye size={18} /> View PO</button>
-                          )}
+                       {activeDropdown === po.id && (
+                         <div className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= currentItems.length - 2 ? 'bottom-0' : 'top-0'}`}>
+                           {/* VIEW / VIEW & EDIT */}
+                           {['Pending', 'Expiring Soon'].includes(po.computedStatusLabel) ? (
+                             <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50 underline-offset-4 decoration-emerald-500 hover:text-emerald-700"><Eye size={18} /> View and Edit PO</button>
+                           ) : (
+                             <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Eye size={18} /> View PO</button>
+                           )}
 
-                          {/* PRINT */}
-                          {['Pending', 'Expiring Soon', 'Completed', 'Expired'].includes(po.computedStatusLabel) && (
-                            <button onClick={() => handlePrint(po)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Download size={18} /> Print PO</button>
-                          )}
+                           {/* PRINT */}
+                           {['Pending', 'Expiring Soon', 'Completed', 'Expired'].includes(po.computedStatusLabel) && (
+                             <button onClick={() => handlePrint(po)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Printer size={18} /> Print PO</button>
+                           )}
 
-                          {/* DELETE */}
-                          {['Expired'].includes(po.computedStatusLabel) && (
-                            <button onClick={() => handleDeletePO(po.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50"><Trash2 size={18} /> Delete</button>
-                          )}
-                        </div>
-                      )}
+                           {/* DELETE */}
+                           {['Expired'].includes(po.computedStatusLabel) && (
+                             <button onClick={() => handleDeletePO(po.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50"><Trash2 size={18} /> Delete</button>
+                           )}
+                         </div>
+                       )}
                     </td>
                   </tr>
                 ))

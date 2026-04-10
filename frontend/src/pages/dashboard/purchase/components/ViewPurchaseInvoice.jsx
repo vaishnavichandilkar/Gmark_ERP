@@ -1,7 +1,8 @@
-import React from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Edit3, Trash2, FileText, Download } from 'lucide-react';
+import { ArrowLeft, Edit3, Trash2, FileText, Download, Printer } from 'lucide-react';
 import { exportToPDF } from '../../../../utils/exportUtils';
+import { ROUTES } from '../../../../constants/routes';
 
 const InfoTableRow = ({ label1, value1, label2, value2, noBorder }) => (
     <div className={`flex flex-col lg:flex-row border-[#E5E7EB] ${noBorder ? '' : 'border-b'}`}>
@@ -28,6 +29,8 @@ const SectionHeading = ({ title }) => (
 
 const ViewPurchaseInvoice = ({ initialData, onBack, onEdit, onDelete }) => {
     const { t } = useTranslation(['modules', 'common']);
+    const navigate = useNavigate();
+    const location = useLocation();
     const data = initialData || {};
 
     // Mock detailed data matching AddPurchaseInvoice logic
@@ -64,8 +67,23 @@ const ViewPurchaseInvoice = ({ initialData, onBack, onEdit, onDelete }) => {
                         ) : (
                             <>
                                 <button 
-                                    onClick={onEdit}
+                                    onClick={() => {
+                                        navigate(ROUTES.PURCHASE_INVOICE_PRINT, { 
+                                            state: { 
+                                                invoiceData: data, 
+                                                type: data.type || 'Invoice',
+                                                from: location.pathname
+                                            } 
+                                        });
+                                    }}
                                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#073318] hover:bg-[#04200f] text-white px-6 h-[40px] rounded-[10px] text-[14px] font-bold transition-all shadow-sm active:scale-[0.98]"
+                                >
+                                    <Printer size={18} />
+                                    Print
+                                </button>
+                                <button 
+                                    onClick={onEdit}
+                                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 border border-[#E5E7EB] hover:bg-gray-50 text-[#4B5563] px-6 h-[40px] rounded-[10px] text-[14px] font-bold transition-all shadow-sm active:scale-[0.98] bg-white"
                                 >
                                     <Edit3 size={18} />
                                     {t('common:edit')}
@@ -75,7 +93,7 @@ const ViewPurchaseInvoice = ({ initialData, onBack, onEdit, onDelete }) => {
                                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 border border-[#E5E7EB] hover:bg-gray-50 text-[#4B5563] px-6 h-[40px] rounded-[10px] text-[14px] font-bold transition-all shadow-sm active:scale-[0.98] bg-white"
                                 >
                                     <ArrowLeft size={18} />
-                                    {t('common:back', 'Back')}
+                                    {t('common:back')}
                                 </button>
                             </>
                         )}

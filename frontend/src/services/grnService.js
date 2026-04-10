@@ -33,22 +33,6 @@ const grnService = {
     return response.data;
   },
 
-  downloadSample: async () => {
-    const response = await axiosInstance.get('/grn/sample-excel', {
-      responseType: 'blob',
-    });
-    return response.data;
-  },
-
-  importGrns: async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await axiosInstance.post('/grn/import', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data;
-  },
-
   printGrn: async (id) => {
     const response = await axiosInstance.get(`/grn/${id}/print`, {
       responseType: 'blob',

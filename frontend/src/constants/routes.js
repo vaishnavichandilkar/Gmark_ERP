@@ -18,6 +18,7 @@ export const ROUTES = {
     PURCHASE_ORDER_VIEW: '/seller/purchase/order/view/:id',
     PURCHASE_ORDER_PRINT: '/seller/purchase/order/print',
     PURCHASE_INVOICE: '/seller/purchase/invoice',
+    PURCHASE_INVOICE_PRINT: '/seller/purchase/invoice/print',
     SALES: '/seller/sales',
     SALES_ORDER: '/seller/sales/order',
     SALES_ORDER_ADD: '/seller/sales/order/add',

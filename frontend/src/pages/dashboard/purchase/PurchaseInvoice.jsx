@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Search, Download, Upload, MoreVertical, Eye, Edit3, CheckCircle2, ChevronDown, RefreshCw, ArrowLeft, ArrowRight, ChevronsUpDown, X, FileText, FileSpreadsheet, Database, FileEdit, Plus } from 'lucide-react';
+import { Search, Download, Upload, MoreVertical, Eye, Edit3, CheckCircle2, ChevronDown, RefreshCw, ArrowLeft, ArrowRight, ChevronsUpDown, X, FileText, FileSpreadsheet, Database, FileEdit, Plus, Printer } from 'lucide-react';
 import AddPurchaseInvoice from './components/AddPurchaseInvoice';
 import ViewPurchaseInvoice from './components/ViewPurchaseInvoice';
 import ImportModal from './components/ImportModal';
@@ -140,7 +140,7 @@ const INITIAL_MOCK_DATA = [
         grossAmount: '7906',
         status: 'Generated',
         type: 'GRN',
-        actionText: 'View & Edit PI',
+        actionText: 'View and Edit GRN',
     }
 ];
 
@@ -152,7 +152,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
     const [data, setData] = useState(INITIAL_MOCK_DATA);
     const [currentView, setCurrentView] = useState('list');
     const [selectedInvoice, setSelectedInvoice] = useState(null);
-    const [activeTab, setActiveTab] = useState(defaultTab || 'Invoice');
+    const [activeTab, setActiveTab] = useState(defaultTab || 'GRN');
 
     useEffect(() => {
         if (defaultTab) setActiveTab(defaultTab);
@@ -177,13 +177,11 @@ const PurchaseInvoice = ({ defaultTab }) => {
 
     const handleDownloadSample = async () => {
         try {
-            const isGrn = activeTab === 'GRN';
-            const blob = await (isGrn ? grnService.downloadSample() : purchaseInvoiceService.downloadSample());
+            const blob = await purchaseInvoiceService.downloadSample();
             const url = window.URL.createObjectURL(new Blob([blob]));
             const link = document.createElement('a');
             link.href = url;
-            const filename = isGrn ? 'grn_sample.xlsx' : 'purchase_invoice_sample.xlsx';
-            link.setAttribute('download', filename);
+            link.setAttribute('download', 'purchase_invoice_sample.xlsx');
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -464,7 +462,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
 
                 {/* Embedded Sub-tabs matching previous structure */}
                 <div className="flex justify-center gap-16 border-b border-[#E5E7EB] w-full mt-6">
-                    {['Invoice', 'GRN'].map((tab) => (
+                    {['GRN', 'Invoice'].map((tab) => (
                         <button
                             key={tab}
                             onClick={() => {
@@ -476,7 +474,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                     : 'text-[#6B7280] hover:text-[#111827]'
                                 }`}
                         >
-                            {tab === 'Invoice' ? t('common:invoice', 'Invoice') : 'GRN'}
+                            {tab === 'GRN' ? 'GRN' : t('common:invoice', 'Invoice')}
                             {activeTab === tab && (
                                 <motion.div
                                     layoutId="activeSubTabUnderline"
@@ -527,13 +525,15 @@ const PurchaseInvoice = ({ defaultTab }) => {
                         </div>
 
                         <div className="flex flex-row items-center gap-3 w-full sm:w-auto" ref={exportRef}>
-                            <button
-                                onClick={() => setIsImportModalOpen(true)}
-                                className="flex items-center justify-center gap-2 w-full sm:w-auto px-5 h-[42px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
-                            >
-                                <Upload size={18} className="text-gray-400" />
-                                {t('common:import', 'Import')}
-                            </button>
+                            {activeTab === 'Invoice' && (
+                                <button
+                                    onClick={() => setIsImportModalOpen(true)}
+                                    className="flex items-center justify-center gap-2 w-full sm:w-auto px-5 h-[42px] border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
+                                >
+                                    <Upload size={18} className="text-gray-400" />
+                                    {t('common:import', 'Import')}
+                                </button>
+                            )}
 
                             <div className="relative w-full sm:w-auto">
                                 <button
@@ -611,12 +611,14 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                     <RefreshCw size={22} className={isRefreshing ? 'animate-spin text-[#073318]' : ''} />
                                 </button>
 
-                                <button
-                                    onClick={() => setIsImportModalOpen(true)}
-                                    className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
-                                >
-                                    <Upload size={22} />
-                                </button>
+                                {activeTab === 'Invoice' && (
+                                    <button
+                                        onClick={() => setIsImportModalOpen(true)}
+                                        className="w-[42px] h-[42px] flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
+                                    >
+                                        <Upload size={22} />
+                                    </button>
+                                )}
 
                                 <div className="relative mobile-export-trigger px-0">
                                     <button
@@ -749,17 +751,30 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                                     }`}
                                             >
                                                 {row.status === 'Generated' ? (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            navigate(`view/${row.id}`);
-                                                            setDropdownIndex(null);
-                                                        }}
-                                                        className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
-                                                    >
-                                                        <FileEdit size={18} className="text-gray-400" />
-                                                        {t('common:view_and_edit_pi', 'View & Edit PI')}
-                                                    </button>
+                                                    <>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                navigate(`view/${row.id}`);
+                                                                setDropdownIndex(null);
+                                                            }}
+                                                            className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
+                                                        >
+                                                            <FileEdit size={18} className="text-gray-400" />
+                                                            {activeTab === 'Invoice' ? 'View and Edit Invoice' : 'View and Edit GRN'}
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => { 
+                                                                e.stopPropagation(); 
+                                                                navigate('print', { state: { invoiceData: row, type: activeTab, from: location.pathname } });
+                                                                setDropdownIndex(null); 
+                                                            }} 
+                                                            className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
+                                                        >
+                                                            <Printer size={18} className="text-gray-400" />
+                                                            Print {activeTab}
+                                                        </button>
+                                                    </>
                                                 ) : (
                                                     <>
                                                         <button
@@ -886,8 +901,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                 onDownloadSample={handleDownloadSample}
                 onImport={async (file) => {
                     try {
-                        const isGrn = activeTab === 'GRN';
-                        const result = await (isGrn ? grnService.importGrns(file) : purchaseInvoiceService.importInvoices(file));
+                        const result = await purchaseInvoiceService.importInvoices(file);
                         if (result.success) {
                             showToast(result.message);
                             handleRefresh(); // Reload data

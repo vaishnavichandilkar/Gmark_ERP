@@ -31,6 +31,7 @@ import PurchaseInvoice from '../pages/dashboard/purchase/PurchaseInvoice';
 import GRN from '../pages/dashboard/purchase/GRN';
 import AddPurchaseInvoice from '../pages/dashboard/purchase/AddPurchaseInvoice';
 import POPrintPreview from '../pages/dashboard/purchase/POPrintPreview';
+import PurchaseInvoicePrintPreview from '../pages/dashboard/purchase/PurchaseInvoicePrintPreview';
 
 // Sales Pages
 import SalesLayout from '../pages/dashboard/sales/SalesLayout';
@@ -312,6 +313,10 @@ export const router = createBrowserRouter([
                                               {
                                                   path: 'view/:id',
                                                   element: <GRN />
+                                              },
+                                              {
+                                                  path: 'print',
+                                                  element: <PurchaseInvoicePrintPreview />
                                               }
                                           ]
                                       }

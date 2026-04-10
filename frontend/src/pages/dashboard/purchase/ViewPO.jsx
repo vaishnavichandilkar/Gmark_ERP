@@ -190,7 +190,7 @@ const ViewPO = () => {
                 ) : (
                     <div className="p-6 md:p-8 border-b border-[#F3F4F6] flex flex-col">
                         <div className="mb-6">
-                            <h1 className="text-[28px] md:text-[32px] font-bold text-[#111827] mb-2 uppercase">
+                            <h1 className="text-[28px] md:text-[32px] font-bold text-[#111827] mb-2">
                                 {formData.po_number ? `#${formData.po_number}` : '-'}
                             </h1>
                             <div className="flex gap-2">
