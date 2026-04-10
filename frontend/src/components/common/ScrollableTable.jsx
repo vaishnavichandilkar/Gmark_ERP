@@ -78,11 +78,10 @@ const ScrollableTable = ({ children, className = "" }) => {
         {showLeft && (
           <button
             onClick={() => scroll('left')}
-            className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-[#073318] border border-[#073318]/10 shadow-[0_4px_12px_rgba(0,0,0,0.2)] flex items-center justify-center text-white hover:bg-[#0a4d25] hover:scale-110 active:scale-95 transition-all duration-300 opacity-0 group-hover/scroll:opacity-100"
+            className="absolute left-6 top-1/2 -translate-y-1/2 z-20 w-[42px] h-[42px] rounded-full bg-[#073318] shadow-[0_4px_12px_rgba(0,0,0,0.25)] flex items-center justify-center text-white hover:bg-[#0a4d25] hover:scale-110 active:scale-95 transition-all duration-300 opacity-0 group-hover/scroll:opacity-100 border border-white/10"
             aria-label="Scroll Left"
-            title="Previous"
           >
-            <ArrowLeft size={18} strokeWidth={3} />
+            <ArrowLeft size={20} strokeWidth={2.5} />
           </button>
         )}
 
@@ -90,11 +89,10 @@ const ScrollableTable = ({ children, className = "" }) => {
         {showRight && (
           <button
             onClick={() => scroll('right')}
-            className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-[#073318] border border-[#073318]/10 shadow-[0_4px_12px_rgba(0,0,0,0.2)] flex items-center justify-center text-white hover:bg-[#0a4d25] hover:scale-110 active:scale-95 transition-all duration-300 opacity-0 group-hover/scroll:opacity-100"
+            className="absolute right-6 top-1/2 -translate-y-1/2 z-20 w-[42px] h-[42px] rounded-full bg-[#073318] shadow-[0_4px_12px_rgba(0,0,0,0.25)] flex items-center justify-center text-white hover:bg-[#0a4d25] hover:scale-110 active:scale-95 transition-all duration-300 opacity-0 group-hover/scroll:opacity-100 border border-white/10"
             aria-label="Scroll Right"
-            title="Next"
           >
-            <ArrowRight size={18} strokeWidth={3} />
+             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
           </button>
         )}
 

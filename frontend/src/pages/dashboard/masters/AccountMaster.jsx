@@ -309,11 +309,13 @@ const AccountMaster = () => {
             navigate('/seller/masters/account-master');
         };
 
-        const handleSuccess = () => {
+        const handleSuccess = (response) => {
             showToast(currentView === 'add' ? t('common:added_successfully') : t('common:updated_successfully'));
             const redirect = searchParams.get('redirect');
             if (redirect && currentView === 'add') {
-                setTimeout(() => navigate(redirect, { replace: true }), 1500);
+                const newId = response?.data?.id || response?.id;
+                const finalRedirect = newId ? `${redirect}${redirect.includes('?') ? '&' : '?'}newCustomerId=${newId}` : redirect;
+                setTimeout(() => navigate(finalRedirect, { replace: true }), 1500);
             } else {
                 dispatch(fetchAllAccounts({ page: currentPage, limit: rowsPerPage, search: searchQuery, ...appliedFilters }));
                 if (currentView === 'add') {

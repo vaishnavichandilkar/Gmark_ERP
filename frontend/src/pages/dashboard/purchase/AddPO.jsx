@@ -813,10 +813,10 @@ const AddPO = () => {
                             <label className="text-[14px] font-semibold text-[#374151]">Address</label>
                             <input
                                 type="text"
-                                placeholder="Auto-filled from supplier"
+                                placeholder="Enter address"
                                 value={formData.address}
-                                readOnly
-                                className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] outline-none cursor-not-allowed ${errors.address ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] transition-all ${errors.address ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                             />
                             {errors.address && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.address}</p>}
                         </div>

@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 import accountService from "../../../../services/accountService";
 import toast from "react-hot-toast";
 
@@ -398,6 +399,27 @@ const AddAccount = ({
           mobileNo: "",
         },
   );
+
+  const [searchParams] = useSearchParams();
+
+  // Handle URL Params for Quick Add
+  useEffect(() => {
+    if (!isEditMode) {
+      const type = searchParams.get('type');
+      const name = searchParams.get('name');
+      
+      if (name) {
+        setFormData(prev => ({ ...prev, accountName: name }));
+      }
+      
+      if (type === 'debtor') {
+        handleInputChange('isCustomer', true);
+      } else if (type === 'creditor') {
+        handleInputChange('isVendor', true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, isEditMode]);
 
   const [msmeEnabled, setMsmeEnabled] = useState(
     Boolean(initialData?.msmeStatus || initialData?.msmeId),

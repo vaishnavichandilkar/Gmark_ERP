@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -527,119 +528,80 @@ const PurchaseOrder = () => {
         </div>
       </div>
 
-      {/* Modals */}
-      <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} />
+      {/* Modals & Overlays - Using Portals to break out of layout constraints */}
+      {createPortal(
+        <>
+          <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} />
 
-      {isImportModalOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" onClick={() => setIsImportModalOpen(false)} />
-          <div className="relative bg-white w-full max-w-[450px] rounded-[16px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 font-outfit">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="text-[18px] font-bold text-[#111827]">Import Data</h3>
-              <button onClick={() => setIsImportModalOpen(false)} className="text-gray-400 hover:text-gray-600 border border-gray-100 p-1 rounded-full"><X size={18} /></button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Download Sample */}
-              <div className="flex justify-center">
+          {isImportModalOpen && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" onClick={() => setIsImportModalOpen(false)} />
+              <div className="relative bg-white w-full max-w-[500px] rounded-[24px] shadow-2xl p-10 space-y-8 animate-in zoom-in-95 duration-300 font-outfit">
+                <h3 className="text-[20px] font-bold text-[#111827] uppercase text-center tracking-tight">Import Data</h3>
                 <button 
                   onClick={handleDownloadSample} 
-                  className="flex items-center gap-2 px-6 py-2.5 bg-[#E8F5E9] text-[#1B5E20] rounded-[10px] text-[14px] font-bold hover:bg-[#C8E6C9] transition-all shadow-sm"
+                  className="w-full py-4 border-2 border-emerald-100 bg-emerald-50 text-emerald-700 rounded-[14px] font-bold uppercase transition-all hover:bg-emerald-100 flex items-center justify-center gap-3 shadow-sm"
                 >
-                  <Download size={18} /> Download Sample
+                  <Download size={20} /> Download Sample
                 </button>
-              </div>
-
-              {/* Divider */}
-              <div className="h-[1px] bg-gray-100 w-full" />
-
-              {/* Upload Section */}
-              <div className="space-y-4">
-                <p className="text-center text-[15px] font-bold text-[#4B5563]">Upload File</p>
-                <div className="flex items-center gap-4">
-                  <span className="text-[14px] text-gray-400 font-medium whitespace-nowrap">Select File</span>
-                  <div className="flex-1 border border-dashed border-[#CBD5E1] rounded-[10px] h-[48px] flex items-center overflow-hidden">
-                    <label className="h-full px-4 flex items-center justify-center bg-[#F8FAFC] border-r border-dashed border-[#CBD5E1] text-[13px] font-bold text-[#475569] cursor-pointer hover:bg-gray-100 transition-all">
-                      Choose File
+                <div className="space-y-4">
+                  <span className="text-[13px] font-bold text-gray-500 uppercase tracking-widest block text-center">Upload File</span>
+                  <div className="border-2 border-dashed border-gray-200 rounded-[14px] h-[56px] flex items-center overflow-hidden bg-gray-50">
+                    <label className="h-full px-6 flex items-center justify-center bg-gray-100 border-r-2 border-dashed border-gray-200 font-bold uppercase text-[14px] cursor-pointer hover:bg-gray-200 transition-all font-outfit">
+                      Browse
                       <input type="file" className="hidden" onChange={(e) => setSelectedFile(e.target.files[0])} />
                     </label>
-                    <span className="px-4 text-[13px] text-gray-400 truncate flex-1 font-medium">
-                      {selectedFile ? selectedFile.name : 'No file chosen'}
+                    <span className="px-6 text-[14px] font-bold text-gray-400 truncate flex-1 uppercase tracking-tight">
+                      {selectedFile ? selectedFile.name : 'No file chosen...'}
                     </span>
                   </div>
                 </div>
-              </div>
-
-              {/* Submit Button */}
-              <div className="pt-2">
                 <button 
                   onClick={handleSubmitImport} 
                   disabled={!selectedFile || isRefreshing} 
-                  className={`w-full h-[48px] rounded-[12px] font-bold flex items-center justify-center gap-2 shadow-md transition-all ${selectedFile ? 'bg-[#7E9F8E] text-white hover:bg-[#6A8B7A]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                  className={`w-full py-4 rounded-[14px] font-bold uppercase shadow-lg transition-all ${selectedFile ? 'bg-[#073318] text-white hover:bg-[#04200f]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
                 >
-                  <CloudUpload size={20} /> {isRefreshing ? 'Importing...' : 'Submit'}
+                  {isRefreshing ? 'Importing...' : 'Submit Data'}
                 </button>
               </div>
             </div>
+          )}
+
+          {isRefreshing && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center">
+              <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" />
+              <div className="relative bg-white/95 px-12 py-10 rounded-[32px] shadow-2xl flex flex-col items-center gap-5 animate-in zoom-in-95 duration-400">
+                <RefreshCw size={48} className="text-[#073318] animate-spin" />
+                <p className="font-bold text-[#073318] uppercase tracking-widest font-outfit">Processing...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Filter Sidebar */}
+          {isFilterOpen && <div className="fixed inset-0 z-[100] bg-slate-900/20 backdrop-blur-[2px] transition-all duration-300" onClick={() => setIsFilterOpen(false)} />}
+          <div className={`fixed top-0 right-0 h-full w-[440px] bg-white shadow-2xl z-[110] transform transition-transform duration-500 ${isFilterOpen ? "translate-x-0" : "translate-x-full"}`}>
+            <div className="bg-[#073318] p-8 flex items-center justify-between">
+              <h2 className="text-white font-bold uppercase text-[20px] tracking-tight font-outfit">Apply Filters</h2>
+              <button onClick={() => setIsFilterOpen(false)} className="text-white/50 hover:text-white transition-all bg-white/10 p-2 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="p-8 space-y-10 flex flex-col h-full bg-white font-outfit">
+              <div className="space-y-4">
+                <label className="text-[14px] font-bold text-gray-400 uppercase tracking-widest block font-outfit">Status Filter</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {statusTabs.map(s => (
+                    <button key={s} onClick={() => setFilterInputs({ ...filterInputs, status: s })} className={`h-12 rounded-[12px] font-bold text-[14px] transition-all border uppercase tracking-tight ${filterInputs.status === s ? 'bg-[#073318] border-[#073318] text-white shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'}`}>{s}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-auto pb-16 flex gap-4">
+                <button onClick={handleClearFilter} className="flex-1 h-14 border border-[#E5E7EB] rounded-[14px] font-bold uppercase tracking-widest text-gray-600 hover:bg-gray-50 transition-all font-outfit">Clear</button>
+                <button onClick={handleApplyFilter} className="flex-1 h-14 bg-[#073318] text-white rounded-[14px] font-bold uppercase tracking-widest hover:bg-[#04200f] shadow-lg transition-all font-outfit">Apply</button>
+              </div>
+            </div>
           </div>
-        </div>
+        </>,
+        document.body
       )}
-
-      {isRefreshing && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" />
-          <div className="relative bg-white/95 px-12 py-10 rounded-[32px] shadow-2xl flex flex-col items-center gap-5 animate-in zoom-in-95 duration-400">
-            <RefreshCw size={48} className="text-[#073318] animate-spin" />
-            <p className="font-bold text-[#073318] uppercase tracking-widest font-outfit">Processing...</p>
-          </div>
-        </div>
-      )}
-
-
-      {isFilterOpen && (
-          <div
-              className="fixed inset-0 z-[60] bg-slate-900/20 backdrop-blur-[2px] transition-all duration-300 ease-in-out"
-              onClick={() => setIsFilterOpen(false)}
-          />
-      )}
-
-      <div className={`fixed top-0 right-0 h-full w-screen sm:w-[440px] bg-white shadow-2xl z-[710] transform transition-all duration-300 ease-in-out flex flex-col ${isFilterOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'}`}>
-          <div className="flex items-center justify-between px-6 py-5 border-b border-[#04200f] bg-emerald-900">
-              <h2 className="text-[20px] font-bold text-white tracking-tight">{t('apply_filters', 'Apply Filters')}</h2>
-              <button onClick={() => setIsFilterOpen(false)} className="text-emerald-100 hover:text-white transition-colors p-1">
-                  <X size={20} />
-              </button>
-          </div>
-
-          <div className="flex-1 px-5 sm:px-8 py-6 sm:py-8 overflow-y-auto space-y-6 sm:space-y-7 pb-32">
-              <FilterDropdown
-                  label={t('common:status', 'Status')}
-                  name="status"
-                  value={filterInputs.status}
-                  onChange={(e) => setFilterInputs({ ...filterInputs, status: e.target.value })}
-                  options={[
-                    { label: "All", value: "" },
-                    ...statusTabs.map(s => ({ label: s, value: s }))
-                  ]}
-              />
-          </div>
-
-          <div className="absolute bottom-0 left-0 w-full px-8 py-6 border-t border-[#E5E7EB] flex items-center gap-4 bg-white">
-              <button
-                  onClick={handleClearFilter}
-                  className="flex-1 h-[46px] bg-white border border-[#E5E7EB] text-[#374151] text-[15px] font-semibold rounded-[10px] hover:bg-gray-50 transition-colors shadow-sm"
-              >
-                  {t('modules:clear', 'Clear')}
-              </button>
-              <button
-                  onClick={handleApplyFilter}
-                  className="flex-1 h-[46px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-colors shadow-sm"
-              >
-                  {t('common:apply_filter', 'Apply Filter')}
-              </button>
-          </div>
-      </div>
     </div>
   );
 };
