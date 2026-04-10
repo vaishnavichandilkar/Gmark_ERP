@@ -36,6 +36,7 @@ model User {
   products             Product[]
   purchaseInvoices     PurchaseInvoice[]
   purchaseOrders       PurchaseOrder[]
+  salesOrders          SalesOrder[]
   grns                 Grn[]
   sub_categories       SubCategory[]
   subGroups            SubGroup[]
@@ -490,6 +491,51 @@ model PurchaseOrderItem {
   @@map("purchase_order_items")
 }
 
+model SalesOrder {
+  id              Int              @id @default(autoincrement())
+  soNumber        String           @unique
+  customerName    String
+  customerType    CustomerType?
+  address         String
+  creditDays      Int
+  soCreationDate  DateTime         @default(now())
+  expiryDate      DateTime
+  gstNumber       String?
+  panNumber       String?
+  status          SOStatus         @default(PENDING)
+  totalAmount     Float            @default(0)
+  taxAmount       Float            @default(0)
+  grandTotal      Float            @default(0)
+  userId          Int
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  items           SalesOrderItem[]
+  user            User             @relation(fields: [userId], references: [id])
+
+  @@map("sales_orders")
+}
+
+model SalesOrderItem {
+  id               Int        @id @default(autoincrement())
+  salesOrderId     Int
+  productCode      String
+  productName      String
+  hsnCode          String
+  quantity         Float
+  rate             Float
+  uom              String
+  discountPercent  Float
+  discountAmount   Float
+  taxPercent       Float
+  taxAmount        Float
+  totalAmount      Float
+  beforeTaxAmount  Float      @default(0)
+  printDescription String?
+  salesOrder       SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+
+  @@map("sales_order_items")
+}
+
 model PurchaseInvoice {
   id                    Int                   @id @default(autoincrement())
   invoiceNumber         String                @unique
@@ -676,5 +722,11 @@ enum PIStatus {
 
 enum GrnStatus {
   GENERATED
+  DELETED
+}
+
+enum SOStatus {
+  PENDING
+  INVOICE_GENERATED
   DELETED
 }

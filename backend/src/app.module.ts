@@ -15,6 +15,7 @@ import { SuperAdminModule } from './modules/superadmin/superadmin.module';
 import { MasterModule } from './modules/Master/master.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { PurchaseModule } from './modules/Purchase/purchase.module';
+import { SalesModule } from './modules/Sales/sales.module';
 import { AppController } from './app.controller';
 @Module({
     imports: [
@@ -32,6 +33,7 @@ import { AppController } from './app.controller';
         MasterModule,
         ProfileModule,
         PurchaseModule,
+        SalesModule,
     ],
     controllers: [AppController],
     providers: [],
