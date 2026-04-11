@@ -2,13 +2,13 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import { toast } from 'react-hot-toast';
-import { 
-    ArrowLeft, 
-    Search, 
-    Trash2, 
-    Plus, 
-    Save, 
-    Printer, 
+import {
+    ArrowLeft,
+    Search,
+    Trash2,
+    Plus,
+    Save,
+    Printer,
     X,
     ChevronDown,
     Calendar,
@@ -47,7 +47,7 @@ const AddPO = () => {
         supplier_id: '',
         supplier_name: '',
         address: '',
-        po_number: '', 
+        po_number: '',
         gst_number: '',
         credit_days: '',
         creation_date: getLocalToday(),
@@ -59,21 +59,21 @@ const AddPO = () => {
     const [isRestoringDraft, setIsRestoringDraft] = useState(false);
 
     const [items, setItems] = useState([
-        { 
-            id: Date.now(), 
-            product_code: '', 
-            product_name: '', 
-            quantity: 0, 
-            rate: 0, 
-            uom: '', 
-            discount_amount: 0, 
-            discount_percent: 0, 
-            hsn: '', 
-            tax_percent: 0, 
-            before_tax: 0, 
-            tax_amount: 0, 
+        {
+            id: Date.now(),
+            product_code: '',
+            product_name: '',
+            quantity: 0,
+            rate: 0,
+            uom: '',
+            discount_amount: 0,
+            discount_percent: 0,
+            hsn: '',
+            tax_percent: 0,
+            before_tax: 0,
+            tax_amount: 0,
             total_amount: 0,
-            description: '' 
+            description: ''
         }
     ]);
 
@@ -82,16 +82,16 @@ const AddPO = () => {
     const [activeRowIndex, setActiveRowIndex] = useState(null);
     const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
     const [products, setProducts] = useState([]);
-    
+
     const [showValidationPopup, setShowValidationPopup] = useState(false);
 
     // Fetch Suppliers and Handle Draft Recovery
     useEffect(() => {
         const fetchInitialLists = async () => {
             try {
-                const response = await accountService.getAllAccounts({ 
+                const response = await accountService.getAllAccounts({
                     groupName: 'SUNDRY_CREDITORS',
-                    limit: 1000 
+                    limit: 1000
                 });
                 const fetchedSuppliers = response.data || [];
                 setSuppliers(fetchedSuppliers);
@@ -99,14 +99,14 @@ const AddPO = () => {
                 // 🛠️ Selective Draft Recovery: Only restore if explicitly requested via URL
                 const urlParams = new URLSearchParams(window.location.search);
                 const isExplicitRestore = urlParams.get('restore') === 'true' || urlParams.get('redirect');
-                
+
                 const draftStr = sessionStorage.getItem('add_po_draft');
                 if (draftStr && isExplicitRestore) {
                     try {
                         const draft = JSON.parse(draftStr);
                         let restoredFormData = draft.formData;
                         let restoredItems = draft.items;
-                        
+
                         // 1. Detect New Supplier
                         const oldSupplierIdsStr = sessionStorage.getItem('add_po_supplier_ids');
                         if (oldSupplierIdsStr) {
@@ -136,23 +136,23 @@ const AddPO = () => {
                             if (newProduct) {
                                 // Auto-generate the row but avoid duplicates if already present
                                 const newItem = {
-                                    id: Date.now(), 
+                                    id: Date.now(),
                                     product_id: newProduct.id,
-                                    product_code: newProduct.product_code, 
-                                    product_name: newProduct.product_name, 
-                                    quantity: 1, 
-                                    rate: newProduct.purchaseRate || 0, 
-                                    uom: newProduct.uom?.unit_name || newProduct.uom?.gst_uom || 'NOS', 
-                                    discount_amount: 0, 
-                                    discount_percent: 0, 
-                                    hsn: newProduct.hsn_code || '', 
-                                    tax_percent: newProduct.tax_rate || 0, 
-                                    before_tax: (newProduct.purchaseRate || 0).toFixed(2), 
-                                    tax_amount: ((newProduct.purchaseRate || 0) * (newProduct.tax_rate || 0) / 100).toFixed(2), 
+                                    product_code: newProduct.product_code,
+                                    product_name: newProduct.product_name,
+                                    quantity: 1,
+                                    rate: newProduct.purchaseRate || 0,
+                                    uom: newProduct.uom?.unit_name || newProduct.uom?.gst_uom || 'NOS',
+                                    discount_amount: 0,
+                                    discount_percent: 0,
+                                    hsn: newProduct.hsn_code || '',
+                                    tax_percent: newProduct.tax_rate || 0,
+                                    before_tax: (newProduct.purchaseRate || 0).toFixed(2),
+                                    tax_amount: ((newProduct.purchaseRate || 0) * (newProduct.tax_rate || 0) / 100).toFixed(2),
                                     total_amount: ((newProduct.purchaseRate || 0) * (1 + (newProduct.tax_rate || 0) / 100)).toFixed(2),
-                                    description: newProduct.description || '' 
+                                    description: newProduct.description || ''
                                 };
-                                
+
                                 // Replace an empty row or append
                                 if (restoredItems.length === 1 && !restoredItems[0].product_name) {
                                     restoredItems = [newItem];
@@ -162,7 +162,7 @@ const AddPO = () => {
                                 toast.success(`New product "${newProduct.product_name}" added!`);
                             }
                         }
-                        
+
                         setFormData(restoredFormData);
                         setItems(restoredItems);
                         setSupplierSearch(restoredFormData.supplier_name || '');
@@ -189,11 +189,11 @@ const AddPO = () => {
         const fetchProducts = async () => {
             try {
                 // If tableSearch is empty, fetch a default list of 20 products
-                const response = await productService.getProducts({ 
+                const response = await productService.getProducts({
                     search: tableSearch.trim() || '',
-                    limit: tableSearch.trim() ? 50 : 20 
+                    limit: tableSearch.trim() ? 50 : 20
                 });
-                setProducts(response.products || []); 
+                setProducts(response.products || []);
             } catch (error) {
                 console.error("Error fetching products:", error);
             }
@@ -295,7 +295,7 @@ const AddPO = () => {
     const handleDateTextChange = (e, field) => {
         const inputVal = e.target.value;
         const digits = inputVal.replace(/\D/g, "").substring(0, 8);
-        
+
         // Auto-format as they type
         let formatted = digits;
         if (digits.length >= 3) formatted = digits.substring(0, 2) + "-" + digits.substring(2);
@@ -307,7 +307,7 @@ const AddPO = () => {
 
     // Filtered suppliers for dropdown
     const filteredSuppliers = useMemo(() => {
-        return (suppliers || []).filter(s => 
+        return (suppliers || []).filter(s =>
             s.accountName?.toLowerCase().includes(supplierSearch.toLowerCase())
         );
     }, [supplierSearch, suppliers]);
@@ -317,14 +317,14 @@ const AddPO = () => {
     const filteredProducts = useMemo(() => {
         const addedProductIds = items.map(item => item.product_id).filter(id => id);
         const searchLower = tableSearch.toLowerCase();
-        
+
         return (products || []).filter(p => {
             // Already added products should NOT be visible
             if (addedProductIds.includes(p.id)) return false;
-            
+
             // If search is empty, show all available (max 50)
             if (!tableSearch) return true;
-            
+
             // Search across multiple fields
             return (
                 p.product_name?.toLowerCase().includes(searchLower) ||
@@ -372,54 +372,54 @@ const AddPO = () => {
 
     const handleQuickAddProduct = (product, targetIndex = null) => {
         const newItem = {
-            id: Date.now(), 
+            id: Date.now(),
             product_id: product.id,
-            product_code: product.product_code || product.productCode || '', 
-            product_name: product.product_name || product.productName || '', 
-            quantity: 1, 
-            rate: product.purchaseRate || product.purchase_rate || product.rate || 0, 
-            uom: product.uom ? `${product.uom.unit_name} - ${product.uom.full_name_of_measurement}` : 'NOS', 
-            discount_amount: 0, 
-            discount_percent: 0, 
-            hsn: product.hsn_code || product.hsn || '', 
-            tax_percent: product.tax_rate || product.tax || 0, 
-            before_tax: (product.purchaseRate || 0).toFixed(2), 
-            tax_amount: ((product.purchaseRate || 0) * (product.tax_rate || 0) / 100).toFixed(2), 
+            product_code: product.product_code || product.productCode || '',
+            product_name: product.product_name || product.productName || '',
+            quantity: 1,
+            rate: product.purchaseRate || product.purchase_rate || product.rate || 0,
+            uom: product.uom ? `${product.uom.unit_name} - ${product.uom.full_name_of_measurement}` : 'NOS',
+            discount_amount: 0,
+            discount_percent: 0,
+            hsn: product.hsn_code || product.hsn || '',
+            tax_percent: product.tax_rate || product.tax || 0,
+            before_tax: (product.purchaseRate || 0).toFixed(2),
+            tax_amount: ((product.purchaseRate || 0) * (product.tax_rate || 0) / 100).toFixed(2),
             total_amount: ((product.purchaseRate || 0) * (1 + (product.tax_rate || 0) / 100)).toFixed(2),
-            description: product.description || product.printDescription || '' 
+            description: product.description || product.printDescription || ''
         };
-        
+
         let updatedItems = [...items];
         const finalTargetIndex = targetIndex !== null ? targetIndex : updatedItems.findIndex(i => !i.product_name);
-        
+
         if (finalTargetIndex !== -1) {
             updatedItems[finalTargetIndex] = newItem;
         } else {
             updatedItems = [...updatedItems, newItem];
         }
-        
+
         // AUTO-CREATE EMPTY ROW: Ensure there is always exactly one empty row at the end
         const hasEmptyRow = updatedItems.some(i => !i.product_name);
         if (!hasEmptyRow) {
             updatedItems.push({
-                id: Date.now() + 1, 
+                id: Date.now() + 1,
                 product_id: null,
-                product_code: '', 
-                product_name: '', 
-                quantity: 0, 
-                rate: 0, 
-                uom: '', 
-                discount_amount: 0, 
-                discount_percent: 0, 
-                hsn: '', 
-                tax_percent: 0, 
-                before_tax: 0, 
-                tax_amount: 0, 
+                product_code: '',
+                product_name: '',
+                quantity: 0,
+                rate: 0,
+                uom: '',
+                discount_amount: 0,
+                discount_percent: 0,
+                hsn: '',
+                tax_percent: 0,
+                before_tax: 0,
+                tax_amount: 0,
                 total_amount: 0,
-                description: '' 
+                description: ''
             });
         }
-        
+
         setItems(updatedItems);
         setTableSearch('');
         setIsProductSearchOpen(false);
@@ -439,7 +439,7 @@ const AddPO = () => {
         switch (e.key) {
             case 'ArrowDown':
                 e.preventDefault();
-                setSelectedSuggestionIndex(prev => 
+                setSelectedSuggestionIndex(prev =>
                     prev < filteredProducts.length - 1 ? prev + 1 : prev
                 );
                 break;
@@ -467,7 +467,7 @@ const AddPO = () => {
     const handleItemChange = (index, field, value) => {
         const newItems = [...items];
         const item = { ...newItems[index] };
-        
+
         // Update the direct field value from input
         item[field] = value;
 
@@ -522,7 +522,7 @@ const AddPO = () => {
         newItems[index] = item;
         setItems(newItems);
     };
-    
+
     // Extracted navigation logic for adding new products while preserving PO draft
     const handleAddNewProduct = async () => {
         sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
@@ -538,7 +538,7 @@ const AddPO = () => {
     // Validation Function
     const validateForm = () => {
         const newErrors = {};
-        
+
         if (!formData.supplier_name) newErrors.supplier_name = "Supplier name is required";
         if (!formData.address) newErrors.address = "Address is required";
         if (!formData.credit_days && formData.credit_days !== 0) {
@@ -635,21 +635,21 @@ const AddPO = () => {
     };
 
     const addNewRow = () => {
-        setItems([...items, { 
-            id: Date.now(), 
-            product_code: '', 
-            product_name: '', 
-            quantity: 0, 
-            rate: 0, 
-            uom: '', 
-            discount_amount: 0, 
-            discount_percent: 0, 
-            hsn: '', 
-            tax_percent: 0, 
-            before_tax: 0, 
-            tax_amount: 0, 
+        setItems([...items, {
+            id: Date.now(),
+            product_code: '',
+            product_name: '',
+            quantity: 0,
+            rate: 0,
+            uom: '',
+            discount_amount: 0,
+            discount_percent: 0,
+            hsn: '',
+            tax_percent: 0,
+            before_tax: 0,
+            tax_amount: 0,
             total_amount: 0,
-            description: '' 
+            description: ''
         }]);
     };
 
@@ -658,21 +658,21 @@ const AddPO = () => {
             setItems(items.filter((_, i) => i !== index));
         } else {
             // Reset the only row if deleted
-            setItems([{ 
-                id: Date.now(), 
-                product_code: '', 
-                product_name: '', 
-                quantity: 0, 
-                rate: 0, 
-                uom: '', 
-                discount_amount: 0, 
-                discount_percent: 0, 
-                hsn: '', 
-                tax_percent: 0, 
-                before_tax: 0.00, 
-                tax_amount: 0.00, 
+            setItems([{
+                id: Date.now(),
+                product_code: '',
+                product_name: '',
+                quantity: 0,
+                rate: 0,
+                uom: '',
+                discount_amount: 0,
+                discount_percent: 0,
+                hsn: '',
+                tax_percent: 0,
+                before_tax: 0.00,
+                tax_amount: 0.00,
                 total_amount: 0.00,
-                description: '' 
+                description: ''
             }]);
         }
     };
@@ -693,7 +693,7 @@ const AddPO = () => {
                 const beforeTax = (qty * rate) - discAmt;
                 const taxAmt = (beforeTax * taxPct) / 100;
                 const total = beforeTax + taxAmt;
-                
+
                 return {
                     ...item,
                     before_tax: beforeTax.toFixed(2),
@@ -704,11 +704,11 @@ const AddPO = () => {
         };
         // Save draft to session storage before navigating to preview
         sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
-        navigate(ROUTES.PURCHASE_ORDER_PRINT, { 
-            state: { 
-                poData: fullPOData, 
-                from: isEditMode ? ROUTES.PURCHASE_ORDER_EDIT.replace(':id', id) : ROUTES.PURCHASE_ORDER_ADD 
-            } 
+        navigate(ROUTES.PURCHASE_ORDER_PRINT, {
+            state: {
+                poData: fullPOData,
+                from: isEditMode ? ROUTES.PURCHASE_ORDER_EDIT.replace(':id', id) : ROUTES.PURCHASE_ORDER_ADD
+            }
         });
     };
 
@@ -723,12 +723,12 @@ const AddPO = () => {
                     <div>
                         <h2 className="hidden md:block text-[18px] md:text-[20px] font-bold text-[#111827]">{isEditMode ? 'Edit PO' : 'Add PO'}</h2>
                     </div>
-                    
-                    <button 
+
+                    <button
                         onClick={() => navigate(ROUTES.PURCHASE_ORDER)}
                         className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[40px] sm:h-[44px] border border-[#E5E7EB] rounded-[10px] text-[14px] md:text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all font-outfit shadow-sm"
                     >
-                        <ArrowLeft size={18} /> 
+                        <ArrowLeft size={18} />
                         <span className="hidden sm:inline">Back</span>
                         <span className="sm:hidden text-gray-500">Back</span>
                     </button>
@@ -754,7 +754,7 @@ const AddPO = () => {
                                 />
                                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                                 {errors.supplier_name && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.supplier_name}</p>}
-                                
+
                                 {isSupplierDropdownOpen && (
                                     <>
                                         <div className="fixed inset-0 z-[65]" onClick={() => setIsSupplierDropdownOpen(false)}></div>
@@ -778,7 +778,7 @@ const AddPO = () => {
                                                 )}
                                             </div>
                                             <div className="p-3 bg-gray-50 border-t border-[#F3F4F6]">
-                                                <button 
+                                                <button
                                                     onClick={() => {
                                                         sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
                                                         sessionStorage.setItem('add_po_supplier_ids', JSON.stringify(suppliers.map(s => s.id)));
@@ -786,7 +786,7 @@ const AddPO = () => {
                                                     }}
                                                     className="w-full flex items-center justify-center gap-2 py-3 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-md group font-outfit"
                                                 >
-                                                    <Plus size={16} className="group-hover:scale-125 transition-all" /> 
+                                                    <Plus size={16} className="group-hover:scale-125 transition-all" />
                                                     Add new supplier
                                                 </button>
                                             </div>
@@ -841,9 +841,9 @@ const AddPO = () => {
                                     readOnly
                                     className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 pr-11 text-[14px] outline-none cursor-not-allowed ${errors.creation_date ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                                 />
-                                <Calendar 
-                                    size={18} 
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto" 
+                                <Calendar
+                                    size={18}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto"
                                     onClick={() => creationDateRef.current?.showPicker?.() || creationDateRef.current?.focus()}
                                 />
                             </div>
@@ -880,9 +880,9 @@ const AddPO = () => {
                                     onChange={(e) => handleDateTextChange(e, 'expiry_date')}
                                     className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-11 text-[14px] outline-none transition-all ${errors.expiry_date ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                                 />
-                                <Calendar 
-                                    size={18} 
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto shadow-sm hover:text-[#073318]" 
+                                <Calendar
+                                    size={18}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto shadow-sm hover:text-[#073318]"
                                     onClick={() => expiryDateRef.current?.showPicker?.() || expiryDateRef.current?.focus()}
                                 />
                             </div>
@@ -925,55 +925,55 @@ const AddPO = () => {
                                 className={`w-full h-[44px] bg-white border rounded-[12px] pl-11 pr-4 text-[14px] outline-none focus:ring-1 transition-all placeholder:text-[#9CA3AF] shadow-sm font-outfit ${errors.items ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
                             />
                             {errors.items && <p className="text-red-500 text-[12px] mt-1 font-medium italic font-outfit">*Please add at least one product</p>}
-                            
+
                             {/* Global Product Search Suggestions Dropdown - Only when NOT editing a specific row */}
                             {isProductSearchOpen && activeRowIndex === null && (
                                 <div className="absolute top-full left-0 w-full sm:w-[550px] mt-2 bg-white border border-gray-100 rounded-[16px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] z-[60] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 font-outfit border-t-4 border-t-emerald-800">
-                                            {/* Scrollable Results Area */}
-                                            <div className="max-h-[320px] overflow-y-auto custom-scrollbar">
-                                                {filteredProducts.map(p => (
-                                                    <button 
-                                                        key={p.id}
-                                                        onClick={() => handleQuickAddProduct(p)}
-                                                        className="w-full px-5 py-4 flex items-center justify-between hover:bg-emerald-50/80 transition-all text-left outline-none border-b border-gray-50 last:border-0 group"
-                                                    >
-                                                        <div className="flex flex-col gap-1.5">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="font-bold text-[#111827] text-[15px] group-hover:text-emerald-900 transition-colors">{p.product_name}</span>
-                                                                <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px] font-extrabold text-gray-500 tracking-wider">#{p.product_code}</span>
-                                                            </div>
-                                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-gray-400">
-                                                                <span className="flex items-center gap-1">HSN: <span className="text-gray-700 font-bold">{p.hsn_code || p.hsn || 'N/A'}</span></span>
-                                                                <span className="flex items-center gap-1">Tax: <span className="text-gray-700 font-bold">{p.tax_rate || p.tax || 0}%</span></span>
-                                                                <span className="flex items-center gap-1">Price: <span className="text-emerald-700 font-black">₹{p.purchaseRate || p.rate || 0}</span></span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex flex-col items-end gap-1 shrink-0">
-                                                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter">{p.category?.name || p.category || 'NO CATEGORY'}</span>
-                                                            <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
-                                                                <Plus size={18} />
-                                                            </div>
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                                {filteredProducts.length === 0 && (
-                                                    <div className="px-5 py-10 text-center text-[13px] text-gray-400 italic">No products found for "{tableSearch}"</div>
-                                                )}
-                                            </div>
+                                    {/* Scrollable Results Area */}
+                                    <div className="max-h-[320px] overflow-y-auto custom-scrollbar">
+                                        {filteredProducts.map(p => (
+                                            <button
+                                                key={p.id}
+                                                onClick={() => handleQuickAddProduct(p)}
+                                                className="w-full px-5 py-4 flex items-center justify-between hover:bg-emerald-50/80 transition-all text-left outline-none border-b border-gray-50 last:border-0 group"
+                                            >
+                                                <div className="flex flex-col gap-1.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-[#111827] text-[15px] group-hover:text-emerald-900 transition-colors">{p.product_name}</span>
+                                                        <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px] font-extrabold text-gray-500 tracking-wider">#{p.product_code}</span>
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-gray-400">
+                                                        <span className="flex items-center gap-1">HSN: <span className="text-gray-700 font-bold">{p.hsn_code || p.hsn || 'N/A'}</span></span>
+                                                        <span className="flex items-center gap-1">Tax: <span className="text-gray-700 font-bold">{p.tax_rate || p.tax || 0}%</span></span>
+                                                        <span className="flex items-center gap-1">Price: <span className="text-emerald-700 font-black">₹{p.purchaseRate || p.rate || 0}</span></span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-1 shrink-0">
+                                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter">{p.category?.name || p.category || 'NO CATEGORY'}</span>
+                                                    <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
+                                                        <Plus size={18} />
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        ))}
+                                        {filteredProducts.length === 0 && (
+                                            <div className="px-5 py-10 text-center text-[13px] text-gray-400 italic">No products found for "{tableSearch}"</div>
+                                        )}
+                                    </div>
 
                                     {/* Fixed Footer for Action Button */}
                                     <div className="p-3 bg-gray-50 border-t border-[#F3F4F6] mt-auto shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
-                                        <button 
+                                        <button
                                             onClick={handleAddNewProduct}
                                             className="w-full h-[44px] bg-[#073318] text-white text-[14px] font-bold rounded-[10px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-md"
                                         >
-                                            <Plus size={16} className="group-hover:scale-110 transition-transform" /> 
+                                            <Plus size={16} className="group-hover:scale-110 transition-transform" />
                                             Add new product
                                         </button>
                                     </div>
                                 </div>
                             )}
-                            
+
                             {/* Overlay */}
                             {isProductSearchOpen && (
                                 <div className="fixed inset-0 z-50 cursor-default" onClick={() => setIsProductSearchOpen(false)}></div>
@@ -1027,261 +1027,261 @@ const AddPO = () => {
                                 <th className="px-4 py-4 w-[80px] text-center text-[13px] font-semibold text-[#4B5563] border-l border-[#F3F4F6]">Action</th>
                             </tr>
                         </thead>
-                                <tbody>
-                                    {items.map((item, index) => (
-                                        <React.Fragment key={item.id}>
-                                        <tr className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-colors group">
-                                            <td className="px-4 py-3 text-center text-[#6B7280] text-[13px]">{index + 1}</td>
-                                            <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                                <input 
-                                                    type="text" 
-                                                    value={item.product_code}
-                                                    onKeyDown={(e) => handleSearchKeyDown(e, index)}
-                                                    onChange={(e) => {
-                                                        setTableSearch(e.target.value);
-                                                        setActiveRowIndex(index);
-                                                        setIsProductSearchOpen(true);
-                                                    }}
-                                                    onFocus={() => {
-                                                        setActiveRowIndex(index);
-                                                        setIsProductSearchOpen(true);
-                                                    }}
-                                                    placeholder="Code"
-                                                    className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none hover:bg-gray-50 rounded-md transition-all cursor-pointer font-bold"
-                                                />
-                                            </td>
-                                            <td className="px-2 py-2 border-l border-[#F3F4F6] relative">
-                                                <input 
-                                                    type="text" 
-                                                    value={item.product_name || (activeRowIndex === index ? tableSearch : '')}
-                                                    onKeyDown={(e) => handleSearchKeyDown(e, index)}
-                                                    onChange={(e) => {
-                                                        setTableSearch(e.target.value);
-                                                        setActiveRowIndex(index);
-                                                        setIsProductSearchOpen(true);
-                                                    }}
-                                                    onFocus={() => {
-                                                        setActiveRowIndex(index);
-                                                        setIsProductSearchOpen(true);
-                                                    }}
-                                                    placeholder={item.product_name ? "" : "Select product..."}
-                                                    className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#111827] outline-none hover:bg-gray-50 rounded-md transition-all cursor-pointer ${!item.product_name ? 'italic text-gray-400 font-normal' : ''}`}
-                                                />
-                                            </td>
-                                            <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                                <input 
-                                                    id={`qty-${index}`}
-                                                    type="number" 
+                        <tbody>
+                            {items.map((item, index) => (
+                                <React.Fragment key={item.id}>
+                                    <tr className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-colors group">
+                                        <td className="px-4 py-3 text-center text-[#6B7280] text-[13px]">{index + 1}</td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input
+                                                type="text"
+                                                value={item.product_code}
+                                                onKeyDown={(e) => handleSearchKeyDown(e, index)}
+                                                onChange={(e) => {
+                                                    setTableSearch(e.target.value);
+                                                    setActiveRowIndex(index);
+                                                    setIsProductSearchOpen(true);
+                                                }}
+                                                onFocus={() => {
+                                                    setActiveRowIndex(index);
+                                                    setIsProductSearchOpen(true);
+                                                }}
+                                                placeholder="Code"
+                                                className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none hover:bg-gray-50 rounded-md transition-all cursor-pointer font-bold"
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6] relative">
+                                            <input
+                                                type="text"
+                                                value={item.product_name || (activeRowIndex === index ? tableSearch : '')}
+                                                onKeyDown={(e) => handleSearchKeyDown(e, index)}
+                                                onChange={(e) => {
+                                                    setTableSearch(e.target.value);
+                                                    setActiveRowIndex(index);
+                                                    setIsProductSearchOpen(true);
+                                                }}
+                                                onFocus={() => {
+                                                    setActiveRowIndex(index);
+                                                    setIsProductSearchOpen(true);
+                                                }}
+                                                placeholder={item.product_name ? "" : "Select product..."}
+                                                className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#111827] outline-none hover:bg-gray-50 rounded-md transition-all cursor-pointer ${!item.product_name ? 'italic text-gray-400 font-normal' : ''}`}
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input
+                                                id={`qty-${index}`}
+                                                type="number"
+                                                min="0"
+                                                value={item.quantity || ''}
+                                                onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                                                className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] outline-none focus:ring-1 text-right transition-all shadow-sm ${errors.itemErrors?.[index]?.quantity ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={item.rate || ''}
+                                                onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
+                                                className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] outline-none focus:ring-1 text-right transition-all shadow-sm ${errors.itemErrors?.[index]?.rate ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input
+                                                type="text"
+                                                value={item.uom}
+                                                readOnly={!!item.product_name}
+                                                onKeyDown={(e) => handleSearchKeyDown(e, index)}
+                                                onFocus={() => {
+                                                    setActiveRowIndex(index);
+                                                    setIsProductSearchOpen(true);
+                                                }}
+                                                className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none font-medium ${!item.product_name ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed'}`}
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <div className="relative">
+                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[12px] text-gray-400 font-bold">₹</span>
+                                                <input
+                                                    type="number"
                                                     min="0"
-                                                    value={item.quantity || ''}
-                                                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                                    className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] outline-none focus:ring-1 text-right transition-all shadow-sm ${errors.itemErrors?.[index]?.quantity ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
+                                                    value={item.discount_amount || ''}
+                                                    onChange={(e) => handleItemChange(index, 'discount_amount', e.target.value)}
+                                                    className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] pl-5 pr-2 text-[13px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 text-right transition-all shadow-sm"
                                                 />
-                                            </td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input 
-                                            type="number" 
-                                            min="0"
-                                            value={item.rate || ''}
-                                            onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
-                                            className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] outline-none focus:ring-1 text-right transition-all shadow-sm ${errors.itemErrors?.[index]?.rate ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
-                                        />
-                                    </td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input 
-                                            type="text" 
-                                            value={item.uom}
-                                            readOnly={!!item.product_name}
-                                            onKeyDown={(e) => handleSearchKeyDown(e, index)}
-                                            onFocus={() => {
-                                                setActiveRowIndex(index);
-                                                setIsProductSearchOpen(true);
-                                            }}
-                                            className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none font-medium ${!item.product_name ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed'}`}
-                                        />
-                                    </td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <div className="relative">
-                                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[12px] text-gray-400 font-bold">₹</span>
-                                            <input 
-                                                type="number" 
-                                                min="0"
-                                                value={item.discount_amount || ''}
-                                                onChange={(e) => handleItemChange(index, 'discount_amount', e.target.value)}
-                                                className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] pl-5 pr-2 text-[13px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 text-right transition-all shadow-sm"
+                                            </div>
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <div className="relative">
+                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[12px] text-[#073318] font-bold">%</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={item.discount_percent || ''}
+                                                    onChange={(e) => handleItemChange(index, 'discount_percent', e.target.value)}
+                                                    className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] pl-2 pr-5 text-[13px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 text-right font-medium text-[#073318] transition-all shadow-sm"
+                                                />
+                                            </div>
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input
+                                                type="text"
+                                                value={item.hsn}
+                                                readOnly={!!item.product_name}
+                                                onKeyDown={(e) => handleSearchKeyDown(e, index)}
+                                                onFocus={() => {
+                                                    setActiveRowIndex(index);
+                                                    setIsProductSearchOpen(true);
+                                                }}
+                                                className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none font-medium ${!item.product_name ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed'}`}
+                                                placeholder="HSN"
                                             />
-                                        </div>
-                                    </td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <div className="relative">
-                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[12px] text-[#073318] font-bold">%</span>
-                                            <input 
-                                                type="number" 
-                                                min="0"
-                                                value={item.discount_percent || ''}
-                                                onChange={(e) => handleItemChange(index, 'discount_percent', e.target.value)}
-                                                className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] pl-2 pr-5 text-[13px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 text-right font-medium text-[#073318] transition-all shadow-sm"
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input
+                                                type="text"
+                                                value={item.tax_percent ? `${item.tax_percent}%` : ''}
+                                                readOnly={!!item.product_name}
+                                                onKeyDown={(e) => handleSearchKeyDown(e, index)}
+                                                onFocus={() => {
+                                                    setActiveRowIndex(index);
+                                                    setIsProductSearchOpen(true);
+                                                }}
+                                                className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-right outline-none font-bold text-[#073318] ${!item.product_name ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed'}`}
                                             />
-                                        </div>
-                                    </td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input 
-                                            type="text" 
-                                            value={item.hsn}
-                                            readOnly={!!item.product_name}
-                                            onKeyDown={(e) => handleSearchKeyDown(e, index)}
-                                            onFocus={() => {
-                                                setActiveRowIndex(index);
-                                                setIsProductSearchOpen(true);
-                                            }}
-                                            className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none font-medium ${!item.product_name ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed'}`}
-                                            placeholder="HSN"
-                                        />
-                                    </td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input 
-                                            type="text" 
-                                            value={item.tax_percent ? `${item.tax_percent}%` : ''}
-                                            readOnly={!!item.product_name}
-                                            onKeyDown={(e) => handleSearchKeyDown(e, index)}
-                                            onFocus={() => {
-                                                setActiveRowIndex(index);
-                                                setIsProductSearchOpen(true);
-                                            }}
-                                            className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-right outline-none font-bold text-[#073318] ${!item.product_name ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed'}`}
-                                        />
-                                    </td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input 
-                                            type="text" 
-                                            readOnly 
-                                            value={item.before_tax || '0.00'}
-                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-right text-[#6B7280] outline-none cursor-not-allowed"
-                                        />
-                                    </td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input 
-                                            type="text" 
-                                            readOnly 
-                                            value={item.tax_amount || '0.00'}
-                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-right text-[#6B7280] outline-none cursor-not-allowed"
-                                        />
-                                    </td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input 
-                                            type="text" 
-                                            readOnly 
-                                            value={item.total_amount || '0.00'}
-                                            className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#073318] text-right outline-none cursor-not-allowed"
-                                        />
-                                    </td>
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input 
-                                            type="text" 
-                                            value={item.description}
-                                            onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                                            className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] text-[#111827] outline-none focus:border-[#073318] transition-all shadow-sm"
-                                            placeholder="Description"
-                                        />
-                                    </td>
-                                                <td className="px-2 py-2 border-l border-[#F3F4F6] text-center">
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const newItems = items.filter((_, i) => i !== index);
-                                                            if (newItems.length === 0) {
-                                                                newItems.push({
-                                                                    id: Date.now(), product_id: null, product_code: '', product_name: '', 
-                                                                    quantity: 0, rate: 0, uom: '', discount_amount: 0, discount_percent: 0, 
-                                                                    hsn: '', tax_percent: 0, before_tax: 0, tax_amount: 0, total_amount: 0, description: ''
-                                                                });
-                                                            }
-                                                            setItems(newItems);
-                                                        }}
-                                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                                    >
-                                                        <Trash2 size={18} />
-                                                    </button>
-                                                </td>
-                                            </tr>
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input
+                                                type="text"
+                                                readOnly
+                                                value={item.before_tax || '0.00'}
+                                                className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-right text-[#6B7280] outline-none cursor-not-allowed"
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input
+                                                type="text"
+                                                readOnly
+                                                value={item.tax_amount || '0.00'}
+                                                className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-right text-[#6B7280] outline-none cursor-not-allowed"
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input
+                                                type="text"
+                                                readOnly
+                                                value={item.total_amount || '0.00'}
+                                                className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#073318] text-right outline-none cursor-not-allowed"
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input
+                                                type="text"
+                                                value={item.description}
+                                                onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                                                className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] text-[#111827] outline-none focus:border-[#073318] transition-all shadow-sm"
+                                                placeholder="Description"
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6] text-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const newItems = items.filter((_, i) => i !== index);
+                                                    if (newItems.length === 0) {
+                                                        newItems.push({
+                                                            id: Date.now(), product_id: null, product_code: '', product_name: '',
+                                                            quantity: 0, rate: 0, uom: '', discount_amount: 0, discount_percent: 0,
+                                                            hsn: '', tax_percent: 0, before_tax: 0, tax_amount: 0, total_amount: 0, description: ''
+                                                        });
+                                                    }
+                                                    setItems(newItems);
+                                                }}
+                                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </td>
+                                    </tr>
 
-                                            {/* 🔥 ERP-Style Inline Product Selection */}
-                                            {isProductSearchOpen && activeRowIndex === index && (
-                                                <>
-                                                    {filteredProducts.slice(0, 10).map((p, pIndex) => (
-                                                        <tr 
-                                                            key={p.id}
+                                    {/* 🔥 ERP-Style Inline Product Selection */}
+                                    {isProductSearchOpen && activeRowIndex === index && (
+                                        <>
+                                            {filteredProducts.slice(0, 10).map((p, pIndex) => (
+                                                <tr
+                                                    key={p.id}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleQuickAddProduct(p, index);
+                                                    }}
+                                                    onMouseEnter={() => setSelectedSuggestionIndex(pIndex)}
+                                                    className={`border-b border-emerald-50 cursor-pointer transition-all duration-200 relative z-[100] ${selectedSuggestionIndex === pIndex ? 'bg-emerald-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.1)]' : 'bg-emerald-50/40 hover:bg-emerald-100/60'}`}
+                                                >
+                                                    <td className="px-4 py-3 text-center">
+                                                        {selectedSuggestionIndex === pIndex ? (
+                                                            <div className="flex items-center justify-center">
+                                                                <div className="w-2.5 h-2.5 bg-white rounded-full ring-4 ring-white/20"></div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="w-1.5 h-1.5 bg-emerald-200 rounded-full mx-auto"></div>
+                                                        )}
+                                                    </td>
+                                                    <td className={`px-4 py-3 border-l border-emerald-100 ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-800'}`}>
+                                                        <span className="font-mono text-[13px] font-black">{p.product_code}</span>
+                                                    </td>
+                                                    <td className={`px-4 py-3 border-l border-emerald-100 ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-900 font-bold'}`}>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[14px] font-black tracking-tight uppercase">{p.product_name}</span>
+                                                            <span className={`text-[10px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-600/70'}`}>{p.category?.name || 'STOCK ITEM'}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td colSpan={1} className="px-4 py-3 border-l border-emerald-100 text-center">
+                                                        <div className={`text-[11px] font-black italic uppercase tracking-tighter ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-600/50'}`}>
+                                                            {selectedSuggestionIndex === pIndex ? 'Hit Enter' : '---'}
+                                                        </div>
+                                                    </td>
+                                                    <td className={`px-4 py-3 border-l border-emerald-100 text-right ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-900 font-black'}`}>
+                                                        ₹{p.purchaseRate || p.rate || 0}
+                                                    </td>
+                                                    <td className={`px-4 py-3 border-l border-emerald-100 text-center whitespace-nowrap ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-800 font-bold'}`}>
+                                                        {p.uom ? `${p.uom.unit_name} - ${p.uom.full_name_of_measurement}` : 'NOS'}
+                                                    </td>
+                                                    <td colSpan={2} className={`px-4 py-3 border-l border-emerald-100 text-center italic text-[11px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-400'}`}>
+                                                        Select this item to continue
+                                                    </td>
+                                                    <td className={`px-4 py-3 border-l border-emerald-100 text-center ${selectedSuggestionIndex === pIndex ? 'text-white font-black' : 'text-emerald-900 font-bold'}`}>
+                                                        {p.hsn_code || p.hsn || 'N/A'}
+                                                    </td>
+                                                    <td className={`px-4 py-3 border-l border-emerald-100 text-center ${selectedSuggestionIndex === pIndex ? 'text-white font-black' : 'text-emerald-900 font-bold'}`}>
+                                                        {p.tax_rate || p.tax || 0}%
+                                                    </td>
+                                                    <td colSpan={5} className="px-4 py-8 border-l border-emerald-100">
+                                                        {/* Action cell empty - selection handled by row click */}
+                                                    </td>
+                                                </tr>
+                                            ))}
+
+                                            {/* Standardized Add New Product Button */}
+                                            <tr className="bg-white border-t border-gray-100">
+                                                <td colSpan={15} className="px-4 py-5 bg-emerald-50/10">
+                                                    <div className="flex justify-center">
+                                                        <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                handleQuickAddProduct(p, index);
+                                                                handleAddNewProduct();
                                                             }}
-                                                            onMouseEnter={() => setSelectedSuggestionIndex(pIndex)}
-                                                            className={`border-b border-emerald-50 cursor-pointer transition-all duration-200 relative z-[100] ${selectedSuggestionIndex === pIndex ? 'bg-emerald-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.1)]' : 'bg-emerald-50/40 hover:bg-emerald-100/60'}`}
+                                                            className="h-[42px] px-10 bg-[#073318] text-white text-[13px] font-bold rounded-[10px] hover:bg-[#052611] transition-all flex items-center justify-center gap-3 group shadow-lg shadow-emerald-900/10 font-outfit relative z-[101]"
                                                         >
-                                                            <td className="px-4 py-3 text-center">
-                                                                {selectedSuggestionIndex === pIndex ? (
-                                                                    <div className="flex items-center justify-center">
-                                                                        <div className="w-2.5 h-2.5 bg-white rounded-full ring-4 ring-white/20"></div>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="w-1.5 h-1.5 bg-emerald-200 rounded-full mx-auto"></div>
-                                                                )}
-                                                            </td>
-                                                            <td className={`px-4 py-3 border-l border-emerald-100 ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-800'}`}>
-                                                                <span className="font-mono text-[13px] font-black">{p.product_code}</span>
-                                                            </td>
-                                                            <td className={`px-4 py-3 border-l border-emerald-100 ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-900 font-bold'}`}>
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-[14px] font-black tracking-tight uppercase">{p.product_name}</span>
-                                                                    <span className={`text-[10px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-600/70'}`}>{p.category?.name || 'STOCK ITEM'}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td colSpan={1} className="px-4 py-3 border-l border-emerald-100 text-center">
-                                                                <div className={`text-[11px] font-black italic uppercase tracking-tighter ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-600/50'}`}>
-                                                                    {selectedSuggestionIndex === pIndex ? 'Hit Enter' : '---'}
-                                                                </div>
-                                                            </td>
-                                                            <td className={`px-4 py-3 border-l border-emerald-100 text-right ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-900 font-black'}`}>
-                                                                ₹{p.purchaseRate || p.rate || 0}
-                                                            </td>
-                                                            <td className={`px-4 py-3 border-l border-emerald-100 text-center whitespace-nowrap ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-800 font-bold'}`}>
-                                                                {p.uom ? `${p.uom.unit_name} - ${p.uom.full_name_of_measurement}` : 'NOS'}
-                                                            </td>
-                                                            <td colSpan={2} className={`px-4 py-3 border-l border-emerald-100 text-center italic text-[11px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-400'}`}>
-                                                                Select this item to continue
-                                                            </td>
-                                                            <td className={`px-4 py-3 border-l border-emerald-100 text-center ${selectedSuggestionIndex === pIndex ? 'text-white font-black' : 'text-emerald-900 font-bold'}`}>
-                                                                {p.hsn_code || p.hsn || 'N/A'}
-                                                            </td>
-                                                            <td className={`px-4 py-3 border-l border-emerald-100 text-center ${selectedSuggestionIndex === pIndex ? 'text-white font-black' : 'text-emerald-900 font-bold'}`}>
-                                                                {p.tax_rate || p.tax || 0}%
-                                                            </td>
-                                                            <td colSpan={5} className="px-4 py-8 border-l border-emerald-100">
-                                                                {/* Action cell empty - selection handled by row click */}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-
-                                                    {/* Standardized Add New Product Button */}
-                                                    <tr className="bg-white border-t border-gray-100">
-                                                        <td colSpan={15} className="px-4 py-5 bg-emerald-50/10">
-                                                            <div className="flex justify-center">
-                                                                <button 
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleAddNewProduct();
-                                                                    }}
-                                                                    className="h-[42px] px-10 bg-[#073318] text-white text-[13px] font-bold rounded-[10px] hover:bg-[#052611] transition-all flex items-center justify-center gap-3 group shadow-lg shadow-emerald-900/10 font-outfit relative z-[101]"
-                                                                >
-                                                                    <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" strokeWidth={3} /> 
-                                                                    Add New Product
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                </>
-                                            )}
-                                        </React.Fragment>
+                                                            <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" strokeWidth={3} />
+                                                            Add New Product
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </>
+                                    )}
+                                </React.Fragment>
                             ))}
                         </tbody>
                         <tfoot>
@@ -1316,20 +1316,20 @@ const AddPO = () => {
 
                 {/* Card Footer Actions */}
                 <div className="flex flex-col sm:flex-row items-center justify-end gap-3 sm:gap-4 px-4 sm:px-8 py-6 border-t border-[#F3F4F6] bg-gray-50/10">
-                    <button 
+                    <button
                         onClick={handlePrintPreview}
                         className="w-full sm:w-auto px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all shadow-md flex items-center justify-center gap-2"
                     >
                         <Printer size={18} />
                         Preview & Print
                     </button>
-                    <button 
+                    <button
                         onClick={handleSave}
                         className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 md:px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-md"
                     >
                         Save PO
                     </button>
-                    <button 
+                    <button
                         onClick={() => navigate(ROUTES.PURCHASE_ORDER)}
                         className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 md:px-10 h-[48px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all shadow-sm order-3"
                     >

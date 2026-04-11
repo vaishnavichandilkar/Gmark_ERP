@@ -41,6 +41,7 @@ import SalesLayout from '../pages/dashboard/sales/SalesLayout';
 import SalesOrder from '../pages/dashboard/sales/SalesOrder';
 import AddSO from '../pages/dashboard/sales/AddSO';
 import ViewSO from '../pages/dashboard/sales/ViewSO';
+import SOPrintPreview from '../pages/dashboard/sales/SOPrintPreview';
 import SalesInvoice from '../pages/dashboard/sales/SalesInvoice';
 
 import SystemSettings from '../features/settings/pages/SystemSettings';
@@ -68,11 +69,11 @@ const InitialRedirect = () => {
     if ((token || refreshToken) && user.role) {
         const role = user.role.toUpperCase();
         if (role === 'SUPERADMIN') return <Navigate to="/superadmin/dashboard" replace />;
-        
+
         if (role === 'SELLER' && (user.approvalStatus !== 'APPROVED' || user.isFirstApprovalLogin)) {
             return <Navigate to="/application-status" replace />;
         }
-        
+
         return <Navigate to="/seller/dashboard" replace />;
     }
 
@@ -92,12 +93,12 @@ const AuthGuard = () => {
     if ((token || refreshToken) && user.role) {
         const role = user.role.toUpperCase();
         if (role === 'SUPERADMIN') return <Navigate to="/superadmin/dashboard" replace />;
-        
+
         // Strictly block sellers from Auth flow if they are in PENDING, REJECTED, or first-time APPROVED
         if (role === 'SELLER' && (user.approvalStatus !== 'APPROVED' || user.isFirstApprovalLogin)) {
             return <Navigate to="/application-status" replace />;
         }
-        
+
         return <Navigate to="/seller/dashboard" replace />;
     }
     return <Outlet />;
@@ -244,116 +245,117 @@ export const router = createBrowserRouter([
                                     }
                                 ]
                             },
-                             {
-                                 path: 'purchase',
-                                 element: <PurchaseLayout />,
-                                 children: [
-                                     {
-                                         index: true,
-                                         element: <PurchaseOrder />
-                                     },
-                                     {
-                                         path: 'order',
-                                         children: [
-                                             {
-                                                 index: true,
-                                                 element: <PurchaseOrder />
-                                             },
-                                             {
-                                                 path: 'add',
-                                                 element: <AddPO />
-                                             },
-                                             {
-                                                 path: 'edit/:id',
-                                                 element: <AddPO />
-                                             },
-                                             {
-                                                 path: 'view/:id',
-                                                 element: <ViewPO />
-                                             },
-                                             {
-                                                 path: 'print',
-                                                 element: <POPrintPreview />
-                                             }
-                                         ]
-                                     },
-                                     {
-                                         path: 'invoice',
-                                         children: [
-                                             {
-                                                 index: true,
-                                                 element: <PurchaseInvoice />
-                                             },
-                                             {
-                                                 path: 'add',
-                                                 element: <AddPurchaseInvoice />
-                                             },
-                                             {
-                                                 path: 'edit/:id',
-                                                 element: <AddPurchaseInvoice />
-                                             },
-                                             {
-                                                 path: 'view/:id',
-                                                 element: <PurchaseInvoice />
-                                             },
-                                             {
-                                                 path: 'print',
-                                                 element: <PurchaseInvoicePrintPreview />
-                                             }
-                                         ]
-                                      },
-                                      {
-                                          path: 'grn',
-                                          children: [
-                                              {
-                                                  index: true,
-                                                  element: <GRN />
-                                              },
-                                              {
-                                                  path: 'add',
-                                                  element: <AddGRN />
-                                              },
-                                              {
-                                                  path: 'edit/:id',
-                                                  element: <AddGRN />
-                                              },
-                                              {
-                                                  path: 'view/:id',
-                                                  element: <GRN />
-                                              },
-                                              {
-                                                  path: 'print',
-                                                  element: <PurchaseInvoicePrintPreview />
-                                              }
-                                          ]
-                                      }
-                                 ]
-                             },
-                             {
-                                 path: 'sales',
-                                 element: <SalesLayout />,
-                                 children: [
-                                     {
-                                         index: true,
-                                         element: <SalesOrder />
-                                     },
-                                     {
-                                         path: 'order',
-                                         children: [
-                                             { index: true, element: <SalesOrder /> },
-                                             { path: 'add', element: <AddSO /> },
-                                             { path: 'edit/:id', element: <AddSO /> },
-                                             { path: 'view/:id', element: <ViewSO /> }
-                                         ]
-                                     },
-                                     {
-                                         path: 'invoice',
-                                         children: [
-                                             { index: true, element: <SalesInvoice /> }
-                                         ]
-                                     }
-                                 ]
-                             },
+                            {
+                                path: 'purchase',
+                                element: <PurchaseLayout />,
+                                children: [
+                                    {
+                                        index: true,
+                                        element: <PurchaseOrder />
+                                    },
+                                    {
+                                        path: 'order',
+                                        children: [
+                                            {
+                                                index: true,
+                                                element: <PurchaseOrder />
+                                            },
+                                            {
+                                                path: 'add',
+                                                element: <AddPO />
+                                            },
+                                            {
+                                                path: 'edit/:id',
+                                                element: <AddPO />
+                                            },
+                                            {
+                                                path: 'view/:id',
+                                                element: <ViewPO />
+                                            },
+                                            {
+                                                path: 'print',
+                                                element: <POPrintPreview />
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        path: 'invoice',
+                                        children: [
+                                            {
+                                                index: true,
+                                                element: <PurchaseInvoice />
+                                            },
+                                            {
+                                                path: 'add',
+                                                element: <AddPurchaseInvoice />
+                                            },
+                                            {
+                                                path: 'edit/:id',
+                                                element: <AddPurchaseInvoice />
+                                            },
+                                            {
+                                                path: 'view/:id',
+                                                element: <PurchaseInvoice />
+                                            },
+                                            {
+                                                path: 'print',
+                                                element: <PurchaseInvoicePrintPreview />
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        path: 'grn',
+                                        children: [
+                                            {
+                                                index: true,
+                                                element: <GRN />
+                                            },
+                                            {
+                                                path: 'add',
+                                                element: <AddGRN />
+                                            },
+                                            {
+                                                path: 'edit/:id',
+                                                element: <AddGRN />
+                                            },
+                                            {
+                                                path: 'view/:id',
+                                                element: <GRN />
+                                            },
+                                            {
+                                                path: 'print',
+                                                element: <PurchaseInvoicePrintPreview />
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                path: 'sales',
+                                element: <SalesLayout />,
+                                children: [
+                                    {
+                                        index: true,
+                                        element: <SalesOrder />
+                                    },
+                                    {
+                                        path: 'order',
+                                        children: [
+                                            { index: true, element: <SalesOrder /> },
+                                            { path: 'add', element: <AddSO /> },
+                                            { path: 'edit/:id', element: <AddSO /> },
+                                            { path: 'view/:id', element: <ViewSO /> },
+                                            { path: 'print', element: <SOPrintPreview /> }
+                                        ]
+                                    },
+                                    {
+                                        path: 'invoice',
+                                        children: [
+                                            { index: true, element: <SalesInvoice /> }
+                                        ]
+                                    }
+                                ]
+                            },
                             {
                                 path: 'settings',
                                 element: <SystemSettings />

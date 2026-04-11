@@ -75,232 +75,7 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
   );
 };
 
-const DUMMY_DATA = [
-  {
-    id: "dummy-1",
-    soNumber: "SO/2024-25/001",
-    customerName: "Global Exports Pvt Ltd",
-    customerType: "Corporate",
-    soCreationDate: "2024-04-01T10:00:00Z",
-    expiryDate: "2024-05-01T10:00:00Z",
-    totalAmount: 125000.00,
-    gstNumber: "27AAACG1234F1Z5",
-    creditDays: 30,
-    taxAmount: 22500.00,
-    grandTotal: 147500.00,
-    status: "pending"
-  },
-  {
-    id: "dummy-2",
-    soNumber: "SO/2024-25/002",
-    customerName: "Apex Manufacturing Solutions",
-    customerType: "Industrial",
-    soCreationDate: "2024-04-02T11:30:00Z",
-    expiryDate: "2024-04-15T10:00:00Z",
-    totalAmount: 45000.50,
-    gstNumber: "27BBBCH5678G2Z6",
-    creditDays: 15,
-    taxAmount: 8100.00,
-    grandTotal: 53100.50,
-    status: "completed"
-  },
-  {
-    id: "dummy-3",
-    soNumber: "SO/2024-25/003",
-    customerName: "Retail Hub Enterprises",
-    customerType: "Retail",
-    soCreationDate: "2024-04-03T09:15:00Z",
-    expiryDate: "2024-04-20T10:00:00Z",
-    totalAmount: 12800.00,
-    gstNumber: "27CCCDI9012H3Z7",
-    creditDays: 7,
-    taxAmount: 2304.00,
-    grandTotal: 15104.00,
-    status: "pending"
-  },
-  {
-    id: "dummy-4",
-    soNumber: "SO/2024-25/004",
-    customerName: "Sterling Trading Co.",
-    customerType: "Corporate",
-    soCreationDate: "2024-04-04T14:45:00Z",
-    expiryDate: "2024-05-04T10:00:00Z",
-    totalAmount: 85000.00,
-    gstNumber: "27DDDEJ3456I4Z8",
-    creditDays: 60,
-    taxAmount: 15300.00,
-    grandTotal: 100300.00,
-    status: "deleted"
-  },
-  {
-    id: "dummy-5",
-    soNumber: "SO/2024-25/005",
-    customerName: "Precision Tools & Dies",
-    customerType: "Industrial",
-    soCreationDate: "2024-04-05T16:20:00Z",
-    expiryDate: "2024-04-25T10:00:00Z",
-    totalAmount: 67200.00,
-    gstNumber: "27EEEFK7890J5Z9",
-    creditDays: 21,
-    taxAmount: 12096.00,
-    grandTotal: 79296.00,
-    status: "pending"
-  },
-  {
-    id: "dummy-6",
-    soNumber: "SO/2024-25/006",
-    customerName: "Bright Electronics",
-    customerType: "Retail",
-    soCreationDate: "2024-04-06T10:00:00Z",
-    expiryDate: "2024-04-30T10:00:00Z",
-    totalAmount: 15000.00,
-    gstNumber: "27FFFGL1234K6Z0",
-    creditDays: 15,
-    taxAmount: 2700.00,
-    grandTotal: 17700.00,
-    status: "pending"
-  },
-  {
-    id: "dummy-7",
-    soNumber: "SO/2024-25/007",
-    customerName: "Titan Forge Industries",
-    customerType: "Industrial",
-    soCreationDate: "2024-04-07T11:00:00Z",
-    expiryDate: "2024-05-07T10:00:00Z",
-    totalAmount: 320000.00,
-    gstNumber: "27GGGHM5678L7Z1",
-    creditDays: 45,
-    taxAmount: 57600.00,
-    grandTotal: 377600.00,
-    status: "completed"
-  },
-  {
-    id: "dummy-8",
-    soNumber: "SO/2024-25/008",
-    customerName: "Nova Logistics",
-    customerType: "Corporate",
-    soCreationDate: "2024-04-08T09:00:00Z",
-    expiryDate: "2024-04-25T10:00:00Z",
-    totalAmount: 42000.00,
-    gstNumber: "27HHHIN9012M8Z2",
-    creditDays: 30,
-    taxAmount: 7560.00,
-    grandTotal: 49560.00,
-    status: "pending"
-  },
-  {
-    id: "dummy-9",
-    soNumber: "SO/2024-25/009",
-    customerName: "Aero Parts Intl",
-    customerType: "Industrial",
-    soCreationDate: "2024-04-09T14:45:00Z",
-    expiryDate: "2024-04-15T10:00:00Z",
-    totalAmount: 95400.00,
-    gstNumber: "27IIIJO3456N9Z3",
-    creditDays: 10,
-    taxAmount: 17172.00,
-    grandTotal: 112572.00,
-    status: "deleted"
-  },
-  {
-    id: "dummy-10",
-    soNumber: "SO/2024-25/010",
-    customerName: "Green Grow Agri",
-    customerType: "Retail",
-    soCreationDate: "2024-04-10T11:00:00Z",
-    expiryDate: "2024-04-20T10:00:00Z",
-    totalAmount: 8500.00,
-    gstNumber: "27JJJKP7890O0Z4",
-    creditDays: 7,
-    taxAmount: 15300.00,
-    grandTotal: 23800.00,
-    status: "completed"
-  },
-  {
-    id: "dummy-11",
-    soNumber: "SO/2024-25/011",
-    customerName: "Orion Systems",
-    customerType: "Corporate",
-    soCreationDate: "2024-04-11T12:00:00Z",
-    expiryDate: "2026-04-11T10:00:00Z", // Expiring Soon (Today is April 9)
-    totalAmount: 156000.00,
-    gstNumber: "27KKKLQ1234P1Z5",
-    creditDays: 60,
-    taxAmount: 28080.00,
-    grandTotal: 184080.00,
-    status: "pending"
-  },
-  {
-    id: "dummy-12",
-    soNumber: "SO/2024-25/012",
-    customerName: "Swift Delivery Co.",
-    customerType: "Corporate",
-    soCreationDate: "2024-04-12T09:30:00Z",
-    expiryDate: "2026-04-10T10:00:00Z", // Expiring Soon
-    totalAmount: 12000.00,
-    gstNumber: "27LLLMR5678Q2Z6",
-    creditDays: 15,
-    taxAmount: 2160.00,
-    grandTotal: 14160.00,
-    status: "pending"
-  },
-  {
-    id: "dummy-13",
-    soNumber: "SO/2024-25/013",
-    customerName: "Blue Ocean Marine",
-    customerType: "Industrial",
-    soCreationDate: "2024-04-13T10:00:00Z",
-    expiryDate: "2024-05-13T10:00:00Z",
-    totalAmount: 210000.00,
-    gstNumber: "27MMMN9012R3Z7",
-    creditDays: 20,
-    taxAmount: 37800.00,
-    grandTotal: 247800.00,
-    status: "pending"
-  },
-  {
-    id: "dummy-14",
-    soNumber: "SO/2024-25/014",
-    customerName: "Galaxy Retail",
-    customerType: "Retail",
-    soCreationDate: "2024-04-14T14:45:00Z",
-    expiryDate: "2024-04-28T10:00:00Z",
-    totalAmount: 4500.00,
-    gstNumber: "27NNNOT3456S4Z8",
-    creditDays: 7,
-    taxAmount: 810.00,
-    grandTotal: 5310.00,
-    status: "deleted"
-  },
-  {
-    id: "dummy-15",
-    soNumber: "SO/2024-25/015",
-    customerName: "Peak Performance Ltd",
-    customerType: "Industrial",
-    soCreationDate: "2024-04-15T16:20:00Z",
-    expiryDate: "2024-05-15T10:00:00Z",
-    totalAmount: 67200.00,
-    gstNumber: "27OOOPU7890T5Z9",
-    creditDays: 30,
-    taxAmount: 12096.00,
-    grandTotal: 79296.00,
-    status: "pending"
-  },
-  {
-    id: "dummy-16",
-    soNumber: "SO/2024-25/016",
-    customerName: "Zenith Technologies",
-    customerType: "Corporate",
-    soCreationDate: "2026-04-09T09:00:00Z",
-    expiryDate: "2026-04-30T10:00:00Z",
-    totalAmount: 85000.00,
-    gstNumber: "27PPPQR1234S1Z0",
-    creditDays: 30,
-    taxAmount: 15300.00,
-    grandTotal: 100300.00,
-    status: "pending"
-  }
-];
+
 
 const SalesOrder = () => {
   const statusTabs = ["ALL", "PENDING", "COMPLETED", "DELETED"];
@@ -319,7 +94,7 @@ const SalesOrder = () => {
   const [soToDelete, setSoToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [salesOrders, setSalesOrders] = useState(DUMMY_DATA);
+  const [salesOrders, setSalesOrders] = useState([]);
   const [totalItemsCount, setTotalItemsCount] = useState(0);
   const [activeTab, setActiveTab] = useState("All");
 
@@ -357,92 +132,25 @@ const SalesOrder = () => {
         const params = {
           page: currentPage,
           limit: itemsPerPage,
-          search: searchQuery,
+          search: searchQuery.trim(),
         };
 
         const statusFilter = appliedFilters.status;
         if (statusFilter !== "ALL") {
-          const statusMap = {
-            "PENDING": "pending",
-            "COMPLETED": "completed",
-            "DELETED": "deleted"
-          };
-          params.filter = statusMap[statusFilter];
+          params.filter = statusFilter.toLowerCase();
         }
 
         const response = await salesOrderService.getSalesOrders(params);
+
+        // Handle response based on backend structure
         const data = Array.isArray(response) ? response : (response.data || []);
-        
-        if (data.length > 0) {
-          setSalesOrders(data);
-          setTotalItemsCount(response.meta?.total || data.length);
-        } else {
-          // If no data from backend, use searchable DUMMY_DATA for demonstration
-          const query = searchQuery.toLowerCase().trim().replace(/,/g, '');
-          const statusFilter = appliedFilters.status;
-
-          let filtered = DUMMY_DATA.filter(so => {
-            // Calculate dynamic status for search compatibility
-            const expiryDate = so.expiryDate ? new Date(so.expiryDate) : null;
-            const today = new Date();
-            const isExpired = expiryDate && expiryDate < today;
-            const diffTime = expiryDate ? expiryDate - today : null;
-            const diffDays = diffTime ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : null;
-            const isExpiringSoon = !isExpired && diffDays !== null && diffDays <= 3;
-            
-            let calcStatus = so.status || "pending";
-            if (calcStatus === 'completed' || calcStatus === 'COMPLETED') calcStatus = "Completed";
-            else if (calcStatus === 'deleted' || calcStatus === 'DELETED') calcStatus = "Deleted";
-            else if (isExpired) calcStatus = "Expired";
-            else if (isExpiringSoon) calcStatus = "Expiring Soon";
-            else calcStatus = "Pending";
-
-            return (
-              so.soNumber?.toLowerCase().includes(query) ||
-              so.customerName?.toLowerCase().includes(query) ||
-              so.customerType?.toLowerCase().includes(query) ||
-              so.gstNumber?.toLowerCase().includes(query) ||
-              calcStatus.toLowerCase().includes(query) ||
-              so.totalAmount?.toString().includes(query) ||
-              so.totalAmount?.toFixed(2).includes(query) ||
-              so.grandTotal?.toString().includes(query) ||
-              so.grandTotal?.toFixed(2).includes(query) ||
-              so.taxAmount?.toString().includes(query) ||
-              so.taxAmount?.toFixed(2).includes(query)
-            );
-          });
-
-          if (statusFilter !== "ALL") {
-            const s = statusFilter.toLowerCase();
-            filtered = filtered.filter(so => {
-               // Re-calculate for status tab filter consistency
-               const expiryDate = so.expiryDate ? new Date(so.expiryDate) : null;
-               const today = new Date();
-               const isExpired = expiryDate && expiryDate < today;
-               const diffTime = expiryDate ? expiryDate - today : null;
-               const diffDays = diffTime ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : null;
-               const isExpiringSoon = !isExpired && diffDays !== null && diffDays <= 3;
-
-               let label = so.status || "pending";
-               if (label === 'completed' || label === 'COMPLETED') label = "completed";
-               else if (label === 'deleted' || label === 'DELETED') label = "deleted";
-               else if (isExpired) label = "expired";
-               else if (isExpiringSoon) label = "expiring soon";
-               else label = "pending";
-
-               return label === s;
-            });
-          }
-
-          // Apply Pagination to Dummy Data
-          const startIndex = (currentPage - 1) * itemsPerPage;
-          const paginated = filtered.slice(startIndex, startIndex + itemsPerPage);
-
-          setSalesOrders(paginated);
-          setTotalItemsCount(filtered.length);
-        }
+        setSalesOrders(data);
+        setTotalItemsCount(response.meta?.total || data.length);
       } catch (error) {
         console.error("Error fetching sales orders:", error);
+        toast.error("Failed to load sales orders");
+        setSalesOrders([]);
+        setTotalItemsCount(0);
       } finally {
         setIsLoading(false);
       }
@@ -475,12 +183,12 @@ const SalesOrder = () => {
       const expiryDate = so.expiryDate ? new Date(so.expiryDate) : null;
       const today = new Date();
       const isExpired = expiryDate && expiryDate < today;
-      
+
       // Calculate days diff
       const diffTime = expiryDate ? expiryDate - today : null;
       const diffDays = diffTime ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : null;
       const isExpiringSoon = !isExpired && diffDays !== null && diffDays <= 3;
-      
+
       let computedStatusLabel = "Pending";
       let bgClass = "bg-gray-100 text-gray-600";
 
@@ -502,7 +210,7 @@ const SalesOrder = () => {
     const query = searchQuery.toLowerCase().trim().replace(/,/g, '');
     if (!query) return baseData;
 
-    return baseData.filter(so => 
+    return baseData.filter(so =>
       so.soNumber?.toLowerCase().includes(query) ||
       so.customerName?.toLowerCase().includes(query) ||
       so.customerType?.toLowerCase().includes(query) ||
@@ -525,9 +233,22 @@ const SalesOrder = () => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
 
-  const handlePrint = (id) => {
-    toast.success(`Opening print view for SO: ${id}...`);
-    // Logic for printing could involve opening a new window with a printable component
+  const handlePrint = async (soData) => {
+    try {
+      setIsRefreshing(true);
+      const fullSo = await salesOrderService.getSalesOrderById(soData.id);
+      navigate(ROUTES.SALES_ORDER_PRINT, {
+        state: {
+          soData: fullSo.data || fullSo,
+          from: '/seller/sales/order'
+        }
+      });
+    } catch (error) {
+      console.error("Print error:", error);
+      toast.error("Failed to load print preview");
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleRefresh = () => {
@@ -600,10 +321,10 @@ const SalesOrder = () => {
 
       if (format === 'xlsx') {
         const timestampStr = `${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
-        
+
         // Define Column Headers
         const headers = ["SO No", "Customer Name", "Customer Type", "Cr. Date", "Exp. Date", "Amount", "GST Number", "Cr. Days", "Tax Amt", "Total Amt", "Status"];
-        
+
         // Prepare Data for AOA (Array of Arrays)
         const aoaData = [
           ["Sales Orders Report"], // Row 1: Title
@@ -687,10 +408,10 @@ const SalesOrder = () => {
 
         // Set widths
         worksheet['!cols'] = [
-          { wch: 18 }, { wch: 35 }, { wch: 18 }, { wch: 15 }, { wch: 15 }, 
+          { wch: 18 }, { wch: 35 }, { wch: 18 }, { wch: 15 }, { wch: 15 },
           { wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 18 }
         ];
-        
+
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Orders");
         XLSX.writeFile(workbook, `Sales_Orders_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -729,13 +450,13 @@ const SalesOrder = () => {
           head: head,
           body: body,
           startY: 32,
-          styles: { 
+          styles: {
             fontSize: 8.5,
             font: 'helvetica',
             cellPadding: 4,
             valign: 'middle'
           },
-          headStyles: { 
+          headStyles: {
             fillColor: mainColor,
             textColor: [255, 255, 255],
             fontStyle: 'bold',
@@ -750,7 +471,7 @@ const SalesOrder = () => {
             8: { halign: 'right' }, // Total Amt
             9: { halign: 'left', fontStyle: 'bold' } // Status
           },
-          didParseCell: function(data) {
+          didParseCell: function (data) {
             // Apply Status Colors
             if (data.section === 'body' && data.column.index === 9) {
               const status = data.cell.raw;
@@ -772,7 +493,7 @@ const SalesOrder = () => {
           },
           margin: { left: 14, right: 14 }
         });
-        
+
         doc.save(`Sales_Orders_${new Date().toLocaleDateString('en-GB').replace(/\//g, '_')}.pdf`);
       }
 
@@ -811,7 +532,7 @@ const SalesOrder = () => {
 
       // Create worksheet
       const worksheet = XLSX.utils.json_to_sheet(sampleData);
-      
+
       // Define Professional Styling
       const headerStyle = {
         font: { bold: true, color: { rgb: "000000" }, name: "Arial", sz: 11 },
@@ -836,7 +557,7 @@ const SalesOrder = () => {
         for (let C = range.s.c; C <= range.e.c; ++C) {
           const address = XLSX.utils.encode_cell({ r: R, c: C });
           if (!worksheet[address]) continue;
-          
+
           if (R === 0) {
             worksheet[address].s = headerStyle; // First row is header
           } else {
@@ -880,7 +601,7 @@ const SalesOrder = () => {
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
           const json = XLSX.utils.sheet_to_json(sheet);
-          
+
           if (json.length === 0) {
             toast.error("The uploaded file is empty.");
             setIsRefreshing(false);
@@ -1015,13 +736,13 @@ const SalesOrder = () => {
                         <div className={`absolute right-full mr-2 w-max min-w-[220px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= currentItems.length - 3 ? 'bottom-0' : 'top-0'}`}>
                           {/* View Option (Always) */}
                           <button onClick={() => navigate(ROUTES.SALES_ORDER_VIEW.replace(':id', so.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50">
-                            <Eye size={18} /> 
-                            { (so.computedStatusLabel === 'Pending' || so.computedStatusLabel === 'Expiring Soon') ? 'View / Edit SO' : 'View SO' }
+                            <Eye size={18} />
+                            {(so.computedStatusLabel === 'Pending' || so.computedStatusLabel === 'Expiring Soon') ? 'View / Edit SO' : 'View SO'}
                           </button>
 
                           {/* Print Option (Not for Deleted) */}
                           {so.computedStatusLabel !== 'Deleted' && (
-                            <button onClick={() => handlePrint(so.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50">
+                            <button onClick={() => handlePrint(so)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50">
                               <Printer size={18} /> Print
                             </button>
                           )}
@@ -1074,30 +795,30 @@ const SalesOrder = () => {
                   <h3 className="text-[24px] font-bold text-[#111827] uppercase tracking-tight font-outfit">Import Sales Orders</h3>
                   <p className="text-gray-500 text-[14px] font-medium font-outfit">Download the sample file to ensure correct format.</p>
                 </div>
-                
-                <button 
-                  onClick={handleDownloadSample} 
+
+                <button
+                  onClick={handleDownloadSample}
                   className="w-full py-4 border-2 border-emerald-100 bg-emerald-50 text-emerald-700 rounded-[14px] font-bold uppercase transition-all hover:bg-emerald-100 flex items-center justify-center gap-3 active:scale-95 duration-200 shadow-sm"
                 >
                   <Download size={20} /> Download Sample XLSX
                 </button>
-                
+
                 <div className="space-y-4 font-outfit">
                   <label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest block text-center">Upload Template</label>
                   <div className={`border-2 border-dashed rounded-[18px] h-[72px] flex items-center overflow-hidden transition-all duration-300 ${selectedFile ? 'border-[#073318] bg-emerald-50/50' : 'border-gray-200 bg-gray-50 hover:border-gray-300'}`}>
                     <label className="h-full px-8 flex items-center justify-center bg-white border-r border-dashed border-gray-200 font-bold uppercase text-[14px] cursor-pointer hover:bg-gray-50 transition-all text-[#073318]">
                       Browse
-                      <input 
-                        type="file" 
-                        className="hidden" 
-                        accept=".xlsx,.xls,.csv" 
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept=".xlsx,.xls,.csv"
                         onChange={(e) => {
                           const file = e.target.files[0];
                           if (!file) return;
-                          
+
                           const allowedExtensions = ['xlsx', 'xls', 'csv'];
                           const fileExtension = file.name.split('.').pop().toLowerCase();
-                          
+
                           if (!allowedExtensions.includes(fileExtension)) {
                             toast.error("Invalid file type. Only Excel and CSV files are allowed.");
                             e.target.value = '';
@@ -1105,7 +826,7 @@ const SalesOrder = () => {
                             return;
                           }
                           setSelectedFile(file);
-                        }} 
+                        }}
                       />
                     </label>
                     <div className="px-6 flex items-center gap-2 truncate flex-1 min-w-0">
@@ -1123,15 +844,15 @@ const SalesOrder = () => {
                 </div>
 
                 <div className="flex gap-4 pt-2">
-                  <button 
-                    onClick={() => { setIsImportModalOpen(false); setSelectedFile(null); }} 
+                  <button
+                    onClick={() => { setIsImportModalOpen(false); setSelectedFile(null); }}
                     className="flex-1 py-4 border border-[#E5E7EB] text-[#4B5563] rounded-[14px] font-bold uppercase transition-all hover:bg-gray-50 active:scale-95 duration-200"
                   >
                     Cancel
                   </button>
-                  <button 
-                    onClick={handleSubmitImport} 
-                    disabled={!selectedFile || isRefreshing} 
+                  <button
+                    onClick={handleSubmitImport}
+                    disabled={!selectedFile || isRefreshing}
                     className={`flex-[2] py-4 rounded-[14px] font-bold uppercase shadow-lg transition-all active:scale-95 duration-200 ${selectedFile ? 'bg-[#073318] text-white hover:bg-[#04200f]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
                   >
                     {isRefreshing ? 'Importing...' : 'Submit Data'}
@@ -1162,8 +883,8 @@ const SalesOrder = () => {
               <div className="space-y-4">
                 <label className="text-[14px] font-bold text-gray-400 uppercase tracking-widest block">Status Filter</label>
                 <div className="relative">
-                  <select 
-                    value={filterInputs.status} 
+                  <select
+                    value={filterInputs.status}
                     onChange={(e) => setFilterInputs({ ...filterInputs, status: e.target.value })}
                     className="w-full h-14 bg-white border border-gray-200 rounded-[12px] px-5 text-[14px] font-bold text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 appearance-none font-outfit"
                   >

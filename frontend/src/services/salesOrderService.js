@@ -46,6 +46,11 @@ export const getCustomerDetails = async (id) => {
     return response.data;
 };
 
+export const getCustomers = async () => {
+    const response = await axiosInstance.get(`${API_PATH}/customers`);
+    return response.data;
+};
+
 export const exportSalesOrders = async (params) => {
     const response = await axiosInstance.get(`${API_PATH}/export`, {
         params,
@@ -74,6 +79,7 @@ export default {
     deleteSalesOrder,
     getNextNumber,
     getCustomerDetails,
+    getCustomers,
     exportSalesOrders,
     importSalesOrders,
     downloadSample

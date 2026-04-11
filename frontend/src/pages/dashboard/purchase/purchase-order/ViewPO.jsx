@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
-import { 
-    ArrowLeft, 
-    Search, 
-    Trash2, 
-    Plus, 
-    Save, 
+import {
+    ArrowLeft,
+    Search,
+    Trash2,
+    Plus,
+    Save,
     X,
     Edit3,
     Printer,
@@ -36,7 +36,7 @@ const ViewPO = () => {
     const navigate = useNavigate();
     const { id } = useParams();
     const isEditMode = false;
-    
+
     const [isLoading, setIsLoading] = useState(true);
     const [purchaseOrder, setPurchaseOrder] = useState(null);
     const [formData, setFormData] = useState({
@@ -89,8 +89,8 @@ const ViewPO = () => {
         return `${d}-${m}-${y}`;
     };
 
-    const filteredSuppliers = []; 
-    const filteredProducts = [];  
+    const filteredSuppliers = [];
+    const filteredProducts = [];
     const isSupplierDropdownOpen = false;
     const isProductSearchOpen = false;
     const supplierSearch = "";
@@ -113,11 +113,11 @@ const ViewPO = () => {
             ...formData,
             items: items
         };
-        navigate(ROUTES.PURCHASE_ORDER_PRINT, { 
-            state: { 
-                poData: fullPOData, 
-                from: ROUTES.PURCHASE_ORDER_VIEW.replace(':id', id) 
-            } 
+        navigate(ROUTES.PURCHASE_ORDER_PRINT, {
+            state: {
+                poData: fullPOData,
+                from: ROUTES.PURCHASE_ORDER_VIEW.replace(':id', id)
+            }
         });
     };
 
@@ -139,7 +139,7 @@ const ViewPO = () => {
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                         {(() => {
                             if (isLoading || (formData.status !== 'PENDING' && formData.status !== 'Approved')) return null;
-                            
+
                             const parseDate = (d) => {
                                 if (!d) return new Date();
                                 if (d.includes && d.includes("T")) return new Date(d);
@@ -151,14 +151,14 @@ const ViewPO = () => {
                                 }
                                 return new Date(d);
                             };
-                            
+
                             const expDate = parseDate(formData.expiry_date);
                             const expiryEndOfDay = new Date(expDate);
                             expiryEndOfDay.setHours(23, 59, 59, 999);
                             if (expiryEndOfDay < new Date()) return null;
 
                             return (
-                                <button 
+                                <button
                                     onClick={() => navigate(ROUTES.PURCHASE_ORDER_EDIT.replace(':id', id))}
                                     className="flex-1 sm:flex-none px-6 md:px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] md:text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-md flex items-center justify-center gap-2"
                                 >
@@ -167,11 +167,11 @@ const ViewPO = () => {
                             );
                         })()}
 
-                        <button 
+                        <button
                             onClick={() => navigate(ROUTES.PURCHASE_ORDER)}
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[44px] border border-[#E5E7EB] rounded-[10px] text-[14px] md:text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all font-outfit"
                         >
-                            <ArrowLeft size={18} /> 
+                            <ArrowLeft size={18} />
                             <span className="hidden sm:inline">Back</span>
                             <span className="sm:hidden text-gray-500">Back</span>
                         </button>
@@ -198,10 +198,9 @@ const ViewPO = () => {
                                     Purchase Order
                                 </div>
                                 {formData.status && (
-                                    <div className={`inline-flex items-center px-4 py-1.5 rounded-[100px] text-[14px] font-bold shadow-sm border ${
-                                        formData.status === 'Approved' ? 'bg-[#D1FAE5] text-[#059669] border-[#A7F3D0]' :
+                                    <div className={`inline-flex items-center px-4 py-1.5 rounded-[100px] text-[14px] font-bold shadow-sm border ${formData.status === 'Approved' ? 'bg-[#D1FAE5] text-[#059669] border-[#A7F3D0]' :
                                         'bg-[#F3F4F6] text-[#4B5563] border-[#E5E7EB]'
-                                    }`}>
+                                        }`}>
                                         {formData.status}
                                     </div>
                                 )}
@@ -240,9 +239,9 @@ const ViewPO = () => {
                                 <div className="absolute top-full left-0 w-full mt-2 bg-white border border-[#E5E7EB] rounded-[12px] shadow-xl z-[60] overflow-hidden py-1">
                                     <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                                         {filteredProducts.map(p => (
-                                            <button 
-                                                key={p.id} 
-                                                onClick={() => handleQuickAddProduct(p)} 
+                                            <button
+                                                key={p.id}
+                                                onClick={() => handleQuickAddProduct(p)}
                                                 className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-all text-left border-b border-[#F3F4F6] last:border-0"
                                             >
                                                 <div>
@@ -262,25 +261,25 @@ const ViewPO = () => {
                         <table className="w-full min-w-[2000px] border-collapse bg-white">
                             <thead>
                                 <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                                    <th className="px-4 py-4 w-[60px] text-center text-[13px] font-semibold text-[#4B5563]">#</th>
+                                    <th className="px-4 py-4 w-[60px] text-center text-[13px] font-semibold text-[#4B5563]">S.No</th>
                                     {[
-                                        {label: "Product Code", width: "160px"},
-                                        {label: "Product", width: "350px"},
-                                        {label: "Qty", width: "120px", align: "right"},
-                                        {label: "UOM", width: "100px"},
-                                        {label: "Rate", width: "140px", align: "right"},
-                                        {label: "Disc Amt", width: "130px", align: "right"},
-                                        {label: "Disc %", width: "120px", align: "right"},
-                                        {label: "HSN", width: "130px"},
-                                        {label: "Tax %", width: "100px", align: "right"},
-                                        {label: "Before Tax", width: "150px", align: "right"},
-                                        {label: "Tax Amt", width: "140px", align: "right"},
-                                        {label: "Total Amt", width: "160px", align: "right"},
-                                        {label: "Description", width: "250px"},
-                                        {label: "Action", width: "80px", align: "center"}
+                                        { label: "Product Code", width: "160px" },
+                                        { label: "Product", width: "350px" },
+                                        { label: "Qty", width: "120px", align: "right" },
+                                        { label: "UOM", width: "100px" },
+                                        { label: "Rate", width: "140px", align: "right" },
+                                        { label: "Disc Amt", width: "130px", align: "right" },
+                                        { label: "Disc %", width: "120px", align: "right" },
+                                        { label: "HSN", width: "130px" },
+                                        { label: "Tax %", width: "100px", align: "right" },
+                                        { label: "Before Tax", width: "150px", align: "right" },
+                                        { label: "Tax Amt", width: "140px", align: "right" },
+                                        { label: "Total Amt", width: "160px", align: "right" },
+                                        { label: "Description", width: "250px" },
+                                        { label: "Action", width: "80px", align: "center" }
                                     ].map((col, idx) => (
-                                        <th 
-                                            key={idx} 
+                                        <th
+                                            key={idx}
                                             className={`px-4 py-4 text-[13px] font-bold text-[#4B5563] text-${col.align || 'left'} border-l border-[#F3F4F6]`}
                                             style={{ width: col.width }}
                                         >
@@ -354,7 +353,7 @@ const ViewPO = () => {
                 {/* Card Footer Actions */}
                 {formData.status !== 'DELETED' && (
                     <div className="flex flex-col sm:flex-row items-center justify-end gap-3 sm:gap-4 px-4 sm:px-8 py-6 border-t border-[#F3F4F6] bg-gray-50/10">
-                        <button 
+                        <button
                             onClick={handlePrintPreview}
                             className="w-full sm:w-auto px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all shadow-md flex items-center justify-center gap-2"
                         >

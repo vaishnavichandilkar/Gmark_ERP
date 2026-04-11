@@ -37,6 +37,7 @@ export const ROUTES = {
     SALES_ORDER_ADD: '/seller/sales/order/add',
     SALES_ORDER_EDIT: '/seller/sales/order/edit/:id',
     SALES_ORDER_VIEW: '/seller/sales/order/view/:id',
+    SALES_ORDER_PRINT: '/seller/sales/order/print',
     SALES_INVOICE: '/seller/sales/invoice',
     SETTINGS: '/seller/settings',
     SELLER_DASHBOARD: '/seller/dashboard',

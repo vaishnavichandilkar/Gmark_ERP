@@ -9,18 +9,25 @@ import * as PDFDocument from 'pdfkit';
 export class SalesOrderService {
     constructor(private prisma: PrismaService) { }
 
-    async generateSONumber(): Promise<string> {
-        const lastSO = await this.prisma.salesOrder.findFirst({
+    async generateSONumber(tx?: any): Promise<string> {
+        const prisma = tx || this.prisma;
+        const lastSO = await prisma.salesOrder.findFirst({
             orderBy: { id: 'desc' },
             select: { soNumber: true },
         });
 
-        if (!lastSO) {
-            return 'SO00001';
+        if (!lastSO || !lastSO.soNumber.startsWith('SO-')) {
+            return 'SO-00001';
         }
 
-        const lastNumber = parseInt(lastSO.soNumber.replace('SO', ''), 10);
-        return `SO${(lastNumber + 1).toString().padStart(5, '0')}`;
+        const lastNumberStr = lastSO.soNumber.split('-')[1];
+        const lastNumber = parseInt(lastNumberStr, 10);
+
+        if (isNaN(lastNumber)) {
+            return 'SO-00001';
+        }
+
+        return `SO-${(lastNumber + 1).toString().padStart(5, '0')}`;
     }
 
     async getNextNumber() {
@@ -99,8 +106,6 @@ export class SalesOrderService {
     async create(createDto: CreateSalesOrderDto, userId: number) {
         const customer = await this._getCustomerDetails(createDto.customerId);
 
-        const soNumber = createDto.soNumber || await this.generateSONumber();
-
         const processedItems = createDto.items.map(item => this.calculateItemValues(item));
 
         const totalAmount = processedItems.reduce((sum, item) => sum + (item.quantity * item.rate) - item.discountAmount, 0);
@@ -108,17 +113,19 @@ export class SalesOrderService {
         const grandTotal = processedItems.reduce((sum, item) => sum + item.totalAmount, 0);
 
         return this.prisma.$transaction(async (tx) => {
+            const finalSoNumber = await this.generateSONumber(tx);
+
             return tx.salesOrder.create({
                 data: {
-                    soNumber,
+                    soNumber: finalSoNumber,
                     customerName: customer.customerName,
-                    customerType: customer.customerType || createDto.customerType,
+                    customerType: (customer.customerType as any) || 'retailer',
                     address: createDto.address || customer.address,
                     creditDays: createDto.creditDays,
-                    soCreationDate: createDto.soCreationDate ? new Date(createDto.soCreationDate) : new Date(),
+                    soCreationDate: new Date(),
                     expiryDate: new Date(createDto.expiryDate),
-                    gstNumber: createDto.gstNo || customer.gstNumber,
-                    panNumber: createDto.panNo || customer.panNumber,
+                    gstNumber: customer.gstNumber || createDto.gstNo || '',
+                    panNumber: customer.panNumber || createDto.panNo || '',
                     totalAmount,
                     taxAmount: totalTaxAmount,
                     grandTotal,
