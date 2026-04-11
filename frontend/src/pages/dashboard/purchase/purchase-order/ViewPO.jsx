@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ROUTES } from '../../../constants/routes';
+import { ROUTES } from '@/constants/routes';
 import { 
     ArrowLeft, 
     Search, 
@@ -13,7 +13,7 @@ import {
     ChevronsUpDown
 } from 'lucide-react';
 
-import purchaseOrderService from '../../../services/purchaseOrderService';
+import purchaseOrderService from '@/services/purchaseOrderService';
 
 const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1, renderEdit2 }) => (
     <div className={`flex flex-col sm:flex-row border-[#E5E7EB] border-b last:border-0 font-outfit`}>

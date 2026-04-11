@@ -25,12 +25,13 @@ import {
   Printer
 } from "lucide-react";
 import toast from 'react-hot-toast';
-import { ROUTES } from "../../../constants/routes";
+import { ROUTES } from "@/constants/routes";
 import { useTranslation } from 'react-i18next';
 
-import purchaseOrderService from "../../../services/purchaseOrderService";
-import ScrollableTable from "../../../components/common/ScrollableTable";
-import FilterDropdown from "../../../pages/dashboard/masters/components/FilterDropdown";
+import purchaseOrderService from "@/services/purchaseOrderService";
+import ScrollableTable from "@/components/common/ScrollableTable";
+import FilterDropdown from "@/pages/dashboard/masters/components/FilterDropdown";
+import ImportModal from "@/pages/dashboard/masters/components/ImportModal";
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
   if (!isOpen) return null;
@@ -85,7 +86,6 @@ const PurchaseOrder = () => {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [poToDelete, setPoToDelete] = useState(null);
@@ -369,20 +369,18 @@ const PurchaseOrder = () => {
     }
   };
 
-  const handleSubmitImport = async () => {
-    if (!selectedFile) return;
+  const handleSubmitImport = async (formData) => {
     try {
       setIsRefreshing(true);
-      const formData = new FormData();
-      formData.append('file', selectedFile);
       await purchaseOrderService.importPurchaseOrders(formData);
       setIsImportModalOpen(false);
-      setSelectedFile(null);
       toast.success("Data imported successfully");
       handleRefresh();
+      return Promise.resolve();
     } catch (error) {
       console.error("Import error:", error);
       toast.error(error.response?.data?.message || "Import failed");
+      return Promise.reject(error);
     } finally {
       setIsRefreshing(false);
     }
@@ -534,37 +532,12 @@ const PurchaseOrder = () => {
           <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} />
 
           {isImportModalOpen && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" onClick={() => setIsImportModalOpen(false)} />
-              <div className="relative bg-white w-full max-w-[500px] rounded-[24px] shadow-2xl p-10 space-y-8 animate-in zoom-in-95 duration-300 font-outfit">
-                <h3 className="text-[20px] font-bold text-[#111827] uppercase text-center tracking-tight">Import Data</h3>
-                <button 
-                  onClick={handleDownloadSample} 
-                  className="w-full py-4 border-2 border-emerald-100 bg-emerald-50 text-emerald-700 rounded-[14px] font-bold uppercase transition-all hover:bg-emerald-100 flex items-center justify-center gap-3 shadow-sm"
-                >
-                  <Download size={20} /> Download Sample
-                </button>
-                <div className="space-y-4">
-                  <span className="text-[13px] font-bold text-gray-500 uppercase tracking-widest block text-center">Upload File</span>
-                  <div className="border-2 border-dashed border-gray-200 rounded-[14px] h-[56px] flex items-center overflow-hidden bg-gray-50">
-                    <label className="h-full px-6 flex items-center justify-center bg-gray-100 border-r-2 border-dashed border-gray-200 font-bold uppercase text-[14px] cursor-pointer hover:bg-gray-200 transition-all font-outfit">
-                      Browse
-                      <input type="file" className="hidden" onChange={(e) => setSelectedFile(e.target.files[0])} />
-                    </label>
-                    <span className="px-6 text-[14px] font-bold text-gray-400 truncate flex-1 uppercase tracking-tight">
-                      {selectedFile ? selectedFile.name : 'No file chosen...'}
-                    </span>
-                  </div>
-                </div>
-                <button 
-                  onClick={handleSubmitImport} 
-                  disabled={!selectedFile || isRefreshing} 
-                  className={`w-full py-4 rounded-[14px] font-bold uppercase shadow-lg transition-all ${selectedFile ? 'bg-[#073318] text-white hover:bg-[#04200f]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
-                >
-                  {isRefreshing ? 'Importing...' : 'Submit Data'}
-                </button>
-              </div>
-            </div>
+              <ImportModal
+                  isOpen={isImportModalOpen}
+                  onClose={() => setIsImportModalOpen(false)}
+                  onImport={handleSubmitImport}
+                  onDownloadSample={handleDownloadSample}
+              />
           )}
 
           {isRefreshing && (
@@ -578,25 +551,50 @@ const PurchaseOrder = () => {
           )}
 
           {/* Filter Sidebar */}
-          {isFilterOpen && <div className="fixed inset-0 z-[100] bg-slate-900/20 backdrop-blur-[2px] transition-all duration-300" onClick={() => setIsFilterOpen(false)} />}
-          <div className={`fixed top-0 right-0 h-full w-[440px] bg-white shadow-2xl z-[110] transform transition-transform duration-500 ${isFilterOpen ? "translate-x-0" : "translate-x-full"}`}>
-            <div className="bg-[#073318] p-8 flex items-center justify-between">
-              <h2 className="text-white font-bold uppercase text-[20px] tracking-tight font-outfit">Apply Filters</h2>
-              <button onClick={() => setIsFilterOpen(false)} className="text-white/50 hover:text-white transition-all bg-white/10 p-2 rounded-full"><X size={20} /></button>
+          {isFilterOpen && (
+            <div
+                className="fixed inset-0 z-[100] bg-slate-900/20 backdrop-blur-[2px] transition-all duration-300 ease-in-out"
+                onClick={() => setIsFilterOpen(false)}
+            />
+          )}
+          <div className={`fixed top-0 right-0 h-full w-screen sm:w-[440px] bg-white shadow-2xl z-[110] transform transition-all duration-300 ease-in-out flex flex-col font-outfit ${isFilterOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'}`}>
+            <div className="flex items-center justify-between px-6 py-5 border-b border-[#04200f] bg-emerald-900">
+                <h2 className="text-[20px] font-bold text-white tracking-tight text-transform-none">{t('apply_filters', 'Apply Filters')}</h2>
+                <button onClick={() => setIsFilterOpen(false)} className="text-emerald-100 hover:text-white transition-colors p-1">
+                    <X size={20} />
+                </button>
             </div>
-            <div className="p-8 space-y-10 flex flex-col h-full bg-white font-outfit">
-              <div className="space-y-4">
-                <label className="text-[14px] font-bold text-gray-400 uppercase tracking-widest block font-outfit">Status Filter</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {statusTabs.map(s => (
-                    <button key={s} onClick={() => setFilterInputs({ ...filterInputs, status: s })} className={`h-12 rounded-[12px] font-bold text-[14px] transition-all border uppercase tracking-tight ${filterInputs.status === s ? 'bg-[#073318] border-[#073318] text-white shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'}`}>{s}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-auto pb-16 flex gap-4">
-                <button onClick={handleClearFilter} className="flex-1 h-14 border border-[#E5E7EB] rounded-[14px] font-bold uppercase tracking-widest text-gray-600 hover:bg-gray-50 transition-all font-outfit">Clear</button>
-                <button onClick={handleApplyFilter} className="flex-1 h-14 bg-[#073318] text-white rounded-[14px] font-bold uppercase tracking-widest hover:bg-[#04200f] shadow-lg transition-all font-outfit">Apply</button>
-              </div>
+
+            <div className="flex-1 px-5 sm:px-8 py-6 sm:py-8 overflow-y-auto space-y-6 sm:space-y-7 pb-32">
+                <FilterDropdown
+                    label="Status"
+                    name="status"
+                    value={filterInputs.status}
+                    onChange={(e) => setFilterInputs({ ...filterInputs, status: e.target.value })}
+                    options={[
+                        { label: 'All', value: 'All' },
+                        { label: 'Pending', value: 'Pending' },
+                        { label: 'Expiring Soon', value: 'Expiring Soon' },
+                        { label: 'Expired', value: 'Expired' },
+                        { label: 'Completed', value: 'Completed' },
+                        { label: 'Deleted', value: 'Deleted' }
+                    ]}
+                />
+            </div>
+
+            <div className="px-8 py-6 border-t border-[#E5E7EB] flex items-center gap-4 bg-white">
+                <button
+                    onClick={handleClearFilter}
+                    className="flex-1 h-[46px] bg-white border border-[#E5E7EB] text-[#374151] text-[15px] font-semibold rounded-[10px] hover:bg-gray-50 transition-colors shadow-sm"
+                >
+                    {t('common:clear', 'Clear')}
+                </button>
+                <button
+                    onClick={handleApplyFilter}
+                    className="flex-1 h-[46px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-colors shadow-sm"
+                >
+                    {t('common:apply_filter', 'Apply Filter')}
+                </button>
             </div>
           </div>
         </>,

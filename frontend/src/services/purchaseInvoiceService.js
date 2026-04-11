@@ -3,9 +3,14 @@ import axiosInstance from './axiosInstance';
 const purchaseInvoiceService = {
   createInvoice: async (data, file) => {
     const formData = new FormData();
-    // Append JSON data as a string (the backend controller likely expects this if using Multer)
-    // Actually, usually we append individual fields or a JSON blob
-    formData.append('data', JSON.stringify(data));
+    Object.keys(data).forEach(key => {
+      if (key === 'items') {
+        formData.append('items', JSON.stringify(data.items));
+      } else if (data[key] !== undefined) {
+        formData.append(key, data[key]);
+      }
+    });
+
     if (file) {
       formData.append('file', file);
     }
@@ -18,13 +23,49 @@ const purchaseInvoiceService = {
     return response.data;
   },
 
-  getAllInvoices: async () => {
-    const response = await axiosInstance.get('/purchase-invoices');
+  updateInvoice: async (id, data, file) => {
+    const formData = new FormData();
+    Object.keys(data).forEach(key => {
+      if (key === 'items') {
+        formData.append('items', JSON.stringify(data.items));
+      } else if (data[key] !== undefined) {
+        formData.append(key, data[key]);
+      }
+    });
+    if (file) {
+      formData.append('file', file);
+    }
+
+    const response = await axiosInstance.patch(`/purchase-invoices/${id}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  getAllInvoices: async (params) => {
+    const response = await axiosInstance.get('/purchase-invoices', { params });
     return response.data;
   },
 
   getInvoice: async (id) => {
     const response = await axiosInstance.get(`/purchase-invoices/${id}`);
+    return response.data;
+  },
+
+  getNextNumber: async () => {
+    const response = await axiosInstance.get('/purchase-invoices/next-number');
+    return response.data;
+  },
+
+  getSuppliersForDropdown: async () => {
+    const response = await axiosInstance.get('/purchase-invoices/suppliers');
+    return response.data;
+  },
+
+  getSupplierPOs: async (supplierName) => {
+    const response = await axiosInstance.get(`/purchase-invoices/supplier-pos?supplierName=${encodeURIComponent(supplierName)}`);
     return response.data;
   },
 
@@ -35,26 +76,15 @@ const purchaseInvoiceService = {
     return response.data;
   },
 
-  downloadSample: async () => {
-    const response = await axiosInstance.get('/purchase-invoices/sample-excel', {
-      responseType: 'blob',
-    });
-    return response.data;
-  },
-
-  importInvoices: async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await axiosInstance.post('/purchase-invoices/import', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data;
-  },
-
   printInvoice: async (id) => {
     const response = await axiosInstance.get(`/purchase-invoices/${id}/print`, {
       responseType: 'blob',
     });
+    return response.data;
+  },
+
+  deleteInvoice: async (id) => {
+    const response = await axiosInstance.delete(`/purchase-invoices/${id}`);
     return response.data;
   }
 };

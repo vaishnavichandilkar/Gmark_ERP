@@ -1,8 +1,8 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Edit3, Trash2, FileText, Download, Printer } from 'lucide-react';
-import { exportToPDF } from '../../../../utils/exportUtils';
-import { ROUTES } from '../../../../constants/routes';
+import { exportToPDF } from '../../../../../../utils/exportUtils';
+import { ROUTES } from '../../../../../../constants/routes';
 
 const InfoTableRow = ({ label1, value1, label2, value2, noBorder }) => (
     <div className={`flex flex-col lg:flex-row border-[#E5E7EB] ${noBorder ? '' : 'border-b'}`}>

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import html2pdf from "html2pdf.js";
 import { toast } from 'react-hot-toast';
-import axiosInstance from '../../../services/axiosInstance';
+import axiosInstance from '../../../../services/axiosInstance';
 
 const POPrintPreview = () => {
     const location = useLocation();

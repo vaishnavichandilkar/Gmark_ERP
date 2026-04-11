@@ -23,6 +23,13 @@ export class GrnController {
     return this.piService.getSuppliers(req.user.id);
   }
 
+  @Get('next-number')
+  @ApiOperation({ summary: 'Generate next available GRN number' })
+  async getNextNumber() {
+    const grnNumber = await this.grnService.generateGrnNumber();
+    return { grnNumber };
+  }
+
   @Get('supplier-pos')
   @ApiOperation({ summary: 'Get list of POs for a specific supplier (for GRN)' })
   @ApiQuery({ name: 'supplierName', required: true, type: String })

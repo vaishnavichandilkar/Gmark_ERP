@@ -24,14 +24,17 @@ import ProductMaster from '../pages/dashboard/masters/ProductMaster';
 
 // Purchase Pages
 import PurchaseLayout from '../pages/dashboard/purchase/PurchaseLayout';
-import PurchaseOrder from '../pages/dashboard/purchase/PurchaseOrder';
-import AddPO from '../pages/dashboard/purchase/AddPO';
-import ViewPO from '../pages/dashboard/purchase/ViewPO';
-import PurchaseInvoice from '../pages/dashboard/purchase/PurchaseInvoice';
-import GRN from '../pages/dashboard/purchase/GRN';
-import AddPurchaseInvoice from '../pages/dashboard/purchase/AddPurchaseInvoice';
-import POPrintPreview from '../pages/dashboard/purchase/POPrintPreview';
-import PurchaseInvoicePrintPreview from '../pages/dashboard/purchase/PurchaseInvoicePrintPreview';
+import PurchaseOrder from '../pages/dashboard/purchase/purchase-order/PurchaseOrder';
+import AddPO from '../pages/dashboard/purchase/purchase-order/AddPO';
+import ViewPO from '../pages/dashboard/purchase/purchase-order/ViewPO';
+import POPrintPreview from '../pages/dashboard/purchase/purchase-order/POPrintPreview';
+
+import PurchaseInvoice from '../pages/dashboard/purchase/purchase-invoice/invoice/PurchaseInvoice';
+import AddPurchaseInvoice from '../pages/dashboard/purchase/purchase-invoice/invoice/AddPurchaseInvoice';
+import PurchaseInvoicePrintPreview from '../pages/dashboard/purchase/purchase-invoice/invoice/PurchaseInvoicePrintPreview';
+
+import GRN from '../pages/dashboard/purchase/purchase-invoice/grn/GRN';
+import AddGRN from '../pages/dashboard/purchase/purchase-invoice/grn/AddGRN';
 
 // Sales Pages
 import SalesLayout from '../pages/dashboard/sales/SalesLayout';
@@ -283,15 +286,19 @@ export const router = createBrowserRouter([
                                              },
                                              {
                                                  path: 'add',
-                                                 element: <PurchaseInvoice />
+                                                 element: <AddPurchaseInvoice />
                                              },
                                              {
                                                  path: 'edit/:id',
-                                                 element: <PurchaseInvoice />
+                                                 element: <AddPurchaseInvoice />
                                              },
                                              {
                                                  path: 'view/:id',
                                                  element: <PurchaseInvoice />
+                                             },
+                                             {
+                                                 path: 'print',
+                                                 element: <PurchaseInvoicePrintPreview />
                                              }
                                          ]
                                       },
@@ -304,11 +311,11 @@ export const router = createBrowserRouter([
                                               },
                                               {
                                                   path: 'add',
-                                                  element: <GRN />
+                                                  element: <AddGRN />
                                               },
                                               {
                                                   path: 'edit/:id',
-                                                  element: <GRN />
+                                                  element: <AddGRN />
                                               },
                                               {
                                                   path: 'view/:id',

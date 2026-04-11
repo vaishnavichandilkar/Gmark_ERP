@@ -20,6 +20,13 @@ export class PurchaseInvoiceController {
     return this.service.getSuppliers(req.user.id);
   }
 
+  @Get('next-number')
+  @ApiOperation({ summary: 'Generate next available Purchase Invoice number' })
+  async getNextNumber() {
+    const invoiceNumber = await this.service.generateInvoiceNumber();
+    return { invoiceNumber };
+  }
+
   @Get('supplier-pos')
   @ApiOperation({ summary: 'Get list of POs for a specific supplier' })
   @ApiQuery({ name: 'supplierName', required: true, type: String })

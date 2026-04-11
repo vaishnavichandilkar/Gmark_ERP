@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ROUTES } from '../../../constants/routes';
+import { ROUTES } from '@/constants/routes';
 import { toast } from 'react-hot-toast';
 import { 
     ArrowLeft, 
@@ -18,9 +18,9 @@ import {
     ChevronsUpDown,
     AlertCircle
 } from 'lucide-react';
-import purchaseOrderService from '../../../services/purchaseOrderService';
-import accountService from '../../../services/accountService';
-import productService from '../../../services/productService';
+import purchaseOrderService from '@/services/purchaseOrderService';
+import accountService from '@/services/accountService';
+import productService from '@/services/productService';
 
 // Mock data removed in favor of API calls
 
