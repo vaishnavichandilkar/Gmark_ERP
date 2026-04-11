@@ -89,9 +89,12 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
                 let key = segment.replace(/-/g, '_');
                 if (key === 'category') key = 'category_master';
                 
-                // If it's the 'order' segment under 'sales', use 'sales_order'
+                // If it's the 'order' or 'invoice' segment under 'sales', use specific keys
                 if (key === 'order' && isSales) {
                     key = 'sales_order';
+                }
+                if (key === 'invoice' && isSales) {
+                    key = 'sales_invoice';
                 }
 
                 const translated = t(`modules:${key}`, { defaultValue: '' }) || t(`common:${key}`, { defaultValue: '' });
