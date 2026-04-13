@@ -32,12 +32,12 @@ model User {
   shopDetail           ShopDetail?
   accounts             AccountMaster[]
   categories           Category[]
+  grns                 Grn[]
   groups               Group[]
   products             Product[]
   purchaseInvoices     PurchaseInvoice[]
   purchaseOrders       PurchaseOrder[]
   salesOrders          SalesOrder[]
-  grns                 Grn[]
   sub_categories       SubCategory[]
   subGroups            SubGroup[]
   sub_sub_categories   SubSubCategory[]
@@ -417,29 +417,28 @@ model HsnMaster {
 }
 
 model Product {
-  id              Int              @id @default(autoincrement())
-  product_name    String
-  product_code    String           
-  uom_id          Int
-  product_type    ProductType
-  category_id     Int
+  id                  Int             @id @default(autoincrement())
+  product_name        String
+  product_code        String
+  uom_id              Int
+  product_type        ProductType
+  category_id         Int
   sub_category_id     Int?
+  hsn_code            String
+  tax_rate            Float
+  description         String?
+  status              MasterStatus    @default(ACTIVE)
+  is_deleted          Boolean         @default(false)
+  created_by          Int
+  created_at          DateTime        @default(now())
+  updated_at          DateTime        @updatedAt
   sub_sub_category_id Int?
-  hsn_code        String
-  tax_rate        Float
-  description     String?
-  status          MasterStatus     @default(ACTIVE)
-  is_deleted      Boolean          @default(false)
-  created_by      Int
-  created_at      DateTime         @default(now())
-  updated_at      DateTime         @updatedAt
-
-  uom             UnitMaster       @relation(fields: [uom_id], references: [id])
-  category        Category         @relation(fields: [category_id], references: [id])
-  sub_category    SubCategory?      @relation(fields: [sub_category_id], references: [id])
-  sub_sub_category SubSubCategory? @relation(fields: [sub_sub_category_id], references: [id])
-  creator         User             @relation(fields: [created_by], references: [id])
-  hsn             HsnMaster        @relation(fields: [hsn_code], references: [hsn_code])
+  category            Category        @relation(fields: [category_id], references: [id])
+  creator             User            @relation(fields: [created_by], references: [id])
+  hsn                 HsnMaster       @relation(fields: [hsn_code], references: [hsn_code])
+  sub_category        SubCategory?    @relation(fields: [sub_category_id], references: [id])
+  sub_sub_category    SubSubCategory? @relation(fields: [sub_sub_category_id], references: [id])
+  uom                 UnitMaster      @relation(fields: [uom_id], references: [id])
 
   @@unique([product_code, created_by])
   @@map("products")
@@ -454,16 +453,14 @@ model PurchaseOrder {
   poCreationDate  DateTime            @default(now())
   expiryDate      DateTime
   gstNumber       String?
-  panNumber       String?
   status          POStatus            @default(PENDING)
-  totalAmount     Float               @default(0)
   taxAmount       Float               @default(0)
-  grandTotal      Float               @default(0)
   userId          Int
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
+  totalAmount     Float               @default(0)
+  grn             Grn[]
   purchaseInvoice PurchaseInvoice?
-  grn             Grn?
   items           PurchaseOrderItem[]
   user            User                @relation(fields: [userId], references: [id])
 
@@ -483,8 +480,8 @@ model PurchaseOrderItem {
   discountAmount   Float
   taxPercent       Float
   taxAmount        Float
-  totalAmount      Float
   beforeTaxAmount  Float         @default(0)
+  totalAmount      Float
   printDescription String?
   purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
 
@@ -492,25 +489,25 @@ model PurchaseOrderItem {
 }
 
 model SalesOrder {
-  id              Int              @id @default(autoincrement())
-  soNumber        String           @unique
-  customerName    String
-  customerType    CustomerType?
-  address         String
-  creditDays      Int
-  soCreationDate  DateTime         @default(now())
-  expiryDate      DateTime
-  gstNumber       String?
-  panNumber       String?
-  status          SOStatus         @default(PENDING)
-  totalAmount     Float            @default(0)
-  taxAmount       Float            @default(0)
-  grandTotal      Float            @default(0)
-  userId          Int
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  items           SalesOrderItem[]
-  user            User             @relation(fields: [userId], references: [id])
+  id             Int              @id @default(autoincrement())
+  soNumber       String           @unique
+  customerName   String
+  customerType   CustomerType?
+  address        String
+  creditDays     Int
+  soCreationDate DateTime         @default(now())
+  expiryDate     DateTime
+  gstNumber      String?
+  panNumber      String?
+  status         SOStatus         @default(PENDING)
+  totalAmount    Float            @default(0)
+  taxAmount      Float            @default(0)
+  grandTotal     Float            @default(0)
+  userId         Int
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  items          SalesOrderItem[]
+  user           User             @relation(fields: [userId], references: [id])
 
   @@map("sales_orders")
 }
@@ -539,27 +536,30 @@ model SalesOrderItem {
 model PurchaseInvoice {
   id                    Int                   @id @default(autoincrement())
   invoiceNumber         String                @unique
+  supplierInvoiceNumber String
+  supplierInvoiceDate   DateTime
   invoiceDate           DateTime              @default(now())
-  poId                  Int?                  @unique
+  bookingDate           DateTime              @default(now())
   supplierName          String
   address               String
+  poNumber              String?
+  challanNumber         String?
   creditDays            Int
+  status                PIStatus              @default(GENERATED)
+  uploadedFilePath      String?
+  totalQuantity         Float                 @default(0)
+  cgstAmount            Float                 @default(0)
+  sgstAmount            Float                 @default(0)
   grandTotal            Float                 @default(0)
+  cumulativeBalance     Float                 @default(0)
   userId                Int
+  poId                  Int?                  @unique
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
-  bookingDate           DateTime              @default(now())
-  cgstAmount            Float                 @default(0)
-  challanNumber         String?
-  cumulativeBalance     Float                 @default(0)
-  poNumber              String?
-  sgstAmount            Float                 @default(0)
-  supplierInvoiceDate   DateTime
-  supplierInvoiceNumber String
+  gstNumber             String?
+  igstAmount            Float                 @default(0)
+  supplierId            Int?
   taxableAmount         Float                 @default(0)
-  totalQuantity         Float                 @default(0)
-  uploadedFilePath      String?
-  status                PIStatus              @default(GENERATED)
   items                 PurchaseInvoiceItem[]
   purchaseOrder         PurchaseOrder?        @relation(fields: [poId], references: [id])
   user                  User                  @relation(fields: [userId], references: [id])
@@ -575,49 +575,73 @@ model PurchaseInvoiceItem {
   quantity          Float
   rate              Float
   uom               String
+  amount            Float           @default(0)
+  beforeTaxAmount   Float           @default(0)
+  productId         Int
+  taxAmount         Float           @default(0)
+  taxPercent        Float           @default(0)
   purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
 
   @@map("purchase_invoice_items")
 }
 
 model Grn {
-  id                    Int                   @id @default(autoincrement())
-  grnNumber             String                @unique
-  grnDate               DateTime              @default(now())
-  poId                  Int?                  @unique
-  supplierName          String
-  address               String
-  creditDays            Int
-  grandTotal            Float                 @default(0)
-  userId                Int
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  bookingDate           DateTime              @default(now())
-  cgstAmount            Float                 @default(0)
-  challanNumber         String
-  cumulativeBalance     Float                 @default(0)
-  poNumber              String?
-  sgstAmount            Float                 @default(0)
-  taxableAmount         Float                 @default(0)
-  totalQuantity         Float                 @default(0)
-  uploadedFilePath      String?
-  status                GrnStatus             @default(GENERATED)
-  items                 GrnItem[]
-  purchaseOrder         PurchaseOrder?        @relation(fields: [poId], references: [id])
-  user                  User                  @relation(fields: [userId], references: [id])
+  id                Int            @id @default(autoincrement())
+  supplierName      String
+   creditDays        Int
+    address           String
+    gstNumber         String?
+    poNumber          String?
+ challanNumber     String
+  grnDate           DateTime       @default(now())
+   bookingDate       DateTime       @default(now())
+  poId              Int?
+ 
+ 
+  grandTotal        Float          @default(0)
+  userId            Int
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  cgstAmount        Float          @default(0)
+ 
+  cumulativeBalance Float          @default(0)
+  
+  sgstAmount        Float          @default(0)
+  taxableAmount     Float          @default(0)
+  totalQuantity     Float          @default(0)
+ 
+  status            GrnStatus      @default(GENERATED)
+  igstAmount        Float          @default(0)
+ 
+  items             GrnItem[]
+  purchaseOrder     PurchaseOrder? @relation(fields: [poId], references: [id])
+  user              User           @relation(fields: [userId], references: [id])
 
   @@map("grns")
 }
 
 model GrnItem {
-  id                Int      @id @default(autoincrement())
-  grnId             Int
-  productCode       String
-  productName       String
-  quantity          Float
-  rate              Float
-  uom               String
-  grn               Grn      @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  id               Int    @id @default(autoincrement())
+  grnId            Int
+  productId        Int?
+  productCode      String
+  productName      String
+totalPoQty       Float
+receivedPoQty    Float
+receivedQty      Float
+remainingQty     Float
+rate             Float
+ uom              String
+ discountAmount   Float  @default(0)
+  discountPercent  Float  @default(0)
+   hsnCode          String?
+  taxPercent       Float  @default(0)
+  beforeTaxAmount  Float  @default(0)
+  taxAmount        Float  @default(0)
+  totalAmount      Float  @default(0)
+  printDescription String? 
+  amount           Float  @default(0)
+  grn              Grn    @relation(fields: [grnId], references: [id], onDelete: Cascade)
 
   @@map("grn_items")
 }
@@ -707,7 +731,6 @@ enum ProductType {
   GOODS
   SERVICES
 }
-
 
 enum POStatus {
   PENDING

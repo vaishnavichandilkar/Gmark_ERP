@@ -78,6 +78,7 @@ const GRN = () => {
     const [grnToDelete, setGrnToDelete] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const exportRef = useRef(null);
 
     // Filter State
     const defaultFilters = { status: "All" };
@@ -122,13 +123,66 @@ const GRN = () => {
         fetchData();
     }, [currentPage, itemsPerPage, searchQuery, appliedFilters]);
 
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (exportRef.current && !exportRef.current.contains(event.target)) {
+                setIsExportOpen(false);
+            }
+            if (activeDropdown !== null) {
+                const btn = document.querySelector(`[data-dropdown-id="${activeDropdown}"]`);
+                const menu = document.querySelector(`[data-menu-id="${activeDropdown}"]`);
+                if (btn && !btn.contains(event.target) && menu && !menu.contains(event.target)) {
+                    setActiveDropdown(null);
+                }
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [activeDropdown]);
+
+    const handleExportPDF = async () => {
+        setIsExportOpen(false);
+        try {
+            const response = await grnService.exportGRNs('pdf', searchQuery);
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `grn_report_${Date.now()}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            toast.success('PDF Exported Successfully');
+        } catch (e) {
+            toast.error('Failed to export PDF');
+        }
+    };
+
+    const handleExportExcel = async () => {
+        setIsExportOpen(false);
+        try {
+            const response = await grnService.exportGRNs('xlsx', searchQuery);
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `grn_report_${Date.now()}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            toast.success('Excel Exported Successfully');
+        } catch (e) {
+            toast.error('Failed to export Excel');
+        }
+    };
+
     // Derived Data
     const mappedGRNs = useMemo(() => {
         return grns.map(item => {
-            const taxableAmount = item.items?.reduce((sum, i) => sum + (i.quantity * i.rate), 0) || 0;
-            const taxAmount = taxableAmount * 0.18; // Default 18% if not available
-            const grossAmount = taxableAmount + taxAmount;
             const status = item.status === 'DELETED' ? 'Deleted' : 'Generated';
+            
+            // Calculate taxable and tax from items if not directly on item (though we just added them)
+            const taxableAmount = item.items?.reduce((sum, i) => sum + (parseFloat(i.beforeTaxAmount) || 0), 0) || 0;
+            const taxAmount = item.items?.reduce((sum, i) => sum + (parseFloat(i.taxAmount) || 0), 0) || 0;
+            const grossAmount = item.grandTotal || (taxableAmount + taxAmount);
             
             return {
                 ...item,
@@ -211,23 +265,7 @@ const GRN = () => {
                 ))}
             </div>
 
-            {/* Status Tabs matching PO design */}
-            <div className="flex gap-8 mb-6 border-b border-gray-100 pb-2">
-                {statusTabs.map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => {
-                            setAppliedFilters({ status: tab });
-                            setFilterInputs({ status: tab });
-                            setCurrentPage(1);
-                        }}
-                        className={`text-[15px] font-bold transition-all pb-2 px-1 relative ${appliedFilters.status === tab ? 'text-[#073318]' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        {tab}
-                        {appliedFilters.status === tab && <motion.div layoutId="statusUnderline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#073318]" />}
-                    </button>
-                ))}
-            </div>
+
 
             {/* Main Card */}
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden mb-8">
@@ -257,9 +295,24 @@ const GRN = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <button className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50">
-                            <Download size={18} /> Export
-                        </button>
+                        <div className="relative" ref={exportRef}>
+                            <button 
+                                onClick={() => setIsExportOpen(!isExportOpen)} 
+                                className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563]'}`}
+                            >
+                                <Download size={18} /> Export
+                            </button>
+                            {isExportOpen && (
+                                <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <button onClick={handleExportPDF} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
+                                        <FileText size={18} className="text-red-500" /> PDF
+                                    </button>
+                                    <button onClick={handleExportExcel} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
+                                        <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -268,7 +321,7 @@ const GRN = () => {
                     <table className="w-full min-w-[1500px] border-collapse text-left">
                         <thead>
                             <tr className="bg-emerald-900 text-white font-bold text-[15px]">
-                                {["Supplier Name", "Challan No", "Challan Date", "Booking Date", "Po No", "Gst No", "Credit Days", "Taxable Amount", "Tax Amount", "Gross Amount", "Status", "Action"].map(h => (
+                                {["Supplier Name", "Supplier Challan Number", "Supplier Challan Date", "Booking Date", "Po No", "Gst No", "Credit Days", "Taxable Amount", "Tax Amount", "Gross Amount", "Status", "Action"].map(h => (
                                     <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
                                 ))}
                             </tr>
@@ -292,21 +345,19 @@ const GRN = () => {
                                         </td>
                                         <td className="px-6 py-5 text-center relative">
                                             <button 
+                                                data-dropdown-id={row.id}
                                                 onClick={() => setActiveDropdown(activeDropdown === row.id ? null : row.id)}
                                                 className={`p-2 rounded-lg transition-colors ${activeDropdown === row.id ? 'bg-[#073318] text-white' : 'text-gray-400 hover:bg-gray-100'}`}
                                             >
                                                 <MoreVertical size={20} />
                                             </button>
                                             {activeDropdown === row.id && (
-                                                <div className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= mappedGRNs.length - 2 ? 'bottom-0' : 'top-0'}`}>
+                                                <div data-menu-id={row.id} className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= mappedGRNs.length - 2 ? 'bottom-0' : 'top-0'}`}>
                                                     <button onClick={() => navigate(`view/${row.id}`)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50">
                                                         <Eye size={18} /> {row.status === 'Generated' ? 'View and Edit GRN' : 'View GRN'}
                                                     </button>
                                                     {row.status === 'Generated' && (
                                                         <>
-                                                            <button onClick={() => navigate(`edit/${row.id}`)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50">
-                                                                <FileEdit size={18} /> Edit
-                                                            </button>
                                                             <button onClick={() => handleDeleteClick(row.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50">
                                                                 <Trash2 size={18} /> Delete
                                                             </button>
@@ -359,13 +410,7 @@ const GRN = () => {
                             <button onClick={() => setIsFilterOpen(false)}><X size={20} /></button>
                         </div>
                         <div className="p-8 space-y-6">
-                            <FilterDropdown
-                                label="Status"
-                                name="status"
-                                value={filterInputs.status}
-                                onChange={(e) => setFilterInputs({ ...filterInputs, status: e.target.value })}
-                                options={[{label:'All',value:'All'}, {label:'Generated',value:'Generated'}, {label:'Deleted',value:'Deleted'}]}
-                            />
+                            <p className="text-gray-500 text-sm italic">No additional filters available at the moment.</p>
                         </div>
                         <div className="absolute bottom-0 left-0 right-0 p-8 border-t flex gap-4 bg-white">
                             <button onClick={handleClearFilter} className="flex-1 h-[46px] border border-[#E5E7EB] rounded-[10px] font-bold">Clear</button>

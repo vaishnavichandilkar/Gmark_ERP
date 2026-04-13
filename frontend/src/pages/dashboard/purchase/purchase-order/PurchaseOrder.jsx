@@ -453,7 +453,7 @@ const PurchaseOrder = () => {
           <table className="w-full min-w-[1500px] border-collapse text-left font-outfit">
             <thead>
               <tr className="bg-emerald-900 text-white font-bold text-[15px]">
-                {["Po No", "Supplier Name", "Creation Date", "Expiry Date", "Amount", "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status", "Action"].map(h => (
+                {["Po No", "Supplier Name", "Creation Date", "Expiry Date", "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status", "Action"].map(h => (
                   <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -468,11 +468,10 @@ const PurchaseOrder = () => {
                     </td>
                     <td className="px-6 py-5 text-[#4B5563]">{formatDate(po.poCreationDate)}</td>
                     <td className="px-6 py-5 text-[#4B5563]">{formatDate(po.expiryDate)}</td>
-                    <td className="px-6 py-5">{(po.totalAmount || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 text-center">{po.gstNumber || '-'}</td>
                     <td className="px-6 py-5 text-center">{po.creditDays || 0}</td>
                     <td className="px-6 py-5 text-center">{(po.taxAmount || 0).toFixed(2)}</td>
-                    <td className="px-6 py-5 text-[#073318]">{(po.grandTotal || 0).toFixed(2)}</td>
+                    <td className="px-6 py-5 text-[#073318]">{(po.totalAmount || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 text-center">
                       <span className={`px-4 py-1.5 ${po.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{po.computedStatusLabel}</span>
                     </td>

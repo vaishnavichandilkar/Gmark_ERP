@@ -1,0 +1,1 @@
+SELECT "supplierName" FROM "grns";

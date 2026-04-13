@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Request, ParseIntPipe, UseInterceptors, UploadedFile, Res, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Request, ParseIntPipe, UseInterceptors, UploadedFile, Res, Delete, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiConsumes, ApiBody, ApiQuery } from '@nestjs/swagger';
-import { PurchaseInvoiceService } from './purchase-invoice.service';
-import { CreatePurchaseInvoiceDto, UpdatePurchaseInvoiceDto } from './dto/purchase-invoice.dto';
+import { PurchaseInvoiceService } from './invoice.service';
+import { CreatePurchaseInvoiceDto, UpdatePurchaseInvoiceDto } from './invoice/dto/invoice.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { multerConfig } from '../../upload/multer.config';
@@ -12,7 +12,7 @@ import { Response } from 'express';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class PurchaseInvoiceController {
-  constructor(private readonly service: PurchaseInvoiceService) {}
+  constructor(private readonly service: PurchaseInvoiceService) { }
 
   @Get('suppliers')
   @ApiOperation({ summary: 'Get list of suppliers from Account Master for dropdown' })
@@ -29,46 +29,36 @@ export class PurchaseInvoiceController {
 
   @Get('supplier-pos')
   @ApiOperation({ summary: 'Get list of POs for a specific supplier' })
-  @ApiQuery({ name: 'supplierName', required: true, type: String })
-  async getSupplierPOs(@Query('supplierName') supplierName: string, @Request() req) {
-    return this.service.getSupplierPOs(supplierName, req.user.id);
+  @ApiQuery({ name: 'supplierId', required: true, type: String })
+  async getSupplierPOs(@Query('supplierId') supplierId: string, @Request() req) {
+    return this.service.getSupplierPOs(supplierId, req.user.id);
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a new Purchase Invoice with multipart support' })
+  @ApiOperation({ summary: 'Create a new Purchase Invoice' })
   @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        supplierInvoiceNumber: { type: 'string', description: 'Mandatory supplier-provided invoice number' },
-        supplierInvoiceDate: { type: 'string', format: 'date', description: 'Mandatory supplier invoice date' },
-        bookingDate: { type: 'string', format: 'date', description: 'Optional: system booking date, defaults to today' },
-        supplierName: { type: 'string', description: 'Name of the supplier' },
-        address: { type: 'string', description: 'Physical address of the supplier' },
-        poNumber: { type: 'string', description: 'Optional: Related PO number' },
-        challanNumber: { type: 'string', description: 'Optional: Challan number' },
-        creditDays: { type: 'integer', description: 'Payment credit days allowed' },
-        poId: { type: 'integer', description: 'Optional: Database ID of related PO' },
-        items: { type: 'string', description: 'JSON string: [{"productCode":"P01","productName":"Item","quantity":10,"rate":100,"uom":"PCS"}]' },
-        file: { type: 'string', format: 'binary', description: 'Optional: PDF/JPG invoice scan' },
-      },
-      required: ['supplierInvoiceNumber', 'supplierInvoiceDate', 'supplierName', 'address', 'creditDays', 'items'],
-    },
-  })
   @UseInterceptors(FileInterceptor('file', multerConfig))
-  async create(@UploadedFile() file: any, @Body() body: any, @Request() req) {
-    // Parsing nested and numeric data from multipart/form-data
-    const items = typeof body.items === 'string' ? JSON.parse(body.items) : body.items;
-    
-    const createDto: CreatePurchaseInvoiceDto = {
-      ...body,
-      items: items,
-      creditDays: body.creditDays ? parseInt(body.creditDays, 10) : 0,
-      poId: body.poId ? parseInt(body.poId, 10) : undefined,
+  async create(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: CreatePurchaseInvoiceDto,
+    @Request() req
+  ) {
+    // Parse JSON strings from multipart/form-data
+    const items = typeof dto.items === 'string' ? JSON.parse(dto.items as any) : dto.items;
+    const accountSummary = typeof dto.accountSummary === 'string' ? JSON.parse(dto.accountSummary as any) : dto.accountSummary;
+    const poIds = typeof dto.poIds === 'string' ? JSON.parse(dto.poIds as any) : dto.poIds;
+    const challanNumbers = typeof dto.challanNumbers === 'string' ? JSON.parse(dto.challanNumbers as any) : dto.challanNumbers;
+
+    const parsedDto: CreatePurchaseInvoiceDto = {
+      ...dto,
+      items,
+      accountSummary,
+      poIds,
+      challanNumbers,
+      creditDays: dto.creditDays ? parseInt(dto.creditDays as any, 10) : 0,
     };
-    
-    return this.service.create(createDto, req.user.id, file?.path);
+
+    return this.service.create(parsedDto, req.user.id, file?.path);
   }
 
   @Get()
@@ -183,14 +173,14 @@ export class PurchaseInvoiceController {
     if (body.items) {
       items = typeof body.items === 'string' ? JSON.parse(body.items) : body.items;
     }
-    
+
     const updateDto: UpdatePurchaseInvoiceDto = {
       ...body,
       items: items,
       creditDays: body.creditDays ? parseInt(body.creditDays, 10) : undefined,
       poId: body.poId ? parseInt(body.poId, 10) : undefined,
     };
-    
+
     return this.service.update(id, updateDto, file?.path);
   }
 

@@ -26,6 +26,7 @@ import purchaseInvoiceService from "@/services/purchaseInvoiceService";
 import ScrollableTable from "@/components/common/ScrollableTable";
 import FilterDropdown from "@/pages/dashboard/masters/components/FilterDropdown";
 import ImportModal from "./components/ImportModal";
+import SuccessToast from "@/pages/dashboard/masters/components/SuccessToast";
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
   if (!isOpen) return null;
@@ -80,6 +81,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
     const [invToDelete, setInvToDelete] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const exportRef = useRef(null);
 
     // Filter State
     const defaultFilters = { status: "All" };
@@ -124,12 +126,93 @@ const PurchaseInvoice = ({ defaultTab }) => {
         fetchData();
     }, [currentPage, itemsPerPage, searchQuery, appliedFilters]);
 
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (exportRef.current && !exportRef.current.contains(event.target)) {
+                setIsExportOpen(false);
+            }
+            if (activeDropdown !== null) {
+                const btn = document.querySelector(`[data-dropdown-id="${activeDropdown}"]`);
+                const menu = document.querySelector(`[data-menu-id="${activeDropdown}"]`);
+                if (btn && !btn.contains(event.target) && menu && !menu.contains(event.target)) {
+                    setActiveDropdown(null);
+                }
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [activeDropdown]);
+
+    const handleExportPDF = async () => {
+        setIsExportOpen(false);
+        try {
+            const response = await purchaseInvoiceService.exportInvoices('pdf', searchQuery);
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `purchase_invoices_${Date.now()}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            toast.success('PDF Exported Successfully');
+        } catch (e) {
+            toast.error('Failed to export PDF');
+        }
+    };
+
+    const handleExportExcel = async () => {
+        setIsExportOpen(false);
+        try {
+            const response = await purchaseInvoiceService.exportInvoices('xlsx', searchQuery);
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `purchase_invoices_${Date.now()}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            toast.success('Excel Exported Successfully');
+        } catch (e) {
+            toast.error('Failed to export Excel');
+        }
+    };
+
+    const handleDownloadSample = async () => {
+        try {
+            const response = await purchaseInvoiceService.downloadSample();
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `purchase_invoice_sample.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+        } catch (e) {
+            toast.error('Failed to download sample file');
+        }
+    };
+
+    const handleImportExcel = async (file) => {
+        const loadingToast = toast.loading('Importing invoices...');
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            await purchaseInvoiceService.importInvoices(formData);
+            toast.dismiss(loadingToast);
+            toast.custom(() => <SuccessToast message="Invoices imported successfully" />, { duration: 2000, position: 'top-right' });
+            fetchData();
+        } catch (error) {
+            toast.dismiss(loadingToast);
+            toast.error(error?.response?.data?.message || 'Failed to import invoices');
+        }
+    };
+
     // Derived Data
     const mappedInvoices = useMemo(() => {
         return invoices.map(item => {
-            const taxableAmount = item.items?.reduce((sum, i) => sum + (i.quantity * i.rate), 0) || 0;
-            const taxAmount = taxableAmount * 0.18; // Default 18% if not available
-            const grossAmount = taxableAmount + taxAmount;
+            const taxableAmount = parseFloat(item.taxableAmount) || 0;
+            const grossAmount = parseFloat(item.grandTotal) || 0;
+            const taxAmount = grossAmount - taxableAmount;
             const status = item.status === 'DELETED' ? 'Deleted' : 'Generated';
             
             return {
@@ -139,7 +222,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                 invoiceDate: item.supplierInvoiceDate ? item.supplierInvoiceDate.split('T')[0] : "-",
                 bookingDate: item.bookingDate ? item.bookingDate.split('T')[0] : "-",
                 poNo: item.poNumber || "-",
-                gstNo: "-", // Can be fetched if needed
+                gstNo: item.gstNumber || "-", 
                 creditDays: item.creditDays || 0,
                 taxableAmount: taxableAmount.toFixed(2),
                 taxAmount: taxAmount.toFixed(2),
@@ -213,23 +296,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                 ))}
             </div>
 
-            {/* Status Tabs matching PO design */}
-            <div className="flex gap-8 mb-6 border-b border-gray-100 pb-2">
-                {statusTabs.map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => {
-                            setAppliedFilters({ status: tab });
-                            setFilterInputs({ status: tab });
-                            setCurrentPage(1);
-                        }}
-                        className={`text-[15px] font-bold transition-all pb-2 px-1 relative ${appliedFilters.status === tab ? 'text-[#073318]' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        {tab}
-                        {appliedFilters.status === tab && <motion.div layoutId="statusUnderline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#073318]" />}
-                    </button>
-                ))}
-            </div>
+
 
             {/* Main Card */}
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden mb-8">
@@ -259,12 +326,27 @@ const PurchaseInvoice = ({ defaultTab }) => {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50">
+                        <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all">
                             <Upload size={18} className="text-gray-400" /> Import
                         </button>
-                        <button className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50">
-                            <Download size={18} /> Export
-                        </button>
+                        <div className="relative" ref={exportRef}>
+                            <button 
+                                onClick={() => setIsExportOpen(!isExportOpen)} 
+                                className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563]'}`}
+                            >
+                                <Download size={18} /> Export
+                            </button>
+                            {isExportOpen && (
+                                <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <button onClick={handleExportPDF} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
+                                        <FileText size={18} className="text-red-500" /> PDF
+                                    </button>
+                                    <button onClick={handleExportExcel} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
+                                        <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -273,7 +355,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                     <table className="w-full min-w-[1500px] border-collapse text-left">
                         <thead>
                             <tr className="bg-emerald-900 text-white font-bold text-[15px]">
-                                {["Supplier Name", "Invoice No", "Invoice Date", "Booking Date", "Po No", "Gst No", "Credit Days", "Taxable Amount", "Tax Amount", "Gross Amount", "Status", "Action"].map(h => (
+                                {["Supplier Name", "Supplier Invoice Number", "Supplier Invoice Date", "Booking Date", "Po No", "Gst No", "Credit Days", "Taxable Amount", "Tax Amount", "Gross Amount", "Status", "Action"].map(h => (
                                     <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
                                 ))}
                             </tr>
@@ -297,13 +379,14 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                         </td>
                                         <td className="px-6 py-5 text-center relative">
                                             <button 
+                                                data-dropdown-id={row.id}
                                                 onClick={() => setActiveDropdown(activeDropdown === row.id ? null : row.id)}
                                                 className={`p-2 rounded-lg transition-colors ${activeDropdown === row.id ? 'bg-[#073318] text-white' : 'text-gray-400 hover:bg-gray-100'}`}
                                             >
                                                 <MoreVertical size={20} />
                                             </button>
                                             {activeDropdown === row.id && (
-                                                <div className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= mappedInvoices.length - 2 ? 'bottom-0' : 'top-0'}`}>
+                                                <div data-menu-id={row.id} className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= mappedInvoices.length - 2 ? 'bottom-0' : 'top-0'}`}>
                                                     <button onClick={() => navigate(`view/${row.id}`)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50">
                                                         <Eye size={18} /> {row.status === 'Generated' ? 'View and Edit Invoice' : 'View Invoice'}
                                                     </button>
@@ -355,7 +438,13 @@ const PurchaseInvoice = ({ defaultTab }) => {
             {createPortal(
                 <>
                     <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} />
-                    {isImportModalOpen && <ImportModal onClose={() => setIsImportModalOpen(false)} />}
+                    <ImportModal 
+                        isOpen={isImportModalOpen} 
+                        onClose={() => setIsImportModalOpen(false)} 
+                        onImport={handleImportExcel}
+                        onDownloadSample={handleDownloadSample}
+                        title="Import Purchase Invoices"
+                    />
                     
                     {/* Filter Sidebar */}
                     {isFilterOpen && <div className="fixed inset-0 z-[100] bg-slate-900/20 backdrop-blur-[2px]" onClick={() => setIsFilterOpen(false)} />}
@@ -365,13 +454,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                             <button onClick={() => setIsFilterOpen(false)}><X size={20} /></button>
                         </div>
                         <div className="p-8 space-y-6">
-                            <FilterDropdown
-                                label="Status"
-                                name="status"
-                                value={filterInputs.status}
-                                onChange={(e) => setFilterInputs({ ...filterInputs, status: e.target.value })}
-                                options={[{label:'All',value:'All'}, {label:'Generated',value:'Generated'}, {label:'Deleted',value:'Deleted'}]}
-                            />
+                            <p className="text-gray-500 text-sm italic">No additional filters available at the moment.</p>
                         </div>
                         <div className="absolute bottom-0 left-0 right-0 p-8 border-t flex gap-4 bg-white">
                             <button onClick={handleClearFilter} className="flex-1 h-[46px] border border-[#E5E7EB] rounded-[10px] font-bold">Clear</button>

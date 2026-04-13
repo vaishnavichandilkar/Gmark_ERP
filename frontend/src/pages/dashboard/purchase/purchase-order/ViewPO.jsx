@@ -47,7 +47,6 @@ const ViewPO = () => {
         expiry_date: '',
         po_number: '',
         gst_number: '',
-        pan_number: '',
         status: ''
     });
     const [items, setItems] = useState([]);
@@ -67,7 +66,6 @@ const ViewPO = () => {
                     expiry_date: po.expiryDate,
                     po_number: po.poNumber,
                     gst_number: po.gstNumber,
-                    pan_number: po.panNumber,
                     status: po.status
                 });
                 setItems(po.items || []);
@@ -211,10 +209,6 @@ const ViewPO = () => {
                             <InfoTableRow label1="Supplier Name:" value1={formData.supplier_name} label2="Credit Days:" value2={formData.credit_days} />
                             <InfoTableRow label1="Address:" value1={formData.address} label2="PO Creation Date:" value2={formatDate(formData.creation_date)} />
                             <InfoTableRow label1="Expiry Date:" value1={formatDate(formData.expiry_date)} label2="GST Number:" value2={formData.gst_number} />
-                            <div className="flex border-b border-[#E5E7EB] last:border-0 font-outfit">
-                                <div className="w-1/4 py-3.5 px-6 text-[13px] text-[#6B7280] border-r border-[#E5E7EB] bg-gray-50/10 font-semibold">PAN Number:</div>
-                                <div className="flex-1 py-3.5 px-6 text-[13px] text-[#111827] bg-white">{formData.pan_number || '-'}</div>
-                            </div>
                         </div>
                     </div>
                 )}

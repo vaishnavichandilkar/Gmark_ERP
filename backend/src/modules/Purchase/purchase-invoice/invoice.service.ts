@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
-import { CreatePurchaseInvoiceDto, UpdatePurchaseInvoiceDto } from './dto/purchase-invoice.dto';
+import { CreatePurchaseInvoiceDto, UpdatePurchaseInvoiceDto, ItemDto } from './invoice/dto/invoice.dto';
 import { Prisma, PIStatus } from '@prisma/client';
 import { PurchaseOrderService } from '../purchase-order/purchase-order.service';
 import * as ExcelJS from 'exceljs';
@@ -11,7 +11,7 @@ export class PurchaseInvoiceService {
   constructor(
     private prisma: PrismaService,
     private poService: PurchaseOrderService
-  ) {}
+  ) { }
 
   async getSuppliers(userId: number) {
     return this.prisma.accountMaster.findMany({
@@ -33,11 +33,23 @@ export class PurchaseInvoiceService {
     });
   }
 
-  async getSupplierPOs(supplierName: string, userId: number) {
+  async getSupplierPOs(supplierIdOrName: string, userId: number) {
+    let accountName = supplierIdOrName;
+    
+    // If it's a numeric ID, find the actual account name first
+    if (/^\d+$/.test(supplierIdOrName)) {
+      const account = await this.prisma.accountMaster.findUnique({
+        where: { id: parseInt(supplierIdOrName, 10) },
+      });
+      if (account) {
+        accountName = account.accountName;
+      }
+    }
+
     return this.prisma.purchaseOrder.findMany({
       where: {
         userId,
-        supplierName,
+        supplierName: accountName,
         status: { not: 'DELETED' },
       },
       select: {
@@ -65,148 +77,95 @@ export class PurchaseInvoiceService {
   }
 
   async create(createDto: CreatePurchaseInvoiceDto, userId: number, uploadedFilePath?: string) {
-    const invoiceNumber = createDto.invoiceNumber || (await this.generateInvoiceNumber());
+    const invoiceNumber = await this.generateInvoiceNumber();
 
-    const existing = await this.prisma.purchaseInvoice.findUnique({
-      where: { invoiceNumber },
+    // Supplier Logic
+    const supplier = await this.prisma.accountMaster.findFirst({
+      where: { id: parseInt(createDto.supplierId, 10) },
     });
-    if (existing) throw new BadRequestException(`Internal Invoice number ${invoiceNumber} already exists`);
 
-    const challanNumber = createDto.challanNumber || createDto.supplierInvoiceNumber;
-    const bookingDate = createDto.bookingDate ? new Date(createDto.bookingDate) : new Date();
+    if (!supplier) throw new BadRequestException('Supplier not found');
 
-    // Calculations
-    let totalQuantity = 0;
-    let taxableAmount = 0;
-
-    for (const item of createDto.items) {
-      if (item.quantity <= 0 || item.rate <= 0) {
-        throw new BadRequestException('Quantity and Rate must be positive');
-      }
-      totalQuantity += Number(item.quantity);
-      taxableAmount += Number(item.quantity) * Number(item.rate);
+    // As per requirement: Check if supplier is valid for purchase
+    // Defaulting to groupName including 'SUNDRY_CREDITORS' if type isn't natively available
+    if (!supplier.groupName.includes('SUNDRY_CREDITORS') && !supplier.supplierCode) {
+      throw new BadRequestException('Invalid supplier');
     }
 
-    const cgstAmount = (taxableAmount * 9) / 100;
-    const sgstAmount = (taxableAmount * 9) / 100;
-    const grandTotal = taxableAmount + cgstAmount + sgstAmount;
+    // Auto-fill from supplier
+    const address = supplier.addressLine1 || createDto.address;
+    const creditDays = supplier.supplierCreditDays || createDto.creditDays || 0;
+    const gstNo = supplier.gstNo || createDto.gstNumber;
 
-    const lastInvoice = await this.prisma.purchaseInvoice.findFirst({
-      where: { userId, supplierName: createDto.supplierName },
-      orderBy: { createdAt: 'desc' },
-      select: { cumulativeBalance: true },
+    const company = await this.prisma.shopDetail.findUnique({
+      where: { userId },
     });
 
-    const previousBalance = lastInvoice ? lastInvoice.cumulativeBalance : 0;
-    const cumulativeBalance = previousBalance + grandTotal;
+    if (!company) throw new BadRequestException('Company detail not found for this user');
 
-    return this.prisma.$transaction(async (tx) => {
-      let finalPoId = createDto.poId;
-      let finalPoNumber = createDto.poNumber;
+    // As per spec: items and accountSummary are prioritized
+    const items = createDto.items;
+    let summary = createDto.accountSummary;
+    
+    // Recalculate if summary is simplified (only totalAmount provided) or missing
+    if (!summary || (summary.materialPurchase === undefined && (summary as any).totalAmount !== undefined)) {
+        const totalAmount = (summary as any).totalAmount || items.reduce((sum, i) => sum + (i.quantity * i.rate), 0);
+        summary = {
+            materialPurchase: totalAmount,
+            cgst: 0,
+            sgst: 0,
+            igst: 0,
+            grandTotal: totalAmount
+        };
+    }
+    
+    const poIds = createDto.poIds || [];
+    const challanNumbers = createDto.challanNumbers || [];
 
-      // REQUIREMENT: Automatically create PO if not selected
-      if (!finalPoId) {
-        // Find supplier details for PO
-        const supplier = await tx.accountMaster.findFirst({
-          where: { accountName: createDto.supplierName, userId }
-        });
+    const poNumberStr = poIds.length > 0 ? poIds.join(',') : null;
+    const grnNumberStr = challanNumbers.length > 0 ? challanNumbers.join(',') : null;
 
-        if (!supplier) {
-          throw new BadRequestException(`Supplier '${createDto.supplierName}' not found in Account Master. Action cancelled.`);
+    const invoice = await this.prisma.purchaseInvoice.create({
+      data: {
+        invoiceNumber,
+        bookingDate: new Date(createDto.bookingDate),
+        supplierInvoiceNumber: createDto.invoiceNumber,
+        supplierInvoiceDate: new Date(createDto.invoiceDate),
+        supplierId: supplier.id,
+        supplierName: supplier.accountName,
+        address: createDto.address,
+        creditDays: createDto.creditDays,
+        gstNumber: createDto.gstNumber,
+        poNumber: poNumberStr,
+        challanNumber: grnNumberStr,
+        cgstAmount: summary.cgst,
+        sgstAmount: summary.sgst,
+        igstAmount: summary.igst,
+        taxableAmount: summary.materialPurchase,
+        grandTotal: summary.grandTotal,
+        userId,
+        uploadedFilePath: uploadedFilePath || null,
+        items: {
+          create: items.map(i => ({
+            productId: parseInt(i.productId, 10),
+            productCode: i.productCode,
+            productName: i.productName,
+            quantity: i.quantity,
+            rate: i.rate,
+            uom: i.uom,
+            taxPercent: i.taxPercent,
+            taxAmount: i.taxAmount,
+            amount: i.totalAmount,
+            beforeTaxAmount: i.beforeTaxAmount,
+          }))
         }
-
-        const poNumber = await this.poService.generatePONumber();
-        const expiryDate = new Date(bookingDate);
-        expiryDate.setDate(expiryDate.getDate() + (createDto.creditDays || 30));
-
-        // Use the PO calculation logic (defaults to 18% tax from PI logic: 9+9)
-        const poItems = createDto.items.map(item => this.poService.calculateItemValues({
-          ...item,
-          taxPercent: 18,
-          discountPercent: 0,
-          discountAmount: 0,
-        }));
-
-        const po = await tx.purchaseOrder.create({
-          data: {
-            poNumber,
-            supplierName: supplier.accountName,
-            address: createDto.address || supplier.addressLine1,
-            creditDays: createDto.creditDays,
-            poCreationDate: bookingDate,
-            expiryDate: expiryDate,
-            gstNumber: supplier.gstNo,
-            panNumber: supplier.panNo,
-            totalAmount: taxableAmount,
-            taxAmount: cgstAmount + sgstAmount,
-            grandTotal: grandTotal,
-            userId,
-            status: 'INVOICE_GENERATED', // Immediately marked as completed
-            items: {
-              create: poItems.map(item => ({
-                productCode: item.productCode,
-                productName: item.productName,
-                hsnCode: '', 
-                quantity: item.quantity,
-                rate: item.rate,
-                uom: item.uom,
-                discountPercent: 0,
-                discountAmount: 0,
-                taxPercent: 18,
-                taxAmount: item.taxAmount,
-                totalAmount: item.totalAmount,
-              })),
-            },
-          },
-        });
-        finalPoId = po.id;
-        finalPoNumber = po.poNumber;
-      } else {
-        // Switch existing PO status
-        await tx.purchaseOrder.update({
-          where: { id: finalPoId },
-          data: { status: 'INVOICE_GENERATED' }
-        });
-      }
-
-      const invoice = await tx.purchaseInvoice.create({
-        data: {
-          invoiceNumber,
-          supplierInvoiceNumber: createDto.supplierInvoiceNumber,
-          supplierInvoiceDate: new Date(createDto.supplierInvoiceDate),
-          invoiceDate: new Date(),
-          bookingDate,
-          supplierName: createDto.supplierName,
-          address: createDto.address,
-          poNumber: finalPoNumber,
-          challanNumber,
-          creditDays: createDto.creditDays,
-          status: PIStatus.GENERATED,
-          uploadedFilePath: uploadedFilePath || null,
-          totalQuantity: totalQuantity,
-          taxableAmount: taxableAmount,
-          cgstAmount: cgstAmount,
-          sgstAmount: sgstAmount,
-          grandTotal: grandTotal,
-          cumulativeBalance: cumulativeBalance,
-          userId,
-          poId: finalPoId,
-          items: {
-            create: createDto.items.map(item => ({
-              productCode: item.productCode,
-              productName: item.productName,
-              quantity: item.quantity,
-              rate: item.rate,
-              uom: item.uom,
-            })),
-          },
-        },
-        include: { items: true },
-      });
-
-      return invoice;
+      },
+      include: { items: true }
     });
+
+    return invoice;
   }
+
 
   async findAll() {
     return this.prisma.purchaseInvoice.findMany({
@@ -233,82 +192,68 @@ export class PurchaseInvoiceService {
 
     if (!existing) throw new NotFoundException(`Invoice ID ${id} not found`);
 
-    let totalQuantity = existing.totalQuantity;
-    let taxableAmount = existing.taxableAmount;
-    let cgstAmount = existing.cgstAmount;
-    let sgstAmount = existing.sgstAmount;
-    let grandTotal = existing.grandTotal;
+    let itemsPayload = updateDto.items || updateDto.products;
+    let summary = updateDto.accountSummary;
 
-    if (updateDto.items) {
-      totalQuantity = 0;
-      taxableAmount = 0;
-      for (const item of updateDto.items) {
-        if (item.quantity <= 0 || item.rate <= 0) {
-          throw new BadRequestException('Quantity and Rate must be positive');
-        }
-        totalQuantity += Number(item.quantity);
-        taxableAmount += Number(item.quantity) * Number(item.rate);
-      }
-      cgstAmount = (taxableAmount * 9) / 100;
-      sgstAmount = (taxableAmount * 9) / 100;
-      grandTotal = taxableAmount + cgstAmount + sgstAmount;
-    }
-
-    let cumulativeBalance = existing.cumulativeBalance;
-    if (updateDto.items) {
-      const difference = grandTotal - existing.grandTotal;
-      cumulativeBalance = existing.cumulativeBalance + difference;
+    // Recalculate if items changed but summary wasn't provided (e.g. from a helper)
+    if (itemsPayload && !summary) {
+        let totalBase = 0;
+        let totalTax = 0;
+        itemsPayload.forEach(i => {
+            const base = (i.quantity * i.rate) - (i.discount || 0);
+            const tax = (base * (i.taxPercent || 0)) / 100;
+            totalBase += base;
+            totalTax += tax;
+            i.baseAmount = base;
+            i.taxAmount = tax;
+            i.totalAmount = base + tax;
+        });
+        summary = {
+            materialPurchase: totalBase,
+            cgst: totalTax / 2,
+            sgst: totalTax / 2,
+            igst: 0,
+            grandTotal: totalBase + totalTax
+        };
     }
 
     return this.prisma.$transaction(async (tx) => {
-      if (updateDto.items) {
+      if (itemsPayload) {
         await tx.purchaseInvoiceItem.deleteMany({
           where: { purchaseInvoiceId: id },
         });
       }
 
-      if (updateDto.poId !== undefined && updateDto.poId !== existing.poId) {
-        if (existing.poId) {
-          await tx.purchaseOrder.update({
-            where: { id: existing.poId },
-            data: { status: 'PENDING' }
-          });
-        }
-        if (updateDto.poId) {
-          await tx.purchaseOrder.update({
-            where: { id: updateDto.poId },
-            data: { status: 'INVOICE_GENERATED' }
-          });
-        }
-      }
-
       const updated = await tx.purchaseInvoice.update({
         where: { id },
         data: {
-          supplierInvoiceNumber: updateDto.supplierInvoiceNumber ?? existing.supplierInvoiceNumber,
-          supplierInvoiceDate: updateDto.supplierInvoiceDate ? new Date(updateDto.supplierInvoiceDate) : existing.supplierInvoiceDate,
+          supplierInvoiceNumber: updateDto.invoiceNumber ?? existing.supplierInvoiceNumber,
+          supplierInvoiceDate: updateDto.invoiceDate ? new Date(updateDto.invoiceDate) : existing.supplierInvoiceDate,
           bookingDate: updateDto.bookingDate ? new Date(updateDto.bookingDate) : existing.bookingDate,
           supplierName: updateDto.supplierName ?? existing.supplierName,
           address: updateDto.address ?? existing.address,
-          poNumber: updateDto.poNumber ?? existing.poNumber,
-          challanNumber: updateDto.challanNumber ?? existing.challanNumber,
+          poNumber: updateDto.poIds ? updateDto.poIds.join(',') : existing.poNumber,
+          challanNumber: updateDto.challanNumbers ? updateDto.challanNumbers.join(',') : existing.challanNumber,
           creditDays: updateDto.creditDays ?? existing.creditDays,
           status: (updateDto.status as any) ?? existing.status,
           uploadedFilePath: uploadedFilePath || existing.uploadedFilePath,
-          totalQuantity,
-          taxableAmount,
-          cgstAmount,
-          sgstAmount,
-          grandTotal,
-          cumulativeBalance,
-          poId: updateDto.poId !== undefined ? updateDto.poId : existing.poId,
-          items: updateDto.items ? {
-            create: updateDto.items.map(item => ({
-              productCode: item.productCode,
-              productName: item.productName,
-              quantity: item.quantity,
-              rate: item.rate,
-              uom: item.uom,
+          taxableAmount: summary?.materialPurchase ?? existing.taxableAmount,
+          cgstAmount: summary?.cgst ?? existing.cgstAmount,
+          sgstAmount: summary?.sgst ?? existing.sgstAmount,
+          igstAmount: summary?.igst ?? existing.igstAmount,
+          grandTotal: summary?.grandTotal ?? existing.grandTotal,
+          items: itemsPayload ? {
+            create: itemsPayload.map(i => ({
+              productId: parseInt(i.productId, 10),
+              productCode: i.productCode,
+              productName: i.productName,
+              quantity: i.quantity,
+              rate: i.rate,
+              uom: i.uom,
+              taxPercent: i.taxPercent,
+              taxAmount: i.taxAmount,
+              amount: i.totalAmount,
+              beforeTaxAmount: i.beforeTaxAmount,
             }))
           } : undefined,
         },
@@ -345,12 +290,12 @@ export class PurchaseInvoiceService {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Purchase Invoice Sample');
     const headers = [
-      'Supplier Name*', 'Supplier Invoice No*', 'Supplier Invoice Date (YYYY-MM-DD)*', 'Booking Date (YYYY-MM-DD)', 
+      'Supplier Name*', 'Supplier Invoice No*', 'Supplier Invoice Date (YYYY-MM-DD)*', 'Booking Date (YYYY-MM-DD)',
       'Address*', 'Credit Days*', 'CH No', 'PO No', 'Product Code*', 'Quantity*', 'Rate*', 'UOM*'
     ];
     worksheet.addRow(headers);
     worksheet.addRow(['SilverPeak Traders', 'INV-555', '2026-03-01', '2026-03-02', '24 Market Street', 30, 'CH-001', 'PO00001', 'P01', 10, 100, 'Ton']);
-    
+
     const headerRow = worksheet.getRow(1);
     headerRow.font = { bold: true };
     headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
@@ -377,29 +322,79 @@ export class PurchaseInvoiceService {
       orderBy: { createdAt: 'desc' },
     });
 
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const hours = now.getHours();
+    const ampm = hours >= 12 ? 'pm' : 'am';
+    const formattedHours = hours % 12 || 12;
+    const d = pad(now.getDate());
+    const m = pad(now.getMonth() + 1);
+    const yyyy = now.getFullYear();
+    const hr = pad(formattedHours);
+    const min = pad(now.getMinutes());
+    const sec = pad(now.getSeconds());
+    const timestamp = `${d}/${m}/${yyyy}, ${hr}:${min}:${sec} ${ampm}`;
+
     if (format === 'xlsx') {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Purchase Invoices');
       worksheet.columns = [
-        { header: 'Invoice No', key: 'invoiceNumber', width: 15 },
-        { header: 'Supplier Name', key: 'supplierName', width: 25 },
+        { header: 'Inv No', key: 'invoiceNumber', width: 15 },
+        { header: 'Supplier Name', key: 'supplierName', width: 30 },
+        { header: 'Supp. Inv No', key: 'supplierInvoiceNumber', width: 20 },
+        { header: 'Supp. Inv Date', key: 'supplierInvoiceDate', width: 15 },
         { header: 'Booking Date', key: 'bookingDate', width: 15 },
-        { header: 'Invoice Date', key: 'supplierInvoiceDate', width: 15 },
-        { header: 'PO No', key: 'poNumber', width: 12 },
-        { header: 'Credit Days', key: 'creditDays', width: 12 },
+        { header: 'PO No', key: 'poNumber', width: 15 },
         { header: 'Taxable Amt', key: 'taxableAmount', width: 15 },
         { header: 'Tax Amt', key: 'taxAmt', width: 15 },
         { header: 'Grand Total', key: 'grandTotal', width: 15 },
         { header: 'Status', key: 'status', width: 12 },
       ];
+
       invoices.forEach(inv => {
         worksheet.addRow({
-          ...inv,
-          bookingDate: inv.bookingDate.toLocaleDateString(),
+          invoiceNumber: inv.invoiceNumber,
+          supplierName: inv.supplierName,
+          supplierInvoiceNumber: inv.supplierInvoiceNumber,
           supplierInvoiceDate: inv.supplierInvoiceDate.toLocaleDateString(),
+          bookingDate: inv.bookingDate.toLocaleDateString(),
+          poNumber: inv.poNumber || '-',
+          taxableAmount: inv.taxableAmount,
           taxAmt: inv.cgstAmount + inv.sgstAmount,
+          grandTotal: inv.grandTotal,
+          status: inv.status,
         });
       });
+
+      worksheet.spliceRows(1, 0, [], [], [], []);
+      worksheet.mergeCells('A1:J1');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.value = 'ERP';
+      titleCell.font = { size: 18, bold: true };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      worksheet.mergeCells('A2:J2');
+      const subtitleCell = worksheet.getCell('A2');
+      subtitleCell.value = 'Purchase Invoice Report';
+      subtitleCell.font = { size: 14 };
+      subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      worksheet.mergeCells('A3:J3');
+      const timestampCell = worksheet.getCell('A3');
+      timestampCell.value = `Exported on: ${timestamp}`;
+      timestampCell.font = { size: 10 };
+      timestampCell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+      const headerRow = worksheet.getRow(5);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4472C4' }
+      };
+      headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+      headerRow.height = 25;
+
       const buffer = await workbook.xlsx.writeBuffer();
       return {
         buffer: Buffer.from(buffer),
@@ -408,32 +403,57 @@ export class PurchaseInvoiceService {
       };
     } else {
       return new Promise<any>((resolve) => {
-        const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+        const doc = new PDFDocument({ margin: 20, size: 'A4', layout: 'landscape' });
         const buffers: Buffer[] = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', () => resolve({ buffer: Buffer.concat(buffers), filename: `purchase_invoices_${Date.now()}.pdf`, mimetype: 'application/pdf' }));
 
-        doc.fontSize(20).text('Purchase Invoices Report', { align: 'center' });
+        doc.fontSize(18).font('Helvetica-Bold').text('ERP', { align: 'center' });
+        doc.fontSize(14).font('Helvetica').text('Purchase Invoice Report', { align: 'center' });
+        doc.moveDown(0.5);
+        doc.fontSize(10).text(`Exported on: ${timestamp}`, { align: 'right' });
         doc.moveDown();
-        const headers = ['Inv No', 'Supplier', 'Booking Date', 'Inv Date', 'PO No', 'Taxable', 'Tax', 'Total', 'Status'];
-        const colX = [30, 100, 220, 300, 380, 450, 520, 600, 680];
-        doc.fontSize(10).font('Helvetica-Bold');
-        headers.forEach((h, i) => doc.text(h, colX[i], 80));
-        doc.font('Helvetica').fontSize(8);
-        let y = 100;
-        invoices.forEach(inv => {
+
+        const tableTop = 100;
+        const colX = [20, 100, 250, 340, 420, 500, 570, 640, 710, 770];
+        const headers = ['Inv No', 'Supplier Name', 'Supp. Inv No', 'Supp. Date', 'Book Date', 'PO No', 'Taxable', 'Tax', 'Total', 'Status'];
+
+        doc.rect(15, tableTop - 5, 805, 20).fill('#4472C4');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+        headers.forEach((h, i) => doc.text(h, colX[i], tableTop));
+
+        let y = tableTop + 20;
+        doc.fillColor('#000000').font('Helvetica');
+
+        invoices.forEach((inv, index) => {
+          if (y > 550) {
+            doc.addPage({ margin: 20, size: 'A4', layout: 'landscape' });
+            y = 40;
+            doc.rect(15, y - 5, 805, 20).fill('#4472C4');
+            doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+            headers.forEach((h, i) => doc.text(h, colX[i], y));
+            y += 20;
+            doc.fillColor('#000000').font('Helvetica');
+          }
+
+          if (index % 2 === 1) {
+            doc.rect(15, y - 3, 805, 15).fill('#F2F2F2').fillColor('#000000');
+          }
+
+          doc.fontSize(7);
           doc.text(inv.invoiceNumber, colX[0], y);
-          doc.text(inv.supplierName.substring(0, 20), colX[1], y);
-          doc.text(inv.bookingDate.toLocaleDateString(), colX[2], y);
+          doc.text(inv.supplierName.substring(0, 30), colX[1], y, { width: 140 });
+          doc.text(inv.supplierInvoiceNumber, colX[2], y);
           doc.text(inv.supplierInvoiceDate.toLocaleDateString(), colX[3], y);
-          doc.text(inv.poNumber || '-', colX[4], y);
-          doc.text(inv.taxableAmount.toFixed(2), colX[5], y);
-          doc.text((inv.cgstAmount + inv.sgstAmount).toFixed(2), colX[6], y);
-          doc.text(inv.grandTotal.toFixed(2), colX[7], y);
-          doc.text(inv.status, colX[8], y);
+          doc.text(inv.bookingDate.toLocaleDateString(), colX[4], y);
+          doc.text(inv.poNumber || '-', colX[5], y);
+          doc.text(inv.taxableAmount.toFixed(2), colX[6], y);
+          doc.text((inv.cgstAmount + inv.sgstAmount).toFixed(2), colX[7], y);
+          doc.text(inv.grandTotal.toFixed(2), colX[8], y);
+          doc.text(inv.status, colX[9], y);
           y += 20;
-          if (y > 550) { doc.addPage({ layout: 'landscape' }); y = 50; }
         });
+
         doc.end();
       });
     }
@@ -450,11 +470,11 @@ export class PurchaseInvoiceService {
     let failed = 0;
     const errors: string[] = [];
 
-    const parseDate = (val: any): string | undefined => {
+    const parseDate = (val: any): Date | undefined => {
       if (!val) return undefined;
       const date = new Date(val);
       if (isNaN(date.getTime())) return undefined;
-      return date.toISOString().split('T')[0];
+      return date;
     };
 
     for (let i = 2; i <= rowCount; i++) {
@@ -463,33 +483,66 @@ export class PurchaseInvoiceService {
         const supplierName = String(row.getCell(1).value || '').trim();
         const supplierInvoiceNumber = String(row.getCell(2).value || '').trim();
         const supplierInvoiceDateRaw = row.getCell(3).value;
-        
+
         if (!supplierInvoiceNumber || !supplierName || supplierInvoiceNumber === 'Supplier Invoice No*') continue;
 
         const supplierInvoiceDate = parseDate(supplierInvoiceDateRaw);
         if (!supplierInvoiceDate) {
-           throw new Error(`Invalid Supplier Invoice Date at row ${i}`);
+          throw new Error(`Invalid Supplier Invoice Date at row ${i}`);
         }
 
-        const dto: CreatePurchaseInvoiceDto = {
-          supplierName,
-          supplierInvoiceNumber,
-          supplierInvoiceDate,
-          bookingDate: parseDate(row.getCell(4).value),
-          address: String(row.getCell(5).value || '').trim(),
-          creditDays: Math.max(1, parseInt(String(row.getCell(6).value || 0), 10)),
-          challanNumber: String(row.getCell(7).value || '').trim(),
-          poNumber: String(row.getCell(8).value || '').trim(),
-          items: [{
-            productCode: String(row.getCell(9).value || '').trim(),
-            productName: 'Imported Item',
-            quantity: parseFloat(String(row.getCell(10).value || 0)),
-            rate: parseFloat(String(row.getCell(11).value || 0)),
-            uom: String(row.getCell(12).value || 'NOS').trim(),
-          }]
-        };
+        const supplier = await this.prisma.accountMaster.findFirst({
+            where: { accountName: supplierName }
+        });
 
-        if (!dto.address) dto.address = 'Imported Address';
+        if (!supplier) {
+            throw new Error(`Supplier ${supplierName} not found`);
+        }
+
+        const items: ItemDto[] = [{
+          productId: '0',
+          productCode: String(row.getCell(9).value || '').trim(),
+          productName: 'Imported Item',
+          quantity: parseFloat(String(row.getCell(10).value || 0)),
+          rate: parseFloat(String(row.getCell(11).value || 0)),
+          uom: String(row.getCell(12).value || 'NOS').trim(),
+          hsnCode: '',
+          discount: 0,
+          taxPercent: 0,
+          beforeTaxAmount: 0,
+          taxAmount: 0,
+          totalAmount: 0,
+          baseAmount: 0
+        }];
+
+        let beforeTaxAmount = 0;
+        items.forEach(p => {
+           p.baseAmount = p.quantity * p.rate;
+           p.taxAmount = 0;
+           p.totalAmount = p.baseAmount;
+           beforeTaxAmount += p.baseAmount;
+        });
+
+        const dto: CreatePurchaseInvoiceDto = {
+          supplierId: supplier.id.toString(),
+          supplierName,
+          invoiceNumber: supplierInvoiceNumber,
+          invoiceDate: supplierInvoiceDate.toISOString(),
+          bookingDate: (parseDate(row.getCell(4).value) || new Date()).toISOString(),
+          address: String(row.getCell(5).value || '').trim() || 'Imported Address',
+          creditDays: Math.max(1, parseInt(String(row.getCell(6).value || 0), 10)),
+          gstNumber: supplier.gstNo || '',
+          challanNumbers: String(row.getCell(7).value || '').trim() ? [String(row.getCell(7).value).trim()] : [],
+          poIds: String(row.getCell(8).value || '').trim() ? [String(row.getCell(8).value).trim()] : [],
+          items,
+          accountSummary: {
+            materialPurchase: beforeTaxAmount,
+            cgst: 0,
+            sgst: 0,
+            igst: 0,
+            grandTotal: beforeTaxAmount
+          }
+        };
 
         await this.create(dto, userId);
         imported++;

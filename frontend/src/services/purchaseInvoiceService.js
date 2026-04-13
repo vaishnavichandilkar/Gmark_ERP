@@ -4,9 +4,9 @@ const purchaseInvoiceService = {
   createInvoice: async (data, file) => {
     const formData = new FormData();
     Object.keys(data).forEach(key => {
-      if (key === 'items') {
-        formData.append('items', JSON.stringify(data.items));
-      } else if (data[key] !== undefined) {
+      if (['items', 'accountSummary', 'poIds', 'challanNumbers'].includes(key)) {
+        formData.append(key, JSON.stringify(data[key]));
+      } else if (data[key] !== undefined && data[key] !== null) {
         formData.append(key, data[key]);
       }
     });
@@ -26,9 +26,9 @@ const purchaseInvoiceService = {
   updateInvoice: async (id, data, file) => {
     const formData = new FormData();
     Object.keys(data).forEach(key => {
-      if (key === 'items') {
-        formData.append('items', JSON.stringify(data.items));
-      } else if (data[key] !== undefined) {
+      if (['items', 'accountSummary', 'poIds', 'challanNumbers'].includes(key)) {
+        formData.append(key, JSON.stringify(data[key]));
+      } else if (data[key] !== undefined && data[key] !== null) {
         formData.append(key, data[key]);
       }
     });
@@ -64,8 +64,13 @@ const purchaseInvoiceService = {
     return response.data;
   },
 
-  getSupplierPOs: async (supplierName) => {
-    const response = await axiosInstance.get(`/purchase-invoices/supplier-pos?supplierName=${encodeURIComponent(supplierName)}`);
+  getSupplierPOs: async (supplierId) => {
+    const response = await axiosInstance.get(`/purchase-invoices/supplier-pos?supplierId=${supplierId}`);
+    return response.data;
+  },
+
+  getSupplierGRNs: async (supplierId) => {
+    const response = await axiosInstance.get(`/grn?supplierId=${supplierId}`);
     return response.data;
   },
 
@@ -73,7 +78,23 @@ const purchaseInvoiceService = {
     const response = await axiosInstance.get(`/purchase-invoices/export?format=${format}&search=${search}`, {
       responseType: 'blob',
     });
+    return response;
+  },
+
+  importInvoices: async (formData) => {
+    const response = await axiosInstance.post('/purchase-invoices/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
+  },
+
+  downloadSample: async () => {
+    const response = await axiosInstance.get('/purchase-invoices/sample-excel', {
+      responseType: 'blob',
+    });
+    return response;
   },
 
   printInvoice: async (id) => {

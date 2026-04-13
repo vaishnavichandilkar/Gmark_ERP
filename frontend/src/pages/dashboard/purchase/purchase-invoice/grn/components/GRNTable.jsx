@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { Search, Trash2, Plus, AlertCircle, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) => {
+const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, type = 'GRN' }) => {
+    const isGRN = type === 'GRN';
     const [tableSearch, setTableSearch] = useState('');
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
     const [activeRowIndex, setActiveRowIndex] = useState(null);
@@ -10,7 +11,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
 
     const filteredProducts = useMemo(() => {
         const query = tableSearch.toLowerCase();
-        const addedProductIds = items.map(item => item.product_id).filter(id => id);
+        const addedProductIds = items.map(item => item.productId).filter(id => id);
         
         return (products || []).filter(p => {
             if (addedProductIds.includes(p.id)) return false;
@@ -31,33 +32,33 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
         // Recalculate
         const qty = parseFloat(item.quantity) || 0;
         const rate = parseFloat(item.rate) || 0;
-        const taxPct = parseFloat(item.tax_percent) || 0;
-        let discAmt = parseFloat(item.discount_amount) || 0;
-        let discPct = parseFloat(item.discount_percent) || 0;
+        const taxPct = gstType?.type === 'NONE' ? 0 : (parseFloat(item.taxPercent) || 0);
+        let discAmt = parseFloat(item.discountAmount) || 0;
+        let discPct = parseFloat(item.discountPercent) || 0;
 
         const baseAmount = qty * rate;
 
-        if (field === 'discount_percent') {
+        if (field === 'discountPercent') {
             discAmt = (baseAmount * discPct) / 100;
-            item.discount_amount = isNaN(discAmt) ? 0 : parseFloat(discAmt.toFixed(2));
-        } else if (field === 'discount_amount') {
+            item.discountAmount = isNaN(discAmt) ? 0 : parseFloat(discAmt.toFixed(2));
+        } else if (field === 'discountAmount') {
             discPct = baseAmount > 0 ? (discAmt / baseAmount) * 100 : 0;
-            item.discount_percent = isNaN(discPct) ? 0 : parseFloat(discPct.toFixed(2));
+            item.discountPercent = isNaN(discPct) ? 0 : parseFloat(discPct.toFixed(2));
         }
 
-        const befTax = baseAmount - (parseFloat(item.discount_amount) || 0);
-        item.before_tax = isNaN(befTax) ? 0 : parseFloat(befTax.toFixed(2));
+        const befTax = baseAmount - (parseFloat(item.discountAmount) || 0);
+        item.beforeTaxAmount = isNaN(befTax) ? 0 : parseFloat(befTax.toFixed(2));
         
-        const taxAmt = (item.before_tax * taxPct) / 100;
-        item.tax_amount = isNaN(taxAmt) ? 0 : parseFloat(taxAmt.toFixed(2));
+        const taxAmt = (item.beforeTaxAmount * taxPct) / 100;
+        item.taxAmount = isNaN(taxAmt) ? 0 : parseFloat(taxAmt.toFixed(2));
         
-        const total = item.before_tax + item.tax_amount;
-        item.total_amount = isNaN(total) ? 0 : parseFloat(total.toFixed(2));
+        const total = item.beforeTaxAmount + item.taxAmount;
+        item.totalAmount = isNaN(total) ? 0 : parseFloat(total.toFixed(2));
 
         // Remaining Qty Logic
-        const totalPO = parseFloat(item.total_po_quantity) || 0;
-        const receivedPO = parseFloat(item.received_po_qty) || 0;
-        item.remaining_quantity = (totalPO - receivedPO - qty).toFixed(2);
+        const totalPO = parseFloat(item.totalPoQty) || 0;
+        const receivedPO = parseFloat(item.receivedPoQty) || 0;
+        item.remainingQty = (totalPO - receivedPO - qty).toFixed(2);
 
         newItems[index] = item;
         setItems(newItems);
@@ -66,7 +67,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
     const handleSelectProduct = (product, rowIndex) => {
         const qty = 1;
         const rate = parseFloat(product.purchaseRate) || 0;
-        const taxPct = parseFloat(product.tax_rate) || 0;
+        const taxPct = gstType?.type === 'NONE' ? 0 : (parseFloat(product.tax_rate) || 0);
         const baseAmount = qty * rate;
         const taxAmt = (baseAmount * taxPct) / 100;
         const total = baseAmount + taxAmt;
@@ -74,23 +75,23 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
         const newItems = [...items];
         newItems[rowIndex] = {
             ...newItems[rowIndex],
-            product_id: product.id,
-            product_code: product.product_code,
-            product_name: product.product_name,
+            productId: product.id,
+            productCode: product.product_code,
+            productName: product.product_name,
             quantity: qty,
             rate: rate,
-            uom: product.unitSymbol || product.unit_name || 'Nos', // Use symbol if available
-            hsn: product.hsn_code || '',
-            tax_percent: taxPct,
-            discount_amount: 0,
-            discount_percent: 0,
-            before_tax: baseAmount,
-            tax_amount: taxAmt,
-            total_amount: total,
-            print_description: product.print_description || product.product_name,
-            total_po_quantity: 0,
-            received_po_qty: 0,
-            remaining_quantity: 0
+            uom: product.unitSymbol || product.unit_name || 'Nos', 
+            hsnCode: product.hsn_code || '',
+            taxPercent: taxPct,
+            discountAmount: 0,
+            discountPercent: 0,
+            beforeTaxAmount: baseAmount,
+            taxAmount: taxAmt,
+            totalAmount: total,
+            printDescription: product.print_description || product.product_name,
+            totalPoQty: 0,
+            receivedPoQty: 0,
+            remainingQty: 0
         };
 
         setItems(newItems);
@@ -103,9 +104,9 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
         const newItems = items.filter((_, i) => i !== index);
         if (newItems.length === 0) {
             newItems.push({ 
-                id: Date.now(), product_id: null, product_code: '', product_name: '', quantity: 0, rate: 0, 
-                uom: '', discount_amount: 0, discount_percent: 0, hsn: '', tax_percent: 0, before_tax: 0, 
-                tax_amount: 0, total_amount: 0, print_description: '', total_po_quantity: 0, received_po_qty: 0, remaining_quantity: 0 
+                id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0, 
+                uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0, 
+                taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0 
             });
         }
         setItems(newItems);
@@ -113,9 +114,9 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
 
     const handleAddManualRow = () => {
         setItems([...items, { 
-            id: Date.now(), product_id: null, product_code: '', product_name: '', quantity: 0, rate: 0, 
-            uom: '', discount_amount: 0, discount_percent: 0, hsn: '', tax_percent: 0, before_tax: 0, 
-            tax_amount: 0, total_amount: 0, print_description: '', total_po_quantity: 0, received_po_qty: 0, remaining_quantity: 0 
+            id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0, 
+            uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0, 
+            taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0 
         }]);
     };
 
@@ -147,7 +148,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
                                 <button
                                     key={p.id}
                                     onClick={() => {
-                                        const emptyIndex = items.findIndex(i => !i.product_id);
+                                        const emptyIndex = items.findIndex(i => !i.productId);
                                         handleSelectProduct(p, emptyIndex === -1 ? items.length - 1 : emptyIndex);
                                     }}
                                     className="w-full px-5 py-4 flex items-center justify-between hover:bg-emerald-50 transition-all border-b border-[#F3F4F6] text-left outline-none group"
@@ -191,10 +192,16 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
                             <th className="px-4 py-4 w-[60px] text-center text-[13px] font-bold text-[#4B5563] border-l border-[#F3F4F6]">Select</th>
                             <th className="px-4 py-4 w-[160px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Product Code</th>
                             <th className="px-4 py-4 w-[350px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Product Name</th>
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Total PO Qty</th>
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Received PO Qty</th>
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Received Qty (Manual)</th>
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Remaining Qty</th>
+                            {isGRN ? (
+                                <>
+                                    <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Total PO Qty</th>
+                                    <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Received PO Qty</th>
+                                    <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Received Qty (Manual)</th>
+                                    <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Remaining Qty</th>
+                                </>
+                            ) : (
+                                <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Qty</th>
+                            )}
                             <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Rate</th>
                             <th className="px-4 py-4 w-[120px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">UOM</th>
                             <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Discount (₹)</th>
@@ -226,46 +233,52 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
 
                                     {/* Product Code */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input type="text" value={item.product_code} readOnly className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#6B7280] outline-none cursor-not-allowed" />
+                                        <input type="text" value={item.productCode} readOnly className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#6B7280] outline-none cursor-not-allowed" />
                                     </td>
 
                                     {/* Product Name */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6] relative">
                                         <input
                                             type="text"
-                                            value={item.product_name}
-                                            readOnly={!!item.product_id}
-                                            onFocus={() => { if(!item.product_id) { setActiveRowIndex(index); setIsProductSearchOpen(true); } }}
+                                            value={item.productName}
+                                            readOnly={!!item.productId}
+                                            onFocus={() => { if(!item.productId) { setActiveRowIndex(index); setIsProductSearchOpen(true); } }}
                                             onChange={(e) => { setTableSearch(e.target.value); setActiveRowIndex(index); setIsProductSearchOpen(true); }}
                                             placeholder="Select product..."
-                                            className={`w-full h-[36px] bg-transparent border-none px-2 text-[14px] font-bold outline-none ${!item.product_name ? 'italic font-normal text-gray-400' : ''}`}
+                                            className={`w-full h-[36px] bg-transparent border-none px-2 text-[14px] font-bold outline-none ${!item.productName ? 'italic font-normal text-gray-400' : ''}`}
                                         />
                                     </td>
 
-                                    {/* Total PO Qty */}
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input type="text" value={item.total_po_quantity || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none" />
-                                    </td>
-
-                                    {/* Received PO Qty */}
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input type="text" value={item.received_po_qty || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none" />
-                                    </td>
-
-                                    {/* Received Qty (Manual) */}
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input
-                                            type="number"
-                                            value={item.quantity === 0 ? '' : item.quantity}
-                                            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                            className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
-                                        />
-                                    </td>
-
-                                    {/* Remaining Qty */}
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input type="text" value={item.remaining_quantity || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-600 outline-none" />
-                                    </td>
+                                    {isGRN ? (
+                                        <>
+                                            <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                                 <input type="text" value={item.totalPoQty || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none" />
+                                             </td>
+                                             <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                                 <input type="text" value={item.receivedPoQty || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none" />
+                                             </td>
+                                             <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                                 <input
+                                                     type="number"
+                                                     value={item.quantity === 0 ? '' : item.quantity}
+                                                     onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                                                     className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
+                                                 />
+                                             </td>
+                                             <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                                 <input type="text" value={item.remainingQty || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-600 outline-none" />
+                                             </td>
+                                         </>
+                                     ) : (
+                                         <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                             <input
+                                                 type="number"
+                                                 value={item.quantity === 0 ? '' : item.quantity}
+                                                 onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                                                 className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
+                                             />
+                                         </td>
+                                     )}
 
                                     {/* Rate */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
@@ -293,8 +306,8 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
                                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400">₹</span>
                                             <input
                                                 type="number"
-                                                value={item.discount_amount === 0 ? '' : item.discount_amount}
-                                                onChange={(e) => handleItemChange(index, 'discount_amount', e.target.value)}
+                                                value={item.discountAmount === 0 ? '' : item.discountAmount}
+                                                onChange={(e) => handleItemChange(index, 'discountAmount', e.target.value)}
                                                 className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] pl-5 pr-2 text-[13px] font-bold text-right outline-none focus:border-[#073318]"
                                             />
                                         </div>
@@ -306,8 +319,8 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
                                             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-emerald-800">%</span>
                                             <input
                                                 type="number"
-                                                value={item.discount_percent === 0 ? '' : item.discount_percent}
-                                                onChange={(e) => handleItemChange(index, 'discount_percent', e.target.value)}
+                                                value={item.discountPercent === 0 ? '' : item.discountPercent}
+                                                onChange={(e) => handleItemChange(index, 'discountPercent', e.target.value)}
                                                 className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] pr-5 pl-2 text-[13px] font-bold text-right outline-none focus:border-[#073318]"
                                             />
                                         </div>
@@ -315,35 +328,35 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
 
                                     {/* HSN Code */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input type="text" value={item.hsn} readOnly className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-gray-500 outline-none" />
+                                        <input type="text" value={item.hsnCode} readOnly className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-gray-500 outline-none" />
                                     </td>
 
                                     {/* Tax % */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input type="text" value={`${item.tax_percent}%`} readOnly className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-black text-right text-emerald-800 outline-none" />
+                                        <input type="text" value={`${item.taxPercent}%`} readOnly className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-black text-right text-emerald-800 outline-none" />
                                     </td>
 
                                     {/* Bef Tax Amount */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6] text-right text-[13px] font-bold text-gray-600 px-4">
-                                        {item.before_tax.toFixed(2)}
+                                        {item.beforeTaxAmount.toFixed(2)}
                                     </td>
 
                                     {/* Tax Amount */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6] text-right text-[13px] font-bold text-gray-600 px-4">
-                                        {item.tax_amount.toFixed(2)}
+                                        {item.taxAmount.toFixed(2)}
                                     </td>
 
                                     {/* Amount */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6] text-right text-[14px] font-black text-[#073318] px-4">
-                                        ₹{item.total_amount.toFixed(2)}
+                                        ₹{item.totalAmount.toFixed(2)}
                                     </td>
 
                                     {/* Print Description */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input
                                             type="text"
-                                            value={item.print_description || ''}
-                                            onChange={(e) => handleItemChange(index, 'print_description', e.target.value)}
+                                            value={item.printDescription || ''}
+                                            onChange={(e) => handleItemChange(index, 'printDescription', e.target.value)}
                                             placeholder="Description for print..."
                                             className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-semibold outline-none focus:border-[#073318]"
                                         />
@@ -405,12 +418,20 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
                             <td colSpan={2} className="px-4 py-4 text-[13px] font-black text-[#111827]">Total</td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
-                            <td className="border-l border-[#F3F4F6]"></td>
-                            <td className="border-l border-[#F3F4F6]"></td>
-                            <td className="px-4 py-4 text-right text-[14px] font-black text-[#111827] border-l border-[#F3F4F6]">
-                                {items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0).toFixed(2)}
-                            </td>
-                            <td className="border-l border-[#F3F4F6]"></td>
+                            {isGRN ? (
+                                <>
+                                    <td className="border-l border-[#F3F4F6]"></td>
+                                    <td className="border-l border-[#F3F4F6]"></td>
+                                    <td className="px-4 py-4 text-right text-[14px] font-black text-[#111827] border-l border-[#F3F4F6]">
+                                        {items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0).toFixed(2)}
+                                    </td>
+                                    <td className="border-l border-[#F3F4F6]"></td>
+                                </>
+                            ) : (
+                                <td className="px-4 py-4 text-right text-[14px] font-black text-[#111827] border-l border-[#F3F4F6]">
+                                    {items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0).toFixed(2)}
+                                </td>
+                            )}
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
@@ -418,13 +439,13 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct }) =>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="px-4 py-4 text-right text-[13px] font-black text-[#111827] border-l border-[#F3F4F6]">
-                                {items.reduce((sum, item) => sum + (parseFloat(item.before_tax) || 0), 0).toFixed(2)}
+                                {items.reduce((sum, item) => sum + (parseFloat(item.beforeTaxAmount) || 0), 0).toFixed(2)}
                             </td>
                             <td className="px-4 py-4 text-right text-[13px] font-black text-[#111827] border-l border-[#F3F4F6]">
-                                {items.reduce((sum, item) => sum + (parseFloat(item.tax_amount) || 0), 0).toFixed(2)}
+                                {items.reduce((sum, item) => sum + (parseFloat(item.taxAmount) || 0), 0).toFixed(2)}
                             </td>
                             <td className="px-4 py-4 text-right text-[15px] font-black text-[#073318] border-l border-[#F3F4F6]">
-                                ₹ {items.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0).toFixed(2)}
+                                ₹ {items.reduce((sum, item) => sum + (parseFloat(item.totalAmount) || 0), 0).toFixed(2)}
                             </td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="sticky right-0 bg-[#F9FAFB] border-l border-[#F3F4F6]"></td>

@@ -91,10 +91,7 @@ export class CreatePurchaseOrderDto {
   @IsOptional()
   gstNo?: string;
 
-  @ApiProperty()
-  @IsString()
-  @IsOptional()
-  panNo?: string;
+
 
   @ApiProperty()
   @IsString()
@@ -138,10 +135,7 @@ export class UpdatePurchaseOrderDto {
   @IsString()
   gstNo?: string;
 
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsString()
-  panNo?: string;
+
 
   @ApiProperty({ required: false })
   @IsOptional()

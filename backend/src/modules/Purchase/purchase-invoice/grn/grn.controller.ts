@@ -1,11 +1,12 @@
 import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Request, ParseIntPipe, UseInterceptors, UploadedFile, Res, Delete } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiConsumes } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { GrnService } from './grn.service';
-import { PurchaseInvoiceService } from '../purchase-invoice/purchase-invoice.service';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { PurchaseInvoiceService } from '../invoice.service';
+import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { multerConfig } from '../../upload/multer.config';
+import { multerConfig } from '../../../upload/multer.config';
 import { Response } from 'express';
+import { CreateGrnDto, UpdateGrnDto } from './dto/grn.dto';
 
 @ApiTags('Goods Receipt Note (GRN)')
 @Controller('grn')
@@ -15,19 +16,12 @@ export class GrnController {
   constructor(
     private readonly grnService: GrnService,
     private readonly piService: PurchaseInvoiceService
-  ) {}
+  ) { }
 
   @Get('suppliers')
   @ApiOperation({ summary: 'Get list of suppliers for GRN' })
   async getSuppliers(@Request() req) {
     return this.piService.getSuppliers(req.user.id);
-  }
-
-  @Get('next-number')
-  @ApiOperation({ summary: 'Generate next available GRN number' })
-  async getNextNumber() {
-    const grnNumber = await this.grnService.generateGrnNumber();
-    return { grnNumber };
   }
 
   @Get('supplier-pos')
@@ -37,20 +31,43 @@ export class GrnController {
     return this.piService.getSupplierPOs(supplierName, req.user.id);
   }
 
+  @Get('supplier-challans')
+  @ApiOperation({ summary: 'Get list of Challan Numbers for a specific supplier' })
+  @ApiQuery({ name: 'supplierName', required: true, type: String })
+  async getSupplierChallans(@Query('supplierName') supplierName: string, @Request() req) {
+    return this.grnService.getSupplierChallans(supplierName, req.user.id);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Create a new GRN' })
   @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: CreateGrnDto })
   @UseInterceptors(FileInterceptor('file', multerConfig))
   async create(@UploadedFile() file: any, @Body() body: any, @Request() req) {
+    // Manual parsing for multipart/form-data strings
     const items = typeof body.items === 'string' ? JSON.parse(body.items) : body.items;
-    return this.grnService.create({ ...body, items }, req.user.id, file?.path);
+    const accounts = typeof body.accounts === 'string' ? JSON.parse(body.accounts) : body.accounts;
+    const accountSummary = typeof body.accountSummary === 'string' ? JSON.parse(body.accountSummary) : body.accountSummary;
+
+    const createDto: CreateGrnDto = {
+      ...body,
+      items,
+      accounts,
+      accountSummary,
+      creditDays: body.creditDays ? parseInt(body.creditDays, 10) : 0,
+      poId: body.poId ? parseInt(body.poId, 10) : undefined,
+      grandTotal: body.grandTotal ? parseFloat(body.grandTotal) : 0,
+    };
+
+    return this.grnService.create(createDto, req.user.id, file?.path);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all Goods Receipt Notes' })
   @ApiQuery({ name: 'search', required: false })
-  async findAll(@Request() req, @Query('search') search?: string) {
-    return this.grnService.findAll({ search, userId: req.user.id });
+  @ApiQuery({ name: 'supplierId', required: false })
+  async findAll(@Request() req, @Query('search') search?: string, @Query('supplierId') supplierId?: string) {
+    return this.grnService.findAll({ search, supplierId, userId: req.user.id });
   }
 
   @Get('export')
@@ -72,17 +89,28 @@ export class GrnController {
   @Patch(':id')
   @ApiOperation({ summary: 'Update GRN' })
   @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: UpdateGrnDto })
   @UseInterceptors(FileInterceptor('file', multerConfig))
   async update(
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file: any,
     @Body() body: any,
   ) {
-    let items;
-    if (body.items) {
-      items = typeof body.items === 'string' ? JSON.parse(body.items) : body.items;
-    }
-    return this.grnService.update(id, { ...body, items }, file?.path);
+    const items = body.items ? (typeof body.items === 'string' ? JSON.parse(body.items) : body.items) : undefined;
+    const accounts = body.accounts ? (typeof body.accounts === 'string' ? JSON.parse(body.accounts) : body.accounts) : undefined;
+    const accountSummary = body.accountSummary ? (typeof body.accountSummary === 'string' ? JSON.parse(body.accountSummary) : body.accountSummary) : undefined;
+
+    const updateDto: UpdateGrnDto = {
+      ...body,
+      items,
+      accounts,
+      accountSummary,
+      creditDays: (body.creditDays !== undefined && body.creditDays !== null && body.creditDays !== '') ? parseInt(body.creditDays, 10) : undefined,
+      poId: body.poId ? parseInt(body.poId, 10) : undefined,
+      grandTotal: body.grandTotal ? parseFloat(body.grandTotal) : undefined,
+    };
+
+    return this.grnService.update(id, updateDto, file?.path);
   }
 
   @Delete(':id')

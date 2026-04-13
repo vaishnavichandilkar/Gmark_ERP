@@ -8,6 +8,7 @@ import grnService from '@/services/grnService';
 import purchaseOrderService from '@/services/purchaseOrderService';
 import accountService from '@/services/accountService';
 import productService from '@/services/productService';
+import { getProfileApi } from '@/services/authService';
 
 import GRNForm from './components/GRNForm';
 import GRNTable from './components/GRNTable';
@@ -44,43 +45,53 @@ const AddGRN = () => {
     const [items, setItems] = useState([
         { 
             id: Date.now(), 
-            product_id: null,
-            product_code: '', 
-            product_name: '', 
+            productId: null,
+            productCode: '', 
+            productName: '', 
             quantity: 0, 
             rate: 0, 
             uom: '', 
-            discount_amount: 0, 
-            discount_percent: 0, 
-            hsn: '', 
-            tax_percent: 0, 
-            before_tax: 0, 
-            tax_amount: 0, 
-            total_amount: 0,
-            print_description: '',
-            total_po_quantity: 0,
-            received_po_qty: 0,
-            remaining_quantity: 0
+            discountAmount: 0, 
+            discountPercent: 0, 
+            hsnCode: '', 
+            taxPercent: 0, 
+            beforeTaxAmount: 0, 
+            taxAmount: 0, 
+            totalAmount: 0,
+            printDescription: '',
+            totalPoQty: 0,
+            receivedPoQty: 0,
+            remainingQty: 0
         }
     ]);
 
     const [errors, setErrors] = useState({});
+    const [companyInfo, setCompanyInfo] = useState(null);
+    const [gstType, setGstType] = useState({ type: 'NONE' });
 
     useEffect(() => {
         const fetchInitialData = async () => {
             setIsLoading(true);
             try {
-                const [accRes, prodRes] = await Promise.all([
-                    accountService.getAllAccounts({ groupName: 'SUNDRY_CREDITORS', limit: 1000 }),
-                    productService.getProducts({ limit: 1000 })
+                const [suppRes, prodRes, profileRes] = await Promise.all([
+                    grnService.getSuppliers(),
+                    productService.getProducts({ limit: 1000 }),
+                    getProfileApi()
                 ]);
                 
-                setSuppliers(accRes.data || []);
+                setSuppliers(suppRes || []);
                 setProducts(prodRes.products || []);
+                setCompanyInfo(profileRes?.shopDetail || null);
 
                 if (isEditMode) {
                     const grn = await grnService.getGRNById(id);
+                    const suppState = grn.supplierState || ""; // Might need to fetch from supplier list if not in GRN object
+                    
+                    const poList = await grnService.getSupplierPOs(grn.supplierName);
+                    setPos(poList || []);
+
                     setFormData({
+                        supplier_id: grn.supplierId?.toString() || '',
                         supplier_name: grn.supplierName,
                         address: grn.address,
                         document_number: grn.grnNumber,
@@ -90,37 +101,42 @@ const AddGRN = () => {
                         credit_days: grn.creditDays,
                         po_id: grn.poId || '',
                         po_number: grn.poNumber || '',
-                        gst_no: grn.gstNumber || ""
+                        gst_no: grn.gstNumber || grn.gstNo || "",
+                        supplier_state: suppState
                     });
+
+                    const type = calculateGST(grn.gstNumber || grn.gstNo || "", suppState);
+                    setGstType(type);
+
                     setItems(grn.items.map(item => {
                         const qty = item.quantity || 0;
                         const rate = item.rate || 0;
-                        const taxPct = 18;
-                        const befTax = qty * rate;
+                        const taxPct = item.taxPercent || 18;
+                        const discAmt = item.discountAmount || 0;
+                        const discPct = item.discountPercent || 0;
+                        const befTax = (qty * rate) - discAmt;
                         const taxAmt = (befTax * taxPct) / 100;
+
                         return {
                             id: item.id,
-                            product_id: item.productId,
-                            product_code: item.productCode,
-                            product_name: item.productName,
+                            productId: item.productId,
+                            productCode: item.productCode,
+                            productName: item.productName,
                             quantity: qty,
                             rate: rate,
                             uom: item.uom,
-                            tax_percent: taxPct,
-                            discount_amount: 0,
-                            discount_percent: 0,
-                            before_tax: befTax,
-                            tax_amount: taxAmt,
-                            total_amount: befTax + taxAmt,
-                            print_description: item.productName,
-                            total_po_quantity: item.poQty || 0,
-                            received_po_qty: item.alreadyReceivedQty || 0,
-                            remaining_quantity: (item.poQty || 0) - (item.alreadyReceivedQty || 0) - item.quantity
+                            taxPercent: taxPct,
+                            discountAmount: discAmt,
+                            discountPercent: discPct,
+                            beforeTaxAmount: befTax,
+                            taxAmount: taxAmt,
+                            totalAmount: befTax + taxAmt,
+                            printDescription: item.printDescription || item.productName,
+                            totalPoQty: item.totalPoQty || 0,
+                            receivedPoQty: item.receivedPoQty || 0,
+                            remainingQty: (item.totalPoQty || 0) - (item.receivedPoQty || 0) - qty
                         };
                     }));
-                } else {
-                    const nextNo = await grnService.getNextNumber();
-                    setFormData(prev => ({ ...prev, document_number: nextNo.grnNumber }));
                 }
             } catch (error) {
                 console.error("Error fetching setup data:", error);
@@ -135,23 +151,36 @@ const AddGRN = () => {
         const supplier = suppliers.find(s => s.id === supplierId);
         if (!supplier) return;
 
+        const supplierState = supplier.state;
+        const type = calculateGST(supplier.gstNo || "", supplierState);
+        setGstType(type);
+
         setFormData(prev => ({
             ...prev,
             supplier_id: supplier.id,
             supplier_name: supplier.accountName,
             address: (supplier.addressLine1 || "") + (supplier.addressLine2 ? ", " + supplier.addressLine2 : ""),
             gst_no: supplier.gstNo || "",
-            credit_days: supplier.supplierCreditDays || 0
+            credit_days: supplier.supplierCreditDays || 0,
+            supplier_state: supplierState
         }));
 
         try {
-            const poResponse = await purchaseOrderService.getPurchaseOrders({ 
-                search: supplier.accountName 
-            });
-            const poList = Array.isArray(poResponse) ? poResponse : (poResponse.data || []);
-            setPos(poList.filter(p => (p.status !== 'DELETED' && p.supplierName === supplier.accountName)));
+            const poData = await grnService.getSupplierPOs(supplier.accountName);
+            setPos(poData || []);
         } catch (error) {
             console.error("Error fetching supplier POs:", error);
+        }
+    };
+
+    const calculateGST = (supplierGST, supplierState) => {
+        if (!supplierGST) {
+            return { type: 'NONE' };
+        }
+        if (supplierState === companyInfo?.state) {
+            return { type: 'INTRA' };
+        } else {
+            return { type: 'INTER' };
         }
     };
 
@@ -168,32 +197,42 @@ const AddGRN = () => {
             const poDetails = await purchaseOrderService.getPurchaseOrderById(poId);
             setFormData(prev => ({ ...prev, po_id: poDetails.id, po_number: poDetails.poNumber }));
 
+            const gstType = calculateGST(formData.gst_no || poDetails.gstNumber, formData.supplier_state);
+
             const poItems = poDetails.items.map(item => {
                 const qty = item.quantity || 0;
                 const rate = item.rate || 0;
-                const discAmt = item.discountAmount || 0;
                 const taxPct = item.taxPercent || 0;
-                const befTax = (qty * rate) - discAmt;
-                const taxAmt = (befTax * taxPct) / 100;
+                const remaining = (item.quantity || 0) - (item.receivedQty || 0);
+                const discAmt = item.discountAmount || 0;
+                const discPct = item.discountPercent || 0;
+                const baseAmount = remaining * rate;
+                const befTax = baseAmount - discAmt;
+                
+                let taxAmt = 0;
+                if (gstType.type !== 'NONE') {
+                    taxAmt = (befTax * taxPct) / 100;
+                }
+
                 return {
                     id: Date.now() + Math.random(),
-                    product_id: item.product_id,
-                    product_code: item.productCode,
-                    product_name: item.productName,
-                    quantity: qty,
+                    productId: item.productId || item.product_id,
+                    productCode: item.productCode || item.product_code,
+                    productName: item.productName || item.product_name,
+                    quantity: remaining, 
                     rate: rate,
                     uom: item.uom,
-                    discount_amount: discAmt,
-                    discount_percent: item.discountPercent || 0,
-                    hsn: item.hsnCode || '',
-                    tax_percent: taxPct,
-                    before_tax: befTax,
-                    tax_amount: taxAmt,
-                    total_amount: befTax + taxAmt,
-                    print_description: item.productName,
-                    total_po_quantity: item.quantity,
-                    received_po_qty: 0,
-                    remaining_quantity: 0
+                    discountAmount: discAmt,
+                    discountPercent: discPct,
+                    hsnCode: item.hsnCode || item.hsn_code || '',
+                    taxPercent: taxPct,
+                    beforeTaxAmount: befTax,
+                    taxAmount: taxAmt,
+                    totalAmount: befTax + taxAmt,
+                    printDescription: item.printDescription || item.productName,
+                    totalPoQty: item.quantity,
+                    receivedPoQty: item.receivedQty || 0,
+                    remainingQty: 0
                 };
             });
             setItems(poItems);
@@ -201,7 +240,6 @@ const AddGRN = () => {
             console.error("Error fetching PO details:", error);
         }
     };
-
     const validateForm = () => {
         const newErrors = {};
         if (!formData.supplier_name) newErrors.supplier_name = "Supplier is required";
@@ -210,13 +248,13 @@ const AddGRN = () => {
         if (!formData.supplier_challan_number) newErrors.supplier_challan_number = "Challan number is required";
         if (!formData.document_date) newErrors.document_date = "Challan date is required";
 
-        const validItems = items.filter(item => item.product_id);
+        const validItems = items.filter(item => item.productCode);
         if (validItems.length === 0) {
             newErrors.items = true;
         } else {
             const itemErrors = [];
             items.forEach((item, index) => {
-                if (item.product_id) {
+                if (item.productCode) {
                     if (!item.quantity || item.quantity <= 0) {
                         if (!itemErrors[index]) itemErrors[index] = {};
                         itemErrors[index].quantity = true;
@@ -241,24 +279,70 @@ const AddGRN = () => {
 
         setIsSaving(true);
         try {
+            const validItems = items.filter(i => i.productCode);
+            const gstType = calculateGST(formData.gst_no, formData.supplier_state);
+            
+            let materialTotal = 0;
+            let cgst = 0, sgst = 0, igst = 0;
+
+            validItems.forEach(p => {
+                const base = (parseFloat(p.quantity) || 0) * (parseFloat(p.rate) || 0);
+                const discount = (parseFloat(p.discountAmount) || 0);
+                const befTax = base - discount;
+                materialTotal += befTax;
+
+                if (gstType.type === 'INTRA') {
+                    cgst += befTax * (parseFloat(p.taxPercent) || 0) / 200;
+                    sgst += befTax * (parseFloat(p.taxPercent) || 0) / 200;
+                } else if (gstType.type === 'INTER') {
+                    igst += befTax * (parseFloat(p.taxPercent) || 0) / 100;
+                }
+            });
+
             const payload = {
+                supplierId: formData.supplier_id,
                 supplierName: formData.supplier_name,
                 address: formData.address,
                 challanNumber: formData.supplier_challan_number,
+                grnDate: formData.document_date,
                 bookingDate: formData.booking_date,
                 creditDays: parseInt(formData.credit_days),
                 poId: formData.po_id ? parseInt(formData.po_id) : undefined,
                 poNumber: formData.po_number || undefined,
                 gstNumber: formData.gst_no,
-                items: items.filter(i => i.product_id).map(i => ({
-                    productId: i.product_id,
-                    productCode: i.product_code,
-                    productName: i.product_name,
-                    quantity: parseFloat(i.quantity),
-                    rate: parseFloat(i.rate),
+                items: validItems.map(i => ({
+                    productId: i.productId?.toString() || undefined,
+                    productCode: i.productCode,
+                    productName: i.productName,
+                    totalPoQty: parseFloat(i.totalPoQty) || 0,
+                    receivedPoQty: parseFloat(i.receivedPoQty) || 0,
+                    quantity: parseFloat(i.quantity) || 0,
+                    remainingQty: parseFloat(i.remainingQty) || 0,
+                    rate: parseFloat(i.rate) || 0,
                     uom: i.uom,
-                    printDescription: i.print_description
-                }))
+                    discountAmt: parseFloat(i.discountAmount) || 0,
+                    discountPercent: parseFloat(i.discountPercent) || 0,
+                    taxPercent: parseFloat(i.taxPercent) || 0,
+                    taxAmount: parseFloat(i.taxAmount) || 0,
+                    beforeTaxAmount: parseFloat(i.beforeTaxAmount) || 0,
+                    hsnCode: i.hsnCode,
+                    amount: (parseFloat(i.totalAmount) || 0),
+                    printDescription: i.printDescription
+                })),
+                accounts: [
+                    { accountName: 'Material Purchase', amount: materialTotal },
+                    { accountName: 'CGST', amount: cgst },
+                    { accountName: 'SGST', amount: sgst },
+                    { accountName: 'IGST', amount: igst }
+                ],
+                accountSummary: {
+                    material: materialTotal,
+                    cgst: cgst,
+                    sgst: sgst,
+                    igst: igst,
+                    grandTotal: materialTotal + cgst + sgst + igst
+                },
+                grandTotal: materialTotal + cgst + sgst + igst
             };
 
             if (isEditMode) {
@@ -323,6 +407,7 @@ const AddGRN = () => {
                         products={products}
                         errors={errors}
                         handleAddNewProduct={handleAddNewProduct}
+                        gstType={gstType}
                     />
                 </div>
 
@@ -331,7 +416,7 @@ const AddGRN = () => {
                          <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
                         Account Summary
                     </h2>
-                    <AccountTable items={items} />
+                    <AccountTable items={items} gstType={gstType} />
                 </div>
 
                 <div className="px-8 py-6 border-t border-[#F3F4F6] bg-gray-50 flex justify-end gap-4">

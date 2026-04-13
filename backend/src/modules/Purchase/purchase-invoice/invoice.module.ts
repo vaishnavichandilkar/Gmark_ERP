@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { PurchaseInvoiceService } from './purchase-invoice.service';
-import { PurchaseInvoiceController } from './purchase-invoice.controller';
+import { PurchaseInvoiceService } from './invoice.service';
+import { PurchaseInvoiceController } from './invoice.controller';
 import { PrismaModule } from '../../../infrastructure/prisma/prisma.module';
 import { PurchaseOrderModule } from '../purchase-order/purchase-order.module';
 
@@ -10,4 +10,4 @@ import { PurchaseOrderModule } from '../purchase-order/purchase-order.module';
   providers: [PurchaseInvoiceService],
   exports: [PurchaseInvoiceService],
 })
-export class PurchaseInvoiceModule {}
+export class PurchaseInvoiceModule { }

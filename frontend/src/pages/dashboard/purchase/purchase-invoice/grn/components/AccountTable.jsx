@@ -1,53 +1,54 @@
 import React, { useMemo } from 'react';
 import { ChevronsUpDown } from 'lucide-react';
 
-const AccountTable = ({ items }) => {
+const AccountTable = ({ items, gstType }) => {
     const tableData = useMemo(() => {
-        // Only consider items with a product selected
-        const validItems = items.filter(item => item.product_id);
+        const validItems = items.filter(item => item.productId);
         
-        const subtotal = validItems.reduce((sum, item) => sum + (parseFloat(item.before_tax) || 0), 0);
-        const taxTotal = validItems.reduce((sum, item) => sum + (parseFloat(item.tax_amount) || 0), 0);
+        const subtotal = validItems.reduce((sum, item) => sum + (parseFloat(item.beforeTaxAmount) || 0), 0);
+        const taxTotal = validItems.reduce((sum, item) => sum + (parseFloat(item.taxAmount) || 0), 0);
         
-        // Calculate GST split
-        const cgst = taxTotal / 2;
-        const sgst = taxTotal / 2;
-        const total = subtotal + taxTotal;
-
-        // Try to find the common tax rate for labels, default to 18 (9+9)
-        const sampleTaxRate = validItems.length > 0 ? (parseFloat(validItems[0].tax_percent) || 18) : 18;
+        const sampleTaxRate = validItems.length > 0 ? (parseFloat(validItems[0].taxPercent) || 18) : 18;
         const splitRate = sampleTaxRate / 2;
 
-        return [
+        const rows = [
             { 
                 account: `Material Purchase (G.S.T.)`, 
                 amount: subtotal > 0 ? subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00', 
                 balance: subtotal > 0 ? subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00' 
             },
-            { 
-                account: '', 
-                amount: '', 
-                balance: subtotal > 0 ? subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00' 
-            },
-            { 
-                account: `c - gst ${splitRate}%`, 
-                amount: cgst > 0 ? cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00', 
-                balance: (subtotal + cgst) > 0 ? (subtotal + cgst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00' 
-            },
-            { 
-                account: `s - gst ${splitRate}%`, 
-                amount: sgst > 0 ? sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00', 
-                balance: (subtotal + taxTotal) > 0 ? (subtotal + taxTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00' 
-            },
-            { 
-                account: '', 
-                amount: '', 
-                balance: total > 0 ? total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00' 
-            },
+            { account: '', amount: '', balance: subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
         ];
-    }, [items]);
 
-    const grandTotalValue = items.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
+        if (gstType?.type === 'INTRA') {
+            const cgst = taxTotal / 2;
+            const sgst = taxTotal / 2;
+            rows.push(
+                { 
+                    account: `c - gst ${splitRate}%`, 
+                    amount: cgst > 0 ? cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00', 
+                    balance: (subtotal + cgst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) 
+                },
+                { 
+                    account: `s - gst ${splitRate}%`, 
+                    amount: sgst > 0 ? sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00', 
+                    balance: (subtotal + taxTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) 
+                }
+            );
+        } else if (gstType?.type === 'INTER') {
+            rows.push({ 
+                account: `i - gst ${sampleTaxRate}%`, 
+                amount: taxTotal > 0 ? taxTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00', 
+                balance: (subtotal + taxTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) 
+            });
+        }
+
+        rows.push({ account: '', amount: '', balance: (subtotal + taxTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) });
+
+        return rows;
+    }, [items, gstType]);
+
+    const grandTotalValue = items.reduce((sum, item) => sum + (parseFloat(item.totalAmount) || 0), 0);
 
     return (
         <div className="mt-4 border border-[#E5E7EB] rounded-[16px] overflow-hidden bg-white shadow-[0_2px_15px_rgba(0,0,0,0.02)] font-outfit">

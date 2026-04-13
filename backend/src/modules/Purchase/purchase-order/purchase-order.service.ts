@@ -41,7 +41,6 @@ export class PurchaseOrderService {
       supplierName: supplier.accountName,
       address: supplier.addressLine1 + (supplier.addressLine2 ? ', ' + supplier.addressLine2 : ''),
       gstNumber: supplier.gstNo,
-      panNumber: supplier.panNo,
       creditDays: supplier.supplierCreditDays || 0,
     };
   }
@@ -84,8 +83,8 @@ export class PurchaseOrderService {
     const processedItems = createDto.items.map(item => this.calculateItemValues(item));
 
     const totalAmount = processedItems.reduce((sum, item) => sum + (item.quantity * item.rate) - item.discountAmount, 0);
-    const totalTaxAmount = processedItems.reduce((sum, item) => sum + item.taxAmount, 0);
-    const grandTotal = processedItems.reduce((sum, item) => sum + item.totalAmount, 0);
+    const totalTaxAmount = processedItems.reduce((sum, item) => sum + (Number(item.taxAmount) || 0), 0);
+    const totalGrandTotal = processedItems.reduce((sum, item) => sum + (Number(item.totalAmount) || 0), 0);
 
     return this.prisma.$transaction(async (tx) => {
       return tx.purchaseOrder.create({
@@ -97,10 +96,8 @@ export class PurchaseOrderService {
           poCreationDate: createDto.poCreationDate ? new Date(createDto.poCreationDate) : new Date(),
           expiryDate: new Date(createDto.expiryDate),
           gstNumber: createDto.gstNo || supplier.gstNumber,
-          panNumber: createDto.panNo || supplier.panNumber,
-          totalAmount,
           taxAmount: totalTaxAmount,
-          grandTotal,
+          totalAmount: totalGrandTotal,
           userId,
           status: 'PENDING',
           items: {
@@ -113,12 +110,13 @@ export class PurchaseOrderService {
               uom: item.uom,
               discountPercent: item.discountPercent,
               discountAmount: item.discountAmount,
-              taxPercent: item.taxPercent,
-              taxAmount: item.taxAmount,
-              totalAmount: item.totalAmount,
+              taxPercent: Number(item.taxPercent) || 0,
+              taxAmount: Number(item.taxAmount) || 0,
+              beforeTaxAmount: Number(item.beforeTaxAmount) || 0,
+              totalAmount: Number(item.totalAmount) || 0,
             })),
           },
-        },
+        } as any,
         include: { items: true },
       });
     });
@@ -174,11 +172,38 @@ export class PurchaseOrderService {
   async findOne(id: number) {
     const po = await this.prisma.purchaseOrder.findUnique({
       where: { id },
-      include: { items: true },
+      include: { 
+        items: true,
+        grn: {
+          include: { items: true }
+        }
+      },
     });
 
     if (!po) throw new NotFoundException(`PO ID ${id} not found`);
-    return po;
+
+    // Calculate received quantity for each item
+    const itemsWithReceived = po.items.map(item => {
+      let receivedQty = 0;
+      
+      po.grn.forEach(grn => {
+        grn.items.forEach(grnItem => {
+          if (grnItem.productCode === item.productCode) {
+            receivedQty += grnItem.receivedQty;
+          }
+        });
+      });
+
+      return {
+        ...item,
+        receivedQty
+      };
+    });
+
+    return {
+      ...po,
+      items: itemsWithReceived
+    };
   }
 
   async update(id: number, updateDto: UpdatePurchaseOrderDto) {
@@ -194,7 +219,6 @@ export class PurchaseOrderService {
         status: updateDto.status ?? (po.status as any),
         address: updateDto.address ?? po.address,
         gstNumber: updateDto.gstNo ?? po.gstNumber,
-        panNumber: updateDto.panNo ?? po.panNumber,
         poNumber: updateDto.poNumber ?? po.poNumber,
         poCreationDate: updateDto.poCreationDate ? new Date(updateDto.poCreationDate) : po.poCreationDate,
       };
@@ -206,15 +230,16 @@ export class PurchaseOrderService {
           // Only override if not explicitly provided in DTO
           if (!updateDto.address) data.address = supplier.addressLine1;
           if (!updateDto.gstNo) data.gstNumber = supplier.gstNo;
-          if (!updateDto.panNo) data.panNumber = supplier.panNo;
         }
       }
 
       if (updateDto.items) {
         const processedItems = updateDto.items.map(item => this.calculateItemValues(item));
-        data.totalAmount = processedItems.reduce((sum, item) => sum + (item.quantity * item.rate) - item.discountAmount, 0);
-        data.taxAmount = processedItems.reduce((sum, item) => sum + item.taxAmount, 0);
-        data.grandTotal = processedItems.reduce((sum, item) => sum + item.totalAmount, 0);
+        const totalTaxAmount = processedItems.reduce((sum, item) => sum + (Number(item.taxAmount) || 0), 0);
+        const totalGrandTotal = processedItems.reduce((sum, item) => sum + (Number(item.totalAmount) || 0), 0);
+        
+        data.taxAmount = totalTaxAmount;
+        data.totalAmount = totalGrandTotal;
         
         data.items = { 
           create: processedItems.map(item => ({
@@ -226,9 +251,10 @@ export class PurchaseOrderService {
             uom: item.uom,
             discountPercent: item.discountPercent,
             discountAmount: item.discountAmount,
-            taxPercent: item.taxPercent,
-            taxAmount: item.taxAmount,
-            totalAmount: item.totalAmount,
+            taxPercent: Number(item.taxPercent) || 0,
+            taxAmount: Number(item.taxAmount) || 0,
+            beforeTaxAmount: Number(item.beforeTaxAmount) || 0,
+            totalAmount: Number(item.totalAmount) || 0,
             printDescription: item.printDescription
           }))
         };
@@ -238,7 +264,7 @@ export class PurchaseOrderService {
 
       return tx.purchaseOrder.update({
         where: { id },
-        data,
+        data: data as any,
         include: { items: true },
       });
     });
@@ -295,7 +321,7 @@ export class PurchaseOrderService {
     const sgst = isInterState ? 0 : po.taxAmount / 2;
     const cgst = isInterState ? 0 : po.taxAmount / 2;
     const igst = isInterState ? po.taxAmount : 0;
-    const amountInWords = this.numberToWords(po.grandTotal);
+    const amountInWords = this.numberToWords(po.totalAmount + po.taxAmount);
 
     return new Promise<any>((resolve) => {
       const doc = new PDFDocument({ margin: 20, size: 'A4' });
@@ -337,11 +363,10 @@ export class PurchaseOrderService {
       doc.fontSize(12).font('Helvetica-Bold').text('PURCHASE ORDER', startX, y + 7, { align: 'center', width: pageWidth });
       y += 25;
 
-      // Header Row 5: GST/PAN/State
+      // Header Row 5: GST/State
       doc.rect(startX, y, pageWidth, 25).stroke();
       doc.fontSize(8).font('Helvetica-Bold').text(`GSTIN : ${po.gstNumber || '-'}`, startX + 10, y + 8);
       doc.text(`State Code : 27 Maharashtra`, startX + 220, y + 8);
-      doc.text(`PAN No : ${po.panNumber || '-'}`, startX + 430, y + 8);
       y += 25;
 
       // Row 6 & 7: Supplier and PO Info
@@ -419,7 +444,7 @@ export class PurchaseOrderService {
         y += 25;
       };
 
-      addSummaryRow('Sub Total', po.totalAmount.toFixed(2));
+      addSummaryRow('Sub Total', (po.totalAmount - po.taxAmount).toFixed(2));
       addSummaryRow('SGST', sgst.toFixed(2));
       addSummaryRow('CGST', cgst.toFixed(2));
       addSummaryRow('IGST', igst.toFixed(2));
@@ -432,7 +457,7 @@ export class PurchaseOrderService {
       doc.font('Helvetica').text(amountInWords, startX + 90, y + 10, { width: summaryLabelX - startX - 100 });
       
       doc.font('Helvetica-Bold').text('Total', summaryLabelX + 5, y + 10, { align: 'right', width: 60 });
-      doc.fontSize(10).text(po.grandTotal.toFixed(2), summaryValueX + 5, y + 10);
+      doc.fontSize(10).text(po.totalAmount.toFixed(2), summaryValueX + 5, y + 10);
       y += 30;
 
       // Footer
@@ -486,11 +511,10 @@ export class PurchaseOrderService {
         { header: 'Supplier Name', key: 'supplierName', width: 30 },
         { header: 'Creation Date', key: 'poCreationDate', width: 18 },
         { header: 'Expiry Date', key: 'expiryDate', width: 18 },
-        { header: 'Amount', key: 'totalAmount', width: 15 },
         { header: 'GST Number', key: 'gstNumber', width: 22 },
         { header: 'Credit Days', key: 'creditDays', width: 12 },
         { header: 'Tax Amount', key: 'taxAmount', width: 15 },
-        { header: 'Total Amount', key: 'grandTotal', width: 15 },
+        { header: 'Total Amount', key: 'totalAmount', width: 15 },
         { header: 'Status', key: 'derivedStatus', width: 18 },
       ];
 
@@ -500,11 +524,8 @@ export class PurchaseOrderService {
           supplierName: order.supplierName,
           poCreationDate: formatDate(order.poCreationDate),
           expiryDate: formatDate(order.expiryDate),
-          totalAmount: Number(order.totalAmount || 0).toFixed(2),
-          gstNumber: order.gstNumber || '-',
-          creditDays: order.creditDays || 0,
           taxAmount: Number(order.taxAmount || 0).toFixed(2),
-          grandTotal: Number(order.grandTotal || 0).toFixed(2),
+          totalAmount: Number(order.totalAmount || 0).toFixed(2),
           derivedStatus: getDerivedStatus(order),
         });
       });
@@ -584,9 +605,9 @@ export class PurchaseOrderService {
 
         // Table Header Styling (Account Master Format)
         const tableTop = 80;
-        const colX = [20, 80, 220, 290, 360, 420, 520, 580, 650, 720];
-        const colW = [60, 140, 70, 70, 60, 100, 60, 70, 70, 70];
-        const headers = ['PO No', 'Supplier Name', 'Cr. Date', 'Exp. Date', 'Amount', 'GST Number', 'Cr. Days', 'Tax Amt', 'Total Amt', 'Status'];
+        const colX = [20, 100, 260, 340, 420, 540, 600, 680, 750];
+        const colW = [80, 160, 80, 80, 120, 60, 80, 70, 70];
+        const headers = ['PO No', 'Supplier Name', 'Cr. Date', 'Exp. Date', 'GST Number', 'Cr. Days', 'Tax Amt', 'Total Amt', 'Status'];
 
         // Draw Header Background
         doc.rect(20, tableTop - 5, 780, 25).fill('#073318');
@@ -617,14 +638,13 @@ export class PurchaseOrderService {
           }
 
           doc.text(order.poNumber, colX[0] + 2, y + 2);
-          doc.text(order.supplierName.substring(0, 30), colX[1] + 2, y + 2);
+          doc.text(order.supplierName.substring(0, 35), colX[1] + 2, y + 2);
           doc.text(formatDate(order.poCreationDate), colX[2] + 2, y + 2);
           doc.text(formatDate(order.expiryDate), colX[3] + 2, y + 2);
-          doc.text(Number(order.totalAmount || 0).toFixed(2), colX[4] + 2, y + 2);
-          doc.text(order.gstNumber || '-', colX[5] + 2, y + 2);
-          doc.text((order.creditDays || 0).toString(), colX[6] + 2, y + 2);
-          doc.text(Number(order.taxAmount || 0).toFixed(2), colX[7] + 2, y + 2);
-          doc.text(Number(order.grandTotal || 0).toFixed(2), colX[8] + 2, y + 2);
+          doc.text(order.gstNumber || '-', colX[4] + 2, y + 2);
+          doc.text((order.creditDays || 0).toString(), colX[5] + 2, y + 2);
+          doc.text(Number(order.taxAmount || 0).toFixed(2), colX[6] + 2, y + 2);
+          doc.text(Number(order.totalAmount || 0).toFixed(2), colX[7] + 2, y + 2);
           
           const status = getDerivedStatus(order);
           // Status color coding

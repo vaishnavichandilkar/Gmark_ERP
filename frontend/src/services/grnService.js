@@ -1,15 +1,31 @@
 import axiosInstance from './axiosInstance';
 
 const grnService = {
+  getSuppliers: async () => {
+    const response = await axiosInstance.get('/grn/suppliers');
+    return response.data;
+  },
+
+  getSupplierPOs: async (supplierName) => {
+    const response = await axiosInstance.get(`/grn/supplier-pos?supplierName=${supplierName}`);
+    return response.data;
+  },
+
+  getSupplierChallans: async (supplierName) => {
+    const response = await axiosInstance.get(`/grn/supplier-challans?supplierName=${encodeURIComponent(supplierName)}`);
+    return response.data;
+  },
+
   createGRN: async (data, file) => {
     const formData = new FormData();
     Object.keys(data).forEach(key => {
-      if (key === 'items') {
-        formData.append('items', JSON.stringify(data.items));
-      } else if (data[key] !== undefined) {
+      if (['items', 'accounts', 'accountSummary'].includes(key)) {
+        formData.append(key, JSON.stringify(data[key]));
+      } else if (data[key] !== undefined && data[key] !== null) {
         formData.append(key, data[key]);
       }
     });
+
     if (file) {
       formData.append('file', file);
     }
@@ -25,12 +41,13 @@ const grnService = {
   updateGRN: async (id, data, file) => {
     const formData = new FormData();
     Object.keys(data).forEach(key => {
-      if (key === 'items') {
-        formData.append('items', JSON.stringify(data.items));
-      } else if (data[key] !== undefined) {
+      if (['items', 'accounts', 'accountSummary'].includes(key)) {
+        formData.append(key, JSON.stringify(data[key]));
+      } else if (data[key] !== undefined && data[key] !== null) {
         formData.append(key, data[key]);
       }
     });
+
     if (file) {
       formData.append('file', file);
     }
@@ -62,7 +79,7 @@ const grnService = {
     const response = await axiosInstance.get(`/grn/export?format=${format}&search=${search}`, {
       responseType: 'blob',
     });
-    return response.data;
+    return response;
   },
 
   printGRN: async (id) => {

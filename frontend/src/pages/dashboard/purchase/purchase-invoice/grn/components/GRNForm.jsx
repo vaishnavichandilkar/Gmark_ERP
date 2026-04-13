@@ -2,14 +2,17 @@ import React, { useState, useMemo } from 'react';
 import { ChevronDown, Calendar, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from "@/constants/routes";
+import GRNMultiSelect from './GRNMultiSelect';
 
 const GRNForm = ({
     formData,
     setFormData,
     handleSupplierChange,
     handlePOChange,
+    handleChallanChange,
     suppliers,
     pos,
+    challans = [],
     errors,
     bookingDateRef,
     challanDateRef,
@@ -17,10 +20,15 @@ const GRNForm = ({
 }) => {
     const isGRN = type === 'GRN';
     const numLabel = isGRN ? 'Challan' : 'Invoice';
-    const dateLabel = isGRN ? 'Challan' : 'Invoice';
+    const dateLabel = isGRN ? 'Supplier Challan' : 'Supplier Invoice';
     const navigate = useNavigate();
+    const fieldForNumber = isGRN ? 'supplier_challan_number' : 'supplier_invoice_number';
     const [supplierSearch, setSupplierSearch] = useState(formData.supplier_name || '');
     const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
+
+    React.useEffect(() => {
+        setSupplierSearch(formData.supplier_name || '');
+    }, [formData.supplier_name]);
 
     const filteredSuppliers = useMemo(() => {
         return (suppliers || []).filter(s =>
@@ -153,7 +161,7 @@ const GRNForm = ({
 
                 {/* 5. Link Purchase Order */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Link Purchase Order</label>
+                    <label className="text-[14px] font-semibold text-[#374151]">PO Number</label>
                     <div className="relative">
                         <select
                             className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-10 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
@@ -173,12 +181,24 @@ const GRNForm = ({
                     <input
                         type="text"
                         placeholder={`Enter ${numLabel.toLowerCase()} no.`}
-                        value={formData.supplier_challan_number || ''}
-                        onChange={(e) => setFormData({ ...formData, supplier_challan_number: e.target.value })}
-                        className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all ${errors.supplier_challan_number ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                        value={formData[fieldForNumber] || ''}
+                        onChange={(e) => setFormData({ ...formData, [fieldForNumber]: e.target.value })}
+                        className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all ${errors[fieldForNumber] ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                     />
-                    {errors.supplier_challan_number && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.supplier_challan_number}</p>}
+                    {errors[fieldForNumber] && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors[fieldForNumber]}</p>}
                 </div>
+
+                {/* 6.1 Supplier Challan Number (Only for Invoice) */}
+                {type === 'Invoice' && (
+                    <div className="space-y-2 font-outfit">
+                        <label className="text-[14px] font-semibold text-[#374151]">Supplier Challan Number</label>
+                        <GRNMultiSelect 
+                            challans={challans}
+                            selectedIds={formData.grn_ids || []}
+                            onChange={(ids) => handleChallanChange(ids)}
+                        />
+                    </div>
+                )}
 
                 {/* 7. Challan Date */}
                 <div className="space-y-2">
@@ -209,7 +229,7 @@ const GRNForm = ({
 
                 {/* 8. Booking Date - Frozen current date */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Booking Date (Current Date) <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">Booking Date</label>
                     <div className="relative">
                         <input
                             type="text"

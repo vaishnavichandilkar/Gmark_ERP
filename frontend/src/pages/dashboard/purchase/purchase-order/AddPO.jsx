@@ -52,7 +52,6 @@ const AddPO = () => {
         credit_days: '',
         creation_date: getLocalToday(),
         expiry_date: '',
-        pan_number: ''
     });
 
     const [errors, setErrors] = useState({});
@@ -223,7 +222,6 @@ const AddPO = () => {
                             credit_days: poToEdit.creditDays,
                             creation_date: poToEdit.poCreationDate ? poToEdit.poCreationDate.split('T')[0] : formData.creation_date,
                             expiry_date: poToEdit.expiryDate ? poToEdit.expiryDate.split('T')[0] : '',
-                            pan_number: poToEdit.panNumber || ''
                         });
                         setSupplierSearch(poToEdit.supplierName);
                         if (poToEdit.items) {
@@ -346,7 +344,6 @@ const AddPO = () => {
                 address: details.address,
                 gst_number: details.gstNumber || '',
                 credit_days: details.creditDays || 0, // Default to 0 instead of empty string if needed
-                pan_number: details.panNumber || ''
             }));
             setSupplierSearch(details.supplierName);
         } catch (error) {
@@ -359,7 +356,6 @@ const AddPO = () => {
                 address: supplier.addressLine1 + (supplier.addressLine2 ? ', ' + supplier.addressLine2 : ''),
                 gst_number: supplier.gstNo || '',
                 credit_days: supplier.supplierCreditDays || supplier.creditDays || 0,
-                pan_number: supplier.panNo || ''
             }));
             setSupplierSearch(supplier.accountName);
         }
@@ -597,7 +593,6 @@ const AddPO = () => {
             creditDays: Number(formData.credit_days),
             address: formData.address,
             gstNo: formData.gst_number,
-            panNo: formData.pan_number,
             poNumber: formData.po_number,
             poCreationDate: toIsoDate(formData.creation_date),
             expiryDate: toIsoDate(formData.expiry_date),
