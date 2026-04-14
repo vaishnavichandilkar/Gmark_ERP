@@ -89,6 +89,39 @@ const SalesInvoice = () => {
     });
   }, []);
 
+  // Challan Mock Data
+  const challanMockData = useMemo(() => {
+    const customers = ["Shree Agro Traders", "Global Industrial", "Metro Supplies Co.", "Apex Logistics", "Zenith Manufacturing", "Dynamic Solutions", "Silverline Systems", "Organic Harvest", "Prime Distributing", "Global Connect"];
+    const statuses = ["Pending", "Completed", "Expiring Soon", "Expired", "Deleted"];
+    
+    return Array.from({ length: 52 }, (_, i) => {
+      const id = i + 1;
+      const customer = customers[i % customers.length];
+      const status = statuses[i % statuses.length];
+      const baseAmt = 1000 + (i * 150);
+      const taxAmt = baseAmt * 0.18;
+      
+      const day = String((i % 28) + 1).padStart(2, '0');
+      const month = String((i % 3) + 1).padStart(2, '0');
+      
+      return {
+        id: `CH-${id}`,
+        challanNo: `INV-${String(id).padStart(4, '0')}`,
+        customerName: customer,
+        customerType: customer,
+        bookingDate: `${day}-${month}-2026`,
+        challanDate: `${String(parseInt(day) + 8).padStart(2, '0')}-${month}-2026`,
+        soNo: `PO${String(id).padStart(6, '0')}`,
+        gstNo: `27${Math.random().toString(36).substring(2, 11).toUpperCase()}Z${i%9}`,
+        creditDays: ((i % 4) + 1) * 15,
+        taxableAmount: baseAmt,
+        taxAmount: taxAmt,
+        grossAmount: baseAmt + taxAmt,
+        status: status
+      };
+    });
+  }, []);
+
   // Logic: Click Outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -163,12 +196,13 @@ const SalesInvoice = () => {
     const timeStr = now.toLocaleTimeString();
 
     // Header
+    const isInvoice = activeTab === "Invoice";
     doc.setFont("helvetica", "bold");
     doc.setFontSize(24);
     doc.text("ERP", pageWidth / 2, 15, { align: "center" });
 
     doc.setFontSize(16);
-    doc.text("Sales Invoice Report", pageWidth / 2, 25, { align: "center" });
+    doc.text(isInvoice ? "Sales Invoice Report" : "Sales Challan Report", pageWidth / 2, 25, { align: "center" });
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -178,11 +212,11 @@ const SalesInvoice = () => {
 
     // Table
     const tableColumn = [
-      "Invoice No",
+      isInvoice ? "Invoice No" : "Challan No",
       "Customer Name",
       "Type",
       "Booking Date",
-      "Invoice Date",
+      isInvoice ? "Invoice Date" : "Challan Date",
       "SO No",
       "GST No",
       "Days",
@@ -193,11 +227,11 @@ const SalesInvoice = () => {
     ];
 
     const tableRows = filteredData.map((item) => [
-      item.invoiceNo,
+      isInvoice ? item.invoiceNo : item.challanNo,
       item.customerName,
       item.customerType,
       item.bookingDate,
-      item.invoiceDate,
+      isInvoice ? item.invoiceDate : item.challanDate,
       item.soNo,
       item.gstNo || "-",
       item.creditDays,
@@ -231,7 +265,7 @@ const SalesInvoice = () => {
       },
     });
 
-    doc.save("sales_invoice_report.pdf");
+    doc.save(isInvoice ? "sales_invoice_report.pdf" : "sales_challan_report.pdf");
     setIsExportOpen(false);
     toast.success("PDF exported successfully");
   };
@@ -244,17 +278,18 @@ const SalesInvoice = () => {
     const wb = XLSX.utils.book_new();
 
     // Prepare Header & Main Data
+    const isInvoice = activeTab === "Invoice";
     const data = [
       ["ERP"],
-      ["Sales Invoice Report"],
+      [isInvoice ? "Sales Invoice Report" : "Sales Challan Report"],
       [`Exported on: ${dateTimeStr}`],
       [], // Spacer
       [
-        "Invoice No",
+        isInvoice ? "Invoice No" : "Challan No",
         "Customer Name",
         "Customer Type",
         "Booking Date",
-        "Invoice Date",
+        isInvoice ? "Invoice Date" : "Challan Date",
         "SO No",
         "GST No",
         "Credit Days",
@@ -268,11 +303,11 @@ const SalesInvoice = () => {
     // Add Table Data
     filteredData.forEach((item) => {
       data.push([
-        item.invoiceNo,
+        isInvoice ? item.invoiceNo : item.challanNo,
         item.customerName,
         item.customerType,
         item.bookingDate,
-        item.invoiceDate,
+        isInvoice ? item.invoiceDate : item.challanDate,
         item.soNo,
         item.gstNo || "-",
         item.creditDays,
@@ -385,16 +420,14 @@ const SalesInvoice = () => {
       { wch: 12 }, // Status
     ];
 
-    XLSX.utils.book_append_sheet(wb, ws, "Sales Invoices");
-    XLSX.writeFile(wb, "sales_invoice_report.xlsx");
-    setIsExportOpen(false);
-    toast.success("Excel exported successfully");
+    XLSX.utils.book_append_sheet(wb, ws, isInvoice ? "Sales Invoices" : "Sales Challans");
+    XLSX.writeFile(wb, isInvoice ? "sales_invoice_report.xlsx" : "sales_challan_report.xlsx");
     setIsExportOpen(false);
     toast.success("Excel exported successfully");
   };
 
   const filteredData = useMemo(() => {
-    let data = mockData;
+    let data = activeTab === "Invoice" ? mockData : challanMockData;
 
     // Apply Status Filter
     if (appliedStatus !== "All") {
@@ -406,11 +439,11 @@ const SalesInvoice = () => {
     if (query) {
       data = data.filter((item) => {
         const searchFields = [
-          item.invoiceNo,
+          activeTab === "Invoice" ? item.invoiceNo : item.challanNo,
           item.customerName,
           item.customerType,
           item.bookingDate,
-          item.invoiceDate,
+          activeTab === "Invoice" ? item.invoiceDate : item.challanDate,
           item.soNo,
           item.gstNo,
           item.status,
@@ -427,7 +460,7 @@ const SalesInvoice = () => {
     }
 
     return data;
-  }, [searchQuery, appliedStatus]);
+  }, [searchQuery, appliedStatus, activeTab]);
 
   const totalItemsCount = filteredData.length;
   const totalPages = Math.ceil(totalItemsCount / itemsPerPage);
@@ -451,7 +484,7 @@ const SalesInvoice = () => {
 
       {/* Sub-Tabs (Invoice/Challan) */}
       <div className="flex items-center justify-center gap-16 mb-4 border-b border-[#E5E7EB]">
-        {["Invoice", "Challan"].map((tab) => (
+        {["Challan", "Invoice"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -798,12 +831,330 @@ const SalesInvoice = () => {
           </div>
         </>
       ) : (
-        /* Challan Tab - Under Development Placeholder */
-        <div className="flex items-center justify-center min-h-[400px]">
-          <p className="text-[18px] font-bold text-[#9CA3AF] uppercase tracking-widest">
-            This Page Is Under Development
-          </p>
-        </div>
+        <>
+          {/* Action Button Section - Positioned between Tabs and Table */}
+          <div className="flex justify-end items-center mb-4">
+            <button
+              onClick={() => navigate("/seller/sales/challan/add")}
+              className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 duration-200"
+            >
+              <Plus size={18} /> Add Challan
+            </button>
+          </div>
+
+          {/* Main Card - Matching SO card and font-outfit */}
+          <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden mb-8 font-outfit">
+            {/* Search & Utility Bar - Matching SO Action Bar */}
+            <div className="p-4 md:p-6 border-b border-[#F3F4F6] flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="relative flex-1 max-w-[320px]">
+                  <Search
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                    size={18}
+                  />
+                  <input
+                    type="text"
+                    placeholder={t(
+                      "common:search_by_anything",
+                      "Search By Anything...",
+                    )}
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 font-bold"
+                  />
+                  {searchQuery && (
+                    <X
+                      size={16}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer"
+                      onClick={() => setSearchQuery("")}
+                    />
+                  )}
+                </div>
+                <button
+                  onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all uppercase bg-white border-[#E5E7EB] text-[#4B5563]`}
+                >
+                  <Filter size={18} className="text-gray-400" />
+                  Filter
+                </button>
+                <button
+                  onClick={handleRefresh}
+                  className={`w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] flex items-center justify-center hover:bg-gray-50 transition-all ${isRefreshing ? "animate-spin border-[#073318]" : ""}`}
+                >
+                  <RefreshCw
+                    size={18}
+                    className={isRefreshing ? "text-[#073318]" : "text-gray-400"}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="flex items-center gap-3 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all shadow-sm active:scale-95 duration-200 uppercase"
+                >
+                  <Upload size={18} className="text-gray-400" /> Import
+                </button>
+                <div className="relative" ref={exportRef}>
+                  <button
+                    onClick={() => setIsExportOpen(!isExportOpen)}
+                    className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 uppercase"
+                  >
+                    <Download size={18} className="text-gray-400" /> Export
+                  </button>
+                  {isExportOpen && (
+                    <div className="absolute top-full right-0 mt-2 w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-50 py-2 animate-in slide-in-from-top-2 duration-200 uppercase font-bold">
+                      <button
+                        onClick={exportToPDF}
+                        className="w-full px-5 py-3 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] transition-colors"
+                      >
+                        <FileText size={18} className="text-red-500" /> PDF
+                      </button>
+                      <button
+                        onClick={exportToExcel}
+                        className="w-full px-4 py-3 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] transition-colors"
+                      >
+                        <FileSpreadsheet size={18} className="text-emerald-600" />{" "}
+                        Excel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Table - Matching SO styling (Emerald header) */}
+            <ScrollableTable>
+              <table className="w-full min-w-[1700px] border-collapse text-left font-outfit">
+                <thead>
+                  <tr className="bg-emerald-900 text-white font-bold text-[15px]">
+                    {[
+                      { label: "Challan No", key: "challanNo" },
+                      { label: "Customer Name", key: "customerName" },
+                      { label: "Customer Type", key: "customerType" },
+                      { label: "Booking Date", key: "bookingDate" },
+                      { label: "Challan Date", key: "challanDate" },
+                      { label: "SO No", key: "soNo" },
+                      { label: "GST No", key: "gstNo" },
+                      { label: "Credit Days", key: "creditDays" },
+                      { label: "Taxable Amount", key: "taxableAmount" },
+                      { label: "Tax Amount", key: "taxAmount" },
+                      { label: "Gross Amount", key: "grossAmount" },
+                      { label: "Status", key: "status" },
+                      { label: "Action", key: "action" },
+                    ].map((col) => (
+                      <th
+                        key={col.key}
+                        className="px-6 py-5 border-r border-white/10 whitespace-nowrap uppercase tracking-wider"
+                      >
+                        <div className="flex items-center gap-2">
+                          {col.label}
+                          {col.key !== "action" && (
+                            <ChevronsUpDown size={14} className="text-white/30" />
+                          )}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody
+                  className={`text-[14px] text-[#111827] ${isRefreshing ? "opacity-40" : "opacity-100"}`}
+                >
+                  {currentItems.length > 0 ? (
+                    currentItems.map((item, idx) => (
+                      <tr
+                        key={item.id}
+                        className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all group"
+                      >
+                        <td className="px-6 py-5 font-bold text-[#111827]">
+                          {item.challanNo}
+                        </td>
+                        <td className="px-6 py-5 font-bold text-[#111827]">
+                          {item.customerName}
+                        </td>
+                        <td className="px-6 py-5 font-bold text-[#6B7280]">
+                          {item.customerType}
+                        </td>
+                        <td className="px-6 py-5 font-bold text-[#4B5563]">
+                          {item.bookingDate}
+                        </td>
+                        <td className="px-6 py-5 font-bold text-[#4B5563]">
+                          {item.challanDate}
+                        </td>
+                        <td className="px-6 py-5 font-bold text-[#111827]">
+                          {item.soNo}
+                        </td>
+                        <td className="px-6 py-5 font-bold text-[#6B7280]">
+                          {item.gstNo || "-"}
+                        </td>
+                        <td className="px-6 py-5 font-bold text-[#6B7280] text-center">
+                          {item.creditDays}
+                        </td>
+                        <td className="px-6 py-5 font-bold text-[#111827]">
+                          {item.taxableAmount.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-5 font-bold text-[#111827]">
+                          {item.taxAmount.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-5 font-bold text-[#073318]">
+                          {item.grossAmount.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-5 text-center">
+                          <span
+                            className={`px-4 py-1.5 rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center ${
+                              item.status === "Deleted"
+                                ? "bg-red-50 text-red-600"
+                                : "bg-emerald-50 text-emerald-600"
+                            }`}
+                          >
+                            {item.status}
+                          </span>
+                        </td>
+                        <td
+                          className="px-6 py-5 text-center relative"
+                          ref={(el) => (dropdownRefs.current[item.id] = el)}
+                        >
+                          <button
+                            onClick={() =>
+                              setActiveDropdown(
+                                activeDropdown === item.id ? null : item.id,
+                              )
+                            }
+                            className={`p-2 rounded-lg transition-all ${
+                              activeDropdown === item.id
+                                ? "bg-[#073318] text-white"
+                                : "text-gray-400 hover:bg-gray-100"
+                            }`}
+                          >
+                            <MoreVertical size={20} />
+                          </button>
+                          {activeDropdown === item.id && (
+                            <div
+                              className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${
+                                idx >= currentItems.length - 2
+                                  ? "bottom-0"
+                                  : "top-0"
+                              }`}
+                            >
+                              <button className="w-full px-5 py-3.5 flex items-center gap-3 text-[#111827] hover:bg-[#F9FAFB] uppercase text-[12px] border-b border-gray-50">
+                                <Eye size={18} className="text-gray-400" /> View SI
+                              </button>
+                              <button className="w-full px-5 py-3.5 flex items-center gap-3 text-[#111827] hover:bg-[#F9FAFB] uppercase text-[12px]">
+                                <Eye size={18} className="text-gray-400" /> View & Edit SI
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan="13"
+                        className="px-6 py-24 text-center text-gray-400 font-bold uppercase tracking-widest bg-white"
+                      >
+                        No results found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </ScrollableTable>
+
+            {/* Pagination - Matching Master module styling exactly */}
+            <div className="px-4 sm:px-6 py-4 border-t border-[#F3F4F6] bg-white flex flex-row items-center justify-between gap-4 font-outfit">
+              {/* Left Side: Show per page */}
+              <div className="flex items-center gap-2 text-[13px] text-[#6B7280] font-medium">
+                <span className="hidden sm:inline">Show</span>
+                <div className="relative group">
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#0A3622] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
+                  >
+                    {[5, 10, 20, 50].map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={14}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#0A3622]"
+                  />
+                </div>
+                <span className="hidden sm:inline">per page</span>
+              </div>
+
+              {/* Right Side: Info + Controls grouped */}
+              <div className="flex items-center gap-3">
+                <span className="text-[#6B7280] text-[13px] font-medium whitespace-nowrap">
+                  {totalItemsCount > 0
+                    ? `${(currentPage - 1) * itemsPerPage + 1}–${Math.min(currentPage * itemsPerPage, totalItemsCount)} of ${totalItemsCount}`
+                    : "0-0 of 0"}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+                  >
+                    <ArrowLeft size={16} />
+                  </button>
+                  <div className="hidden md:flex items-center gap-1.5 px-1">
+                    {(() => {
+                      const maxVisible = 4;
+                      let startPage = 1;
+
+                      if (totalPages <= maxVisible) {
+                        startPage = 1;
+                      } else if (currentPage <= 2) {
+                        startPage = 1;
+                      } else if (currentPage >= totalPages - 1) {
+                        startPage = totalPages - 3;
+                      } else {
+                        startPage = currentPage - 1;
+                      }
+
+                      const endPage = Math.min(startPage + maxVisible - 1, totalPages);
+                      const pages = [];
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(i);
+                      }
+
+                      return pages.map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          className={`min-w-[32px] h-[32px] rounded-[8px] flex items-center justify-center transition-all text-[13px] font-bold ${
+                            currentPage === page
+                              ? "bg-[#F9FAFB] text-[#111827] shadow-sm border border-gray-100"
+                              : "text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ));
+                    })()}
+                  </div>
+                  <button
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+                  >
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
 
