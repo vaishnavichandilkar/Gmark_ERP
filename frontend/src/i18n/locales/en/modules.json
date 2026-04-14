@@ -514,5 +514,14 @@
     "invoiceDate": "Invoice Date",
     "challanDate": "Challan Date",
     "challanNo": "Challan No",
-    "soNo": "SO No"
+    "soNo": "SO No",
+    "taxableAmount": "Taxable Amount",
+    "taxAmount": "Tax Amount",
+    "grossAmount": "Gross Amount",
+    "status": "Status",
+    "action": "Action",
+    "show": "Show",
+    "perPage": "per page",
+    "paginationRange": "{{from}}-{{to}} of {{total}}",
+    "expiringSoon": "Expiring Soon"
 }

@@ -684,7 +684,7 @@ const SalesInvoice = () => {
                                 : "bg-emerald-50 text-emerald-600"
                             }`}
                           >
-                            {item.status}
+                            {t(item.status === "Expiring Soon" ? "expiringSoon" : item.status.toLowerCase(), item.status)}
                           </span>
                         </td>
                         <td
@@ -763,15 +763,15 @@ const SalesInvoice = () => {
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#0A3622]"
                   />
                 </div>
-                <span className="hidden sm:inline">per page</span>
+                <span className="hidden sm:inline">{t("perPage")}</span>
               </div>
 
               {/* Right Side: Info + Controls grouped */}
               <div className="flex items-center gap-3">
                 <span className="text-[#6B7280] text-[13px] font-medium whitespace-nowrap">
                   {totalItemsCount > 0
-                    ? `${(currentPage - 1) * itemsPerPage + 1}–${Math.min(currentPage * itemsPerPage, totalItemsCount)} of ${totalItemsCount}`
-                    : "0-0 of 0"}
+                    ? t("paginationRange", { from: (currentPage - 1) * itemsPerPage + 1, to: Math.min(currentPage * itemsPerPage, totalItemsCount), total: totalItemsCount })
+                    : t("paginationRange", { from: 0, to: 0, total: 0 })}
                 </span>
                 <div className="flex items-center gap-1">
                   <button
@@ -931,19 +931,19 @@ const SalesInvoice = () => {
                 <thead>
                   <tr className="bg-emerald-900 text-white font-bold text-[15px]">
                     {[
-                      { label: "Challan No", key: "challanNo" },
-                      { label: "Customer Name", key: "customerName" },
-                      { label: "Customer Type", key: "customerType" },
-                      { label: "Booking Date", key: "bookingDate" },
-                      { label: "Challan Date", key: "challanDate" },
-                      { label: "SO No", key: "soNo" },
-                      { label: "GST No", key: "gstNo" },
-                      { label: "Credit Days", key: "creditDays" },
-                      { label: "Taxable Amount", key: "taxableAmount" },
-                      { label: "Tax Amount", key: "taxAmount" },
-                      { label: "Gross Amount", key: "grossAmount" },
-                      { label: "Status", key: "status" },
-                      { label: "Action", key: "action" },
+                      { label: activeTab === "Invoice" ? t("invoiceNo") : t("challanNo", "Challan No"), key: "invoiceNo" },
+                      { label: t("customerName"), key: "customerName" },
+                      { label: t("customerType"), key: "customerType" },
+                      { label: t("bookingDate"), key: "bookingDate" },
+                      { label: activeTab === "Invoice" ? t("invoiceDate") : t("challanDate", "Challan Date"), key: "invoiceDate" },
+                      { label: t("soNo"), key: "soNo" },
+                      { label: t("gst_no", "GST No"), key: "gstNo" },
+                      { label: t("credit_days", "Credit Days"), key: "creditDays" },
+                      { label: t("taxableAmount", "Taxable Amount"), key: "taxableAmount" },
+                      { label: t("taxAmount", "Tax Amount"), key: "taxAmount" },
+                      { label: t("grossAmount", "Gross Amount"), key: "grossAmount" },
+                      { label: t("status", "Status"), key: "status" },
+                      { label: t("action", "Action"), key: "action" },
                     ].map((col) => (
                       <th
                         key={col.key}
@@ -1009,7 +1009,7 @@ const SalesInvoice = () => {
                                 : "bg-emerald-50 text-emerald-600"
                             }`}
                           >
-                            {item.status}
+                            {t(item.status === "Expiring Soon" ? "expiringSoon" : item.status.toLowerCase(), item.status)}
                           </span>
                         </td>
                         <td
@@ -1067,7 +1067,7 @@ const SalesInvoice = () => {
             <div className="px-4 sm:px-6 py-4 border-t border-[#F3F4F6] bg-white flex flex-row items-center justify-between gap-4 font-outfit">
               {/* Left Side: Show per page */}
               <div className="flex items-center gap-2 text-[13px] text-[#6B7280] font-medium">
-                <span className="hidden sm:inline">Show</span>
+                <span className="hidden sm:inline">{t("show")}</span>
                 <div className="relative group">
                   <select
                     value={itemsPerPage}
@@ -1095,8 +1095,8 @@ const SalesInvoice = () => {
               <div className="flex items-center gap-3">
                 <span className="text-[#6B7280] text-[13px] font-medium whitespace-nowrap">
                   {totalItemsCount > 0
-                    ? `${(currentPage - 1) * itemsPerPage + 1}–${Math.min(currentPage * itemsPerPage, totalItemsCount)} of ${totalItemsCount}`
-                    : "0-0 of 0"}
+                    ? t("paginationRange", { from: (currentPage - 1) * itemsPerPage + 1, to: Math.min(currentPage * itemsPerPage, totalItemsCount), total: totalItemsCount })
+                    : t("paginationRange", { from: 0, to: 0, total: 0 })}
                 </span>
                 <div className="flex items-center gap-1">
                   <button
