@@ -8,8 +8,8 @@ const SalesLayout = () => {
     const location = useLocation();
 
     const tabs = [
-        { name: 'Sales Order', path: '/seller/sales/order' },
-        { name: 'Sales Invoice', path: '/seller/sales/invoice' },
+        { name: t('salesOrder'), path: '/seller/sales/order' },
+        { name: t('salesInvoice'), path: '/seller/sales/invoice' },
     ];
 
     // If we are on the base /seller/sales route, redirect to the first tab (Sales Order)
@@ -28,10 +28,10 @@ const SalesLayout = () => {
             {!isDetailView && (
                 <div className="mb-0">
                     <h1 className="text-[28px] md:text-[32px] font-bold text-[#111827] mb-2 tracking-tight">
-                        Sales
+                        {t('sales')}
                     </h1>
                     <p className="text-[#6B7280] text-[15px] font-medium max-w-[800px] leading-relaxed mb-8">
-                        Create and monitor sales orders, customer invoices, and revenue tracking activities.
+                        {t('salesDescription')}
                     </p>
                 </div>
             )}

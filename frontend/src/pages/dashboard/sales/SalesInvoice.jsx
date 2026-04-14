@@ -478,7 +478,7 @@ const SalesInvoice = () => {
       {/* Title & Action Bar - Matching SO styling */}
       <div className="flex flex-col md:flex-row gap-4 mb-6 md:mb-8 justify-between items-center font-outfit uppercase">
         <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">
-          Sales Invoice
+          {t("salesInvoice")}
         </h1>
       </div>
 
@@ -494,7 +494,7 @@ const SalesInvoice = () => {
                 : "text-[#6B7280] hover:text-[#111827]"
             }`}
           >
-            {tab}
+            {t(tab.toLowerCase())}
             {activeTab === tab && (
               <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#073318] rounded-full" />
             )}
@@ -512,7 +512,7 @@ const SalesInvoice = () => {
               onClick={() => navigate("/seller/sales/invoice/add")}
               className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 duration-200"
             >
-              <Plus size={18} /> Add SI
+              <Plus size={18} /> {t("addSI")}
             </button>
           </div>
 
@@ -529,7 +529,7 @@ const SalesInvoice = () => {
                   <input
                     type="text"
                     placeholder={t(
-                      "common:search_by_anything",
+                      "searchByAnything",
                       "Search By Anything...",
                     )}
                     value={searchQuery}
@@ -570,14 +570,14 @@ const SalesInvoice = () => {
                   onClick={() => setIsImportModalOpen(true)}
                   className="flex items-center gap-3 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all shadow-sm active:scale-95 duration-200 uppercase"
                 >
-                  <Upload size={18} className="text-gray-400" /> Import
+                  <Upload size={18} className="text-gray-400" /> {t("import")}
                 </button>
                 <div className="relative" ref={exportRef}>
                   <button
                     onClick={() => setIsExportOpen(!isExportOpen)}
                     className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 uppercase"
                   >
-                    <Download size={18} className="text-gray-400" /> Export
+                    <Download size={18} className="text-gray-400" /> {t("export")}
                   </button>
                   {isExportOpen && (
                     <div className="absolute top-full right-0 mt-2 w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-50 py-2 animate-in slide-in-from-top-2 duration-200 uppercase font-bold">
@@ -606,19 +606,19 @@ const SalesInvoice = () => {
                 <thead>
                   <tr className="bg-emerald-900 text-white font-bold text-[15px]">
                     {[
-                      { label: "Invoice No", key: "invoiceNo" },
-                      { label: "Customer Name", key: "customerName" },
-                      { label: "Customer Type", key: "customerType" },
-                      { label: "Booking Date", key: "bookingDate" },
-                      { label: "Invoice Date", key: "invoiceDate" },
-                      { label: "SO No", key: "soNo" },
-                      { label: "GST No", key: "gstNo" },
-                      { label: "Credit Days", key: "creditDays" },
-                      { label: "Taxable Amount", key: "taxableAmount" },
-                      { label: "Tax Amount", key: "taxAmount" },
-                      { label: "Gross Amount", key: "grossAmount" },
-                      { label: "Status", key: "status" },
-                      { label: "Action", key: "action" },
+                      { label: activeTab === "Invoice" ? t("invoiceNo") : t("challanNo", "Challan No"), key: "invoiceNo" },
+                      { label: t("customerName"), key: "customerName" },
+                      { label: t("customerType"), key: "customerType" },
+                      { label: t("bookingDate"), key: "bookingDate" },
+                      { label: activeTab === "Invoice" ? t("invoiceDate") : t("challanDate", "Challan Date"), key: "invoiceDate" },
+                      { label: t("soNo"), key: "soNo" },
+                      { label: t("gst_no", "GST No"), key: "gstNo" },
+                      { label: t("credit_days", "Credit Days"), key: "creditDays" },
+                      { label: t("taxableAmount", "Taxable Amount"), key: "taxableAmount" },
+                      { label: t("taxAmount", "Tax Amount"), key: "taxAmount" },
+                      { label: t("grossAmount", "Gross Amount"), key: "grossAmount" },
+                      { label: t("status", "Status"), key: "status" },
+                      { label: t("action", "Action"), key: "action" },
                     ].map((col) => (
                       <th
                         key={col.key}
@@ -714,11 +714,10 @@ const SalesInvoice = () => {
                               }`}
                             >
                               <button className="w-full px-5 py-3.5 flex items-center gap-3 text-[#111827] hover:bg-[#F9FAFB] uppercase text-[12px] border-b border-gray-50">
-                                <Eye size={18} className="text-gray-400" /> View SI
+                                <Eye size={18} className="text-gray-400" /> {t("view_sales_invoice", "View SI")}
                               </button>
                               <button className="w-full px-5 py-3.5 flex items-center gap-3 text-[#111827] hover:bg-[#F9FAFB] uppercase text-[12px]">
-                                <Eye size={18} className="text-gray-400" /> View &
-                                Edit SI
+                                <Eye size={18} className="text-gray-400" /> {t("edit_sales_invoice", "Edit SI")}
                               </button>
                             </div>
                           )}
@@ -731,7 +730,7 @@ const SalesInvoice = () => {
                         colSpan="13"
                         className="px-6 py-24 text-center text-gray-400 font-bold uppercase tracking-widest bg-white"
                       >
-                        No results found
+                        {t("no_results_found", "No results found")}
                       </td>
                     </tr>
                   )}
