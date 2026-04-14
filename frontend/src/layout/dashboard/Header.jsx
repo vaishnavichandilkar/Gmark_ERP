@@ -91,10 +91,10 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
                 
                 // If it's the 'order' or 'invoice' segment under 'sales', use specific keys
                 if (key === 'order' && isSales) {
-                    key = 'sales_order';
+                    key = 'salesOrder';
                 }
                 if (key === 'invoice' && isSales) {
-                    key = 'sales_invoice';
+                    key = 'salesInvoice';
                 }
 
                 const translated = t(`modules:${key}`, { defaultValue: '' }) || t(`common:${key}`, { defaultValue: '' });
