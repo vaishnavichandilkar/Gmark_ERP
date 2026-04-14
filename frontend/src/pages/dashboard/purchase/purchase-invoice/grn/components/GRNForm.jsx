@@ -128,8 +128,8 @@ const GRNForm = ({
                         type="number"
                         placeholder="0"
                         value={formData.credit_days || ''}
-                        readOnly
-                        className={`w-full h-[48px] bg-gray-50 border rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed ${errors.credit_days ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                        onChange={(e) => setFormData(prev => ({ ...prev, credit_days: e.target.value }))}
+                        className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm ${errors.credit_days ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                     />
                     {errors.credit_days && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.credit_days}</p>}
                 </div>
@@ -141,8 +141,8 @@ const GRNForm = ({
                         type="text"
                         placeholder="Enter address"
                         value={formData.address || ''}
-                        readOnly
-                        className={`w-full h-[48px] bg-gray-50 border rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed ${errors.address ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                        onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                        className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm ${errors.address ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                     />
                     {errors.address && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.address}</p>}
                 </div>
@@ -154,8 +154,8 @@ const GRNForm = ({
                         type="text"
                         placeholder="Optional"
                         value={formData.gst_no || ''}
-                        readOnly
-                        className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed"
+                        onChange={(e) => setFormData(prev => ({ ...prev, gst_no: e.target.value }))}
+                        className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm"
                     />
                 </div>
 

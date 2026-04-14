@@ -92,7 +92,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
             productName: product.product_name,
             quantity: qty,
             rate: rate,
-            uom: product.unitSymbol || product.unit_name || 'Nos', 
+            uom: product.uom?.gst_uom || 'Nos', 
             hsnCode: product.hsn_code || '',
             taxPercent: taxPct,
             discountAmount: 0,

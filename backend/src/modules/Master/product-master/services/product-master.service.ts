@@ -64,7 +64,7 @@ export class ProductMasterService {
                     srNo: index + 1,
                     productCode: prod.product_code,
                     productName: prod.product_name,
-                    uom: prod.uom?.unit_name || '-',
+                    uom: prod.uom?.gst_uom || '-',
                     productType: prod.product_type,
                     category: prod.category?.name || '-',
                     subCategory: prod.sub_category?.name || '-',
@@ -168,7 +168,7 @@ export class ProductMasterService {
                     doc.text((index + 1).toString(), colX[0], y);
                     doc.text(prod.product_code, colX[1], y);
                     doc.text(prod.product_name, colX[2], y, { width: 110 });
-                    doc.text(prod.uom?.unit_name || '-', colX[3], y);
+                    doc.text(prod.uom?.gst_uom || '-', colX[3], y);
                     doc.text(prod.product_type, colX[4], y);
                     doc.text(prod.category?.name || '-', colX[5], y, { width: 90 });
                     doc.text(prod.sub_category?.name || '-', colX[6], y, { width: 90 });
