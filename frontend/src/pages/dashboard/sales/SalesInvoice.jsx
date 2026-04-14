@@ -741,7 +741,7 @@ const SalesInvoice = () => {
             <div className="px-4 sm:px-6 py-4 border-t border-[#F3F4F6] bg-white flex flex-row items-center justify-between gap-4 font-outfit">
               {/* Left Side: Show per page */}
               <div className="flex items-center gap-2 text-[13px] text-[#6B7280] font-medium">
-                <span className="hidden sm:inline">Show</span>
+                <span className="hidden sm:inline">{t("show")}</span>
                 <div className="relative group">
                   <select
                     value={itemsPerPage}
@@ -1319,4 +1319,5 @@ const SalesInvoice = () => {
 };
 
 export default SalesInvoice;
+
 
