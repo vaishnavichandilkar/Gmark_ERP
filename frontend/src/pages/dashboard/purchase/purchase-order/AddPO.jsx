@@ -141,7 +141,7 @@ const AddPO = () => {
                                     product_name: newProduct.product_name,
                                     quantity: 1,
                                     rate: newProduct.purchaseRate || 0,
-                                    uom: newProduct.uom?.unit_name || newProduct.uom?.gst_uom || 'NOS',
+                                    uom: newProduct.uom?.gst_uom || newProduct.uom?.unit_name || 'NOS',
                                     discount_amount: 0,
                                     discount_percent: 0,
                                     hsn: newProduct.hsn_code || '',
@@ -374,7 +374,7 @@ const AddPO = () => {
             product_name: product.product_name || product.productName || '',
             quantity: 1,
             rate: product.purchaseRate || product.purchase_rate || product.rate || 0,
-            uom: product.uom ? `${product.uom.unit_name} - ${product.uom.full_name_of_measurement}` : 'NOS',
+            uom: product.uom?.gst_uom || 'NOS',
             discount_amount: 0,
             discount_percent: 0,
             hsn: product.hsn_code || product.hsn || '',
@@ -1240,7 +1240,7 @@ const AddPO = () => {
                                                         ₹{p.purchaseRate || p.rate || 0}
                                                     </td>
                                                     <td className={`px-4 py-3 border-l border-emerald-100 text-center whitespace-nowrap ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-800 font-bold'}`}>
-                                                        {p.uom ? `${p.uom.unit_name} - ${p.uom.full_name_of_measurement}` : 'NOS'}
+                                                        {p.uom?.gst_uom || 'NOS'}
                                                     </td>
                                                     <td colSpan={2} className={`px-4 py-3 border-l border-emerald-100 text-center italic text-[11px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-400'}`}>
                                                         Select this item to continue

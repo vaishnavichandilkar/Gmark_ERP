@@ -503,8 +503,8 @@ const UnitMaster = () => {
                                         <tr key={row.id} className="group">
                                             <td className="text-gray-500 font-medium border-r border-[#F3F4F6]">{startIndex + index + 1}</td>
                                             <td className="font-bold text-[#111827] border-r border-[#F3F4F6]">{row.unit_name}</td>
-                                            <td className="text-[#6B7280] max-w-[300px] truncate border-r border-[#F3F4F6]">{row.full_name_of_measurement || '-'}</td>
-                                            <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">{t(`modules:${row.gst_uom?.toLowerCase()}`, row.gst_uom)}</td>
+                                            <td className="text-[#6B7280] max-w-[300px] truncate border-r border-[#F3F4F6] font-bold text-[#111827]">{t(`modules:${row.gst_uom?.toLowerCase()}`, row.gst_uom)}</td>
+                                            <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">{row.full_name_of_measurement || '-'}</td>
                                             <td className="border-r border-[#F3F4F6]">
                                                 <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${row.status === 'ACTIVE' ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
                                                     <span className={`w-1.5 h-1.5 rounded-full ${row.status === 'ACTIVE' ? 'bg-[#059669]' : 'bg-[#DC2626]'}`}></span>
