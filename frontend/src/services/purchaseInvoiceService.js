@@ -4,7 +4,7 @@ const purchaseInvoiceService = {
   createInvoice: async (data, file) => {
     const formData = new FormData();
     Object.keys(data).forEach(key => {
-      if (['items', 'accountSummary', 'poIds', 'challanNumbers'].includes(key)) {
+      if (['items', 'accountSummary', 'poIds', 'challanNumbers', 'expenses'].includes(key)) {
         formData.append(key, JSON.stringify(data[key]));
       } else if (data[key] !== undefined && data[key] !== null) {
         formData.append(key, data[key]);
@@ -26,7 +26,7 @@ const purchaseInvoiceService = {
   updateInvoice: async (id, data, file) => {
     const formData = new FormData();
     Object.keys(data).forEach(key => {
-      if (['items', 'accountSummary', 'poIds', 'challanNumbers'].includes(key)) {
+      if (['items', 'accountSummary', 'poIds', 'challanNumbers', 'expenses'].includes(key)) {
         formData.append(key, JSON.stringify(data[key]));
       } else if (data[key] !== undefined && data[key] !== null) {
         formData.append(key, data[key]);
@@ -50,6 +50,10 @@ const purchaseInvoiceService = {
   },
 
   getInvoice: async (id) => {
+    const response = await axiosInstance.get(`/purchase-invoices/${id}`);
+    return response.data;
+  },
+  getInvoiceById: async (id) => {
     const response = await axiosInstance.get(`/purchase-invoices/${id}`);
     return response.data;
   },

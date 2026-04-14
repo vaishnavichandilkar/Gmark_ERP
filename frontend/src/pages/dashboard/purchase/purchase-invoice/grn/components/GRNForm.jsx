@@ -128,8 +128,8 @@ const GRNForm = ({
                         type="number"
                         placeholder="0"
                         value={formData.credit_days || ''}
-                        onChange={(e) => setFormData({ ...formData, credit_days: e.target.value })}
-                        className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all ${errors.credit_days ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                        readOnly
+                        className={`w-full h-[48px] bg-gray-50 border rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed ${errors.credit_days ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                     />
                     {errors.credit_days && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.credit_days}</p>}
                 </div>
@@ -141,8 +141,8 @@ const GRNForm = ({
                         type="text"
                         placeholder="Enter address"
                         value={formData.address || ''}
-                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                        className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all ${errors.address ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                        readOnly
+                        className={`w-full h-[48px] bg-gray-50 border rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed ${errors.address ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                     />
                     {errors.address && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.address}</p>}
                 </div>
@@ -154,8 +154,8 @@ const GRNForm = ({
                         type="text"
                         placeholder="Optional"
                         value={formData.gst_no || ''}
-                        onChange={(e) => setFormData({ ...formData, gst_no: e.target.value })}
-                        className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all"
+                        readOnly
+                        className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed"
                     />
                 </div>
 

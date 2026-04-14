@@ -104,21 +104,139 @@ export class PurchaseInvoiceService {
     if (!company) throw new BadRequestException('Company detail not found for this user');
 
     // As per spec: items and accountSummary are prioritized
-    const items = createDto.items;
+    const pItems = createDto.items || createDto.products || [];
     let summary = createDto.accountSummary;
     
-    // Recalculate if summary is simplified (only totalAmount provided) or missing
-    if (!summary || (summary.materialPurchase === undefined && (summary as any).totalAmount !== undefined)) {
-        const totalAmount = (summary as any).totalAmount || items.reduce((sum, i) => sum + (i.quantity * i.rate), 0);
-        summary = {
-            materialPurchase: totalAmount,
-            cgst: 0,
-            sgst: 0,
-            igst: 0,
-            grandTotal: totalAmount
-        };
+    let totalTaxable = 0;
+    let materialTax = 0;
+    const itemsToCreate = [];
+
+    for (const i of pItems) {
+        const qty = Number(i.quantity || 0);
+        const rate = Number(i.rate || 0);
+        const discAmt = Number(i.discount || 0);
+        const befTax = (qty * rate) - discAmt;
+        const taxPct = Number(i.taxPercent || 0);
+        const taxAmt = (befTax * taxPct) / 100;
+        
+        totalTaxable += befTax;
+        materialTax += taxAmt;
+
+        itemsToCreate.push({
+            productId: i.productId ? parseInt(i.productId, 10) : null,
+            productCode: i.productCode,
+            productName: i.productName,
+            quantity: qty,
+            rate: rate,
+            uom: i.uom,
+            taxPercent: taxPct,
+            taxAmount: taxAmt,
+            amount: befTax + taxAmt,
+            beforeTaxAmount: befTax,
+            totalPoQty: i.totalPoQty || 0,
+        });
     }
-    
+
+    let expenseTotal = 0;
+    let expenseTax = 0;
+    let postGstChargeTotal = 0;
+    const expensesToCreate = [];
+
+    if (createDto.expenses) {
+        for (const exp of createDto.expenses) {
+            const amt = Number(exp.amount || 0);
+            const isPostGst = !!exp.isPostGst;
+            const tRate = Number(exp.taxRate || 0);
+            let tAmt = 0;
+            
+            if (!isPostGst) {
+                if (exp.isGstApplicable) {
+                    tAmt = (amt * tRate) / 100;
+                }
+                expenseTotal += amt;
+                expenseTax += tAmt;
+            } else {
+                // Post GST charges don't add to base or tax
+                postGstChargeTotal += amt;
+            }
+
+            expensesToCreate.push({
+                groupName: exp.groupName,
+                amount: amt,
+                taxRate: tRate,
+                taxAmount: tAmt,
+                isGstApplicable: !!exp.isGstApplicable,
+                isPostGst: isPostGst
+            });
+        }
+    }
+
+    const finalTax = materialTax + expenseTax;
+
+    // Fetch user's registered GST
+    const userGstDoc = await this.prisma.sellerDocument.findFirst({
+        where: { uploadedByUserId: userId, type: 'GST' },
+        select: { name: true }
+    });
+    const userGst = userGstDoc?.name;
+
+    const companyState = (company.state || "").trim().toLowerCase();
+    const supplierState = (supplier.state || "").trim().toLowerCase();
+    const supplierGst = gstNo;
+
+    let isGstApplicable = true;
+    let isRcm = false;
+    let isInterState = false;
+
+    const userCode = userGst ? userGst.substring(0, 2) : null;
+    const supplierCode = supplierGst ? supplierGst.substring(0, 2) : null;
+
+    if (userGst && supplierGst) {
+        // Case 1: Both have GST
+        if (/^\d{2}$/.test(userCode) && /^\d{2}$/.test(supplierCode)) {
+            isInterState = userCode !== supplierCode;
+        } else {
+            isInterState = companyState !== supplierState;
+        }
+    } else if (userGst && !supplierGst) {
+        // Case 2: Supplier NO, Buyer YES (RCM)
+        isRcm = true;
+    } else if (!userGst && supplierGst) {
+        // Case 3: Buyer NO, Supplier YES (Normal GST)
+        isInterState = companyState !== supplierState;
+    } else {
+        // Case 4: Both NO
+        isGstApplicable = false;
+    }
+
+    let cgst = 0, sgst = 0, igst = 0;
+    const effectiveTax = isGstApplicable ? finalTax : 0;
+
+    if (isGstApplicable) {
+        if (isInterState) {
+            igst = effectiveTax;
+        } else {
+            cgst = effectiveTax / 2;
+            sgst = effectiveTax / 2;
+        }
+    }
+
+    // RCM: Buyer pays tax separately. Supplier invoice doesn't include it in payable total.
+    const taxInTotal = isRcm ? 0 : effectiveTax;
+    const grandTotal = totalTaxable + expenseTotal + taxInTotal + postGstChargeTotal;
+
+    const lastPi = await this.prisma.purchaseInvoice.findFirst({
+        where: { 
+          userId, 
+          supplierName: supplier.accountName,
+          status: { not: 'DELETED' }
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { cumulativeBalance: true }
+    });
+
+    const cumulativeBalance = (lastPi?.cumulativeBalance || 0) + grandTotal;
+
     const poIds = createDto.poIds || [];
     const challanNumbers = createDto.challanNumbers || [];
 
@@ -127,10 +245,10 @@ export class PurchaseInvoiceService {
 
     const invoice = await this.prisma.purchaseInvoice.create({
       data: {
-        invoiceNumber,
-        bookingDate: new Date(createDto.bookingDate),
-        supplierInvoiceNumber: createDto.invoiceNumber,
-        supplierInvoiceDate: new Date(createDto.invoiceDate),
+        invoiceNumber: createDto.invoiceNumber || invoiceNumber,
+        bookingDate: createDto.bookingDate ? new Date(createDto.bookingDate) : new Date(),
+        supplierInvoiceNumber: createDto.supplierInvoiceNumber,
+        supplierInvoiceDate: createDto.invoiceDate ? new Date(createDto.invoiceDate) : new Date(),
         supplierId: supplier.id,
         supplierName: supplier.accountName,
         address: createDto.address,
@@ -138,46 +256,75 @@ export class PurchaseInvoiceService {
         gstNumber: createDto.gstNumber,
         poNumber: poNumberStr,
         challanNumber: grnNumberStr,
-        cgstAmount: summary.cgst,
-        sgstAmount: summary.sgst,
-        igstAmount: summary.igst,
-        taxableAmount: summary.materialPurchase,
-        grandTotal: summary.grandTotal,
+        cgstAmount: cgst,
+        sgstAmount: sgst,
+        igstAmount: igst,
+        isRcm: isRcm,
+        taxableAmount: totalTaxable,
+        grandTotal: grandTotal,
+        cumulativeBalance: cumulativeBalance,
         userId,
         uploadedFilePath: uploadedFilePath || null,
         items: {
-          create: items.map(i => ({
-            productId: parseInt(i.productId, 10),
-            productCode: i.productCode,
-            productName: i.productName,
-            quantity: i.quantity,
-            rate: i.rate,
-            uom: i.uom,
-            taxPercent: i.taxPercent,
-            taxAmount: i.taxAmount,
-            amount: i.totalAmount,
-            beforeTaxAmount: i.beforeTaxAmount,
-          }))
+          create: itemsToCreate
+        },
+        expenses: {
+          create: expensesToCreate
         }
       },
-      include: { items: true }
+      include: { items: true, expenses: true }
     });
 
     return invoice;
   }
 
 
-  async findAll() {
-    return this.prisma.purchaseInvoice.findMany({
-      include: { items: true },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findAll(query?: { search?: string, status?: string, page?: number, limit?: number, userId?: number }) {
+    const where: any = {
+      userId: query?.userId
+    };
+
+    if (query?.status && query.status !== 'all') {
+      where.status = query.status.toUpperCase();
+    }
+
+    if (query?.search) {
+      where.OR = [
+        { supplierName: { contains: query.search, mode: 'insensitive' } },
+        { invoiceNumber: { contains: query.search, mode: 'insensitive' } },
+        { supplierInvoiceNumber: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const { page = 1, limit = 10 } = query || {};
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      this.prisma.purchaseInvoice.findMany({
+        where,
+        include: { items: true, expenses: true },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.purchaseInvoice.count({ where })
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
   }
 
   async findOne(id: number) {
     const invoice = await this.prisma.purchaseInvoice.findUnique({
       where: { id },
-      include: { items: true },
+      include: { items: true, expenses: true },
     });
 
     if (!invoice) throw new NotFoundException(`Invoice ID ${id} not found`);
@@ -187,39 +334,146 @@ export class PurchaseInvoiceService {
   async update(id: number, updateDto: UpdatePurchaseInvoiceDto, uploadedFilePath?: string) {
     const existing = await this.prisma.purchaseInvoice.findUnique({
       where: { id },
-      include: { items: true },
+      include: { items: true, expenses: true },
     });
 
     if (!existing) throw new NotFoundException(`Invoice ID ${id} not found`);
 
-    let itemsPayload = updateDto.items || updateDto.products;
-    let summary = updateDto.accountSummary;
+    const company = await this.prisma.shopDetail.findUnique({
+      where: { userId: existing.userId },
+    });
 
-    // Recalculate if items changed but summary wasn't provided (e.g. from a helper)
-    if (itemsPayload && !summary) {
-        let totalBase = 0;
-        let totalTax = 0;
-        itemsPayload.forEach(i => {
-            const base = (i.quantity * i.rate) - (i.discount || 0);
-            const tax = (base * (i.taxPercent || 0)) / 100;
-            totalBase += base;
-            totalTax += tax;
-            i.baseAmount = base;
-            i.taxAmount = tax;
-            i.totalAmount = base + tax;
-        });
-        summary = {
-            materialPurchase: totalBase,
-            cgst: totalTax / 2,
-            sgst: totalTax / 2,
-            igst: 0,
-            grandTotal: totalBase + totalTax
-        };
+    if (!company) throw new BadRequestException('Company detail not found');
+
+    let pItems = updateDto.items || updateDto.products;
+    
+    let totalTaxable = 0;
+    let materialTax = 0;
+    const itemsToCreate = [];
+
+    if (pItems) {
+        for (const i of pItems) {
+            const qty = Number(i.quantity || 0);
+            const rate = Number(i.rate || 0);
+            const discAmt = Number(i.discount || 0);
+            const befTax = (qty * rate) - discAmt;
+            const taxPct = Number(i.taxPercent || 0);
+            const taxAmt = (befTax * taxPct) / 100;
+            
+            totalTaxable += befTax;
+            materialTax += taxAmt;
+
+            itemsToCreate.push({
+                productId: i.productId ? parseInt(i.productId, 10) : null,
+                productCode: i.productCode,
+                productName: i.productName,
+                quantity: qty,
+                rate: rate,
+                uom: i.uom,
+                taxPercent: taxPct,
+                taxAmount: taxAmt,
+                amount: befTax + taxAmt,
+                beforeTaxAmount: befTax,
+                totalPoQty: i.totalPoQty || 0,
+            });
+        }
+    } else {
+        totalTaxable = existing.taxableAmount;
+        // Approximation for materialTax if items not provided
+        materialTax = existing.cgstAmount + existing.sgstAmount + existing.igstAmount; 
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      if (itemsPayload) {
-        await tx.purchaseInvoiceItem.deleteMany({
+    let expenseTotal = 0;
+    let expenseTax = 0;
+    let postGstChargeTotal = 0;
+    const expensesToCreate = [];
+
+    if (updateDto.expenses) {
+        for (const exp of updateDto.expenses) {
+            const amt = Number(exp.amount || 0);
+            const tRate = Number(exp.taxRate || 0);
+            const isPostGst = !!exp.isPostGst;
+            let tAmt = 0;
+            
+            if (!isPostGst) {
+                if (exp.isGstApplicable) {
+                    tAmt = (amt * tRate) / 100;
+                }
+                expenseTotal += amt;
+                expenseTax += tAmt;
+            } else {
+                postGstChargeTotal += amt;
+            }
+
+            expensesToCreate.push({
+                groupName: exp.groupName,
+                amount: amt,
+                taxRate: tRate,
+                taxAmount: tAmt,
+                isGstApplicable: !!exp.isGstApplicable,
+                isPostGst: isPostGst
+            });
+        }
+    }
+
+    const finalTax = materialTax + expenseTax;
+    const gstNo = updateDto.gstNumber || existing.gstNumber;
+
+    // Fetch user's registered GST
+    const userGstDoc = await this.prisma.sellerDocument.findFirst({
+        where: { uploadedByUserId: existing.userId, type: 'GST' },
+        select: { name: true }
+    });
+    const userGst = userGstDoc?.name;
+
+    const companyState = (company.state || "").trim().toLowerCase();
+    
+    let isGstApplicable = true;
+    let isRcm = false;
+    let isInterState = false;
+
+    const userCode = userGst ? userGst.substring(0, 2) : null;
+    const supplierCode = gstNo ? gstNo.substring(0, 2) : null;
+
+    if (userGst && gstNo) {
+        if (/^\d{2}$/.test(userCode) && /^\d{2}$/.test(supplierCode)) {
+            isInterState = userCode !== supplierCode;
+        } else {
+            isInterState = gstNo.substring(0, 2) !== company.state.substring(0, 2);
+        }
+    } else if (userGst && !gstNo) {
+        isRcm = true;
+    } else if (!userGst && gstNo) {
+        isInterState = gstNo.substring(0, 2) !== company.state.substring(0, 2);
+    } else {
+        isGstApplicable = false;
+    }
+
+    let cgst = 0, sgst = 0, igst = 0;
+    const effectiveTax = isGstApplicable ? finalTax : 0;
+
+    if (isGstApplicable) {
+        if (isInterState) {
+            igst = effectiveTax;
+        } else {
+            cgst = effectiveTax / 2;
+            sgst = effectiveTax / 2;
+        }
+    }
+
+    const taxInTotal = isRcm ? 0 : effectiveTax;
+    const grandTotal = totalTaxable + expenseTotal + taxInTotal + postGstChargeTotal;
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        if (pItems) {
+          await tx.purchaseInvoiceItem.deleteMany({
+            where: { purchaseInvoiceId: id },
+          });
+        }
+
+      if (updateDto.expenses) {
+        await tx.purchaseInvoiceExpense.deleteMany({
           where: { purchaseInvoiceId: id },
         });
       }
@@ -227,7 +481,8 @@ export class PurchaseInvoiceService {
       const updated = await tx.purchaseInvoice.update({
         where: { id },
         data: {
-          supplierInvoiceNumber: updateDto.invoiceNumber ?? existing.supplierInvoiceNumber,
+          invoiceNumber: updateDto.invoiceNumber ?? existing.invoiceNumber,
+          supplierInvoiceNumber: updateDto.supplierInvoiceNumber ?? existing.supplierInvoiceNumber,
           supplierInvoiceDate: updateDto.invoiceDate ? new Date(updateDto.invoiceDate) : existing.supplierInvoiceDate,
           bookingDate: updateDto.bookingDate ? new Date(updateDto.bookingDate) : existing.bookingDate,
           supplierName: updateDto.supplierName ?? existing.supplierName,
@@ -237,31 +492,28 @@ export class PurchaseInvoiceService {
           creditDays: updateDto.creditDays ?? existing.creditDays,
           status: (updateDto.status as any) ?? existing.status,
           uploadedFilePath: uploadedFilePath || existing.uploadedFilePath,
-          taxableAmount: summary?.materialPurchase ?? existing.taxableAmount,
-          cgstAmount: summary?.cgst ?? existing.cgstAmount,
-          sgstAmount: summary?.sgst ?? existing.sgstAmount,
-          igstAmount: summary?.igst ?? existing.igstAmount,
-          grandTotal: summary?.grandTotal ?? existing.grandTotal,
-          items: itemsPayload ? {
-            create: itemsPayload.map(i => ({
-              productId: parseInt(i.productId, 10),
-              productCode: i.productCode,
-              productName: i.productName,
-              quantity: i.quantity,
-              rate: i.rate,
-              uom: i.uom,
-              taxPercent: i.taxPercent,
-              taxAmount: i.taxAmount,
-              amount: i.totalAmount,
-              beforeTaxAmount: i.beforeTaxAmount,
-            }))
+          taxableAmount: totalTaxable,
+          cgstAmount: cgst,
+          sgstAmount: sgst,
+          igstAmount: igst,
+          isRcm: isRcm,
+          grandTotal: grandTotal,
+          items: pItems ? {
+            create: itemsToCreate
+          } : undefined,
+          expenses: updateDto.expenses ? {
+            create: expensesToCreate
           } : undefined,
         },
-        include: { items: true },
+        include: { items: true, expenses: true },
       });
 
-      return updated;
-    });
+        return updated;
+      });
+    } catch (error) {
+        console.error("Error in updatePurchaseInvoice:", error);
+        throw new BadRequestException("Failed to update Purchase Invoice: " + error.message);
+    }
   }
 
   private numberToWords(num: number): string {
@@ -637,8 +889,9 @@ export class PurchaseInvoiceService {
         });
       }
 
-      return tx.purchaseInvoice.delete({
+      return tx.purchaseInvoice.update({
         where: { id },
+        data: { status: 'DELETED' }
       });
     });
   }

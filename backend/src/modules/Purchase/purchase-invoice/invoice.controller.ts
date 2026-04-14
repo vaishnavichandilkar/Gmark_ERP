@@ -40,22 +40,24 @@ export class PurchaseInvoiceController {
   @UseInterceptors(FileInterceptor('file', multerConfig))
   async create(
     @UploadedFile() file: Express.Multer.File,
-    @Body() dto: CreatePurchaseInvoiceDto,
+    @Body() body: any,
     @Request() req
   ) {
     // Parse JSON strings from multipart/form-data
-    const items = typeof dto.items === 'string' ? JSON.parse(dto.items as any) : dto.items;
-    const accountSummary = typeof dto.accountSummary === 'string' ? JSON.parse(dto.accountSummary as any) : dto.accountSummary;
-    const poIds = typeof dto.poIds === 'string' ? JSON.parse(dto.poIds as any) : dto.poIds;
-    const challanNumbers = typeof dto.challanNumbers === 'string' ? JSON.parse(dto.challanNumbers as any) : dto.challanNumbers;
+    const items = typeof body.items === 'string' ? JSON.parse(body.items as any) : body.items;
+    const accountSummary = typeof body.accountSummary === 'string' ? JSON.parse(body.accountSummary as any) : body.accountSummary;
+    const poIds = typeof body.poIds === 'string' ? JSON.parse(body.poIds as any) : body.poIds;
+    const challanNumbers = typeof body.challanNumbers === 'string' ? JSON.parse(body.challanNumbers as any) : body.challanNumbers;
+    const expenses = typeof body.expenses === 'string' ? JSON.parse(body.expenses) : body.expenses;
 
     const parsedDto: CreatePurchaseInvoiceDto = {
-      ...dto,
+      ...body,
       items,
       accountSummary,
       poIds,
       challanNumbers,
-      creditDays: dto.creditDays ? parseInt(dto.creditDays as any, 10) : 0,
+      expenses,
+      creditDays: body.creditDays ? parseInt(body.creditDays as any, 10) : 0,
     };
 
     return this.service.create(parsedDto, req.user.id, file?.path);
@@ -63,8 +65,8 @@ export class PurchaseInvoiceController {
 
   @Get()
   @ApiOperation({ summary: 'Get all Purchase Invoices' })
-  async findAll() {
-    return this.service.findAll();
+  async findAll(@Query() query: any, @Request() req) {
+    return this.service.findAll({ ...query, userId: req.user.id });
   }
 
   @Get('sample-excel')
@@ -169,15 +171,20 @@ export class PurchaseInvoiceController {
     @Body() body: any,
     @Request() req
   ) {
-    let items;
-    if (body.items) {
-      items = typeof body.items === 'string' ? JSON.parse(body.items) : body.items;
-    }
+    const items = body.items ? (typeof body.items === 'string' ? JSON.parse(body.items) : body.items) : undefined;
+    const expenses = body.expenses ? (typeof body.expenses === 'string' ? JSON.parse(body.expenses) : body.expenses) : undefined;
+    const accountSummary = body.accountSummary ? (typeof body.accountSummary === 'string' ? JSON.parse(body.accountSummary) : body.accountSummary) : undefined;
+    const poIds = body.poIds ? (typeof body.poIds === 'string' ? JSON.parse(body.poIds) : body.poIds) : undefined;
+    const challanNumbers = body.challanNumbers ? (typeof body.challanNumbers === 'string' ? JSON.parse(body.challanNumbers) : body.challanNumbers) : undefined;
 
     const updateDto: UpdatePurchaseInvoiceDto = {
       ...body,
-      items: items,
-      creditDays: body.creditDays ? parseInt(body.creditDays, 10) : undefined,
+      items,
+      expenses,
+      accountSummary,
+      poIds,
+      challanNumbers,
+      creditDays: (body.creditDays !== undefined && body.creditDays !== null && body.creditDays !== '') ? parseInt(body.creditDays, 10) : undefined,
       poId: body.poId ? parseInt(body.poId, 10) : undefined,
     };
 

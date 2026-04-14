@@ -558,9 +558,11 @@ model PurchaseInvoice {
   updatedAt             DateTime              @updatedAt
   gstNumber             String?
   igstAmount            Float                 @default(0)
+  isRcm                 Boolean               @default(false)
   supplierId            Int?
   taxableAmount         Float                 @default(0)
   items                 PurchaseInvoiceItem[]
+  expenses              PurchaseInvoiceExpense[]
   purchaseOrder         PurchaseOrder?        @relation(fields: [poId], references: [id])
   user                  User                  @relation(fields: [userId], references: [id])
 
@@ -577,6 +579,7 @@ model PurchaseInvoiceItem {
   uom               String
   amount            Float           @default(0)
   beforeTaxAmount   Float           @default(0)
+  totalPoQty       Float           @default(0)
   productId         Int
   taxAmount         Float           @default(0)
   taxPercent        Float           @default(0)
@@ -612,8 +615,11 @@ model Grn {
  
   status            GrnStatus      @default(GENERATED)
   igstAmount        Float          @default(0)
+  isInterState      Boolean        @default(false)
  
   items             GrnItem[]
+  expenses          GrnExpense[]
+  isRcm             Boolean        @default(false)
   purchaseOrder     PurchaseOrder? @relation(fields: [poId], references: [id])
   user              User           @relation(fields: [userId], references: [id])
 
@@ -626,15 +632,15 @@ model GrnItem {
   productId        Int?
   productCode      String
   productName      String
-totalPoQty       Float
-receivedPoQty    Float
-receivedQty      Float
-remainingQty     Float
-rate             Float
- uom              String
- discountAmount   Float  @default(0)
+  totalPoQty       Float
+  receivedPoQty    Float
+  receivedQty      Float
+  remainingQty     Float
+  rate             Float
+  uom              String
+  discountAmount   Float  @default(0)
   discountPercent  Float  @default(0)
-   hsnCode          String?
+  hsnCode          String?
   taxPercent       Float  @default(0)
   beforeTaxAmount  Float  @default(0)
   taxAmount        Float  @default(0)
@@ -644,6 +650,34 @@ rate             Float
   grn              Grn    @relation(fields: [grnId], references: [id], onDelete: Cascade)
 
   @@map("grn_items")
+}
+
+model PurchaseInvoiceExpense {
+  id                Int             @id @default(autoincrement())
+  purchaseInvoiceId Int
+  groupName         String
+  amount            Float
+  taxRate           Float           @default(0)
+  taxAmount         Float           @default(0)
+  isGstApplicable   Boolean         @default(false)
+  isPostGst         Boolean         @default(false)
+  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_invoice_expenses")
+}
+
+model GrnExpense {
+  id              Int      @id @default(autoincrement())
+  grnId           Int
+  groupName       String
+  amount          Float
+  taxRate         Float           @default(0)
+  taxAmount       Float           @default(0)
+  isGstApplicable Boolean         @default(false)
+  isPostGst       Boolean         @default(false)
+  grn             Grn      @relation(fields: [grnId], references: [id], onDelete: Cascade)
+
+  @@map("grn_expenses")
 }
 
 enum AdminStatus {

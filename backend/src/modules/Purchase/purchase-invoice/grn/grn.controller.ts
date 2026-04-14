@@ -38,6 +38,20 @@ export class GrnController {
     return this.grnService.getSupplierChallans(supplierName, req.user.id);
   }
 
+  @Get('product-received-qty')
+  @ApiOperation({ summary: 'Get total received quantity for a product under a supplier' })
+  @ApiQuery({ name: 'supplierName', required: true, type: String })
+  @ApiQuery({ name: 'productCode', required: true, type: String })
+  @ApiQuery({ name: 'poNumber', required: false, type: String })
+  async getReceivedQty(
+    @Query('supplierName') supplierName: string,
+    @Query('productCode') productCode: string,
+    @Query('poNumber') poNumber: string,
+    @Request() req
+  ) {
+    return this.grnService.getReceivedQty(supplierName, productCode, req.user.id, poNumber);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Create a new GRN' })
   @ApiConsumes('multipart/form-data')
@@ -46,13 +60,13 @@ export class GrnController {
   async create(@UploadedFile() file: any, @Body() body: any, @Request() req) {
     // Manual parsing for multipart/form-data strings
     const items = typeof body.items === 'string' ? JSON.parse(body.items) : body.items;
-    const accounts = typeof body.accounts === 'string' ? JSON.parse(body.accounts) : body.accounts;
+    const expenses = typeof body.expenses === 'string' ? JSON.parse(body.expenses) : body.expenses;
     const accountSummary = typeof body.accountSummary === 'string' ? JSON.parse(body.accountSummary) : body.accountSummary;
 
     const createDto: CreateGrnDto = {
       ...body,
       items,
-      accounts,
+      expenses,
       accountSummary,
       creditDays: body.creditDays ? parseInt(body.creditDays, 10) : 0,
       poId: body.poId ? parseInt(body.poId, 10) : undefined,
@@ -66,8 +80,11 @@ export class GrnController {
   @ApiOperation({ summary: 'Get all Goods Receipt Notes' })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'supplierId', required: false })
-  async findAll(@Request() req, @Query('search') search?: string, @Query('supplierId') supplierId?: string) {
-    return this.grnService.findAll({ search, supplierId, userId: req.user.id });
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  async findAll(@Query() query: any, @Request() req) {
+    return this.grnService.findAll({ ...query, userId: req.user.id });
   }
 
   @Get('export')
@@ -97,13 +114,13 @@ export class GrnController {
     @Body() body: any,
   ) {
     const items = body.items ? (typeof body.items === 'string' ? JSON.parse(body.items) : body.items) : undefined;
-    const accounts = body.accounts ? (typeof body.accounts === 'string' ? JSON.parse(body.accounts) : body.accounts) : undefined;
+    const expenses = body.expenses ? (typeof body.expenses === 'string' ? JSON.parse(body.expenses) : body.expenses) : undefined;
     const accountSummary = body.accountSummary ? (typeof body.accountSummary === 'string' ? JSON.parse(body.accountSummary) : body.accountSummary) : undefined;
 
     const updateDto: UpdateGrnDto = {
       ...body,
       items,
-      accounts,
+      expenses,
       accountSummary,
       creditDays: (body.creditDays !== undefined && body.creditDays !== null && body.creditDays !== '') ? parseInt(body.creditDays, 10) : undefined,
       poId: body.poId ? parseInt(body.poId, 10) : undefined,

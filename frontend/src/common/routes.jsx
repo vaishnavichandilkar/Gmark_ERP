@@ -31,6 +31,7 @@ import POPrintPreview from '../pages/dashboard/purchase/purchase-order/POPrintPr
 
 import PurchaseInvoice from '../pages/dashboard/purchase/purchase-invoice/invoice/PurchaseInvoice';
 import AddPurchaseInvoice from '../pages/dashboard/purchase/purchase-invoice/invoice/AddPurchaseInvoice';
+import ViewPurchaseInvoice from '../pages/dashboard/purchase/purchase-invoice/invoice/ViewPurchaseInvoice';
 import PurchaseInvoicePrintPreview from '../pages/dashboard/purchase/purchase-invoice/invoice/PurchaseInvoicePrintPreview';
 
 import GRN from '../pages/dashboard/purchase/purchase-invoice/grn/GRN';
@@ -296,7 +297,7 @@ export const router = createBrowserRouter([
                                             },
                                             {
                                                 path: 'view/:id',
-                                                element: <PurchaseInvoice />
+                                                element: <ViewPurchaseInvoice />
                                             },
                                             {
                                                 path: 'print',
