@@ -213,12 +213,14 @@ const PurchaseInvoice = ({ defaultTab }) => {
             const taxableAmount = parseFloat(item.taxableAmount) || 0;
             const grossAmount = parseFloat(item.grandTotal) || 0;
             const taxAmount = grossAmount - taxableAmount;
-            const status = item.status === 'DELETED' ? 'Deleted' : 'Generated';
+            const itemStatus = (item.status || "").toUpperCase();
+            const statusLabel = itemStatus === 'DELETED' ? 'Deleted' : 'Generated';
             
             return {
                 ...item,
                 supplierName: item.supplierName || "-",
-                invoiceNo: item.invoiceNumber || "-",
+                internalNo: item.invoiceNumber || "-",
+                invoiceNo: item.supplierInvoiceNumber || "-",
                 invoiceDate: item.supplierInvoiceDate ? item.supplierInvoiceDate.split('T')[0] : "-",
                 bookingDate: item.bookingDate ? item.bookingDate.split('T')[0] : "-",
                 poNo: item.poNumber || "-",
@@ -227,8 +229,8 @@ const PurchaseInvoice = ({ defaultTab }) => {
                 taxableAmount: taxableAmount.toFixed(2),
                 taxAmount: taxAmount.toFixed(2),
                 grossAmount: grossAmount.toFixed(2),
-                status,
-                bgClass: status === 'Generated' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
+                status: statusLabel,
+                bgClass: statusLabel === 'Generated' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
             };
         });
     }, [invoices]);
@@ -391,14 +393,9 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                                         <Eye size={18} /> {row.status === 'Generated' ? 'View and Edit Invoice' : 'View Invoice'}
                                                     </button>
                                                     {row.status === 'Generated' && (
-                                                        <>
-                                                            <button onClick={() => navigate(`edit/${row.id}`)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50">
-                                                                <FileEdit size={18} /> Edit
-                                                            </button>
-                                                            <button onClick={() => handleDeleteClick(row.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50">
-                                                                <Trash2 size={18} /> Delete
-                                                            </button>
-                                                        </>
+                                                        <button onClick={() => handleDeleteClick(row.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50">
+                                                            <Trash2 size={18} /> Delete
+                                                        </button>
                                                     )}
                                                 </div>
                                             )}

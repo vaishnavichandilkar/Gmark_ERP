@@ -59,8 +59,14 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
         );
 
         if (pathSegments.length > 0) {
-            const formattedSegments = pathSegments.map((segment, index) => {
+            const formattedSegments = [];
+            pathSegments.forEach((segment, index) => {
                 const isSales = pathSegments[0] === 'sales';
+                
+                // Inject 'Purchase Invoice' if we are in GRN and it's not already there
+                if (segment === 'grn' && pathSegments[0] === 'purchase' && !pathSegments.includes('invoice')) {
+                    formattedSegments.push(t('modules:purchase_invoice'));
+                }
 
                 // Special handling for 'add' and 'edit' segments to show verbose labels
                 if (segment === 'add' || segment === 'edit' || segment === 'view') {
@@ -70,7 +76,6 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
                         if (parentKey === 'category') parentKey = 'category_master';
                         
                         const action = segment === 'add' ? 'add' : (segment === 'edit' ? 'edit' : 'view');
-                        // Map entity names (e.g., group_master -> group, order -> po/order)
                         let entity = parentKey.replace('_master', '');
                         
                         if (entity === 'order') {
@@ -82,24 +87,25 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
                         
                         const verboseKey = `${action}_${entity}`;
                         const translated = t(`modules:${verboseKey}`, { defaultValue: '' });
-                        if (translated) return translated;
+                        if (translated) {
+                            formattedSegments.push(translated);
+                            return;
+                        }
                     }
                 }
 
                 let key = segment.replace(/-/g, '_');
                 if (key === 'category') key = 'category_master';
                 
-                // If it's the 'order' or 'invoice' segment under 'sales', use specific keys
                 if (key === 'order' && isSales) {
                     key = 'salesOrder';
                 }
-                if (key === 'invoice' && isSales) {
-                    key = 'salesInvoice';
+                if (key === 'invoice') {
+                    key = isSales ? 'sales_invoice' : 'purchase_invoice';
                 }
 
                 const translated = t(`modules:${key}`, { defaultValue: '' }) || t(`common:${key}`, { defaultValue: '' });
-                if (translated) return translated;
-                return segment.split(/[_-]/).map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+                formattedSegments.push(translated || segment.split(/[_-]/).map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' '));
             });
 
             breadcrumbElements = formattedSegments.map((segment, index) => {

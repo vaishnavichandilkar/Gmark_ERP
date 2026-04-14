@@ -55,13 +55,22 @@ export class GrnProductDto {
 
 export class GrnAccountDto {
   @ApiProperty()
-  accountName: string;
+  groupName: string;
 
   @ApiProperty()
   amount: number;
 
   @ApiPropertyOptional()
-  cumulativeBalance?: number;
+  taxRate?: number;
+
+  @ApiPropertyOptional()
+  taxAmount?: number;
+
+  @ApiPropertyOptional()
+  isGstApplicable?: boolean;
+
+  @ApiPropertyOptional()
+  isPostGst?: boolean;
 }
 
 export class GrnAccountSummaryDto {
@@ -122,7 +131,7 @@ export class CreateGrnDto {
   items: GrnProductDto[];
 
   @ApiPropertyOptional({ type: [GrnAccountDto] })
-  accounts?: GrnAccountDto[];
+  expenses?: GrnAccountDto[];
 
   @ApiPropertyOptional({ type: GrnAccountSummaryDto })
   accountSummary?: GrnAccountSummaryDto;
@@ -160,7 +169,7 @@ export class UpdateGrnDto {
   items?: GrnProductDto[];
 
   @ApiPropertyOptional({ type: [GrnAccountDto] })
-  accounts?: GrnAccountDto[];
+  expenses?: GrnAccountDto[];
 
   @ApiPropertyOptional({ type: GrnAccountSummaryDto })
   accountSummary?: GrnAccountSummaryDto;

@@ -65,6 +65,8 @@ const AddGRN = () => {
         }
     ]);
 
+    const [expenses, setExpenses] = useState([]);
+
     const [errors, setErrors] = useState({});
     const [companyInfo, setCompanyInfo] = useState(null);
     const [gstType, setGstType] = useState({ type: 'NONE' });
@@ -81,7 +83,10 @@ const AddGRN = () => {
                 
                 setSuppliers(suppRes || []);
                 setProducts(prodRes.products || []);
-                setCompanyInfo(profileRes?.shopDetail || null);
+                setCompanyInfo({
+                    ...profileRes?.shopDetail,
+                    gstNumber: profileRes?.gstNumber
+                });
 
                 if (isEditMode) {
                     const grn = await grnService.getGRNById(id);
@@ -109,10 +114,10 @@ const AddGRN = () => {
                     setGstType(type);
 
                     setItems(grn.items.map(item => {
-                        const qty = item.quantity || 0;
+                        const qty = item.receivedQty || item.quantity || 0;
                         const rate = item.rate || 0;
                         const taxPct = item.taxPercent || 18;
-                        const discAmt = item.discountAmount || 0;
+                        const discAmt = item.discountAmount || item.discountAmt || 0;
                         const discPct = item.discountPercent || 0;
                         const befTax = (qty * rate) - discAmt;
                         const taxAmt = (befTax * taxPct) / 100;
@@ -137,6 +142,14 @@ const AddGRN = () => {
                             remainingQty: (item.totalPoQty || 0) - (item.receivedPoQty || 0) - qty
                         };
                     }));
+
+                    setExpenses(grn.expenses?.map(e => ({
+                        id: e.id,
+                        groupName: e.groupName,
+                        amount: e.amount,
+                        isGstApplicable: e.isGstApplicable,
+                        taxRate: e.taxRate
+                    })) || []);
                 }
             } catch (error) {
                 console.error("Error fetching setup data:", error);
@@ -174,19 +187,45 @@ const AddGRN = () => {
     };
 
     const calculateGST = (supplierGST, supplierState) => {
-        if (!supplierGST) {
-            return { type: 'NONE' };
-        }
-        if (supplierState === companyInfo?.state) {
-            return { type: 'INTRA' };
+        const userGst = companyInfo?.gstNumber;
+        const userState = (companyInfo?.state || "").trim().toLowerCase();
+        const suppState = (supplierState || "").trim().toLowerCase();
+
+        const userCode = userGst ? userGst.substring(0, 2) : null;
+        const supplierCode = supplierGST ? supplierGST.substring(0, 2) : null;
+
+        if (userGst && supplierGST) {
+            // Case 1: Both have GST
+            let isInterState = false;
+            if (/^\d{2}$/.test(userCode) && /^\d{2}$/.test(supplierCode)) {
+                isInterState = userCode !== supplierCode;
+            } else {
+                isInterState = userState !== suppState;
+            }
+            return { type: isInterState ? 'INTER' : 'INTRA', applicable: true, isRcm: false };
+        } else if (userGst && !supplierGST) {
+            // Case 2: Supplier NO, Buyer YES (RCM)
+            return { type: 'NONE', applicable: true, isRcm: true };
+        } else if (!userGst && supplierGST) {
+            // Case 3: Buyer NO, Supplier YES (Normal GST)
+            const isInterState = userState !== suppState;
+            return { type: isInterState ? 'INTER' : 'INTRA', applicable: true, isRcm: false };
         } else {
-            return { type: 'INTER' };
+            // Case 4: Both NO
+            return { type: 'NONE', applicable: false, isRcm: false };
         }
     };
 
     const handlePOChange = async (poId) => {
         if (!poId) {
             setFormData(prev => ({ ...prev, po_id: '', po_number: '' }));
+            const resetItems = items.map(item => ({
+                ...item,
+                totalPoQty: 0,
+                receivedPoQty: 0,
+                remainingQty: 0
+            }));
+            setItems(resetItems);
             return;
         }
 
@@ -197,20 +236,30 @@ const AddGRN = () => {
             const poDetails = await purchaseOrderService.getPurchaseOrderById(poId);
             setFormData(prev => ({ ...prev, po_id: poDetails.id, po_number: poDetails.poNumber }));
 
-            const gstType = calculateGST(formData.gst_no || poDetails.gstNumber, formData.supplier_state);
-
-            const poItems = poDetails.items.map(item => {
+            const poItems = await Promise.all(poDetails.items.map(async (item) => {
                 const qty = item.quantity || 0;
                 const rate = item.rate || 0;
                 const taxPct = item.taxPercent || 0;
-                const remaining = (item.quantity || 0) - (item.receivedQty || 0);
                 const discAmt = item.discountAmount || 0;
                 const discPct = item.discountPercent || 0;
-                const baseAmount = remaining * rate;
+                
+                // Fetch received count for this product & supplier from GRN history
+                let receivedCount = item.receivedQty || 0;
+                try {
+                   const history = await grnService.getReceivedQty(formData.supplier_name, item.productCode || item.product_code, selectedPO.poNumber);
+                   receivedCount = history.receivedPoQty;
+                } catch (e) {
+                   console.error("Failed to fetch received history", e);
+                }
+
+                const remainingInPO = qty - receivedCount;
+                const effectiveQty = remainingInPO > 0 ? remainingInPO : 0;
+                const baseAmount = effectiveQty * rate;
                 const befTax = baseAmount - discAmt;
                 
+                const type = calculateGST(formData.gst_no || poDetails.gstNumber, formData.supplier_state);
                 let taxAmt = 0;
-                if (gstType.type !== 'NONE') {
+                if (type.type !== 'NONE') {
                     taxAmt = (befTax * taxPct) / 100;
                 }
 
@@ -219,7 +268,7 @@ const AddGRN = () => {
                     productId: item.productId || item.product_id,
                     productCode: item.productCode || item.product_code,
                     productName: item.productName || item.product_name,
-                    quantity: remaining, 
+                    quantity: effectiveQty, 
                     rate: rate,
                     uom: item.uom,
                     discountAmount: discAmt,
@@ -230,11 +279,11 @@ const AddGRN = () => {
                     taxAmount: taxAmt,
                     totalAmount: befTax + taxAmt,
                     printDescription: item.printDescription || item.productName,
-                    totalPoQty: item.quantity,
-                    receivedPoQty: item.receivedQty || 0,
-                    remainingQty: 0
+                    totalPoQty: qty,
+                    receivedPoQty: receivedCount,
+                    remainingQty: 0 // Will be calc in table
                 };
-            });
+            }));
             setItems(poItems);
         } catch (error) {
             console.error("Error fetching PO details:", error);
@@ -280,24 +329,56 @@ const AddGRN = () => {
         setIsSaving(true);
         try {
             const validItems = items.filter(i => i.productCode);
-            const gstType = calculateGST(formData.gst_no, formData.supplier_state);
+            const gstResult = calculateGST(formData.gst_no, formData.supplier_state);
             
             let materialTotal = 0;
-            let cgst = 0, sgst = 0, igst = 0;
+            let materialTax = 0;
 
             validItems.forEach(p => {
-                const base = (parseFloat(p.quantity) || 0) * (parseFloat(p.rate) || 0);
-                const discount = (parseFloat(p.discountAmount) || 0);
-                const befTax = base - discount;
+                const qty = parseFloat(p.quantity) || 0;
+                const rate = parseFloat(p.rate) || 0;
+                const discAmt = parseFloat(p.discountAmount) || 0;
+                const befTax = (qty * rate) - discAmt;
+                const taxPct = parseFloat(p.taxPercent) || 0;
                 materialTotal += befTax;
-
-                if (gstType.type === 'INTRA') {
-                    cgst += befTax * (parseFloat(p.taxPercent) || 0) / 200;
-                    sgst += befTax * (parseFloat(p.taxPercent) || 0) / 200;
-                } else if (gstType.type === 'INTER') {
-                    igst += befTax * (parseFloat(p.taxPercent) || 0) / 100;
-                }
+                materialTax += (befTax * taxPct) / 100;
             });
+
+            let expenseTotal = 0;
+            let expenseTax = 0;
+            const expenseData = expenses.filter(e => e.groupName && e.amount > 0).map(e => {
+                const amt = parseFloat(e.amount) || 0;
+                const taxRate = parseFloat(e.taxRate) || 0;
+                let taxAmt = 0;
+                if (e.isGstApplicable) {
+                    taxAmt = (amt * taxRate) / 100;
+                }
+                expenseTotal += amt;
+                expenseTax += taxAmt;
+                return {
+                    groupName: e.groupName,
+                    amount: amt,
+                    isGstApplicable: e.isGstApplicable,
+                    taxRate: taxRate,
+                    taxAmount: taxAmt
+                };
+            });
+
+            const finalTaxTotal = gstResult.applicable ? (materialTax + expenseTax) : 0;
+            let cgst = 0, sgst = 0, igst = 0;
+
+            if (gstResult.applicable) {
+                if (gstResult.type === 'INTRA') {
+                    cgst = finalTaxTotal / 2;
+                    sgst = finalTaxTotal / 2;
+                } else if (gstResult.type === 'INTER') {
+                    igst = finalTaxTotal;
+                }
+            }
+
+            // Case 2 RCM: Tax is calculated but not added to grandTotal payable to supplier
+            const taxInGrandTotal = gstResult.isRcm ? 0 : finalTaxTotal;
+            const grandTotal = materialTotal + expenseTotal + taxInGrandTotal;
 
             const payload = {
                 supplierId: formData.supplier_id,
@@ -310,6 +391,7 @@ const AddGRN = () => {
                 poId: formData.po_id ? parseInt(formData.po_id) : undefined,
                 poNumber: formData.po_number || undefined,
                 gstNumber: formData.gst_no,
+                isRcm: gstResult.isRcm,
                 items: validItems.map(i => ({
                     productId: i.productId?.toString() || undefined,
                     productCode: i.productCode,
@@ -329,20 +411,16 @@ const AddGRN = () => {
                     amount: (parseFloat(i.totalAmount) || 0),
                     printDescription: i.printDescription
                 })),
-                accounts: [
-                    { accountName: 'Material Purchase', amount: materialTotal },
-                    { accountName: 'CGST', amount: cgst },
-                    { accountName: 'SGST', amount: sgst },
-                    { accountName: 'IGST', amount: igst }
-                ],
+                expenses: expenseData,
                 accountSummary: {
                     material: materialTotal,
+                    expense: expenseTotal,
                     cgst: cgst,
                     sgst: sgst,
                     igst: igst,
-                    grandTotal: materialTotal + cgst + sgst + igst
+                    grandTotal: grandTotal
                 },
-                grandTotal: materialTotal + cgst + sgst + igst
+                grandTotal: grandTotal
             };
 
             if (isEditMode) {
@@ -408,6 +486,8 @@ const AddGRN = () => {
                         errors={errors}
                         handleAddNewProduct={handleAddNewProduct}
                         gstType={gstType}
+                        isPoSelected={!!formData.po_id}
+                        supplierName={formData.supplier_name}
                     />
                 </div>
 
@@ -416,7 +496,12 @@ const AddGRN = () => {
                          <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
                         Account Summary
                     </h2>
-                    <AccountTable items={items} gstType={gstType} />
+                    <AccountTable 
+                        items={items} 
+                        gstType={gstType} 
+                        expenses={expenses}
+                        setExpenses={setExpenses}
+                    />
                 </div>
 
                 <div className="px-8 py-6 border-t border-[#F3F4F6] bg-gray-50 flex justify-end gap-4">

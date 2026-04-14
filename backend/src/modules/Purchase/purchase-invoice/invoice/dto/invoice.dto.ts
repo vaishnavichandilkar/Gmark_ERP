@@ -1,6 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateNested, IsArray } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateNested, IsArray, IsBoolean } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum PIStatus {
   GENERATED = 'GENERATED',
@@ -72,6 +72,11 @@ export class ItemDto {
   @IsNumber()
   @IsOptional()
   beforeTaxAmount?: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @IsOptional()
+  totalPoQty?: number;
 }
 
 export class AccountSummaryDto {
@@ -94,6 +99,40 @@ export class AccountSummaryDto {
   @ApiProperty()
   @IsNumber()
   grandTotal: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  expense?: number;
+}
+
+export class InvoiceExpenseDto {
+  @ApiProperty()
+  @IsString()
+  groupName: string;
+
+  @ApiProperty()
+  @IsNumber()
+  amount: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  taxRate?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  taxAmount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  isGstApplicable?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isPostGst?: boolean;
 }
 
 export class CreatePurchaseInvoiceDto {
@@ -148,6 +187,11 @@ export class CreatePurchaseInvoiceDto {
   @IsNotEmpty()
   invoiceNumber: string;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  supplierInvoiceNumber?: string;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsNumber()
@@ -163,6 +207,13 @@ export class CreatePurchaseInvoiceDto {
   @ValidateNested()
   @Type(() => AccountSummaryDto)
   accountSummary: AccountSummaryDto;
+
+  @ApiPropertyOptional({ type: [InvoiceExpenseDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => InvoiceExpenseDto)
+  expenses?: InvoiceExpenseDto[];
 
   @ApiProperty({ type: [ItemDto], required: false })
   @IsOptional()
@@ -230,6 +281,11 @@ export class UpdatePurchaseInvoiceDto {
   @IsString()
   invoiceNumber?: string;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  supplierInvoiceNumber?: string;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsNumber()
@@ -247,6 +303,13 @@ export class UpdatePurchaseInvoiceDto {
   @ValidateNested()
   @Type(() => AccountSummaryDto)
   accountSummary?: AccountSummaryDto;
+
+  @ApiPropertyOptional({ type: [InvoiceExpenseDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => InvoiceExpenseDto)
+  expenses?: InvoiceExpenseDto[];
 
   @ApiProperty({ type: [ItemDto], required: false })
   @IsOptional()

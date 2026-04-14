@@ -40,6 +40,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             where: { phone_number: user.phone }
         });
 
+        const shopDetail = await this.prisma.shopDetail.findUnique({
+            where: { userId: user.id }
+        });
+
+        const gstDoc = await this.prisma.sellerDocument.findFirst({
+            where: { uploadedByUserId: user.id, type: 'GST' },
+            select: { name: true }
+        });
+
         return {
             id: user.id,
             userId: user.id,
@@ -56,6 +65,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             rejectionReason: user.rejectionReason,
             isFirstApprovalLogin: user.isFirstApprovalLogin,
             onboarded: !!user.onboarded_at,
+            shopDetail,
+            gstNumber: gstDoc?.name || null
         };
     }
 }

@@ -15,11 +15,18 @@ const grnService = {
     const response = await axiosInstance.get(`/grn/supplier-challans?supplierName=${encodeURIComponent(supplierName)}`);
     return response.data;
   },
+  
+  getReceivedQty: async (supplierName, productCode, poNumber = '') => {
+    let url = `/grn/product-received-qty?supplierName=${encodeURIComponent(supplierName)}&productCode=${encodeURIComponent(productCode)}`;
+    if (poNumber) url += `&poNumber=${encodeURIComponent(poNumber)}`;
+    const response = await axiosInstance.get(url);
+    return response.data;
+  },
 
   createGRN: async (data, file) => {
     const formData = new FormData();
     Object.keys(data).forEach(key => {
-      if (['items', 'accounts', 'accountSummary'].includes(key)) {
+      if (['items', 'accounts', 'accountSummary', 'expenses'].includes(key)) {
         formData.append(key, JSON.stringify(data[key]));
       } else if (data[key] !== undefined && data[key] !== null) {
         formData.append(key, data[key]);
@@ -41,7 +48,7 @@ const grnService = {
   updateGRN: async (id, data, file) => {
     const formData = new FormData();
     Object.keys(data).forEach(key => {
-      if (['items', 'accounts', 'accountSummary'].includes(key)) {
+      if (['items', 'accounts', 'accountSummary', 'expenses'].includes(key)) {
         formData.append(key, JSON.stringify(data[key]));
       } else if (data[key] !== undefined && data[key] !== null) {
         formData.append(key, data[key]);

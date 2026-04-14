@@ -3,14 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import { 
     ArrowLeft, 
-    Trash2, 
     Edit3,
     Printer,
     RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-import grnService from '@/services/grnService';
+import purchaseInvoiceService from '@/services/purchaseInvoiceService';
 
 const InfoTableRow = ({ label1, value1, label2, value2 }) => (
     <div className="flex flex-col sm:flex-row border-[#E5E7EB] border-b last:border-0 font-outfit">
@@ -29,32 +28,39 @@ const InfoTableRow = ({ label1, value1, label2, value2 }) => (
     </div>
 );
 
-const ViewGRN = () => {
+const ViewPurchaseInvoice = () => {
     const navigate = useNavigate();
     const { id } = useParams();
     
     const [isLoading, setIsLoading] = useState(true);
-    const [grn, setGrn] = useState(null);
+    const [invoice, setInvoice] = useState(null);
     const [items, setItems] = useState([]);
+    const [expenses, setExpenses] = useState([]);
 
     useEffect(() => {
-        const fetchGRN = async () => {
-            console.log("Fetching GRN with ID:", id);
+        const fetchInvoice = async () => {
+            console.log("Fetching invoice with ID:", id);
             setIsLoading(true);
             try {
-                const data = await grnService.getGRNById(id);
-                console.log("Successfully loaded GRN data:", data);
-                setGrn(data);
+                // Try both methods for robustness
+                const service = purchaseInvoiceService;
+                if (!service) throw new Error("purchaseInvoiceService is undefined");
+                
+                const data = await (service.getInvoiceById ? service.getInvoiceById(id) : service.getInvoice(id));
+                console.log("Successfully loaded invoice data:", data);
+                
+                setInvoice(data);
                 setItems(data.items || []);
+                setExpenses(data.expenses || []);
             } catch (error) {
-                console.error("Error fetching GRN details:", error);
+                console.error("Error fetching invoice details:", error);
                 const errorMsg = error.response?.data?.message || error.message || "Unknown error";
                 toast.error(`Failed to load: ${errorMsg}`);
             } finally {
                 setIsLoading(false);
             }
         };
-        if (id) fetchGRN();
+        if (id) fetchInvoice();
     }, [id]);
 
     const formatDate = (dateStr) => {
@@ -74,32 +80,42 @@ const ViewGRN = () => {
         );
     }
 
-    if (!grn) {
+    if (!invoice) {
         return (
             <div className="text-center py-20">
-                <h2 className="text-xl font-bold text-gray-600">GRN not found</h2>
+                <h2 className="text-xl font-bold text-gray-600">Purchase Invoice not found</h2>
                 <button onClick={() => navigate(-1)} className="mt-4 text-emerald-800 font-bold underline">Go Back</button>
             </div>
         );
     }
 
+    const materialSubtotal = items.reduce((s, i) => s + (parseFloat(i.beforeTaxAmount) || 0), 0);
+    const materialTax = items.reduce((s, i) => s + (parseFloat(i.taxAmount) || 0), 0);
+    
+    const taxableExpensesSubtotal = expenses.filter(e => e.isGstApplicable).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+    const nonTaxableExpensesSubtotal = expenses.filter(e => !e.isGstApplicable).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+    
+    // In many implementations, expense tax is stored or calculated. 
+    // Usually, invoice record level grandTotal and tax fields are most reliable.
+    const totalTax = invoice.taxAmount || (materialTax + expenses.reduce((s, e) => s + (parseFloat(e.taxAmount) || 0), 0));
+
     return (
         <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-500 pb-20 font-outfit">
             <style>{`
-                .custom-grn-scrollbar::-webkit-scrollbar { height: 6px; }
-                .custom-grn-scrollbar::-webkit-scrollbar-track { background: #E5E7EB; }
-                .custom-grn-scrollbar::-webkit-scrollbar-thumb { background: #A7C0B8; border-radius: 4px; }
-                .custom-grn-scrollbar::-webkit-scrollbar-thumb:hover { background: #014A36; }
+                .custom-invoice-scrollbar::-webkit-scrollbar { height: 6px; }
+                .custom-invoice-scrollbar::-webkit-scrollbar-track { background: #E5E7EB; }
+                .custom-invoice-scrollbar::-webkit-scrollbar-thumb { background: #A7C0B8; border-radius: 4px; }
+                .custom-invoice-scrollbar::-webkit-scrollbar-thumb:hover { background: #014A36; }
             `}</style>
 
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
                 {/* Header Section */}
                 <div className="flex flex-col sm:flex-row items-center justify-between px-8 py-6 border-b border-[#F3F4F6] gap-4">
-                    <h2 className="text-[20px] font-bold text-[#111827]">View Goods Receipt Note</h2>
+                    <h2 className="text-[20px] font-bold text-[#111827]">View Purchase Invoice</h2>
                     <div className="flex items-center gap-3">
-                        {grn.status !== 'DELETED' && (
+                        {invoice.status !== 'DELETED' && (
                             <button 
-                                onClick={() => navigate(`/seller/purchase/grn/edit/${id}`)}
+                                onClick={() => navigate(`/seller/purchase/invoice/edit/${id}`)}
                                 className="px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all flex items-center gap-2"
                             >
                                 <Edit3 size={18} /> Edit
@@ -117,28 +133,29 @@ const ViewGRN = () => {
                 {/* Information Section */}
                 <div className="p-8 border-b border-[#F3F4F6]">
                     <div className="mb-6">
-                        <h1 className="text-[32px] font-bold text-[#111827] mb-2 uppercase tracking-tight">#{grn.grnNumber}</h1>
+                        <h1 className="text-[32px] font-bold text-[#111827] mb-2 uppercase tracking-tight">#{invoice.invoiceNumber}</h1>
                         <div className="flex gap-2">
-                            <span className="px-4 py-1.5 bg-[#4B5563] text-white rounded-full text-[13px] font-bold">GRN DETAILS</span>
+                            <span className="px-4 py-1.5 bg-[#4B5563] text-white rounded-full text-[13px] font-bold">INVOICE DETAILS</span>
                             <span className={`px-4 py-1.5 rounded-full text-[13px] font-bold border ${
-                                grn.status === 'DELETED' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                invoice.status === 'DELETED' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                             }`}>
-                                {grn.status === 'DELETED' ? 'DELETED' : 'GENERATED'}
+                                {invoice.status === 'DELETED' ? 'DELETED' : 'POSTED'}
                             </span>
                         </div>
                     </div>
 
                     <div className="border border-[#E5E7EB] rounded-[12px] overflow-hidden shadow-sm">
-                        <InfoTableRow label1="Supplier Name:" value1={grn.supplierName} label2="Credit Days:" value2={grn.creditDays} />
-                        <InfoTableRow label1="Supplier Address:" value1={grn.address} label2="PO Number:" value2={grn.poNumber} />
-                        <InfoTableRow label1="Supplier Challan No:" value1={grn.challanNumber} label2="Booking Date:" value2={formatDate(grn.bookingDate)} />
-                        <InfoTableRow label1="Challan Date:" value1={formatDate(grn.grnDate)} label2="GST Number:" value2={grn.gstNumber} />
+                        <InfoTableRow label1="Supplier Name:" value1={invoice.supplierName} label2="Credit Days:" value2={invoice.creditDays} />
+                        <InfoTableRow label1="Supplier Address:" value1={invoice.address} label2="PO Number:" value2={invoice.poNumber} />
+                        <InfoTableRow label1="Supplier Invoice No:" value1={invoice.supplierInvoiceNumber} label2="Booking Date:" value2={formatDate(invoice.bookingDate)} />
+                        <InfoTableRow label1="Invoice Date:" value1={formatDate(invoice.supplierInvoiceDate)} label2="GST Number:" value2={invoice.gstNumber} />
                     </div>
                 </div>
 
                 {/* Table Section */}
                 <div className="p-8">
-                    <div className="overflow-x-auto custom-grn-scrollbar border border-[#E5E7EB] rounded-[12px]">
+                    <h3 className="text-[16px] font-bold text-gray-800 mb-4 uppercase tracking-wider">Item Details</h3>
+                    <div className="overflow-x-auto custom-invoice-scrollbar border border-[#E5E7EB] rounded-[12px] mb-8">
                         <table className="w-full min-w-[1200px] border-collapse bg-white">
                             <thead>
                                 <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
@@ -170,33 +187,13 @@ const ViewGRN = () => {
                                     </tr>
                                 ))}
                             </tbody>
-                            <tfoot className="bg-[#F9FAFB] border-t-2 border-[#E5E7EB] font-bold">
-                                <tr>
-                                    <td colSpan={3} className="px-4 py-5 text-[14px]">Total Summary</td>
-                                    <td className="px-4 py-4 border-l border-[#F3F4F6] text-right">
-                                        {items.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0).toFixed(2)}
-                                    </td>
-                                    <td colSpan={3} className="border-l border-[#F3F4F6]"></td>
-                                    <td className="px-4 py-4 border-l border-[#F3F4F6] text-right">
-                                        ₹{items.reduce((s, i) => s + (parseFloat(i.beforeTaxAmount) || 0), 0).toFixed(2)}
-                                    </td>
-                                    <td className="px-4 py-4 border-l border-[#F3F4F6] text-right">
-                                        ₹{items.reduce((s, i) => s + (parseFloat(i.taxAmount) || 0), 0).toFixed(2)}
-                                    </td>
-                                    <td className="px-4 py-4 border-l border-[#F3F4F6] text-right text-[#073318]">
-                                        ₹{parseFloat(grn.grandTotal || items.reduce((s, i) => s + (parseFloat(i.totalAmount) || 0), 0)).toFixed(2)}
-                                    </td>
-                                </tr>
-                            </tfoot>
                         </table>
                     </div>
-                </div>
 
-                {/* Account Summary Section */}
-                <div className="p-8 border-t border-[#F3F4F6]">
+                    {/* Account Summary */}
                     <h3 className="text-[16px] font-bold text-gray-800 mb-4 uppercase tracking-wider">Account Summary</h3>
                     <div className="border border-[#E5E7EB] rounded-[16px] overflow-hidden shadow-sm max-w-[800px]">
-                        <table className="w-full text-left font-outfit">
+                        <table className="w-full text-left">
                             <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
                                 <tr>
                                     <th className="px-6 py-4 text-[13px] font-bold text-[#64748B] uppercase tracking-wider">Account Description</th>
@@ -206,9 +203,9 @@ const ViewGRN = () => {
                             <tbody className="divide-y divide-[#F1F5F9]">
                                 <tr>
                                     <td className="px-6 py-4 text-[14px] font-bold text-[#475569]">MATERIAL PURCHASE (EXCL. GST)</td>
-                                    <td className="px-6 py-4 text-right font-bold text-[#1e293b]">₹{items.reduce((s, i) => s + (parseFloat(i.beforeTaxAmount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-4 text-right font-bold text-[#1e293b]">₹{materialSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 </tr>
-                                {(grn.expenses || []).filter(e => e.isGstApplicable).map(exp => (
+                                {expenses.filter(e => e.isGstApplicable).map(exp => (
                                     <tr key={exp.id}>
                                         <td className="px-6 py-4 text-[14px] font-medium text-[#64748B] italic">{exp.groupName || 'Direct Expense'}</td>
                                         <td className="px-6 py-4 text-right font-bold text-[#1e293b]">₹{parseFloat(exp.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
@@ -216,13 +213,13 @@ const ViewGRN = () => {
                                 ))}
                                 <tr className="bg-emerald-50/20">
                                     <td className="px-6 py-3 text-[13px] font-bold text-emerald-800">C-GST</td>
-                                    <td className="px-6 py-3 text-right font-bold text-emerald-800">₹{(parseFloat(grn.taxAmount || items.reduce((s, i) => s + (parseFloat(i.taxAmount) || 0), 0)) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-emerald-800">₹{(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 </tr>
                                 <tr className="bg-emerald-50/20">
                                     <td className="px-6 py-3 text-[13px] font-bold text-emerald-800">S-GST</td>
-                                    <td className="px-6 py-3 text-right font-bold text-emerald-800">₹{(parseFloat(grn.taxAmount || items.reduce((s, i) => s + (parseFloat(i.taxAmount) || 0), 0)) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-emerald-800">₹{(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 </tr>
-                                {(grn.expenses || []).filter(e => !e.isGstApplicable).map(exp => (
+                                {expenses.filter(e => !e.isGstApplicable).map(exp => (
                                     <tr key={exp.id}>
                                         <td className="px-6 py-4 text-[14px] font-medium text-[#64748B] italic">{exp.groupName || 'Post-GST Charge'}</td>
                                         <td className="px-6 py-4 text-right font-bold text-[#1e293b]">₹{parseFloat(exp.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
@@ -230,7 +227,7 @@ const ViewGRN = () => {
                                 ))}
                                 <tr className="bg-[#073318] text-white">
                                     <td className="px-6 py-5 text-[16px] font-black uppercase tracking-widest">Grand Total</td>
-                                    <td className="px-6 py-5 text-right text-[20px] font-black">₹{parseFloat(grn.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-5 text-right text-[20px] font-black">₹{parseFloat(invoice.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -239,8 +236,11 @@ const ViewGRN = () => {
 
                 {/* Footer Section */}
                 <div className="flex justify-end px-8 py-6 border-t border-[#F3F4F6] bg-gray-50/10">
-                    <button className="px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all flex items-center gap-2 shadow-md">
-                        <Printer size={18} /> Print Record
+                    <button 
+                        onClick={() => navigate(`/seller/purchase/invoice/print?id=${id}`)}
+                        className="px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all flex items-center gap-2 shadow-md"
+                    >
+                        <Printer size={18} /> Print Invoice
                     </button>
                 </div>
             </div>
@@ -248,4 +248,4 @@ const ViewGRN = () => {
     );
 };
 
-export default ViewGRN;
+export default ViewPurchaseInvoice;
