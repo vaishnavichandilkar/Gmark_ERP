@@ -551,8 +551,7 @@ const SalesInvoice = () => {
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
                   className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all uppercase bg-white border-[#E5E7EB] text-[#4B5563]`}
                 >
-                  <Filter size={18} className="text-gray-400" />
-                  Filter
+                  <Filter size={18} className="text-gray-400" />{t("filter")}
                 </button>
                 <button
                   onClick={handleRefresh}
@@ -876,8 +875,7 @@ const SalesInvoice = () => {
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
                   className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all uppercase bg-white border-[#E5E7EB] text-[#4B5563]`}
                 >
-                  <Filter size={18} className="text-gray-400" />
-                  Filter
+                  <Filter size={18} className="text-gray-400" />{t("filter")}
                 </button>
                 <button
                   onClick={handleRefresh}
@@ -1321,3 +1319,4 @@ const SalesInvoice = () => {
 };
 
 export default SalesInvoice;
+

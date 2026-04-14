@@ -523,5 +523,6 @@
     "show": "Show",
     "perPage": "per page",
     "paginationRange": "{{from}}-{{to}} of {{total}}",
-    "expiringSoon": "Expiring Soon"
+    "expiringSoon": "Expiring Soon",
+    "filter": "Filter"
 }
