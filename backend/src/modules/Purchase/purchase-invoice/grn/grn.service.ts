@@ -304,8 +304,8 @@ export class GrnService {
       ];
     }
 
-    const page = parseInt(query.page as any, 10) || 1;
-    const limit = parseInt(query.limit as any, 10) || 10;
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.max(1, Number(query.limit) || 10);
     const skip = (page - 1) * limit;
 
     const [data, total] = await Promise.all([
@@ -432,7 +432,7 @@ export class GrnService {
         { header: 'Status', key: 'status', width: 12 },
       ];
 
-      grns.forEach(g => {
+      grns.data.forEach(g => {
         worksheet.addRow({
           supplierName: g.supplierName,
           challanNumber: g.challanNumber || '-',
@@ -504,7 +504,7 @@ export class GrnService {
         let y = tableTop + 20;
         doc.fillColor('#000000').font('Helvetica');
 
-        grns.forEach((g, index) => {
+        grns.data.forEach((g, index) => {
           if (y > 550) {
             doc.addPage({ margin: 20, size: 'A4', layout: 'landscape' });
             y = 40;

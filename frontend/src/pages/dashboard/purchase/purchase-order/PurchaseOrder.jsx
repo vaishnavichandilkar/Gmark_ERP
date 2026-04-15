@@ -350,23 +350,17 @@ const PurchaseOrder = () => {
   };
 
   const handleDownloadSample = async () => {
-    try {
-      const response = await purchaseOrderService.downloadSample();
-      const url = window.URL.createObjectURL(response.data);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'PO_Sample.xlsx');
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 100);
-      toast.success("Sample file downloaded!");
-    } catch (error) {
-      console.error("Download error:", error);
-      toast.error("Error downloading sample file.");
-    }
+    const response = await purchaseOrderService.downloadSample();
+    const url = window.URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'PO_Sample.xlsx');
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
   };
 
   const handleSubmitImport = async (formData) => {
@@ -431,17 +425,27 @@ const PurchaseOrder = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50">
-              <Upload size={18} className="text-gray-400" /> Import
+            <button 
+                onClick={() => setIsImportModalOpen(true)} 
+                className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all"
+            >
+              <Upload size={18} /> Import
             </button>
             <div className="relative" ref={exportRef}>
-              <button onClick={() => setIsExportOpen(!isExportOpen)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50">
-                <Download size={18} className="text-gray-400" /> Export
+              <button 
+                  onClick={() => setIsExportOpen(!isExportOpen)} 
+                  className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all bg-white ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
+              >
+                <Download size={18} /> Export
               </button>
               {isExportOpen && (
-                <div className="absolute top-full right-0 mt-2 w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-50 py-2 animate-in slide-in-from-top-2 duration-200 font-bold">
-                  <button onClick={() => handleExport('pdf')} className="w-full px-5 py-3 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB]"><FileText size={18} className="text-red-500" /> PDF</button>
-                  <button onClick={() => handleExport('xlsx')} className="w-full px-5 py-3 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB]"><FileSpreadsheet size={18} className="text-emerald-600" /> Excel</button>
+                <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <button onClick={() => handleExport('pdf')} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
+                      <FileText size={18} className="text-red-500" /> PDF
+                  </button>
+                  <button onClick={() => handleExport('xlsx')} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
+                      <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                  </button>
                 </div>
               )}
             </div>

@@ -146,8 +146,99 @@ const AddPurchaseInvoice = () => {
                     })) || []);
                 } else {
                     const nextNo = await purchaseInvoiceService.getNextNumber();
+                    let newDocNo = '';
                     if (nextNo) {
+                        newDocNo = nextNo.invoiceNumber;
                         setFormData(prev => ({ ...prev, document_number: nextNo.invoiceNumber }));
+                    }
+
+                    // Check for Draft Restore
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const newCustomerId = urlParams.get('newCustomerId');
+                    const isExplicitRestore = urlParams.get('restore') === 'true' || !!newCustomerId;
+
+                    const draftStr = sessionStorage.getItem('add_pi_draft');
+                    if (draftStr && isExplicitRestore) {
+                        try {
+                            const draft = JSON.parse(draftStr);
+                            let restoredFormData = draft.formData;
+                            let restoredItems = draft.items;
+                            let restoredExpenses = draft.expenses || [];
+
+                            if (newDocNo && !restoredFormData.document_number) restoredFormData.document_number = newDocNo;
+
+                            const oldSupplierIdsStr = sessionStorage.getItem('add_pi_supplier_ids');
+                            const fetchedSuppliers = accRes.data || [];
+                            let newSupplier = null;
+
+                            if (newCustomerId) {
+                                newSupplier = fetchedSuppliers.find(s => s.id === parseInt(newCustomerId));
+                            } else if (oldSupplierIdsStr) {
+                                const oldIds = JSON.parse(oldSupplierIdsStr);
+                                newSupplier = fetchedSuppliers.find(s => !oldIds.includes(s.id));
+                            }
+
+                            if (newSupplier) {
+                                    restoredFormData = {
+                                        ...restoredFormData,
+                                        supplier_id: newSupplier.id,
+                                        supplier_name: newSupplier.accountName,
+                                        address: (newSupplier.addressLine1 || '') + (newSupplier.addressLine2 ? ', ' + newSupplier.addressLine2 : ''),
+                                        credit_days: newSupplier.supplierCreditDays || newSupplier.creditDays || 0,
+                                        gst_no: newSupplier.gstNo || '',
+                                        supplier_state: newSupplier.state || ''
+                                    };
+                                }
+                            
+                            const oldProductIdsStr = sessionStorage.getItem('add_pi_product_ids');
+                            if (oldProductIdsStr) {
+                                const oldIds = JSON.parse(oldProductIdsStr);
+                                const prodRes = await productService.getProducts({ limit: 50 }); // We have to fetch products since not stored here locally immediately
+                                const newProduct = (prodRes.products || []).find(p => !oldIds.includes(p.id));
+                                if (newProduct) {
+                                    const newItem = {
+                                        id: Date.now(),
+                                        productId: newProduct.id,
+                                        productCode: newProduct.product_code,
+                                        productName: newProduct.product_name,
+                                        quantity: 1,
+                                        rate: newProduct.purchaseRate || 0,
+                                        uom: newProduct.uom?.gst_uom || newProduct.uom?.unit_name || 'NOS',
+                                        taxPercent: newProduct.tax_rate || 0,
+                                        discountAmount: 0,
+                                        discountPercent: 0,
+                                        beforeTaxAmount: newProduct.purchaseRate || 0,
+                                        taxAmount: ((newProduct.purchaseRate || 0) * (newProduct.tax_rate || 0)) / 100,
+                                        totalAmount: (newProduct.purchaseRate || 0) * (1 + (newProduct.tax_rate || 0) / 100),
+                                        printDescription: newProduct.description || newProduct.product_name,
+                                        totalPoQty: 0,
+                                        receivedPoQty: 0,
+                                        remainingQty: 0
+                                    };
+
+                                    if (restoredItems.length === 1 && !restoredItems[0].productCode) {
+                                        restoredItems = [newItem];
+                                    } else if (!restoredItems.some(i => i.productId === newProduct.id)) {
+                                        restoredItems = [...restoredItems, newItem];
+                                    }
+                                }
+                            }
+
+                            setFormData(restoredFormData);
+                            setItems(restoredItems);
+                            setExpenses(restoredExpenses);
+                            
+                            if (restoredFormData.gst_no || restoredFormData.supplier_state) {
+                                setGstType(calculateGST(restoredFormData.gst_no, restoredFormData.supplier_state));
+                            }
+                        } catch (e) {
+                            console.error('Draft parsing failed', e);
+                        } finally {
+                            sessionStorage.removeItem('add_pi_supplier_ids');
+                            sessionStorage.removeItem('add_pi_product_ids');
+                        }
+                    } else if (draftStr) {
+                        sessionStorage.removeItem('add_pi_draft');
                     }
                 }
             } catch (error) {
@@ -507,6 +598,7 @@ const AddPurchaseInvoice = () => {
                 await purchaseInvoiceService.createInvoice(payload, formData.attachment);
                 toast.success("Purchase Invoice created successfully");
             }
+            sessionStorage.removeItem('add_pi_draft');
             navigate(ROUTES.PURCHASE_INVOICE);
             } catch (error) {
                 console.error("Error saving Purchase Invoice:", error);
@@ -519,8 +611,26 @@ const AddPurchaseInvoice = () => {
 
     const handleAddNewProduct = () => {
         const redirect = isEditMode ? `${ROUTES.PURCHASE_INVOICE_EDIT.replace(':id', id)}` : ROUTES.PURCHASE_INVOICE_ADD;
+        sessionStorage.setItem('add_pi_draft', JSON.stringify({ formData, items, expenses }));
+        sessionStorage.setItem('add_pi_product_ids', JSON.stringify(products.map(p => p.id)));
         navigate(`/seller/masters/product-master/add?redirect=${redirect}`);
     };
+
+    const handleAddNewSupplier = () => {
+        sessionStorage.setItem('add_pi_draft', JSON.stringify({ formData, items, expenses }));
+        sessionStorage.setItem('add_pi_supplier_ids', JSON.stringify(suppliers.map(s => s.id)));
+        navigate(`/seller/masters/account-master/add?redirect=${ROUTES.PURCHASE_INVOICE_ADD}`);
+    };
+
+    // Auto save draft on change
+    useEffect(() => {
+        if (!isEditMode) {
+            const hasData = formData.supplier_id || items.some(i => i.productId);
+            if (hasData) {
+                sessionStorage.setItem('add_pi_draft', JSON.stringify({ formData, items, expenses }));
+            }
+        }
+    }, [formData, items, expenses, isEditMode]);
 
     if (isLoading && !isEditMode) {
         return (
@@ -556,6 +666,7 @@ const AddPurchaseInvoice = () => {
                         errors={errors}
                         challanDateRef={challanDateRef}
                         type="Invoice"
+                        onAddSupplier={handleAddNewSupplier}
                     />
                 </div>
 

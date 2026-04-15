@@ -3,8 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import { 
     ArrowLeft, 
-    Edit3,
-    Printer,
     RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -118,7 +116,7 @@ const ViewPurchaseInvoice = () => {
                                 onClick={() => navigate(`/seller/purchase/invoice/edit/${id}`)}
                                 className="px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all flex items-center gap-2"
                             >
-                                <Edit3 size={18} /> Edit
+                                Edit
                             </button>
                         )}
                         <button 
@@ -234,15 +232,7 @@ const ViewPurchaseInvoice = () => {
                     </div>
                 </div>
 
-                {/* Footer Section */}
-                <div className="flex justify-end px-8 py-6 border-t border-[#F3F4F6] bg-gray-50/10">
-                    <button 
-                        onClick={() => navigate(`/seller/purchase/invoice/print?id=${id}`)}
-                        className="px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all flex items-center gap-2 shadow-md"
-                    >
-                        <Printer size={18} /> Print Invoice
-                    </button>
-                </div>
+                {/* Footer Section - Back Button only if needed, currently no footer content */}
             </div>
         </div>
     );

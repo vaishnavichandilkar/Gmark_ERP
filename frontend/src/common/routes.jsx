@@ -32,7 +32,6 @@ import POPrintPreview from "../pages/dashboard/purchase/purchase-order/POPrintPr
 import PurchaseInvoice from "../pages/dashboard/purchase/purchase-invoice/invoice/PurchaseInvoice";
 import AddPurchaseInvoice from "../pages/dashboard/purchase/purchase-invoice/invoice/AddPurchaseInvoice";
 import ViewPurchaseInvoice from "../pages/dashboard/purchase/purchase-invoice/invoice/ViewPurchaseInvoice";
-import PurchaseInvoicePrintPreview from "../pages/dashboard/purchase/purchase-invoice/invoice/PurchaseInvoicePrintPreview";
 
 import GRN from "../pages/dashboard/purchase/purchase-invoice/grn/GRN";
 import AddGRN from "../pages/dashboard/purchase/purchase-invoice/grn/AddGRN";
@@ -45,7 +44,6 @@ import AddSO from "../pages/dashboard/sales/AddSO";
 import ViewSO from "../pages/dashboard/sales/ViewSO";
 import SalesInvoice from "../pages/dashboard/sales/SalesInvoice";
 import AddSI from "../pages/dashboard/sales/AddSI";
-import AddChallan from "../pages/dashboard/sales/AddChallan";
 
 import SystemSettings from "../features/settings/pages/SystemSettings";
 
@@ -309,10 +307,6 @@ export const router = createBrowserRouter([
                         path: "view/:id",
                         element: <ViewPurchaseInvoice />,
                       },
-                      {
-                        path: "print",
-                        element: <PurchaseInvoicePrintPreview />,
-                      },
                     ],
                   },
                   {
@@ -333,10 +327,6 @@ export const router = createBrowserRouter([
                       {
                         path: "view/:id",
                         element: <ViewGRN />,
-                      },
-                      {
-                        path: "print",
-                        element: <PurchaseInvoicePrintPreview />,
                       },
                     ],
                   },
@@ -361,21 +351,7 @@ export const router = createBrowserRouter([
                   },
                   {
                     path: "invoice",
-                    children: [
-                      { index: true, element: <SalesInvoice /> },
-                      { path: "add", element: <AddSI /> },
-                      { path: "edit/:id", element: <AddSI /> },
-                      { path: "view/:id", element: <AddSI /> },
-                    ],
-                  },
-                  {
-                    path: "challan",
-                    children: [
-                      { index: true, element: <SalesInvoice /> },
-                      { path: "add", element: <AddChallan /> },
-                      { path: "edit/:id", element: <AddChallan /> },
-                      { path: "view/:id", element: <AddChallan /> },
-                    ],
+                    children: [{ index: true, element: <SalesInvoice /> }],
                   },
                 ],
               },

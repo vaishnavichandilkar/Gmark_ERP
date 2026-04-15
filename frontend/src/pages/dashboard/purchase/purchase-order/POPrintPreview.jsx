@@ -200,11 +200,16 @@ const POPrintPreview = () => {
                         padding: 10mm;
                         margin: 0 !important;
                         border: none !important;
-                        background: white !important;
+                        background: #ffffff !important;
+                        color: #000000 !important;
                         position: absolute;
                         left: 0;
                         top: 0;
                         z-index: 9999;
+                    }
+
+                    .print-container * {
+                        border-color: #000000 !important;
                     }
                     
                     /* Hide everything except our print container when printing */
@@ -212,28 +217,21 @@ const POPrintPreview = () => {
                         display: none !important;
                     }
                 }
-                .black-border { border: 1.5px solid black; }
-                .border-b-black { border-bottom: 1px solid black; }
-                .border-r-black { border-right: 1px solid black; }
-                .border-t-black { border-top: 1px solid black; }
-                .border-l-black { border-left: 1px solid black; }
+                .black-border { border: 1.5px solid #000000; }
+                .border-b-black { border-bottom: 1px solid #000000; }
+                .border-r-black { border-right: 1px solid #000000; }
+                .border-t-black { border-top: 1px solid #000000; }
+                .border-l-black { border-left: 1px solid #000000; }
                 
-                table { border-collapse: collapse; width: 100%; }
-                th, td { border: 1px solid black; }
+                table { border-collapse: collapse; width: 100%; border-color: #000000; }
+                th, td { border: 1px solid #000000; border-color: #000000; }
                 .table-no-top-border th { border-top: none; }
                 .table-no-bottom-border td { border-bottom: none; }
                 
                 .no-scrollbar::-webkit-scrollbar { display: none; }
             `}</style>
 
-            <div className="no-print flex items-center justify-between px-6 pt-4">
-                <div className="flex items-center gap-2 text-[12px] font-bold text-gray-400">
-                    <span onClick={() => navigate('/seller/purchase/order')} className="cursor-pointer hover:text-black">PURCHASE</span>
-                    <span>&gt;</span>
-                    <span onClick={() => navigate('/seller/purchase/order')} className="cursor-pointer hover:text-black">PURCHASE ORDER</span>
-                    <span>&gt;</span>
-                    <span className="text-[#073318]">PRINT</span>
-                </div>
+            <div className="no-print flex items-center justify-end px-6 pt-4">
                 <div className="flex items-center gap-3">
                     <button
                         onClick={handleDownloadPDF}
@@ -265,42 +263,42 @@ const POPrintPreview = () => {
             </div>
 
             <div className="no-print-bg flex justify-center p-6 bg-gray-50/50 min-h-screen">
-                <div ref={printRef} className="print-container w-[210mm] h-[296mm] max-h-[296mm] bg-white black-border flex flex-col font-outfit text-black leading-tight overflow-hidden p-[10mm] box-border">
+                <div ref={printRef} className="print-container w-[210mm] h-[296mm] max-h-[296mm] bg-[#ffffff] black-border flex flex-col font-outfit text-[#000000] leading-tight overflow-hidden p-[10mm] box-border" style={{ backgroundColor: '#ffffff', color: '#000000' }}>
 
                     {/* Brand Header */}
-                    <div className="w-full border-black border flex flex-col">
-                        <div className="border-b border-black p-4 py-3 flex items-center justify-center relative min-h-[85px]">
+                    <div className="w-full border-[#000000] border flex flex-col">
+                        <div className="border-b border-[#000000] p-4 py-3 flex items-center justify-center relative min-h-[85px]">
                             <div className="absolute left-6 w-14 h-14 bg-[#014A36] rounded-full"></div>
                             <h1 className="text-[26px] font-black uppercase text-center">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</h1>
                         </div>
-                        <div className="border-b border-black py-2.5 text-center text-[12.5px] font-semibold">
+                        <div className="border-b border-[#000000] py-2.5 text-center text-[12.5px] font-semibold">
                             {sellerInfo?.address || "Near Mahalaxmi Temple, Hitani"}
                         </div>
-                        <div className="border-b border-black py-2.5 text-center text-[11px] font-semibold tracking-wide">
+                        <div className="border-b border-[#000000] py-2.5 text-center text-[11px] font-semibold tracking-wide">
                             Phone No.: {sellerInfo?.phone || "+91 2855943035"} &nbsp; Email Id: {sellerInfo?.email || "ardhya123@gmail.com"} &nbsp; Website: {sellerInfo?.website || "ardhyaagro.in"}
                         </div>
-                        <div className="border-b border-black py-3 text-center font-black text-[15px] uppercase tracking-[3px]" style={{ backgroundColor: 'rgba(249, 250, 251, 0.1)' }}>
+                        <div className="border-b border-[#000000] py-3 text-center font-black text-[15px] uppercase tracking-[3px]" style={{ backgroundColor: '#f3f4f6' }}>
                             PURCHASE ORDER
                         </div>
 
                         {/* GST Row */}
-                        <div className="flex border-b border-black text-[12px] font-black">
+                        <div className="flex border-b border-[#000000] text-[12px] font-black">
                             <div className="w-[38%] py-3 px-4">GSTIN : {sellerInfo?.gstNumber || "27ABCDE1234F1Z5"}</div>
                             <div className="w-[30%] py-3 px-4 text-center">State Code : 27 Maharashtra</div>
                             <div className="flex-1 py-3 px-4 text-right pr-6 uppercase whitespace-nowrap">PAN No : ABCDE1235F</div>
                         </div>
 
-                        <div className="flex border-b border-black min-h-[160px]">
+                        <div className="flex border-b border-[#000000] min-h-[160px]">
                             {/* Left Half: Supplier */}
-                            <div className="w-1/2 flex flex-col border-r border-black">
-                                <div className="border-b border-black flex items-center px-4 h-[44px] gap-4">
+                            <div className="w-1/2 flex flex-col border-r border-[#000000]">
+                                <div className="border-b border-[#000000] flex items-center px-4 h-[44px] gap-4">
                                     <span className="font-black text-[12px] min-w-[30px]">M/S.</span>
                                     <span className="font-black text-[12px] uppercase">{supplier_name}</span>
                                 </div>
                                 <div className="flex-1 px-4 py-3 text-[11.5px] leading-relaxed font-semibold overflow-hidden">
                                     {address}
                                 </div>
-                                <div className="border-t border-black flex items-center px-4 h-[44px] gap-4">
+                                <div className="border-t border-[#000000] flex items-center px-4 h-[44px] gap-4">
                                     <span className="font-black text-[12px] min-w-[70px]">Supplier Code</span>
                                     <span className="font-black text-[12px]">SP00001</span>
                                 </div>
@@ -308,17 +306,17 @@ const POPrintPreview = () => {
 
                             {/* Right Half: PO Details */}
                             <div className="w-1/2 flex flex-col">
-                                <div className="flex border-b border-black h-[44px]">
+                                <div className="flex border-b border-[#000000] h-[44px]">
                                     <div className="w-[40%] flex items-center px-4 gap-4">
                                         <span className="font-black text-[11px] whitespace-nowrap">PO No. :</span>
                                         <span className="font-semibold text-[11px] whitespace-nowrap">{po_no}</span>
                                     </div>
-                                    <div className="flex-1 flex items-center px-4 gap-4 border-l" style={{ borderColor: 'rgba(0, 0, 0, 0.1)' }}>
+                                    <div className="flex-1 flex items-center px-4 gap-4 border-l" style={{ borderColor: '#000000' }}>
                                         <span className="font-black text-[11px] whitespace-nowrap">PO Creation Date :</span>
                                         <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(po_creation_date)}</span>
                                     </div>
                                 </div>
-                                <div className="flex-1 border-b border-black flex items-center px-4 py-2.5 gap-4">
+                                <div className="flex-1 border-b border-[#000000] flex items-center px-4 py-2.5 gap-4">
                                     <span className="font-black text-[12px] min-w-[80px]">Pay. Terms</span>
                                     <span className="font-semibold text-[12px]">{credit_days} Days</span>
                                 </div>
@@ -331,37 +329,37 @@ const POPrintPreview = () => {
 
                         {/* Products Table */}
                         <div className="w-full h-full flex flex-col">
-                            <table className="w-full border-none m-0">
+                            <table className="w-full border-none m-0" style={{ borderColor: '#000000' }}>
                                 <thead>
-                                    <tr className="text-[11px] font-black h-[40px]" style={{ backgroundColor: 'rgba(249, 250, 251, 0.1)' }}>
-                                        <th className="w-[45px] border-b border-r border-black">Sn.</th>
-                                        <th className="border-b border-r border-black px-4 text-left">Description</th>
-                                        <th className="w-[85px] border-b border-r border-black">HSN/SAC</th>
-                                        <th className="w-[50px] border-b border-r border-black text-center">Tax%</th>
-                                        <th className="w-[65px] border-b border-r border-black text-center">Quantity</th>
-                                        <th className="w-[65px] border-b border-r border-black text-center">Units</th>
-                                        <th className="w-[85px] border-b border-r border-black text-center">Rate</th>
-                                        <th className="w-[55px] border-b border-r border-black text-center">Dis%</th>
-                                        <th className="w-[110px] border-b border-black text-right px-4">Amount</th>
+                                    <tr className="text-[11px] font-black h-[40px]" style={{ backgroundColor: '#f3f4f6' }}>
+                                        <th className="w-[45px] border-b border-r border-[#000000]">Sn.</th>
+                                        <th className="border-b border-r border-[#000000] px-4 text-left">Description</th>
+                                        <th className="w-[85px] border-b border-r border-[#000000]">HSN/SAC</th>
+                                        <th className="w-[50px] border-b border-r border-[#000000] text-center">Tax%</th>
+                                        <th className="w-[65px] border-b border-r border-[#000000] text-center">Quantity</th>
+                                        <th className="w-[65px] border-b border-r border-[#000000] text-center">Units</th>
+                                        <th className="w-[85px] border-b border-r border-[#000000] text-center">Rate</th>
+                                        <th className="w-[55px] border-b border-r border-[#000000] text-center">Dis%</th>
+                                        <th className="w-[110px] border-b border-[#000000] text-right px-4">Amount</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {items.map((item, idx) => (
                                         <tr key={item.id || idx} className="text-[12px] font-semibold min-h-[40px]">
-                                            <td className="border-b border-r border-black text-center">{idx + 1}</td>
-                                            <td className="border-b border-r border-black px-4 py-2 leading-tight">
+                                            <td className="border-b border-r border-[#000000] text-center">{idx + 1}</td>
+                                            <td className="border-b border-r border-[#000000] px-4 py-2 leading-tight">
                                                 <div className="font-bold text-[13px]">{item.productName || item.product_name}</div>
                                                 {(item.description || item.printDescription) && (
-                                                    <div className="font-normal text-[11px] mt-1 text-gray-700 whitespace-pre-wrap">{item.description || item.printDescription}</div>
+                                                    <div className="font-normal text-[11px] mt-1 text-[#374151] whitespace-pre-wrap" style={{ color: '#374151' }}>{item.description || item.printDescription}</div>
                                                 )}
                                             </td>
-                                            <td className="border-b border-r border-black text-center">{item.hsnCode || item.hsn}</td>
-                                            <td className="border-b border-r border-black text-center">{item.taxPercent || item.tax_percent}</td>
-                                            <td className="border-b border-r border-black text-center">{item.quantity}</td>
-                                            <td className="border-b border-r border-black text-center uppercase">{item.uom}</td>
-                                            <td className="border-b border-r border-black text-center">{item.rate}</td>
-                                            <td className="border-b border-r border-black text-center">{item.discountPercent || item.discount_percent || 0}</td>
-                                            <td className="border-b border-black text-right px-4 font-black">
+                                            <td className="border-b border-r border-[#000000] text-center">{item.hsnCode || item.hsn}</td>
+                                            <td className="border-b border-r border-[#000000] text-center">{item.taxPercent || item.tax_percent}</td>
+                                            <td className="border-b border-r border-[#000000] text-center">{item.quantity}</td>
+                                            <td className="border-b border-r border-[#000000] text-center uppercase">{item.uom}</td>
+                                            <td className="border-b border-r border-[#000000] text-center">{item.rate}</td>
+                                            <td className="border-b border-r border-[#000000] text-center">{item.discountPercent || item.discount_percent || 0}</td>
+                                            <td className="border-b border-[#000000] text-right px-4 font-black">
                                                 {(parseFloat(item.before_tax || (item.quantity * item.rate - (item.discountAmount || 0)))).toFixed(2)}
                                             </td>
                                         </tr>
@@ -371,30 +369,30 @@ const POPrintPreview = () => {
                         </div>
 
                         {/* Calculation Footer */}
-                        <div className="w-full border-t border-black bg-white">
-                            <div className="flex border-b border-black h-[35px]">
+                        <div className="w-full border-t border-[#000000] bg-[#ffffff]">
+                            <div className="flex border-b border-[#000000] h-[35px]">
                                 <div className="flex-1 flex justify-end items-center pr-4 font-black text-[12.5px]">Sub Total</div>
-                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[12.5px]">{subTotal.toFixed(2)}</div>
+                                <div className="w-[110px] border-l border-[#000000] flex items-center justify-end px-4 font-black text-[12.5px]">{subTotal.toFixed(2)}</div>
                             </div>
-                            <div className="flex border-b border-black h-[35px]">
+                            <div className="flex border-b border-[#000000] h-[35px]">
                                 <div className="flex-1 flex justify-end items-center pr-4 font-black text-[12.5px] uppercase tracking-widest">SGST</div>
-                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[12.5px]">{sgst.toFixed(2)}</div>
+                                <div className="w-[110px] border-l border-[#000000] flex items-center justify-end px-4 font-black text-[12.5px]">{sgst.toFixed(2)}</div>
                             </div>
-                            <div className="flex border-b border-black h-[35px]">
+                            <div className="flex border-b border-[#000000] h-[35px]">
                                 <div className="flex-1 flex justify-end items-center pr-4 font-black text-[12.5px] uppercase tracking-widest">CGST</div>
-                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[12.5px]">{cgst.toFixed(2)}</div>
+                                <div className="w-[110px] border-l border-[#000000] flex items-center justify-end px-4 font-black text-[12.5px]">{cgst.toFixed(2)}</div>
                             </div>
-                            <div className="flex border-b border-black h-[35px]">
+                            <div className="flex border-b border-[#000000] h-[35px]">
                                 <div className="flex-1 flex justify-end items-center pr-4 font-black text-[12.5px] uppercase tracking-widest" style={{ color: '#9ca3af' }}>IGST</div>
-                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[12.5px]" style={{ color: '#9ca3af' }}>--</div>
+                                <div className="w-[110px] border-l border-[#000000] flex items-center justify-end px-4 font-black text-[12.5px]" style={{ color: '#9ca3af' }}>--</div>
                             </div>
 
                             <div className="flex h-[55px]">
-                                <div className="flex-1 border-r border-black p-4 py-2 font-black text-[10.5px] flex items-center">
+                                <div className="flex-1 border-r border-[#000000] p-4 py-2 font-black text-[10.5px] flex items-center">
                                     <span className="mr-2">Amount In Words :</span>
                                     <span className="uppercase underline decoration-1 underline-offset-4">{numberToWords(totalAmount)}</span>
                                 </div>
-                                <div className="w-[100px] border-r border-black flex items-center justify-center font-black text-[13px] uppercase">Total</div>
+                                <div className="w-[100px] border-r border-[#000000] flex items-center justify-center font-black text-[13px] uppercase">Total</div>
                                 <div className="w-[110px] flex items-center justify-end px-4 font-black text-[16px]">
                                     {totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </div>
@@ -402,7 +400,7 @@ const POPrintPreview = () => {
                         </div>
 
                         {/* Signature Section */}
-                        <div className="w-full border-t border-black p-6 flex flex-col justify-between min-h-[160px] bg-white">
+                        <div className="w-full border-t border-[#000000] p-6 flex flex-col justify-between min-h-[160px] bg-[#ffffff]">
                             <div className="text-right pr-4">
                                 <p className="font-black text-[12px]">For <span className="uppercase italic tracking-[2px]">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</span></p>
                             </div>
@@ -411,7 +409,7 @@ const POPrintPreview = () => {
                             </div>
                         </div>
 
-                        <div className="w-full border-t py-5 text-center text-[10px] font-bold bg-white" style={{ borderColor: 'rgba(0, 0, 0, 0.1)', color: '#9ca3af' }}>
+                        <div className="w-full border-t py-5 text-center text-[10px] font-bold bg-[#ffffff]" style={{ borderColor: '#e5e7eb', color: '#9ca3af' }}>
                             <p className="mb-0.5">{sellerInfo?.shopName || "Ardhya Agro Service"} Purchase Order #{po_no}</p>
                             <p>Page 1 of 1</p>
                         </div>
