@@ -357,8 +357,8 @@ export class ProductMasterService {
     }
 
     async getProducts(query: GetProductsQuery, userId: number) {
-        const page = query.page ? parseInt(query.page.toString(), 10) : 1;
-        const limit = query.limit ? parseInt(query.limit.toString(), 10) : 10;
+        const page = Math.max(1, Number(query.page) || 1);
+        const limit = Math.max(1, Number(query.limit) || 10);
         const skip = (page - 1) * limit;
 
         let status: any = undefined;

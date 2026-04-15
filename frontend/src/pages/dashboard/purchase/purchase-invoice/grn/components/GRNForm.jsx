@@ -16,7 +16,8 @@ const GRNForm = ({
     errors,
     bookingDateRef,
     challanDateRef,
-    type = 'GRN'
+    type = 'GRN',
+    onAddSupplier
 }) => {
     const isGRN = type === 'GRN';
     const numLabel = isGRN ? 'Challan' : 'Invoice';
@@ -108,7 +109,13 @@ const GRNForm = ({
                                     <div className="p-3 bg-gray-50 border-t border-[#F3F4F6]">
                                         <button
                                             type="button"
-                                            onClick={() => navigate(`/seller/masters/account-master/add?redirect=${isGRN ? ROUTES.GRN_ADD : ROUTES.PURCHASE_INVOICE_ADD}`)}
+                                            onClick={() => {
+                                                if (onAddSupplier) {
+                                                    onAddSupplier();
+                                                } else {
+                                                    navigate(`/seller/masters/account-master/add?redirect=${isGRN ? ROUTES.GRN_ADD : ROUTES.PURCHASE_INVOICE_ADD}`);
+                                                }
+                                            }}
                                             className="w-full flex items-center justify-center gap-2 py-3 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold shadow-md hover:bg-[#052611] transition-all"
                                         >
                                             <Plus size={16} /> Add new supplier

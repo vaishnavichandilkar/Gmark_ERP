@@ -121,10 +121,13 @@ export class UnitMasterService {
     }
 
     async getUnitsList(userId: number, query: UnitQueryDto) {
-        const { search, gst_uom, unit_name, full_name_of_measurement, status, page = '1', limit = '10', sortBy = 'created_at', sortOrder = 'desc' } = query;
-
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-        const take = parseInt(limit);
+        const { search, gst_uom, unit_name, full_name_of_measurement, status, sortBy = 'created_at', sortOrder = 'desc' } = query;
+        
+        const page = Math.max(1, Number(query.page) || 1);
+        const limit = Math.max(1, Number(query.limit) || 10);
+        
+        const skip = (page - 1) * limit;
+        const take = limit;
 
         const where: any = { user_id: userId };
         if (search) {
@@ -170,9 +173,9 @@ export class UnitMasterService {
             data: items,
             meta: {
                 total,
-                page: parseInt(page),
-                limit: take,
-                totalPages: Math.ceil(total / take)
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
             }
         };
     }

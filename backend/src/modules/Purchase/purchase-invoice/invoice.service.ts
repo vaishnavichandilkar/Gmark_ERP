@@ -122,8 +122,20 @@ export class PurchaseInvoiceService {
         totalTaxable += befTax;
         materialTax += taxAmt;
 
+        const productId = i.productId ? parseInt(i.productId, 10) : null;
+        let hsnCode = i.hsnCode || '';
+        
+        // Fetch HSN from product if missing
+        if (!hsnCode && productId) {
+            const product = await this.prisma.product.findUnique({
+                where: { id: productId },
+                select: { hsn_code: true }
+            });
+            hsnCode = product?.hsn_code || '';
+        }
+
         itemsToCreate.push({
-            productId: i.productId ? parseInt(i.productId, 10) : null,
+            productId: productId,
             productCode: i.productCode,
             productName: i.productName,
             quantity: qty,
@@ -134,6 +146,7 @@ export class PurchaseInvoiceService {
             amount: befTax + taxAmt,
             beforeTaxAmount: befTax,
             totalPoQty: i.totalPoQty || 0,
+            hsnCode: hsnCode // Temporarily stored for PO creation if needed
         });
     }
 
@@ -237,10 +250,48 @@ export class PurchaseInvoiceService {
 
     const cumulativeBalance = (lastPi?.cumulativeBalance || 0) + grandTotal;
 
-    const poIds = createDto.poIds || [];
-    const challanNumbers = createDto.challanNumbers || [];
+    let finalPoIds = Array.isArray(createDto.poIds) ? [...createDto.poIds] : [];
+    let autoPoId: number | null = null;
 
-    const poNumberStr = poIds.length > 0 ? poIds.join(',') : null;
+    if (finalPoIds.length === 0) {
+        // Auto-create PO because none was provided
+        const expiryDate = new Date(createDto.bookingDate || new Date());
+        expiryDate.setDate(expiryDate.getDate() + 30); // Default 30 day validity
+
+        const autoPo = await this.poService.create({
+            supplierId: supplier.id,
+            creditDays: creditDays,
+            address: address,
+            gstNo: gstNo,
+            poCreationDate: createDto.bookingDate || new Date().toISOString(),
+            expiryDate: expiryDate.toISOString(),
+            items: itemsToCreate.map(it => ({
+                productCode: it.productCode,
+                productId: it.productId,
+                productName: it.productName,
+                hsnCode: it.hsnCode || '0000',
+                quantity: it.quantity,
+                rate: it.rate,
+                uom: it.uom,
+                taxPercent: it.taxPercent,
+                discountPercent: 0,
+                discountAmount: 0,
+                printDescription: it.productName
+            }))
+        }, userId);
+
+        // Mark PO as generated so it doesn't show as pending
+        await this.prisma.purchaseOrder.update({
+            where: { id: autoPo.id },
+            data: { status: 'INVOICE_GENERATED' }
+        });
+
+        autoPoId = autoPo.id;
+        finalPoIds = [autoPo.poNumber];
+    }
+
+    const poNumberStr = finalPoIds.length > 0 ? finalPoIds.join(',') : null;
+    const challanNumbers = createDto.challanNumbers || [];
     const grnNumberStr = challanNumbers.length > 0 ? challanNumbers.join(',') : null;
 
     const invoice = await this.prisma.purchaseInvoice.create({
@@ -255,6 +306,7 @@ export class PurchaseInvoiceService {
         creditDays: createDto.creditDays,
         gstNumber: createDto.gstNumber,
         poNumber: poNumberStr,
+        poId: autoPoId,
         challanNumber: grnNumberStr,
         cgstAmount: cgst,
         sgstAmount: sgst,
@@ -266,7 +318,7 @@ export class PurchaseInvoiceService {
         userId,
         uploadedFilePath: uploadedFilePath || null,
         items: {
-          create: itemsToCreate
+          create: itemsToCreate.map(({ hsnCode, ...rest }) => rest) // Remove hsnCode as it's not in the InvoiceItem model
         },
         expenses: {
           create: expensesToCreate
@@ -296,7 +348,8 @@ export class PurchaseInvoiceService {
       ];
     }
 
-    const { page = 1, limit = 10 } = query || {};
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Number(query?.limit) || 10);
     const skip = (page - 1) * limit;
 
     const [data, total] = await Promise.all([

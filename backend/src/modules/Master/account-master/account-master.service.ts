@@ -278,7 +278,8 @@ export class AccountMasterService {
     const where: Prisma.AccountMasterWhereInput = {};
     
     if (filter.groupName) {
-      const groups = filter.groupName.split(',').map(g => g.trim().toUpperCase()).filter(g => g !== '');
+      const groupNameStr = String(filter.groupName);
+      const groups = groupNameStr.split(',').map(g => g.trim().toUpperCase()).filter(g => g !== '');
       if (groups.length > 0) {
         where.groupName = { hasSome: groups };
       }

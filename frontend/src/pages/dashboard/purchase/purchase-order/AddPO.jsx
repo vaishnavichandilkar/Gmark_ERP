@@ -97,7 +97,8 @@ const AddPO = () => {
 
                 // 🛠️ Selective Draft Recovery: Only restore if explicitly requested via URL
                 const urlParams = new URLSearchParams(window.location.search);
-                const isExplicitRestore = urlParams.get('restore') === 'true' || urlParams.get('redirect');
+                const newCustomerId = urlParams.get('newCustomerId');
+                const isExplicitRestore = urlParams.get('restore') === 'true' || !!newCustomerId;
 
                 const draftStr = sessionStorage.getItem('add_po_draft');
                 if (draftStr && isExplicitRestore) {
@@ -108,10 +109,16 @@ const AddPO = () => {
 
                         // 1. Detect New Supplier
                         const oldSupplierIdsStr = sessionStorage.getItem('add_po_supplier_ids');
-                        if (oldSupplierIdsStr) {
+                        let newSupplier = null;
+                        
+                        if (newCustomerId) {
+                            newSupplier = fetchedSuppliers.find(s => s.id === parseInt(newCustomerId));
+                        } else if (oldSupplierIdsStr) {
                             const oldIds = JSON.parse(oldSupplierIdsStr);
-                            const newSupplier = fetchedSuppliers.find(s => !oldIds.includes(s.id));
-                            if (newSupplier) {
+                            newSupplier = fetchedSuppliers.find(s => !oldIds.includes(s.id));
+                        }
+                        
+                        if (newSupplier) {
                                 restoredFormData = {
                                     ...restoredFormData,
                                     supplier_id: newSupplier.id,
@@ -123,9 +130,8 @@ const AddPO = () => {
                                 };
                                 setSupplierSearch(newSupplier.accountName);
                             }
-                        }
 
-                        // 2. Detect New Product
+                            // 2. Detect New Product
                         const oldProductIdsStr = sessionStorage.getItem('add_po_product_ids');
                         if (oldProductIdsStr) {
                             const oldIds = JSON.parse(oldProductIdsStr);
