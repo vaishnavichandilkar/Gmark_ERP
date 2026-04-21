@@ -99,8 +99,8 @@ export class GrnController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get GRN details by ID' })
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.grnService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    return this.grnService.findOne(id, req.user.id);
   }
 
   @Patch(':id')
@@ -112,6 +112,7 @@ export class GrnController {
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file: any,
     @Body() body: any,
+    @Request() req
   ) {
     const items = body.items ? (typeof body.items === 'string' ? JSON.parse(body.items) : body.items) : undefined;
     const expenses = body.expenses ? (typeof body.expenses === 'string' ? JSON.parse(body.expenses) : body.expenses) : undefined;
@@ -127,7 +128,7 @@ export class GrnController {
       grandTotal: body.grandTotal ? parseFloat(body.grandTotal) : undefined,
     };
 
-    return this.grnService.update(id, updateDto, file?.path);
+    return this.grnService.update(id, updateDto, req.user.id, file?.path);
   }
 
   @Delete(':id')

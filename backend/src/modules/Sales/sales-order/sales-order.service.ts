@@ -9,9 +9,10 @@ import * as PDFDocument from 'pdfkit';
 export class SalesOrderService {
     constructor(private prisma: PrismaService) { }
 
-    async generateSONumber(tx?: any): Promise<string> {
+    async generateSONumber(userId: number, tx?: any): Promise<string> {
         const prisma = tx || this.prisma;
         const lastSO = await prisma.salesOrder.findFirst({
+            where: { userId },
             orderBy: { id: 'desc' },
             select: { soNumber: true },
         });
@@ -30,14 +31,15 @@ export class SalesOrderService {
         return `SO-${(lastNumber + 1).toString().padStart(5, '0')}`;
     }
 
-    async getNextNumber() {
-        const soNumber = await this.generateSONumber();
+    async getNextNumber(userId: number) {
+        const soNumber = await this.generateSONumber(userId);
         return { soNumber };
     }
 
-    async getCustomers() {
+    async getCustomers(userId: number) {
         const customers = await this.prisma.accountMaster.findMany({
             where: {
+                userId, // Filter by user if account master is also user-specific
                 customerCode: {
                     not: null,
                 },
@@ -113,7 +115,7 @@ export class SalesOrderService {
         const grandTotal = processedItems.reduce((sum, item) => sum + item.totalAmount, 0);
 
         return this.prisma.$transaction(async (tx) => {
-            const finalSoNumber = await this.generateSONumber(tx);
+            const finalSoNumber = await this.generateSONumber(userId, tx);
 
             return tx.salesOrder.create({
                 data: {
@@ -153,13 +155,13 @@ export class SalesOrderService {
         });
     }
 
-    async findAll(query: { filter?: 'all' | 'pending' | 'expiring' | 'expired' | 'completed' | 'deleted', search?: string }) {
+    async findAll(userId: number, query: { filter?: 'all' | 'pending' | 'expiring' | 'expired' | 'completed' | 'deleted', search?: string }) {
         const startOfToday = new Date();
         startOfToday.setHours(0, 0, 0, 0);
         const fortyEightHoursLater = new Date(startOfToday.getTime() + 48 * 60 * 60 * 1000);
         fortyEightHoursLater.setHours(23, 59, 59, 999);
 
-        const where: Prisma.SalesOrderWhereInput = {};
+        const where: Prisma.SalesOrderWhereInput = { userId };
 
         switch (query.filter) {
             case 'pending':
@@ -197,9 +199,9 @@ export class SalesOrderService {
         });
     }
 
-    async findOne(id: number) {
-        const so = await this.prisma.salesOrder.findUnique({
-            where: { id },
+    async findOne(id: number, userId: number) {
+        const so = await this.prisma.salesOrder.findFirst({
+            where: { id, userId },
             include: { items: true },
         });
 
@@ -207,8 +209,8 @@ export class SalesOrderService {
         return so;
     }
 
-    async update(id: number, updateDto: UpdateSalesOrderDto) {
-        const so = await this.findOne(id);
+    async update(id: number, updateDto: UpdateSalesOrderDto, userId: number) {
+        const so = await this.findOne(id, userId);
         if (so.status === 'INVOICE_GENERATED' || so.status === 'DELETED') {
             throw new ForbiddenException(`Update forbidden in status ${so.status}`);
         }
@@ -271,8 +273,8 @@ export class SalesOrderService {
         });
     }
 
-    async softDelete(id: number) {
-        const so = await this.findOne(id);
+    async softDelete(id: number, userId: number) {
+        const so = await this.findOne(id, userId);
         if (so.status === 'DELETED') return so;
         return this.prisma.salesOrder.update({
             where: { id },
@@ -454,8 +456,8 @@ export class SalesOrderService {
         });
     }
 
-    async exportSalesOrders(format: string, query: { filter?: any; search?: string }) {
-        const orders = await this.findAll(query);
+    async exportSalesOrders(userId: number, format: string, query: { filter?: any; search?: string }) {
+        const orders = await this.findAll(userId, query);
 
         if (orders.length === 0) {
             throw new BadRequestException('No data available to export');

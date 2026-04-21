@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { ChevronsUpDown, ChevronDown, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import masterService from '@/services/masterService';
 
-const AccountTable = ({ items, gstType, expenses, setExpenses }) => {
+const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel = "Material Purchase (Excl. G.S.T.)" }) => {
     const [groups, setGroups] = useState([]);
 
     useEffect(() => {
@@ -37,7 +37,16 @@ const AccountTable = ({ items, gstType, expenses, setExpenses }) => {
         return flat;
     };
 
-    const flatGroups = useMemo(() => flattenGroups(groups), [groups]);
+    const flatGroups = useMemo(() => {
+        const flat = flattenGroups(groups);
+        const seen = new Set();
+        return flat.filter(g => {
+            const name = (g.group_name || '').trim();
+            if (!name || seen.has(name)) return false;
+            seen.add(name);
+            return true;
+        });
+    }, [groups]);
 
     const materialValues = useMemo(() => {
         const validItems = items.filter(item => item.productCode);
@@ -120,10 +129,9 @@ const AccountTable = ({ items, gstType, expenses, setExpenses }) => {
                     </tr>
                 </thead>
                 <tbody className="text-[14px]">
-                    {/* Material Purchase Row */}
                     <tr className="border-b border-[#F1F5F9] transition-all duration-200 hover:bg-gray-50">
                         <td className="px-6 py-6 font-bold text-[#334155] uppercase text-[12px] tracking-wide">
-                            Material Purchase (Excl. G.S.T.)
+                            {mainAccountLabel}
                         </td>
                         <td className="px-6 py-6 text-right font-black text-[#0F172A] border-l border-[#F1F5F9]">
                             {materialValues.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}

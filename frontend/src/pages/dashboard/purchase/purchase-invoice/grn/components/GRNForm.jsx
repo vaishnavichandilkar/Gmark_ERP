@@ -39,28 +39,27 @@ const GRNForm = ({
 
     const toDisplayDate = (dateStr) => {
         if (!dateStr) return "";
+        // If it looks like formatted DD/MM/YYYY, return as is
+        if (dateStr.includes("/") && dateStr.split("/").length >= 2) return dateStr;
+        // If it looks like ISO YYYY-MM-DD
         const parts = dateStr.split("-");
-        if (parts.length === 3) {
-            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        if (parts.length === 3 && parts[0].length === 4) {
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
         }
         return dateStr;
     };
 
     const handleDateTextChange = (e, field) => {
-        let val = e.target.value.replace(/\D/g, '');
-        if (val.length > 8) val = val.slice(0, 8);
+        const val = e.target.value;
+        const digits = val.replace(/\D/g, '').substring(0, 8);
         
-        let formatted = val;
-        if (val.length > 2) formatted = val.slice(0, 2) + '-' + val.slice(2);
-        if (val.length > 4) formatted = formatted.slice(0, 5) + '-' + val.slice(4);
+        // Auto-format as they type
+        let formatted = digits;
+        if (digits.length >= 3) formatted = digits.substring(0, 2) + '/' + digits.substring(2);
+        if (digits.length >= 5) formatted = formatted.substring(0, 5) + '/' + digits.substring(5);
 
-        if (val.length === 8) {
-            const day = val.slice(0, 2);
-            const month = val.slice(2, 4);
-            const year = val.slice(4, 8);
-            const iso = `${year}-${month}-${day}`;
-            setFormData(prev => ({ ...prev, [field]: iso }));
-        }
+        // Update state with formatted string to allow typing
+        setFormData(prev => ({ ...prev, [field]: formatted }));
     };
 
     return (
@@ -216,14 +215,15 @@ const GRNForm = ({
                             ref={challanDateRef}
                             className="absolute opacity-0 pointer-events-none w-0 h-0"
                             value={formData.document_date || ''}
+                            max={new Date().toISOString().split('T')[0]}
                             onChange={(e) => setFormData({ ...formData, document_date: e.target.value })}
                         />
                         <input
                             type="text"
-                            placeholder="DD-MM-YYYY"
+                            placeholder="DD/MM/YYYY"
                             value={toDisplayDate(formData.document_date)}
                             onChange={(e) => handleDateTextChange(e, 'document_date')}
-                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all ${errors.document_date ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all ${errors.document_date ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                         />
                         <Calendar
                             size={18}

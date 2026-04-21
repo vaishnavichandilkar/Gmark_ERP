@@ -27,11 +27,11 @@ import toast from 'react-hot-toast';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import XLSX from "xlsx-js-style";
-import { ROUTES } from "../../../constants/routes";
+import { ROUTES } from "../../../../constants/routes";
 import { useTranslation } from 'react-i18next';
 
-import salesOrderService from "../../../services/salesOrderService";
-import ScrollableTable from "../../../components/common/ScrollableTable";
+import salesOrderService from "../../../../services/salesOrderService";
+import ScrollableTable from "../../../../components/common/ScrollableTable";
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
   if (!isOpen) return null;

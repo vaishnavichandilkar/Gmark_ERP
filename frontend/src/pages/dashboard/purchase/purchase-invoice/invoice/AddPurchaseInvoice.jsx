@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { RefreshCw, ArrowLeft } from 'lucide-react';
+import { RefreshCw, ArrowLeft, Eye, EyeOff, Trash2, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ROUTES } from '@/constants/routes';
+import { BASE_URL } from '@/constants/apiConstants';
 
 import purchaseInvoiceService from '@/services/purchaseInvoiceService';
 import purchaseOrderService from '@/services/purchaseOrderService';
@@ -37,7 +38,7 @@ const AddPurchaseInvoice = () => {
         gst_no: '',
         credit_days: 0,
         booking_date: new Date().toISOString().split('T')[0],
-        document_date: new Date().toISOString().split('T')[0],
+        document_date: '', // Cleared default as per user request
         supplier_invoice_number: '',
         grn_ids: [],
         po_id: '',
@@ -45,6 +46,21 @@ const AddPurchaseInvoice = () => {
         attachment: null,
         supplier_state: ''
     });
+
+    const toIsoDate = (displayDate) => {
+        if (!displayDate) return "";
+        if (displayDate.includes("-") && displayDate.split("-")[0].length === 4) return displayDate; // Already ISO
+        const separator = displayDate.includes("/") ? "/" : "-";
+        const parts = displayDate.split(separator);
+        if (parts.length === 3) {
+            // Assume DD/MM/YYYY or DD-MM-YYYY
+            const day = parts[0].padStart(2, '0');
+            const month = parts[1].padStart(2, '0');
+            const year = parts[2];
+            if (year.length === 4) return `${year}-${month}-${day}`;
+        }
+        return displayDate;
+    };
 
     const [expenses, setExpenses] = useState([]);
     const [items, setItems] = useState([
@@ -86,14 +102,37 @@ const AddPurchaseInvoice = () => {
                 
                 setSuppliers(accRes.data || []);
                 setProducts(prodRes.products || []);
+                const companyGst = profileRes?.gstNumber || profileRes?.data?.gstNumber || "";
                 setCompanyInfo({
                     ...profileRes?.shopDetail,
-                    gstNumber: profileRes?.gstNumber
+                    ...profileRes?.data?.shopDetail,
+                    gstNumber: companyGst
                 });
 
                 if (isEditMode) {
                     const invoice = await purchaseInvoiceService.getInvoice(id);
                     const currentSupplier = (accRes.data || []).find(s => s.id === invoice.supplierId);
+                    
+                    // Requirement: Fetch dropdown data for the supplier in edit mode
+                    if (invoice.supplierId) {
+                        try {
+                            const [poResponse, grnResponse] = await Promise.all([
+                                purchaseInvoiceService.getSupplierPOs(invoice.supplierId),
+                                purchaseInvoiceService.getSupplierGRNs(invoice.supplierId)
+                            ]);
+                            const poList = Array.isArray(poResponse) ? poResponse : (poResponse.data || []);
+                            setPos(poList.filter(p => p.status !== 'DELETED'));
+                            const grnList = Array.isArray(grnResponse) ? grnResponse : (grnResponse.data || []);
+                            setChallans(grnList);
+                        } catch (e) {
+                            console.error("Error fetching supplier associations in edit mode:", e);
+                        }
+                    }
+
+                    const supplierGST = invoice.gstNumber || currentSupplier?.gstNo || "";
+                    const supplierState = currentSupplier?.state || "";
+                    
+                    const numericGrnIds = invoice.challanNumber ? invoice.challanNumber.split(',').map(Number) : [];
                     
                     setFormData({
                         supplier_id: invoice.supplierId || '',
@@ -106,36 +145,58 @@ const AddPurchaseInvoice = () => {
                         credit_days: invoice.creditDays,
                         po_id: invoice.poId || '',
                         po_number: invoice.poNumber || '',
-                        gst_no: invoice.gstNumber || "",
-                        grn_ids: invoice.challanNumber ? invoice.challanNumber.split(',') : [],
-                        supplier_state: currentSupplier?.state || ""
+                        gst_no: supplierGST,
+                        grn_ids: numericGrnIds,
+                        supplier_state: supplierState,
+                        attachment: invoice.uploadedFilePath
                     });
-                    setItems(invoice.items.map(item => {
-                        const quantity = item.quantity || 0;
-                        const rate = item.rate || 0;
-                        const taxPct = item.taxPercent || 18;
-                        const baseAmt = quantity * rate;
-                        const taxAmt = (baseAmt * taxPct) / 100;
-                        return {
-                            id: item.id,
-                            productId: item.productId,
-                            productCode: item.productCode,
-                            productName: item.productName,
-                            quantity: quantity,
-                            rate: rate,
-                            uom: item.uom,
-                            taxPercent: taxPct,
-                            discountAmount: item.discountAmount || 0,
-                            discountPercent: item.discountPercent || 0,
-                            beforeTaxAmount: item.beforeTaxAmount || baseAmt,
-                            taxAmount: item.taxAmount || taxAmt,
-                            totalAmount: item.totalAmount || (baseAmt + taxAmt),
-                            printDescription: item.productName,
-                            totalPoQty: item.totalPoQty || 0, 
-                            receivedPoQty: item.receivedPoQty || 0,
-                            remainingQty: (item.totalPoQty || 0) - (item.receivedPoQty || 0) - quantity
-                        };
-                    }));
+
+                    // Trigger GST calculation with direct profile data
+                    const type = calculateGST(supplierGST, supplierState, companyGst);
+                    setGstType(type);
+
+                    // Requirement: If challans are selected, re-sync the item table from GRN data
+                    if (numericGrnIds.length > 0) {
+                        await handleChallanChange(numericGrnIds);
+                    } else {
+                        // Fallback to saved invoice items if no challans linked
+                        setItems(invoice.items.map(item => {
+                            const quantity = item.quantity || 0;
+                            const rate = item.rate || 0;
+                            const taxPct = item.taxPercent || 18;
+                            const discAmt = item.discountAmount || 0;
+                            const baseAmt = quantity * rate;
+                            const befTax = baseAmt - discAmt;
+                            const taxAmt = (befTax * taxPct) / 100;
+                            
+                            let hsn = item.hsnCode;
+                            if (!hsn && item.productId) {
+                                const prod = (prodRes.products || []).find(p => p.id === item.productId);
+                                hsn = prod?.hsn_code || '';
+                            }
+
+                            return {
+                                id: item.id,
+                                productId: item.productId,
+                                productCode: item.productCode,
+                                productName: item.productName,
+                                quantity: quantity,
+                                rate: rate,
+                                uom: item.uom,
+                                taxPercent: taxPct,
+                                discountAmount: discAmt,
+                                discountPercent: item.discountPercent || 0,
+                                hsnCode: hsn || '',
+                                beforeTaxAmount: item.beforeTaxAmount || befTax,
+                                taxAmount: item.taxAmount || taxAmt,
+                                totalAmount: item.totalAmount || (befTax + taxAmt),
+                                printDescription: item.productName,
+                                totalPoQty: item.totalPoQty || 0, 
+                                receivedPoQty: item.receivedPoQty || 0,
+                                remainingQty: (item.totalPoQty || 0) - (item.receivedPoQty || 0) - quantity
+                            };
+                        }));
+                    }
 
                     setExpenses(invoice.expenses?.map(e => ({
                         id: e.id,
@@ -278,14 +339,31 @@ const AddPurchaseInvoice = () => {
             setPos(poList.filter(p => p.status !== 'DELETED'));
             
             const grnList = Array.isArray(grnResponse) ? grnResponse : (grnResponse.data || []);
-            setChallans(grnList.filter(c => c.status !== 'DELETED' && (c.remainingQty === undefined || c.remainingQty > 0)));
+            setChallans(grnList.filter(c => c.status !== 'DELETED'));
         } catch (error) {
             console.error("Error fetching supplier data:", error);
         }
     };
 
-    const calculateGST = (supplierGST, supplierState) => {
-        const userGst = companyInfo?.gstNumber;
+    const filteredChallans = React.useMemo(() => {
+        const baseChallans = Array.isArray(challans) ? challans : [];
+        const selectedGrnIds = (formData.grn_ids || []).map(id => id.toString());
+
+        if (!formData.po_id && !formData.po_number) return baseChallans;
+        
+        const normalize = (val) => String(val || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const searchPONumber = normalize(formData.po_number);
+
+        return baseChallans.filter(c => {
+            const grnPoNumber = normalize(c.poNumber);
+            return (searchPONumber && grnPoNumber === searchPONumber) || 
+                   (formData.po_id && (String(c.poId) === String(formData.po_id))) ||
+                   selectedGrnIds.includes(c.id.toString());
+        });
+    }, [challans, formData.po_id, formData.po_number, formData.grn_ids]);
+
+    const calculateGST = (supplierGST, supplierState, companyGst = companyInfo?.gstNumber) => {
+        const userGst = companyGst;
         const userState = (companyInfo?.state || "").trim().toLowerCase();
         const suppState = (supplierState || "").trim().toLowerCase();
 
@@ -335,27 +413,33 @@ const AddPurchaseInvoice = () => {
                 if (grn && grn.items) {
                     grn.items.forEach(item => {
                         const pid = item.productId;
+                        const itemDiscAmt = parseFloat(item.discountAmount || item.discountAmt) || 0;
+                        const itemQty = parseFloat(item.receivedQty || item.quantity) || 0;
+                        const itemRate = parseFloat(item.rate) || 0;
+                        const itemGross = itemQty * itemRate;
+
                         if (!productMap[pid]) {
                             productMap[pid] = {
                                 id: Date.now() + Math.random(),
                                 productId: item.productId,
                                 productCode: item.productCode,
                                 productName: item.productName,
-                                quantity: parseFloat(item.quantity) || 0,
-                                rate: parseFloat(item.rate) || 0,
+                                quantity: itemQty,
+                                totalGross: itemGross, // Use this for weighted average rate
                                 uom: item.uom,
                                 hsnCode: item.hsnCode || '',
                                 taxPercent: item.taxPercent || 18,
                                 totalPoQty: item.totalPoQty || 0,
-                                discountAmount: 0,
-                                discountPercent: 0,
+                                discountAmount: itemDiscAmt,
                                 beforeTaxAmount: 0, 
                                 taxAmount: 0,
                                 totalAmount: 0,
                                 printDescription: item.productName
                             };
                         } else {
-                            productMap[pid].quantity += parseFloat(item.quantity) || 0;
+                            productMap[pid].quantity += itemQty;
+                            productMap[pid].totalGross += itemGross;
+                            productMap[pid].discountAmount += itemDiscAmt;
                         }
                     });
                 }
@@ -363,15 +447,24 @@ const AddPurchaseInvoice = () => {
 
             const mergedItems = Object.values(productMap).map(item => {
                 const quantity = item.quantity;
-                const rate = item.rate;
+                const totalGross = item.totalGross;
+                const discAmt = item.discountAmount;
                 const taxPct = item.taxPercent;
-                const baseAmt = quantity * rate;
-                const taxAmt = (baseAmt * taxPct) / 100;
+                
+                // Calculate weighted average rate and percent
+                const rate = quantity > 0 ? (totalGross / quantity) : 0;
+                const discPercent = totalGross > 0 ? (discAmt / totalGross) * 100 : 0;
+                
+                const beforeTax = totalGross - discAmt;
+                const taxAmt = (beforeTax * taxPct) / 100;
+                
                 return {
                     ...item,
-                    beforeTaxAmount: parseFloat(baseAmt.toFixed(2)),
+                    rate: parseFloat(rate.toFixed(2)),
+                    discountPercent: parseFloat(discPercent.toFixed(2)),
+                    beforeTaxAmount: parseFloat(beforeTax.toFixed(2)),
                     taxAmount: parseFloat(taxAmt.toFixed(2)),
-                    totalAmount: parseFloat((baseAmt + taxAmt).toFixed(2))
+                    totalAmount: parseFloat((beforeTax + taxAmt).toFixed(2))
                 };
             });
 
@@ -409,13 +502,19 @@ const AddPurchaseInvoice = () => {
 
         try {
             const poDetails = await purchaseOrderService.getPurchaseOrderById(poId);
-            setFormData(prev => ({ ...prev, po_id: poDetails.id, po_number: poDetails.poNumber }));
+            setFormData(prev => ({ 
+                ...prev, 
+                po_id: poDetails.id, 
+                po_number: poDetails.poNumber,
+                grn_ids: [] // Clear previously selected GRNs when PO changes
+            }));
 
             const poItems = await Promise.all(poDetails.items.map(async (item) => {
                 const quantity = item.quantity || 0;
                 const rate = item.rate || 0;
-                const discAmt = item.discountAmount || 0;
+                const discAmt = item.discountAmount || item.discountAmt || 0;
                 const taxPct = item.taxPercent || 0;
+                const discPct = item.discountPercent || 0;
 
                 // Fetch received count for this product & supplier from GRN history
                 let receivedCount = item.receivedQty || 0;
@@ -465,15 +564,23 @@ const AddPurchaseInvoice = () => {
         if (!formData.address) newErrors.address = "Address is required";
         if (formData.credit_days === "" || formData.credit_days === undefined) newErrors.credit_days = "Credit days is required";
         if (!formData.supplier_invoice_number) newErrors.supplier_invoice_number = "Invoice number is required";
-        if (!formData.document_date) newErrors.document_date = "Invoice date is required";
+        const isoDocDate = toIsoDate(formData.document_date);
+        if (!isoDocDate) {
+            newErrors.document_date = "Invoice date is required";
+        } else {
+            const today = new Date().toISOString().split('T')[0];
+            if (isoDocDate > today) {
+                newErrors.document_date = "Date cannot be in the future";
+            }
+        }
 
-        const validItems = items.filter(item => item.productId);
+        const validItems = items.filter(item => item.productId || item.productCode);
         if (validItems.length === 0) {
             newErrors.items = true;
         } else {
             const itemErrors = [];
             items.forEach((item, index) => {
-                if (item.productId) {
+                if (item.productId || item.productCode) {
                     if (!item.quantity || item.quantity <= 0) {
                         if (!itemErrors[index]) itemErrors[index] = {};
                         itemErrors[index].quantity = true;
@@ -562,7 +669,7 @@ const AddPurchaseInvoice = () => {
                 challanNumbers: formData.grn_ids.map(id => id.toString()),
                 supplierInvoiceNumber: formData.supplier_invoice_number,
                 invoiceNumber: formData.document_number,
-                invoiceDate: formData.document_date,
+                invoiceDate: toIsoDate(formData.document_date),
                 bookingDate: formData.booking_date,
                 items: validItems.map(i => ({
                     productId: i.productId?.toString() || undefined,
@@ -573,6 +680,7 @@ const AddPurchaseInvoice = () => {
                     rate: Number(i.rate),
                     uom: i.uom,
                     hsnCode: i.hsnCode,
+                    discount: Number(i.discountAmount) || 0,
                     taxPercent: parseFloat(i.taxPercent) || 0,
                     taxAmount: parseFloat(i.taxAmount) || 0,
                     beforeTaxAmount: parseFloat(i.beforeTaxAmount) || 0,
@@ -591,11 +699,18 @@ const AddPurchaseInvoice = () => {
             
             console.log("FINAL PAYLOAD:", payload);
 
+            const finalPayload = {
+                ...payload,
+                removeAttachment: formData.removeAttachment
+            };
+
+            const fileToUpload = (formData.attachment instanceof File) ? formData.attachment : null;
+
             if (isEditMode) {
-                await purchaseInvoiceService.updateInvoice(id, payload, formData.attachment);
+                await purchaseInvoiceService.updateInvoice(id, finalPayload, fileToUpload);
                 toast.success("Purchase Invoice updated successfully");
             } else {
-                await purchaseInvoiceService.createInvoice(payload, formData.attachment);
+                await purchaseInvoiceService.createInvoice(finalPayload, fileToUpload);
                 toast.success("Purchase Invoice created successfully");
             }
             sessionStorage.removeItem('add_pi_draft');
@@ -662,7 +777,7 @@ const AddPurchaseInvoice = () => {
                         handleChallanChange={handleChallanChange}
                         suppliers={suppliers}
                         pos={pos}
-                        challans={challans}
+                        challans={filteredChallans}
                         errors={errors}
                         challanDateRef={challanDateRef}
                         type="Invoice"
@@ -700,15 +815,59 @@ const AddPurchaseInvoice = () => {
 
                 <div className="p-8 flex items-center gap-6 border-t border-[#F3F4F6]">
                     <span className="text-[15px] font-bold text-[#374151]">Upload Purchase Invoice :</span>
-                    <label className="relative cursor-pointer px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all flex items-center justify-center gap-2 shadow-sm group active:scale-95">
-                        {formData.attachment ? (
-                            <span className="flex items-center gap-2">
-                                <span className="max-w-[200px] truncate">{formData.attachment.name}</span>
-                                <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded text-emerald-100">Change</span>
-                            </span>
-                        ) : "Upload Purchase Invoice"}
-                        <input type="file" className="hidden" onChange={(e) => setFormData({...formData, attachment: e.target.files[0]})} accept="application/pdf,image/jpeg,image/png" />
-                    </label>
+                    <div className="flex items-center gap-3">
+                        <label className="relative cursor-pointer px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all flex items-center justify-center gap-2 shadow-sm group active:scale-95">
+                            {formData.attachment ? (
+                                <span className="flex items-center gap-2">
+                                    <FileText size={18} />
+                                    <span className="max-w-[200px] truncate">
+                                        {typeof formData.attachment === 'string' ? 'Existing Invoice' : formData.attachment.name}
+                                    </span>
+                                    <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded text-emerald-100">Change</span>
+                                </span>
+                            ) : (
+                                <>
+                                    <FileText size={18} />
+                                    <span>Upload Purchase Invoice</span>
+                                </>
+                            )}
+                            <input 
+                                type="file" 
+                                className="hidden" 
+                                onChange={(e) => setFormData({...formData, attachment: e.target.files[0], removeAttachment: false})} 
+                                accept="application/pdf,image/jpeg,image/png" 
+                            />
+                        </label>
+
+                        {formData.attachment && (
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (typeof formData.attachment === 'string') {
+                                            const root = BASE_URL.split('/api')[0];
+                                            window.open(`${root}/${formData.attachment}`, '_blank');
+                                        } else {
+                                            const url = URL.createObjectURL(formData.attachment);
+                                            window.open(url, '_blank');
+                                        }
+                                    }}
+                                    className="p-2.5 bg-blue-50 text-blue-600 rounded-[10px] hover:bg-blue-100 transition-all shadow-sm border border-blue-100"
+                                    title="View Invoice"
+                                >
+                                    <Eye size={18} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({...formData, attachment: null, removeAttachment: true})}
+                                    className="p-2.5 bg-red-50 text-red-500 rounded-[10px] hover:bg-red-100 transition-all shadow-sm border border-red-100"
+                                    title="Remove Invoice"
+                                >
+                                    <Trash2 size={18} />
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className="px-8 py-6 border-t border-[#F3F4F6] bg-gray-50 flex justify-end gap-4">

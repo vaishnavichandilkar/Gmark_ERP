@@ -34,12 +34,14 @@ export class PurchaseInvoiceService {
   }
 
   async getSupplierPOs(supplierIdOrName: string, userId: number) {
-    let accountName = supplierIdOrName;
+    if (!supplierIdOrName) return [];
+    
+    let accountName = String(supplierIdOrName).trim();
     
     // If it's a numeric ID, find the actual account name first
-    if (/^\d+$/.test(supplierIdOrName)) {
+    if (/^\d+$/.test(accountName)) {
       const account = await this.prisma.accountMaster.findUnique({
-        where: { id: parseInt(supplierIdOrName, 10) },
+        where: { id: parseInt(accountName, 10) },
       });
       if (account) {
         accountName = account.accountName;
@@ -49,7 +51,7 @@ export class PurchaseInvoiceService {
     return this.prisma.purchaseOrder.findMany({
       where: {
         userId,
-        supplierName: accountName,
+        supplierName: { equals: accountName, mode: 'insensitive' },
         status: { not: 'DELETED' },
       },
       select: {
@@ -60,9 +62,9 @@ export class PurchaseInvoiceService {
     });
   }
 
-  async generateInvoiceNumber(): Promise<string> {
+  async generateInvoiceNumber(userId: number): Promise<string> {
     const lastInvoice = await this.prisma.purchaseInvoice.findFirst({
-      where: { invoiceNumber: { startsWith: 'INV-' } },
+      where: { userId, invoiceNumber: { startsWith: 'INV-' } },
       orderBy: { invoiceNumber: 'desc' },
       select: { invoiceNumber: true },
     });
@@ -77,11 +79,11 @@ export class PurchaseInvoiceService {
   }
 
   async create(createDto: CreatePurchaseInvoiceDto, userId: number, uploadedFilePath?: string) {
-    const invoiceNumber = await this.generateInvoiceNumber();
+    const invoiceNumber = await this.generateInvoiceNumber(userId);
 
     // Supplier Logic
     const supplier = await this.prisma.accountMaster.findFirst({
-      where: { id: parseInt(createDto.supplierId, 10) },
+      where: { id: parseInt(createDto.supplierId, 10), userId },
     });
 
     if (!supplier) throw new BadRequestException('Supplier not found');
@@ -118,6 +120,7 @@ export class PurchaseInvoiceService {
         const befTax = (qty * rate) - discAmt;
         const taxPct = Number(i.taxPercent || 0);
         const taxAmt = (befTax * taxPct) / 100;
+        const discPct = (qty * rate) > 0 ? (discAmt / (qty * rate)) * 100 : 0;
         
         totalTaxable += befTax;
         materialTax += taxAmt;
@@ -127,8 +130,8 @@ export class PurchaseInvoiceService {
         
         // Fetch HSN from product if missing
         if (!hsnCode && productId) {
-            const product = await this.prisma.product.findUnique({
-                where: { id: productId },
+            const product = await this.prisma.product.findFirst({
+                where: { id: productId, created_by: userId },
                 select: { hsn_code: true }
             });
             hsnCode = product?.hsn_code || '';
@@ -141,12 +144,14 @@ export class PurchaseInvoiceService {
             quantity: qty,
             rate: rate,
             uom: i.uom,
+            discountPercent: discPct,
+            discountAmount: discAmt,
             taxPercent: taxPct,
             taxAmount: taxAmt,
             amount: befTax + taxAmt,
             beforeTaxAmount: befTax,
             totalPoQty: i.totalPoQty || 0,
-            hsnCode: hsnCode // Temporarily stored for PO creation if needed
+            hsnCode: hsnCode
         });
     }
 
@@ -318,7 +323,7 @@ export class PurchaseInvoiceService {
         userId,
         uploadedFilePath: uploadedFilePath || null,
         items: {
-          create: itemsToCreate.map(({ hsnCode, ...rest }) => rest) // Remove hsnCode as it's not in the InvoiceItem model
+          create: itemsToCreate
         },
         expenses: {
           create: expensesToCreate
@@ -373,22 +378,19 @@ export class PurchaseInvoiceService {
       }
     };
   }
-
-  async findOne(id: number) {
-    const invoice = await this.prisma.purchaseInvoice.findUnique({
-      where: { id },
+ 
+  async findOne(id: number, userId: number) {
+    const invoice = await this.prisma.purchaseInvoice.findFirst({
+      where: { id, userId },
       include: { items: true, expenses: true },
     });
-
-    if (!invoice) throw new NotFoundException(`Invoice ID ${id} not found`);
+ 
+    if (!invoice) throw new NotFoundException(`Invoice ID ${id} not found or access denied`);
     return invoice;
   }
-
-  async update(id: number, updateDto: UpdatePurchaseInvoiceDto, uploadedFilePath?: string) {
-    const existing = await this.prisma.purchaseInvoice.findUnique({
-      where: { id },
-      include: { items: true, expenses: true },
-    });
+ 
+  async update(id: number, updateDto: UpdatePurchaseInvoiceDto, userId: number, uploadedFilePath?: string) {
+    const existing = await this.findOne(id, userId);
 
     if (!existing) throw new NotFoundException(`Invoice ID ${id} not found`);
 
@@ -411,6 +413,7 @@ export class PurchaseInvoiceService {
             const discAmt = Number(i.discount || 0);
             const befTax = (qty * rate) - discAmt;
             const taxPct = Number(i.taxPercent || 0);
+            const discPct = (qty * rate) > 0 ? (discAmt / (qty * rate)) * 100 : 0;
             const taxAmt = (befTax * taxPct) / 100;
             
             totalTaxable += befTax;
@@ -423,11 +426,14 @@ export class PurchaseInvoiceService {
                 quantity: qty,
                 rate: rate,
                 uom: i.uom,
+                discountPercent: discPct,
+                discountAmount: discAmt,
                 taxPercent: taxPct,
                 taxAmount: taxAmt,
                 amount: befTax + taxAmt,
                 beforeTaxAmount: befTax,
                 totalPoQty: i.totalPoQty || 0,
+                hsnCode: i.hsnCode || ''
             });
         }
     } else {
@@ -544,7 +550,7 @@ export class PurchaseInvoiceService {
           challanNumber: updateDto.challanNumbers ? updateDto.challanNumbers.join(',') : existing.challanNumber,
           creditDays: updateDto.creditDays ?? existing.creditDays,
           status: (updateDto.status as any) ?? existing.status,
-          uploadedFilePath: uploadedFilePath || existing.uploadedFilePath,
+          uploadedFilePath: (updateDto as any).removeAttachment === 'true' ? null : (uploadedFilePath || existing.uploadedFilePath),
           taxableAmount: totalTaxable,
           cgstAmount: cgst,
           sgstAmount: sgst,
@@ -614,15 +620,18 @@ export class PurchaseInvoiceService {
     };
   }
 
-  async exportPurchaseInvoices(format: string, query: { search?: string }) {
+  async exportPurchaseInvoices(userId: number, format: string, query: { search?: string }) {
     const invoices = await this.prisma.purchaseInvoice.findMany({
-      where: query.search ? {
-        OR: [
-          { invoiceNumber: { contains: query.search, mode: 'insensitive' } },
-          { supplierName: { contains: query.search, mode: 'insensitive' } },
-          { supplierInvoiceNumber: { contains: query.search, mode: 'insensitive' } },
-        ]
-      } : {},
+      where: {
+        userId,
+        ...(query.search ? {
+          OR: [
+            { invoiceNumber: { contains: query.search, mode: 'insensitive' } },
+            { supplierName: { contains: query.search, mode: 'insensitive' } },
+            { supplierInvoiceNumber: { contains: query.search, mode: 'insensitive' } },
+          ]
+        } : {})
+      },
       include: { items: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -797,7 +806,7 @@ export class PurchaseInvoiceService {
         }
 
         const supplier = await this.prisma.accountMaster.findFirst({
-            where: { accountName: supplierName }
+            where: { accountName: supplierName, userId }
         });
 
         if (!supplier) {

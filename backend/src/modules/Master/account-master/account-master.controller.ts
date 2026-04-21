@@ -210,7 +210,11 @@ export class AccountMasterController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Req() req?: any
   ) {
+    const fs = require('fs');
+    const logInfo = `[${new Date().toISOString()}] findAll called. User: ${JSON.stringify(req?.user)}, Params: ${JSON.stringify({groupName, search, page, limit})}\n`;
+    fs.appendFileSync('d:/USERS/vaishnavi/Desktop/weighting_scale/backend/debug_account_master.log', logInfo);
     return this.accountMasterService.findAll({ 
       groupName, 
       gstNo, 
@@ -220,7 +224,8 @@ export class AccountMasterController {
       status, 
       search,
       page: page ? parseInt(page, 10) : undefined,
-      limit: limit ? parseInt(limit, 10) : undefined
+      limit: limit ? parseInt(limit, 10) : undefined,
+      userId: req.user.id
     });
   }
 
@@ -236,6 +241,7 @@ export class AccountMasterController {
     @Query('supplierCreditDays') supplierCreditDays?: number,
     @Query('status') status?: MasterStatus,
     @Query('search') search?: string,
+    @Req() req?: any
   ) {
     const filters = {
       groupName, 
@@ -244,7 +250,8 @@ export class AccountMasterController {
       customerCreditDays: customerCreditDays ? Number(customerCreditDays) : undefined,
       supplierCreditDays: supplierCreditDays ? Number(supplierCreditDays) : undefined, 
       status, 
-      search 
+      search,
+      userId: req.user.id
     };
 
     const file = await this.accountMasterService.exportAccounts(format.toLowerCase(), filters);
@@ -327,8 +334,8 @@ export class AccountMasterController {
   @Get(':id')
   @ApiOperation({ summary: 'Get full details of a specific account' })
   @ApiParam({ name: 'id', required: true, description: 'ID of the account' })
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.accountMasterService.findOne(id);
+  findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.accountMasterService.findOne(id, req.user.id);
   }
 
   @Put(':id')
@@ -448,7 +455,7 @@ export class AccountMasterController {
       throw new BadRequestException(flattenErrors(errors));
     }
 
-    return this.accountMasterService.update(id, dto, files);
+    return this.accountMasterService.update(id, dto, req.user.id, files);
   }
 
   @Patch(':id/status')
@@ -457,8 +464,9 @@ export class AccountMasterController {
   @HttpCode(HttpStatus.OK)
   updateStatus(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateStatusDto: UpdateAccountStatusDto
+    @Body() updateStatusDto: UpdateAccountStatusDto,
+    @Req() req: any
   ) {
-    return this.accountMasterService.updateStatus(id, updateStatusDto);
+    return this.accountMasterService.updateStatus(id, updateStatusDto, req.user.id);
   }
 }

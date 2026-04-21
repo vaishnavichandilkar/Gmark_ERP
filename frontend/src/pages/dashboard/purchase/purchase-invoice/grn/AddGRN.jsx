@@ -377,7 +377,14 @@ const AddGRN = () => {
         if (!formData.address) newErrors.address = "Address is required";
         if (formData.credit_days === "" || formData.credit_days === undefined) newErrors.credit_days = "Credit days is required";
         if (!formData.supplier_challan_number) newErrors.supplier_challan_number = "Challan number is required";
-        if (!formData.document_date) newErrors.document_date = "Challan date is required";
+        if (!formData.document_date) {
+            newErrors.document_date = "Challan date is required";
+        } else {
+            const today = new Date().toISOString().split('T')[0];
+            if (formData.document_date > today) {
+                newErrors.document_date = "Date cannot be in the future";
+            }
+        }
 
         const validItems = items.filter(item => item.productCode);
         if (validItems.length === 0) {

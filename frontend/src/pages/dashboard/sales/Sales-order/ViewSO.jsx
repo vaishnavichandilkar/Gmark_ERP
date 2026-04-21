@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ROUTES } from '../../../constants/routes';
+import { ROUTES } from '../../../../constants/routes';
 import {
     ArrowLeft,
     Search,
@@ -13,7 +13,7 @@ import {
     ChevronsUpDown
 } from 'lucide-react';
 
-import salesOrderService from '../../../services/salesOrderService';
+import salesOrderService from '../../../../services/salesOrderService';
 
 const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1, renderEdit2 }) => (
     <div className={`flex flex-col sm:flex-row border-[#E5E7EB] border-b last:border-0 font-outfit`}>
@@ -107,27 +107,12 @@ const ViewSO = () => {
                     </h2>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                         {!isLoading && (
-                            <>
-                                <button
-                                    onClick={() => {
-                                        navigate(ROUTES.SALES_ORDER_PRINT, {
-                                            state: {
-                                                soData: salesOrder,
-                                                from: `/seller/sales/order/view/${id}`
-                                            }
-                                        });
-                                    }}
-                                    className="flex-1 sm:flex-none px-6 md:px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] md:text-[15px] font-bold hover:bg-[#052611] transition-all shadow-md flex items-center justify-center gap-2"
-                                >
-                                    <Printer size={18} /> Print SO
-                                </button>
-                                <button
-                                    onClick={() => navigate(ROUTES.SALES_ORDER_EDIT.replace(':id', id))}
-                                    className="flex-1 sm:flex-none px-6 md:px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] md:text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-md flex items-center justify-center gap-2"
-                                >
-                                    Edit SO
-                                </button>
-                            </>
+                            <button
+                                onClick={() => navigate(ROUTES.SALES_ORDER_EDIT.replace(':id', id))}
+                                className="flex-1 sm:flex-none px-6 md:px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] md:text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-md flex items-center justify-center gap-2"
+                            >
+                                Edit SO
+                            </button>
                         )}
                         <button
                             onClick={() => navigate(-1)}
@@ -281,7 +266,24 @@ const ViewSO = () => {
                             </tfoot>
                         </table>
                     </div>
-                </div>
+                </div>                {/* Footer Actions */}
+                {!isLoading && (
+                    <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-[#E5E7EB] p-5 flex justify-end z-[100] shadow-[0_-8px_30px_rgba(0,0,0,0.04)] font-outfit">
+                        <button
+                            onClick={() => {
+                                navigate(ROUTES.SALES_ORDER_PRINT, {
+                                    state: {
+                                        soData: salesOrder,
+                                        from: `/seller/sales/order/view/${id}`
+                                    }
+                                });
+                            }}
+                            className="flex items-center gap-2 px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all active:scale-95 shadow-sm"
+                        >
+                            <Printer size={18} /> Preview & Print SO
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

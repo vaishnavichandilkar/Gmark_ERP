@@ -22,8 +22,8 @@ export class PurchaseInvoiceController {
 
   @Get('next-number')
   @ApiOperation({ summary: 'Generate next available Purchase Invoice number' })
-  async getNextNumber() {
-    const invoiceNumber = await this.service.generateInvoiceNumber();
+  async getNextNumber(@Request() req) {
+    const invoiceNumber = await this.service.generateInvoiceNumber(req.user.id);
     return { invoiceNumber };
   }
 
@@ -86,11 +86,12 @@ export class PurchaseInvoiceController {
   @ApiQuery({ name: 'format', enum: ['xlsx', 'pdf'], required: true })
   @ApiQuery({ name: 'search', required: false })
   async exportInvoices(
+    @Request() req,
     @Query('format') format: string,
     @Query('search') search: string,
     @Res() res: Response
   ) {
-    const { buffer, filename, mimetype } = await this.service.exportPurchaseInvoices(format, { search });
+    const { buffer, filename, mimetype } = await this.service.exportPurchaseInvoices(req.user.id, format, { search });
     res.set({
       'Content-Type': mimetype,
       'Content-Disposition': `attachment; filename=${filename}`,
@@ -115,8 +116,8 @@ export class PurchaseInvoiceController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get Invoice details by ID' })
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    return this.service.findOne(id, req.user.id);
   }
 
   @Get(':id/print')
@@ -188,7 +189,7 @@ export class PurchaseInvoiceController {
       poId: body.poId ? parseInt(body.poId, 10) : undefined,
     };
 
-    return this.service.update(id, updateDto, file?.path);
+    return this.service.update(id, updateDto, req.user.id, file?.path);
   }
 
   @Delete(':id')

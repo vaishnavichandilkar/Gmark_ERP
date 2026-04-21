@@ -274,8 +274,11 @@ export class AccountMasterService {
     page?: number;
     limit?: number;
     isExport?: boolean;
+    userId: number;
   }) {
-    const where: Prisma.AccountMasterWhereInput = {};
+    const fs = require('fs');
+    fs.appendFileSync('d:/USERS/vaishnavi/Desktop/weighting_scale/backend/debug_service.log', `[${new Date().toISOString()}] Service.findAll User: ${filter.userId}, Filter: ${JSON.stringify(filter)}\n`);
+    const where: Prisma.AccountMasterWhereInput = { userId: filter.userId };
     
     if (filter.groupName) {
       const groupNameStr = String(filter.groupName);
@@ -401,26 +404,26 @@ export class AccountMasterService {
     };
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, userId: number) {
     const account = await this.prisma.accountMaster.findUnique({
-      where: { id },
+      where: { id, userId },
     });
 
     if (!account) {
-      throw new NotFoundException(`Account with ID ${id} not found`);
+      throw new NotFoundException(`Account with ID ${id} not found or access denied`);
     }
 
     return account;
   }
 
-  async update(id: number, updateDto: UpdateAccountMasterDto, files?: any) {
-    const existingOriginal = await this.findOne(id);
+  async update(id: number, updateDto: UpdateAccountMasterDto, userId: number, files?: any) {
+    const existingOriginal = await this.findOne(id, userId);
     
     if (updateDto.accountName) {
       const duplicateAccount = await this.prisma.accountMaster.findFirst({
         where: {
           accountName: { equals: updateDto.accountName, mode: 'insensitive' },
-          userId: existingOriginal.userId,
+          userId,
           id: { not: id }
         }
       });
@@ -496,10 +499,10 @@ export class AccountMasterService {
     };
   }
 
-  async updateStatus(id: number, updateStatusDto: UpdateAccountStatusDto) {
-    await this.findOne(id);
+  async updateStatus(id: number, updateStatusDto: UpdateAccountStatusDto, userId: number) {
+    await this.findOne(id, userId);
     return this.prisma.accountMaster.update({
-      where: { id },
+      where: { id, userId },
       data: { status: updateStatusDto.status },
     });
   }

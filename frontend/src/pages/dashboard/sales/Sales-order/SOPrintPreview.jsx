@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import html2pdf from "html2pdf.js";
 import { toast } from 'react-hot-toast';
-import axiosInstance from '../../../services/axiosInstance';
+import axiosInstance from '@/services/axiosInstance';
 
 const SOPrintPreview = () => {
     const location = useLocation();
@@ -13,19 +13,35 @@ const SOPrintPreview = () => {
     const [isDownloading, setIsDownloading] = useState(false);
     const [sellerInfo, setSellerInfo] = useState(null);
 
+    const getStateName = (gstin) => {
+        if (!gstin || gstin.length < 2) return "Maharashtra";
+        const code = gstin.substring(0, 2);
+        const states = {
+            "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand",
+            "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar",
+            "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", "15": "Mizoram",
+            "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal", "20": "Workhand",
+            "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat", "25": "Daman & Diu",
+            "26": "Dadra & Nagar Haveli", "27": "Maharashtra", "28": "Andhra Pradesh", "29": "Karnataka", "30": "Goa",
+            "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman & Nicobar Islands",
+            "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh"
+        };
+        return states[code] || "Maharashtra";
+    };
+
     useEffect(() => {
         const fetchSellerInfo = async () => {
             try {
                 const response = await axiosInstance.get('/business/profile');
                 if (response.data) {
-                    const { shopDetail, phone, email } = response.data;
+                    const { shopDetail, phone, email, websiteUrl, gstNumber } = response.data;
                     setSellerInfo({
                         shopName: shopDetail?.shopName || "ARDHYA AGRO SERVICE",
                         address: shopDetail ? `${shopDetail.address}, ${shopDetail.village || ''}, ${shopDetail.district}, ${shopDetail.state} - ${shopDetail.pinCode}` : "Near Mahalaxmi Temple, Hitani",
                         phone: phone || "+91 2855943035",
                         email: email || "ardhya123@gmail.com",
-                        website: "ardhyaagro.in",
-                        gstNumber: shopDetail?.gstNumber || "27ABCDE1234F1Z5"
+                        website: websiteUrl || "",
+                        gstNumber: gstNumber || shopDetail?.gstNumber || ""
                     });
                 }
             } catch (error) {
@@ -40,7 +56,11 @@ const SOPrintPreview = () => {
             <div className="flex flex-col items-center justify-center h-screen gap-4">
                 <p className="text-gray-500 font-outfit text-[13px]">No SO data found for preview.</p>
                 <button
-                    onClick={() => navigate('/seller/sales/order/add?restore=true')}
+                    onClick={() => {
+                        const fromPath = location.state?.from || '/seller/sales/order/add';
+                        const target = fromPath.includes('?') ? `${fromPath}&restore=true` : `${fromPath}?restore=true`;
+                        navigate(target);
+                    }}
                     className="px-6 py-2 bg-[#073318] text-white rounded-[10px] font-bold text-[13px]"
                 >
                     Go Back
@@ -64,22 +84,32 @@ const SOPrintPreview = () => {
     };
 
     const {
-        soNumber: so_no = "N/A",
-        customerName: customer_name = "N/A",
-        address = "",
-        soCreationDate: so_creation_date = "N/A",
-        expiryDate = "N/A",
-        gstNumber: gst_number = "-",
-        panNumber: pan_number = "-",
-        creditDays: credit_days = "0",
+        soNumber, so_number,
+        customerName, customer_name,
+        address,
+        soCreationDate, creation_date,
+        expiryDate, expiry_date,
+        gstNumber, gst_number,
+        panNumber, pan_number,
+        creditDays, credit_days,
         items = []
     } = soData;
 
-    const subTotal = items.reduce((sum, item) => sum + (parseFloat(item.before_tax || (item.quantity * item.rate - (item.discountAmount || 0))) || 0), 0);
-    const totalTax = items.reduce((sum, item) => sum + (parseFloat(item.tax_amount || ((item.quantity * item.rate - (item.discountAmount || 0)) * (item.taxPercent || 0) / 100)) || 0), 0);
-    const cgst = totalTax / 2;
-    const sgst = totalTax / 2;
-    const totalAmount = items.reduce((sum, item) => sum + (parseFloat(item.total_amount || ((item.quantity * item.rate - (item.discountAmount || 0)) * (1 + (item.taxPercent || 0) / 100))) || 0), 0);
+    const final_so_no = soNumber || so_number || "N/A";
+    const final_customer_name = customerName || customer_name || "N/A";
+    const final_so_creation_date = soCreationDate || creation_date || "N/A";
+    const final_expiryDate = expiryDate || expiry_date || "N/A";
+    const final_gst_number = gstNumber || gst_number || "-";
+    const final_pan_number = panNumber || pan_number || "-";
+    const final_credit_days = creditDays || credit_days || "0";
+
+    const subTotal = items.reduce((sum, item) => sum + (parseFloat(item.before_tax || (item.quantity * item.rate - (item.discount_amount || 0))) || 0), 0);
+    const materialTax = items.reduce((sum, item) => sum + (parseFloat(item.tax_amount || ((item.quantity * item.rate - (item.discount_amount || 0)) * (item.tax_percent || 0) / 100)) || 0), 0);
+    
+    const totalTaxOnCombined = materialTax;
+    const cgst = totalTaxOnCombined / 2;
+    const sgst = totalTaxOnCombined / 2;
+    const totalAmount = subTotal + totalTaxOnCombined;
 
     const numberToWords = (num) => {
         const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
@@ -130,7 +160,7 @@ const SOPrintPreview = () => {
             const element = printRef.current;
             const opt = {
                 margin: 0,
-                filename: `SO_${so_no}.pdf`,
+                filename: `SO_${final_so_no}.pdf`,
                 image: { type: 'jpeg', quality: 1 },
                 html2canvas: {
                     scale: 3,
@@ -196,7 +226,14 @@ const SOPrintPreview = () => {
                     <button onClick={() => window.print()} className="px-6 h-[40px] bg-[#073318] text-white rounded-[10px] font-bold text-[14px] flex items-center justify-center">
                         Print SO
                     </button>
-                    <button onClick={() => navigate(-1)} className="px-6 h-[40px] border border-gray-300 rounded-[10px] font-bold text-[14px] flex items-center justify-center gap-2">
+                    <button 
+                        onClick={() => {
+                            const fromPath = location.state?.from || '/seller/sales/order/add';
+                            const target = fromPath.includes('?') ? `${fromPath}&restore=true` : `${fromPath}?restore=true`;
+                            navigate(target);
+                        }} 
+                        className="px-6 h-[40px] border border-gray-300 rounded-[10px] font-bold text-[14px] flex items-center justify-center gap-2"
+                    >
                         <ArrowLeft size={16} /> Back
                     </button>
                 </div>
@@ -213,23 +250,23 @@ const SOPrintPreview = () => {
                             {sellerInfo?.address || "Near Mahalaxmi Temple, Hitani"}
                         </div>
                         <div className="border-b border-black py-2.5 text-center text-[11px] font-semibold tracking-wide">
-                            Phone No.: {sellerInfo?.phone || "+91 2855943035"} &nbsp; Email Id: {sellerInfo?.email || "ardhya123@gmail.com"} &nbsp; Website: {sellerInfo?.website || "ardhyaagro.in"}
+                            Phone No.: {sellerInfo?.phone || "+91 2855943035"} &nbsp; Email Id: {sellerInfo?.email || "ardhya123@gmail.com"} {sellerInfo?.website && ` &nbsp; Website: ${sellerInfo.website}`}
                         </div>
                         <div className="border-b border-black py-3 text-center font-black text-[15px] uppercase tracking-[3px]">
                             SALES ORDER
                         </div>
 
                         <div className="flex border-b border-black text-[12px] font-black">
-                            <div className="w-[38%] py-3 px-4">GSTIN : {sellerInfo?.gstNumber || "27ABCDE1234F1Z5"}</div>
-                            <div className="w-[30%] py-3 px-4 text-center">State Code : 27 Maharashtra</div>
-                            <div className="flex-1 py-3 px-4 text-right pr-6 uppercase whitespace-nowrap">PAN No : ABCDE1235F</div>
+                            <div className="w-[38%] py-3 px-4">GSTIN : {sellerInfo?.gstNumber || "N/A"}</div>
+                            <div className="w-[30%] py-3 px-4 text-center">State Code : {sellerInfo?.gstNumber ? `${sellerInfo.gstNumber.substring(0, 2)} ${getStateName(sellerInfo.gstNumber)}` : "N/A"}</div>
+                            <div className="flex-1 py-3 px-4 text-right pr-6 uppercase whitespace-nowrap">PAN No : {final_pan_number || (sellerInfo?.gstNumber ? sellerInfo.gstNumber.substring(2, 12) : "N/A")}</div>
                         </div>
 
                         <div className="flex border-b border-black min-h-[160px]">
                             <div className="w-1/2 flex flex-col border-r border-black">
                                 <div className="border-b border-black flex items-center px-4 h-[44px] gap-4">
                                     <span className="font-black text-[12px] min-w-[30px]">M/S.</span>
-                                    <span className="font-black text-[12px] uppercase">{customer_name}</span>
+                                    <span className="font-black text-[12px] uppercase">{final_customer_name}</span>
                                 </div>
                                 <div className="flex-1 px-4 py-3 text-[11.5px] leading-relaxed font-semibold overflow-hidden">{address}</div>
                                 <div className="border-t border-black flex items-center px-4 h-[44px] gap-4">
@@ -239,22 +276,26 @@ const SOPrintPreview = () => {
                             </div>
                             <div className="w-1/2 flex flex-col">
                                 <div className="flex border-b border-black h-[44px]">
-                                    <div className="w-[40%] flex items-center px-4 gap-4">
+                                    <div className="w-[43%] flex items-center px-4 gap-4">
                                         <span className="font-black text-[11px] whitespace-nowrap">SO No. :</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{so_no}</span>
+                                        <span className="font-semibold text-[11px] whitespace-nowrap">{final_so_no}</span>
                                     </div>
                                     <div className="flex-1 flex items-center px-4 gap-4 border-l" style={{ borderColor: 'rgba(0, 0, 0, 0.1)' }}>
-                                        <span className="font-black text-[11px] whitespace-nowrap">SO Date :</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(so_creation_date)}</span>
+                                        <span className="font-black text-[11px] whitespace-nowrap">SO Creation Date :</span>
+                                        <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(final_so_creation_date)}</span>
                                     </div>
                                 </div>
                                 <div className="flex-1 border-b border-black flex items-center px-4 py-2.5 gap-4">
                                     <span className="font-black text-[12px] min-w-[80px]">Pay. Terms</span>
-                                    <span className="font-semibold text-[12px]">{credit_days} Days</span>
+                                    <span className="font-semibold text-[12px]">{final_credit_days} Days</span>
+                                </div>
+                                <div className="flex items-center px-4 h-[44px] gap-4 border-b border-black">
+                                    <span className="font-black text-[12px] min-w-[80px]">Expiry Date:</span>
+                                    <span className="font-semibold text-[12px]">{formatDate(final_expiryDate)}</span>
                                 </div>
                                 <div className="flex items-center px-4 h-[44px] gap-4">
-                                    <span className="font-black text-[12px] min-w-[80px]">Expiry Date:</span>
-                                    <span className="font-semibold text-[12px]">{formatDate(expiryDate)}</span>
+                                    <span className="font-black text-[12px] min-w-[80px]">GST No:</span>
+                                    <span className="font-semibold text-[12px] uppercase">{final_gst_number || "N/A"}</span>
                                 </div>
                             </div>
                         </div>
@@ -274,19 +315,24 @@ const SOPrintPreview = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {items.map((item, idx) => (
+                                 {items.map((item, idx) => (
                                     <tr key={item.id || idx} className="text-[12px] font-semibold min-h-[40px]">
                                         <td className="border-b border-r border-black text-center">{idx + 1}</td>
                                         <td className="border-b border-r border-black px-4 py-2 leading-tight">
-                                            <div className="font-bold text-[13px]">{item.productName}</div>
+                                            <div className="font-bold text-[13px] transition-all">{item.productName || item.product_name}</div>
+                                            {(item.description || item.printDescription) && (
+                                                <div className="text-[10px] text-gray-500 mt-0.5 leading-tight font-medium">
+                                                    {item.description || item.printDescription}
+                                                </div>
+                                            )}
                                         </td>
-                                        <td className="border-b border-r border-black text-center">{item.hsnCode}</td>
-                                        <td className="border-b border-r border-black text-center">{item.taxPercent}</td>
+                                        <td className="border-b border-r border-black text-center">{item.hsnCode || item.hsn}</td>
+                                        <td className="border-b border-r border-black text-center">{item.taxPercent || item.tax_percent}</td>
                                         <td className="border-b border-r border-black text-center">{item.quantity}</td>
                                         <td className="border-b border-r border-black text-center uppercase">{item.uom}</td>
                                         <td className="border-b border-r border-black text-center">{item.rate}</td>
-                                        <td className="border-b border-r border-black text-center">{item.discountPercent || 0}</td>
-                                        <td className="border-b border-black text-right px-4 font-black">{(item.totalAmount || 0).toFixed(2)}</td>
+                                        <td className="border-b border-r border-black text-center">{item.discountPercent || item.discount_percent || 0}</td>
+                                        <td className="border-b border-black text-right px-4 font-black">{(Number(item.totalAmount || item.total_amount) || 0).toFixed(2)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -294,24 +340,24 @@ const SOPrintPreview = () => {
 
                         <div className="w-full border-t border-black bg-white">
                             <div className="flex border-b border-black h-[30px]">
-                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">Sub Total</div>
-                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{subTotal.toFixed(2)}</div>
-                            </div>
-                            <div className="flex border-b border-black h-[30px]">
-                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">SGST</div>
-                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{sgst.toFixed(2)}</div>
+                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">Material Sub Total</div>
+                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(subTotal || 0).toFixed(2)}</div>
                             </div>
                             <div className="flex border-b border-black h-[30px]">
                                 <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">CGST</div>
-                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{cgst.toFixed(2)}</div>
+                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(cgst || 0).toFixed(2)}</div>
+                            </div>
+                            <div className="flex border-b border-black h-[30px]">
+                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">SGST</div>
+                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(sgst || 0).toFixed(2)}</div>
                             </div>
                             <div className="flex h-[45px]">
                                 <div className="flex-1 border-r border-black p-4 py-2 font-black text-[10px] flex items-center">
                                     <span className="mr-2">Amount In Words :</span>
-                                    <span className="uppercase underline">{numberToWords(totalAmount)}</span>
+                                    <span className="uppercase underline leading-none">{numberToWords(totalAmount)}</span>
                                 </div>
-                                <div className="w-[100px] border-r border-black flex items-center justify-center font-black text-[11px] uppercase">Total</div>
-                                <div className="w-[110px] flex items-center justify-end px-4 font-black text-[14px]">{totalAmount.toFixed(2)}</div>
+                                <div className="w-[100px] border-r border-black flex items-center justify-center font-black text-[11px] uppercase">Grand Total</div>
+                                <div className="w-[110px] flex items-center justify-end px-4 font-black text-[14px]">₹ {Number(totalAmount || 0).toFixed(2)}</div>
                             </div>
                         </div>
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, ParseIntPipe, Res, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Patch, Param, Delete, Query, UseGuards, Request, ParseIntPipe, Res, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { PurchaseOrderService } from './purchase-order.service';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from './dto/purchase-order.dto';
@@ -22,8 +22,8 @@ export class PurchaseOrderController {
 
   @Get('next-number')
   @ApiOperation({ summary: 'Generate next available PO Number' })
-  async getNextNumber() {
-    return this.service.getNextNumber();
+  async getNextNumber(@Request() req) {
+    return this.service.getNextNumber(req.user.userId);
   }
 
   @Get('sample-excel')
@@ -44,12 +44,13 @@ export class PurchaseOrderController {
   @ApiQuery({ name: 'filter', required: false, enum: ['all', 'pending', 'expiring', 'expired', 'completed', 'deleted'] })
   @ApiQuery({ name: 'search', required: false })
   async exportOrders(
+    @Request() req,
     @Query('format') format: string,
     @Query('filter') filter: any,
     @Query('search') search: string,
     @Res() res: Response
   ) {
-    const { buffer, filename, mimetype } = await this.service.exportPurchaseOrders(format, { filter, search });
+    const { buffer, filename, mimetype } = await this.service.exportPurchaseOrders(req.user.userId, format, { filter, search });
     res.set({
       'Content-Type': mimetype,
       'Content-Disposition': `attachment; filename="${filename}"`,
@@ -74,22 +75,22 @@ export class PurchaseOrderController {
 
   @Get('supplier/:id')
   @ApiOperation({ summary: 'Fetch supplier details for PO creation' })
-  async getSupplierDetails(@Param('id', ParseIntPipe) id: number) {
-    return this.service.getSupplierDetails(id);
+  async getSupplierDetails(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    return this.service.getSupplierDetails(id, req.user.userId);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all Purchase Orders' })
   @ApiQuery({ name: 'filter', required: false, enum: ['all', 'pending', 'expiring', 'expired', 'completed', 'deleted'] })
   @ApiQuery({ name: 'search', required: false, type: String })
-  async findAll(@Query('filter') filter?: 'all' | 'pending' | 'expiring' | 'expired' | 'completed' | 'deleted', @Query('search') search?: string) {
-    return this.service.findAll({ filter, search });
+  async findAll(@Request() req, @Query('filter') filter?: 'all' | 'pending' | 'expiring' | 'expired' | 'completed' | 'deleted', @Query('search') search?: string) {
+    return this.service.findAll({ filter, search }, req.user.userId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get PO details by ID' })
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    return this.service.findOne(id, req.user.userId);
   }
 
   @Get(':id/print')
@@ -118,13 +119,13 @@ export class PurchaseOrderController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update PO' })
-  async update(@Param('id', ParseIntPipe) id: number, @Body() updateDto: UpdatePurchaseOrderDto) {
-    return this.service.update(id, updateDto);
+  async update(@Param('id', ParseIntPipe) id: number, @Body() updateDto: UpdatePurchaseOrderDto, @Request() req) {
+    return this.service.update(id, updateDto, req.user.userId);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Soft delete a Purchase Order' })
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    return this.service.softDelete(id);
+  async remove(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    return this.service.softDelete(id, req.user.userId);
   }
 }

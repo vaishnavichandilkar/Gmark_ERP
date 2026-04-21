@@ -257,7 +257,9 @@ export class GrnService {
         id: true,
         challanNumber: true,
         bookingDate: true,
-        grandTotal: true
+        grandTotal: true,
+        poId: true,
+        poNumber: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -330,20 +332,17 @@ export class GrnService {
     };
   }
 
-  async findOne(id: number) {
-    const grn = await this.prisma.grn.findUnique({
-      where: { id },
+  async findOne(id: number, userId: number) {
+    const grn = await this.prisma.grn.findFirst({
+      where: { id, userId },
       include: { items: true, expenses: true },
     });
-    if (!grn) throw new NotFoundException(`GRN ID ${id} not found`);
+    if (!grn) throw new NotFoundException(`GRN ID ${id} not found or access denied`);
     return grn;
   }
-
-  async update(id: number, updateDto: any, uploadedFilePath?: string) {
-    const existing = await this.prisma.grn.findUnique({
-      where: { id },
-      include: { items: true, expenses: true },
-    });
+ 
+  async update(id: number, updateDto: any, userId: number, uploadedFilePath?: string) {
+    const existing = await this.findOne(id, userId);
     if (!existing) throw new NotFoundException(`GRN ID ${id} not found`);
 
     const mergedDto: CreateGrnDto = {

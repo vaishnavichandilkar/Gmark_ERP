@@ -22,8 +22,8 @@ export class SalesOrderController {
 
     @Get('next-number')
     @ApiOperation({ summary: 'Generate next available SO Number' })
-    async getNextNumber() {
-        return this.service.getNextNumber();
+    async getNextNumber(@Request() req) {
+        return this.service.getNextNumber(req.user.userId);
     }
 
     @Get('export')
@@ -35,9 +35,10 @@ export class SalesOrderController {
         @Query('format') format: string,
         @Query('filter') filter: any,
         @Query('search') search: string,
+        @Request() req,
         @Res() res: Response
     ) {
-        const { buffer, filename, mimetype } = await this.service.exportSalesOrders(format, { filter, search });
+        const { buffer, filename, mimetype } = await this.service.exportSalesOrders(req.user.userId, format, { filter, search });
         res.set({
             'Content-Type': mimetype,
             'Content-Disposition': `attachment; filename="${filename}"`,
@@ -62,22 +63,22 @@ export class SalesOrderController {
 
     @Get('customers')
     @ApiOperation({ summary: 'Get list of all valid customers (where customerCode exists)' })
-    async getCustomers() {
-        return this.service.getCustomers();
+    async getCustomers(@Request() req) {
+        return this.service.getCustomers(req.user.userId);
     }
 
     @Get()
     @ApiOperation({ summary: 'Get all Sales Orders' })
     @ApiQuery({ name: 'filter', required: false, enum: ['all', 'pending', 'expiring', 'expired', 'completed', 'deleted'] })
     @ApiQuery({ name: 'search', required: false, type: String })
-    async findAll(@Query('filter') filter?: 'all' | 'pending' | 'expiring' | 'expired' | 'completed' | 'deleted', @Query('search') search?: string) {
-        return this.service.findAll({ filter, search });
+    async findAll(@Request() req, @Query('filter') filter?: 'all' | 'pending' | 'expiring' | 'expired' | 'completed' | 'deleted', @Query('search') search?: string) {
+        return this.service.findAll(req.user.userId, { filter, search });
     }
 
     @Get(':id')
     @ApiOperation({ summary: 'Get SO details by ID' })
-    async findOne(@Param('id', ParseIntPipe) id: number) {
-        return this.service.findOne(id);
+    async findOne(@Param('id', ParseIntPipe) id: number, @Request() req) {
+        return this.service.findOne(id, req.user.userId);
     }
 
     @Get(':id/print')
@@ -106,13 +107,13 @@ export class SalesOrderController {
 
     @Patch(':id')
     @ApiOperation({ summary: 'Update SO' })
-    async update(@Param('id', ParseIntPipe) id: number, @Body() updateDto: UpdateSalesOrderDto) {
-        return this.service.update(id, updateDto);
+    async update(@Param('id', ParseIntPipe) id: number, @Body() updateDto: UpdateSalesOrderDto, @Request() req) {
+        return this.service.update(id, updateDto, req.user.userId);
     }
 
     @Delete(':id')
     @ApiOperation({ summary: 'Soft delete a Sales Order' })
-    async remove(@Param('id', ParseIntPipe) id: number) {
-        return this.service.softDelete(id);
+    async remove(@Param('id', ParseIntPipe) id: number, @Request() req) {
+        return this.service.softDelete(id, req.user.userId);
     }
 }

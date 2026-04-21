@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ROUTES } from '../../../constants/routes';
+import { ROUTES } from '../../../../constants/routes';
 import { toast } from 'react-hot-toast';
 import {
     ArrowLeft,
@@ -19,9 +19,9 @@ import {
     ChevronsUpDown,
     AlertCircle
 } from 'lucide-react';
-import salesOrderService from '../../../services/salesOrderService';
-import accountService from '../../../services/accountService';
-import productService from '../../../services/productService';
+import salesOrderService from '../../../../services/salesOrderService';
+import accountService from '../../../../services/accountService';
+import productService from '../../../../services/productService';
 
 const AddSO = () => {
     const navigate = useNavigate();
@@ -34,7 +34,7 @@ const AddSO = () => {
 
     const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
     const [isCustomerTypeDropdownOpen, setIsCustomerTypeDropdownOpen] = useState(false);
-    const customerTypes = ['Industrial', 'Institutional', 'Dealer', 'Retailer', 'Wholesaler'];
+    const customerTypes = ['industrial', 'institutional', 'dealer', 'retailer', 'wholesaler'];
     const [customerSearch, setCustomerSearch] = useState('');
     const [customers, setCustomers] = useState([]);
     const [formData, setFormData] = useState({
@@ -96,35 +96,45 @@ const AddSO = () => {
 
                 // Recover Draft if exists
                 const draftStr = sessionStorage.getItem('add_so_draft');
-                if (draftStr && !isEditMode) { // Only restore draft if not editing
+                const shouldRestore = searchParams.get('restore') === 'true';
+
+                if (draftStr && (!isEditMode || shouldRestore)) {
                     try {
                         const draft = JSON.parse(draftStr);
-                        // Restore only form data that isn't customer related
-                        const {
-                            customer_id,
-                            customer_name,
-                            address,
-                            gst_number,
-                            pan_number,
-                            customer_type,
-                            credit_days,
-                            ...otherFormData
-                        } = draft.formData;
+                        
+                        if (shouldRestore) {
+                            // Full restore for preview return
+                            setFormData(draft.formData);
+                            setItems(draft.items);
+                            setCustomerSearch(draft.formData.customer_name || '');
+                        } else if (!isEditMode) {
+                            // Partial restore for general draft (existing behavior)
+                            const {
+                                customer_id,
+                                customer_name,
+                                address,
+                                gst_number,
+                                pan_number,
+                                customer_type,
+                                credit_days,
+                                ...otherFormData
+                            } = draft.formData;
 
-                        setFormData(prev => ({
-                            ...prev,
-                            ...otherFormData,
-                            customer_id: '',
-                            customer_name: '',
-                            address: '',
-                            gst_number: '',
-                            pan_number: '',
-                            customer_type: '',
-                            credit_days: '',
-                            expiry_date: ''
-                        }));
-                        setItems(draft.items);
-                        setCustomerSearch('');
+                            setFormData(prev => ({
+                                ...prev,
+                                ...otherFormData,
+                                customer_id: '',
+                                customer_name: '',
+                                address: '',
+                                gst_number: '',
+                                pan_number: '',
+                                customer_type: '',
+                                credit_days: '',
+                                expiry_date: ''
+                            }));
+                            setItems(draft.items);
+                            setCustomerSearch('');
+                        }
                         setIsRestoringDraft(true);
                     } catch (e) {
                         console.error('Draft parsing failed', e);
@@ -265,6 +275,30 @@ const AddSO = () => {
         }
     }, [formData, items]);
 
+    // Auto-calculate Expiry Date based on Credit Days
+    useEffect(() => {
+        if (formData.creation_date && formData.credit_days) {
+            try {
+                const credit = parseInt(formData.credit_days);
+                if (!isNaN(credit)) {
+                    const creation = new Date(formData.creation_date);
+                    const expiry = new Date(creation);
+                    expiry.setDate(creation.getDate() + credit);
+                    
+                    const formattedExpiry = expiry.toLocaleDateString('en-CA');
+                    if (formattedExpiry !== formData.expiry_date) {
+                        setFormData(prev => ({
+                            ...prev,
+                            expiry_date: formattedExpiry
+                        }));
+                    }
+                }
+            } catch (error) {
+                console.error("Error calculating expiry date:", error);
+            }
+        }
+    }, [formData.creation_date, formData.credit_days]);
+
     const filteredCustomers = useMemo(() => {
         return (customers || []).filter(c =>
             c.customerName?.toLowerCase().includes(customerSearch.toLowerCase()) ||
@@ -403,20 +437,26 @@ const AddSO = () => {
         const qty = parseFloat(item.quantity) || 0;
         const rate = parseFloat(item.rate) || 0;
         const taxPct = parseFloat(item.tax_percent) || 0;
-
         let discAmt = parseFloat(item.discount_amount) || 0;
         let discPct = parseFloat(item.discount_percent) || 0;
 
+        // If quantity or rate changed, always synchronize discount based on the percentage
+        if (field === 'quantity' || field === 'rate') {
+            discAmt = (qty * rate * discPct) / 100;
+            item.discount_amount = parseFloat(discAmt.toFixed(2));
+        }
         // If discount percent changed, update discount amount
-        if (field === 'discount_percent') {
+        else if (field === 'discount_percent' || field === 'discount_percentage') {
             discAmt = (qty * rate * discPct) / 100;
             item.discount_amount = parseFloat(discAmt.toFixed(2));
         }
         // If discount amount changed, update discount percent
-        else if (field === 'discount_amount') {
+        else if (field === 'discount_amount' || field === 'discount_amt') {
             if (qty * rate > 0) {
                 discPct = (discAmt / (qty * rate)) * 100;
                 item.discount_percent = parseFloat(discPct.toFixed(2));
+            } else {
+                item.discount_percent = 0;
             }
         }
 
@@ -491,8 +531,9 @@ const AddSO = () => {
                 quantity: parseFloat(item.quantity),
                 rate: parseFloat(item.rate),
                 uom: item.uom,
-                discountPercent: parseFloat(item.discount_percent),
-                taxPercent: parseFloat(item.tax_percent)
+                discountPercent: parseFloat(item.discount_percent) || 0,
+                discountAmount: parseFloat(item.discount_amount) || 0,
+                taxPercent: parseFloat(item.tax_percent) || 0
             }))
         };
 
@@ -501,17 +542,8 @@ const AddSO = () => {
                 await salesOrderService.updateSalesOrder(id, payload);
                 toast.success("Sales Order updated successfully");
             } else {
-                const response = await salesOrderService.createSalesOrder(payload);
+                await salesOrderService.createSalesOrder(payload);
                 toast.success("Sales Order created successfully");
-
-                // Redirect to edit page with the new ID instead of list page
-                // This allows the user to click 'Preview & Print' immediately after saving
-                const createdSO = response.data || response;
-                if (createdSO && createdSO.id) {
-                    sessionStorage.removeItem('add_so_draft');
-                    navigate(ROUTES.SALES_ORDER_EDIT.replace(':id', createdSO.id));
-                    return; // Stop further execution
-                }
             }
             sessionStorage.removeItem('add_so_draft');
             navigate(ROUTES.SALES_ORDER);
@@ -696,29 +728,22 @@ const AddSO = () => {
                         {/* Row 4 */}
                         <div className="space-y-2">
                             <label className="text-[14px] font-semibold text-[#374151]">Expiry Date <span className="text-red-500">*</span></label>
-                            <div className="relative">
+                            <div className="relative group/date">
                                 <input
-                                    type={formData.expiry_date ? "date" : "text"}
+                                    type="date"
                                     value={formData.expiry_date}
-                                    placeholder="DD-MM-YYYY"
-                                    autoComplete="off"
-                                    min={new Date().toLocaleDateString('en-CA')}
-                                    onFocus={(e) => (e.target.type = "date")}
-                                    onBlur={(e) => {
-                                        if (!e.target.value) e.target.type = "text";
+                                    min={new Date().toISOString().split('T')[0]}
+                                    onClick={(e) => {
+                                        try {
+                                            e.target.showPicker();
+                                        } catch (err) {}
                                     }}
                                     onChange={(e) => {
-                                        const selectedDate = e.target.value;
-                                        const today = new Date().toLocaleDateString('en-CA');
-                                        if (selectedDate && selectedDate < today) {
-                                            toast.error("Past dates are not allowed");
-                                            return;
-                                        }
-                                        setFormData({ ...formData, expiry_date: selectedDate });
+                                        setFormData({ ...formData, expiry_date: e.target.value });
                                     }}
-                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-12 text-[14px] outline-none transition-all placeholder:text-gray-400 ${errors.expiry_date ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
+                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-12 text-[14px] outline-none transition-all placeholder:text-gray-400 custom-date-input ${errors.expiry_date ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                                 />
-                                <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={20} />
+                                <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover/date:text-[#073318] transition-colors" size={20} />
                             </div>
                             {errors.expiry_date && <p className="text-red-500 text-[12px] mt-1 italic font-medium">*{errors.expiry_date}</p>}
                         </div>
@@ -863,6 +888,25 @@ const AddSO = () => {
                         display: flex;
                         align-items: center;
                         flex-shrink: 0;
+                    }
+
+                    /* Hide native date icon but keep functionality */
+                    .custom-date-input::-webkit-calendar-picker-indicator {
+                        position: absolute;
+                        right: 12px;
+                        top: 0;
+                        bottom: 0;
+                        width: 30px;
+                        height: auto;
+                        background: transparent;
+                        color: transparent;
+                        cursor: pointer;
+                        z-index: 10;
+                    }
+                    .custom-date-input {
+                        position: relative;
+                        appearance: none;
+                        -webkit-appearance: none;
                     }
                 `}</style>
 
@@ -1249,16 +1293,20 @@ const AddSO = () => {
                 <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-[#E5E7EB] p-5 flex justify-end gap-3 z-[100] shadow-[0_-8px_30px_rgba(0,0,0,0.04)] font-outfit">
                     <button
                         onClick={() => {
-                            if (id) {
-                                navigate(ROUTES.SALES_ORDER_PRINT, {
-                                    state: {
-                                        soData: { ...formData, items },
-                                        from: id ? `/seller/sales/order/edit/${id}` : ROUTES.SALES_ORDER_ADD
-                                    }
-                                });
-                            } else {
-                                toast.error("Please save the Sales Order first to preview");
+                            if (!validateForm()) {
+                                setShowValidationPopup(true);
+                                return;
                             }
+                            
+                            // Explicitly save the latest state before navigating
+                            sessionStorage.setItem('add_so_draft', JSON.stringify({ formData, items }));
+
+                            navigate(ROUTES.SALES_ORDER_PRINT, {
+                                state: {
+                                    soData: { ...formData, items },
+                                    from: id ? `/seller/sales/order/edit/${id}` : ROUTES.SALES_ORDER_ADD
+                                }
+                            });
                         }}
                         className="flex items-center gap-2 px-7 h-[48px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all active:scale-95 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={isSaving}
@@ -1277,6 +1325,46 @@ const AddSO = () => {
                         Cancel
                     </button>
                 </div>
+            {/* Validation Popup */}
+            {showValidationPopup && (
+                <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-[4px] z-[200] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[24px] w-full max-w-[420px] shadow-[0_25px_80px_rgba(0,0,0,0.18)] overflow-hidden animate-in zoom-in-95 duration-300">
+                        {/* Header */}
+                        <div className="bg-[#EF4444] px-7 py-5 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                                    <AlertCircle className="text-white" size={19} />
+                                </div>
+                                <h3 className="text-[17px] font-bold text-white tracking-tight font-outfit">Missing Required Fields</h3>
+                            </div>
+                            <button 
+                                onClick={() => setShowValidationPopup(false)} 
+                                className="text-white/80 hover:text-white transition-colors p-1"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-7 font-outfit">
+                            <div className="min-h-[60px] flex items-center">
+                                <p className="text-[15px] text-[#475569] leading-[1.6] font-medium">
+                                    Please ensure all mandatory fields (marked with <span className='text-red-600 font-bold'>*</span>) are filled correctly before proceeding to preview.
+                                </p>
+                            </div>
+
+                            <div className="mt-8 flex justify-end">
+                                <button 
+                                    onClick={() => setShowValidationPopup(false)}
+                                    className="h-[46px] px-8 bg-[#EF4444] text-white rounded-[12px] text-[15px] font-bold hover:bg-[#DC2626] transition-all active:scale-[0.96] shadow-[0_4px_15px_rgba(239,68,68,0.25)] flex items-center justify-center"
+                                >
+                                    Got it
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             </div>
         </div>
     );

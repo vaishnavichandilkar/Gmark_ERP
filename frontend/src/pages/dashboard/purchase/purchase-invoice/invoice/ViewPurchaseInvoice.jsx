@@ -190,42 +190,98 @@ const ViewPurchaseInvoice = () => {
 
                     {/* Account Summary */}
                     <h3 className="text-[16px] font-bold text-gray-800 mb-4 uppercase tracking-wider">Account Summary</h3>
-                    <div className="border border-[#E5E7EB] rounded-[16px] overflow-hidden shadow-sm max-w-[800px]">
+                    <div className="border border-[#E5E7EB] rounded-[16px] overflow-hidden shadow-sm w-full">
                         <table className="w-full text-left">
                             <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
                                 <tr>
                                     <th className="px-6 py-4 text-[13px] font-bold text-[#64748B] uppercase tracking-wider">Account Description</th>
-                                    <th className="px-6 py-4 text-right text-[13px] font-bold text-[#64748B] uppercase tracking-wider">Amount</th>
+                                    <th className="px-6 py-4 text-right text-[13px] font-bold text-[#64748B] uppercase tracking-wider border-l border-[#F1F5F9]">Amount</th>
+                                    <th className="px-6 py-4 text-right text-[13px] font-bold text-[#64748B] uppercase tracking-wider border-l border-[#F1F5F9]">Cum. Balance</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[#F1F5F9]">
-                                <tr>
-                                    <td className="px-6 py-4 text-[14px] font-bold text-[#475569]">MATERIAL PURCHASE (EXCL. GST)</td>
-                                    <td className="px-6 py-4 text-right font-bold text-[#1e293b]">₹{materialSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                                {expenses.filter(e => e.isGstApplicable).map(exp => (
-                                    <tr key={exp.id}>
-                                        <td className="px-6 py-4 text-[14px] font-medium text-[#64748B] italic">{exp.groupName || 'Direct Expense'}</td>
-                                        <td className="px-6 py-4 text-right font-bold text-[#1e293b]">₹{parseFloat(exp.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                    </tr>
-                                ))}
-                                <tr className="bg-emerald-50/20">
-                                    <td className="px-6 py-3 text-[13px] font-bold text-emerald-800">C-GST</td>
-                                    <td className="px-6 py-3 text-right font-bold text-emerald-800">₹{(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                                <tr className="bg-emerald-50/20">
-                                    <td className="px-6 py-3 text-[13px] font-bold text-emerald-800">S-GST</td>
-                                    <td className="px-6 py-3 text-right font-bold text-emerald-800">₹{(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                                {expenses.filter(e => !e.isGstApplicable).map(exp => (
-                                    <tr key={exp.id}>
-                                        <td className="px-6 py-4 text-[14px] font-medium text-[#64748B] italic">{exp.groupName || 'Post-GST Charge'}</td>
-                                        <td className="px-6 py-4 text-right font-bold text-[#1e293b]">₹{parseFloat(exp.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                    </tr>
-                                ))}
+                                {/* Material Row */}
+                                {(() => {
+                                    let runningBalance = materialSubtotal;
+                                    return (
+                                        <tr>
+                                            <td className="px-6 py-4 text-[14px] font-bold text-[#475569]">MATERIAL PURCHASE (EXCL. GST)</td>
+                                            <td className="px-6 py-4 text-right font-bold text-[#1e293b] border-l border-[#F1F5F9]">₹{materialSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                            <td className="px-6 py-4 text-right font-bold text-[#64748B] border-l border-[#F1F5F9]">₹{runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                        </tr>
+                                    );
+                                })()}
+                                
+                                {/* Direct Expenses (Taxable) */}
+                                {(() => {
+                                    let runningBalance = materialSubtotal;
+                                    return expenses.filter(e => e.isGstApplicable).map(exp => {
+                                        runningBalance += parseFloat(exp.amount) || 0;
+                                        return (
+                                            <tr key={exp.id}>
+                                                <td className="px-6 py-4 text-[14px] font-medium text-[#64748B] italic">{exp.groupName || 'Direct Expense'}</td>
+                                                <td className="px-6 py-4 text-right font-bold text-[#1e293b] border-l border-[#F1F5F9]">₹{parseFloat(exp.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                <td className="px-6 py-4 text-right font-bold text-[#64748b] border-l border-[#F1F5F9]">₹{runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                            </tr>
+                                        );
+                                    });
+                                })()}
+
+                                {/* GST Rows */}
+                                {(() => {
+                                    const beforeGstTotal = materialSubtotal + expenses.filter(e => e.isGstApplicable).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+                                    let currentWithGst = beforeGstTotal;
+                                    const rows = [];
+                                    
+                                    const cgst = totalTax / 2;
+                                    const sgst = totalTax / 2;
+
+                                    if (cgst > 0) {
+                                        currentWithGst += cgst;
+                                        rows.push(
+                                            <tr key="cgst" className="bg-emerald-50/20">
+                                                <td className="px-6 py-3 text-[13px] font-bold text-emerald-800 uppercase">C-GST</td>
+                                                <td className="px-6 py-3 text-right font-bold text-emerald-800 border-l border-[#F1F5F9]">₹{cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                <td className="px-6 py-3 text-right font-bold text-[#64748b] border-l border-[#F1F5F9]">₹{currentWithGst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                            </tr>
+                                        );
+                                    }
+                                    if (sgst > 0) {
+                                        currentWithGst += sgst;
+                                        rows.push(
+                                            <tr key="sgst" className="bg-emerald-50/20">
+                                                <td className="px-6 py-3 text-[13px] font-bold text-emerald-800 uppercase">S-GST</td>
+                                                <td className="px-6 py-3 text-right font-bold text-emerald-800 border-l border-[#F1F5F9]">₹{sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                <td className="px-6 py-3 text-right font-bold text-[#64748b] border-l border-[#F1F5F9]">₹{currentWithGst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                            </tr>
+                                        );
+                                    }
+                                    return rows;
+                                })()}
+
+                                {/* Post-GST Charges */}
+                                {(() => {
+                                    const baseWithGst = materialSubtotal + 
+                                                      expenses.filter(e => e.isGstApplicable).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) +
+                                                      totalTax;
+                                    let runningBalance = baseWithGst;
+                                    return expenses.filter(e => !e.isGstApplicable).map(exp => {
+                                        runningBalance += parseFloat(exp.amount) || 0;
+                                        return (
+                                            <tr key={exp.id}>
+                                                <td className="px-6 py-4 text-[14px] font-medium text-[#64748B] italic">{exp.groupName || 'Post-GST Charge'}</td>
+                                                <td className="px-6 py-4 text-right font-bold text-[#1e293b] border-l border-[#F1F5F9]">₹{parseFloat(exp.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                <td className="px-6 py-4 text-right font-bold text-[#64748b] border-l border-[#F1F5F9]">₹{runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                            </tr>
+                                        );
+                                    });
+                                })()}
+
+                                {/* Grand Total */}
                                 <tr className="bg-[#073318] text-white">
                                     <td className="px-6 py-5 text-[16px] font-black uppercase tracking-widest">Grand Total</td>
-                                    <td className="px-6 py-5 text-right text-[20px] font-black">₹{parseFloat(invoice.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-5 text-right text-[20px] font-black border-l border-[#ffffff20]">₹{parseFloat(invoice.grandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-5 border-l border-[#ffffff20]"></td>
                                 </tr>
                             </tbody>
                         </table>

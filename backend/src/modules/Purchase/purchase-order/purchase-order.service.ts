@@ -9,8 +9,9 @@ import * as PDFDocument from 'pdfkit';
 export class PurchaseOrderService {
   constructor(private prisma: PrismaService) {}
 
-  async generatePONumber(): Promise<string> {
+  async generatePONumber(userId: number): Promise<string> {
     const lastPO = await this.prisma.purchaseOrder.findFirst({
+      where: { userId },
       orderBy: { id: 'desc' },
       select: { poNumber: true },
     });
@@ -23,18 +24,18 @@ export class PurchaseOrderService {
     return `PO${(lastNumber + 1).toString().padStart(5, '0')}`;
   }
 
-  async getNextNumber() {
-    const poNumber = await this.generatePONumber();
+  async getNextNumber(userId: number) {
+    const poNumber = await this.generatePONumber(userId);
     return { poNumber };
   }
 
-  async getSupplierDetails(supplierId: number) {
-    const supplier = await this.prisma.accountMaster.findUnique({
-      where: { id: supplierId },
+  async getSupplierDetails(supplierId: number, userId: number) {
+    const supplier = await this.prisma.accountMaster.findFirst({
+      where: { id: supplierId, userId },
     });
 
     if (!supplier) {
-      throw new NotFoundException('Supplier not found');
+      throw new NotFoundException('Supplier not found or access denied');
     }
 
     return {
@@ -75,10 +76,10 @@ export class PurchaseOrderService {
   }
 
   async create(createDto: CreatePurchaseOrderDto, userId: number) {
-    const supplier = await this.getSupplierDetails(createDto.supplierId);
+    const supplier = await this.getSupplierDetails(createDto.supplierId, userId);
     
     // Requirement 4 & 8: Prefer passed poNumber (if validly unique) or generate new
-    const poNumber = createDto.poNumber || await this.generatePONumber();
+    const poNumber = createDto.poNumber || await this.generatePONumber(userId);
 
     const processedItems = createDto.items.map(item => this.calculateItemValues(item));
 
@@ -122,13 +123,13 @@ export class PurchaseOrderService {
     });
   }
 
-  async findAll(query: { filter?: 'all' | 'pending' | 'expiring' | 'expired' | 'completed' | 'deleted', search?: string }) {
+  async findAll(query: { filter?: 'all' | 'pending' | 'expiring' | 'expired' | 'completed' | 'deleted', search?: string }, userId: number) {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     const fortyEightHoursLater = new Date(startOfToday.getTime() + 48 * 60 * 60 * 1000);
     fortyEightHoursLater.setHours(23, 59, 59, 999);
 
-    const where: Prisma.PurchaseOrderWhereInput = {};
+    const where: Prisma.PurchaseOrderWhereInput = { userId };
 
     // Apply Filter-specific conditions
     switch (query.filter) {
@@ -169,9 +170,9 @@ export class PurchaseOrderService {
     });
   }
 
-  async findOne(id: number) {
-    const po = await this.prisma.purchaseOrder.findUnique({
-      where: { id },
+  async findOne(id: number, userId: number) {
+    const po = await this.prisma.purchaseOrder.findFirst({
+      where: { id, userId },
       include: { 
         items: true,
         grn: {
@@ -206,8 +207,8 @@ export class PurchaseOrderService {
     };
   }
 
-  async update(id: number, updateDto: UpdatePurchaseOrderDto) {
-    const po = await this.findOne(id);
+  async update(id: number, updateDto: UpdatePurchaseOrderDto, userId: number) {
+    const po = await this.findOne(id, userId);
     if (po.status === 'INVOICE_GENERATED' || po.status === 'DELETED') {
       throw new ForbiddenException(`Update forbidden in status ${po.status}`);
     }
@@ -270,8 +271,8 @@ export class PurchaseOrderService {
     });
   }
 
-  async softDelete(id: number) {
-    const po = await this.findOne(id);
+  async softDelete(id: number, userId: number) {
+    const po = await this.findOne(id, userId);
     if (po.status === 'DELETED') return po;
     return this.prisma.purchaseOrder.update({
       where: { id },
@@ -304,8 +305,8 @@ export class PurchaseOrderService {
   }
 
   async printPurchaseOrder(id: number, userId: number) {
-    const po = await this.prisma.purchaseOrder.findUnique({
-      where: { id },
+    const po = await this.prisma.purchaseOrder.findFirst({
+      where: { id, userId },
       include: { items: true, user: { include: { shopDetail: true } } },
     });
 
@@ -470,8 +471,8 @@ export class PurchaseOrderService {
     });
   }
 
-  async exportPurchaseOrders(format: string, query: { filter?: any; search?: string }) {
-    const orders = await this.findAll(query);
+  async exportPurchaseOrders(userId: number, format: string, query: { filter?: any; search?: string }) {
+    const orders = await this.findAll(query, userId);
 
     if (orders.length === 0) {
       throw new BadRequestException('No data available to export');

@@ -9,7 +9,7 @@ const PurchaseLayout = () => {
 
     const tabs = [
         { name: 'Purchase Order', path: '/seller/purchase/order' },
-        { name: 'Purchase Invoice', path: '/seller/purchase/invoice' },
+        { name: 'Purchase Invoice', path: '/seller/purchase/grn' },
     ];
 
     // If we are on the base /seller/purchase route, redirect to the first tab (Purchase Order)

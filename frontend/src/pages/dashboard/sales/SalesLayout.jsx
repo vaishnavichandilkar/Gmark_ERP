@@ -9,7 +9,7 @@ const SalesLayout = () => {
 
     const tabs = [
         { name: t('salesOrder'), path: '/seller/sales/order' },
-        { name: t('salesInvoice'), path: '/seller/sales/invoice' },
+        { name: t('salesInvoice'), path: '/seller/sales/challan' },
     ];
 
     // If we are on the base /seller/sales route, redirect to the first tab (Sales Order)
@@ -20,7 +20,9 @@ const SalesLayout = () => {
     // Hide tabs and header when in detail views (add/edit/view)
     const isDetailView = location.pathname.includes('/add') || 
                          location.pathname.includes('/edit/') || 
-                         location.pathname.includes('/view/');
+                         location.pathname.includes('/view/') ||
+                         location.pathname.includes('/print') ||
+                         location.pathname.includes('/preview');
  
     return (
         <div className="flex flex-col w-full max-w-[1400px] mx-auto pb-10 font-['Plus_Jakarta_Sans'] transition-all duration-300">
@@ -41,7 +43,9 @@ const SalesLayout = () => {
                 <div className="border-b border-[#E5E7EB] mb-6 overflow-x-auto scroll-smooth pb-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full">
                     <div className="flex items-center justify-center gap-2 md:gap-4 pb-2">
                         {tabs.map((tab) => {
-                            const isActive = location.pathname.startsWith(tab.path);
+                            const isActive = tab.name === t('salesInvoice')
+                                ? (location.pathname.startsWith('/seller/sales/invoice') || location.pathname.startsWith('/seller/sales/challan'))
+                                : location.pathname.startsWith(tab.path);
                             return (
                                 <NavLink
                                     key={tab.path}

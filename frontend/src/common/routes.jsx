@@ -39,11 +39,17 @@ import ViewGRN from "../pages/dashboard/purchase/purchase-invoice/grn/ViewGRN";
 
 // Sales Pages
 import SalesLayout from "../pages/dashboard/sales/SalesLayout";
-import SalesOrder from "../pages/dashboard/sales/SalesOrder";
-import AddSO from "../pages/dashboard/sales/AddSO";
-import ViewSO from "../pages/dashboard/sales/ViewSO";
-import SalesInvoice from "../pages/dashboard/sales/SalesInvoice";
-import AddSI from "../pages/dashboard/sales/AddSI";
+import SalesOrder from "../pages/dashboard/sales/Sales-order/SalesOrder";
+import AddSO from "../pages/dashboard/sales/Sales-order/AddSO";
+import ViewSO from "../pages/dashboard/sales/Sales-order/ViewSO";
+import SOPrintPreview from "../pages/dashboard/sales/Sales-order/SOPrintPreview";
+import SalesInvoice from "../pages/dashboard/sales/Sales-invoice/invoice/SalesInvoice";
+import AddSI from "../pages/dashboard/sales/Sales-invoice/invoice/AddSalesInvoice";
+import ViewSalesInvoice from "../pages/dashboard/sales/Sales-invoice/invoice/ViewSalesInvoice";
+import SIPrintPreview from "../pages/dashboard/sales/Sales-invoice/invoice/SIPrintPreview";
+import AddChallan from "../pages/dashboard/sales/Sales-invoice/challan/AddChallan";
+import ViewChallan from "../pages/dashboard/sales/Sales-invoice/challan/ViewChallan";
+import Challan from "../pages/dashboard/sales/Sales-invoice/challan/Challan";
 
 import SystemSettings from "../features/settings/pages/SystemSettings";
 
@@ -347,11 +353,27 @@ export const router = createBrowserRouter([
                       { path: "add", element: <AddSO /> },
                       { path: "edit/:id", element: <AddSO /> },
                       { path: "view/:id", element: <ViewSO /> },
+                      { path: "print", element: <SOPrintPreview /> },
                     ],
                   },
                   {
                     path: "invoice",
-                    children: [{ index: true, element: <SalesInvoice /> }],
+                    children: [
+                      { path: "preview", element: <SIPrintPreview /> },
+                      { index: true, element: <SalesInvoice /> },
+                      { path: "add", element: <AddSI /> },
+                      { path: "edit/:id", element: <AddSI /> },
+                      { path: "view/:id", element: <ViewSalesInvoice /> },
+                    ],
+                  },
+                  {
+                    path: "challan",
+                    children: [
+                      { index: true, element: <Challan /> },
+                      { path: "add", element: <AddChallan /> },
+                      { path: "edit/:id", element: <AddChallan /> },
+                      { path: "view/:id", element: <ViewChallan /> },
+                    ],
                   },
                 ],
               },

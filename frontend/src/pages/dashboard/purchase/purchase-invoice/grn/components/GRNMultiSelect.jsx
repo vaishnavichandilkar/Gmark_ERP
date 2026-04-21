@@ -27,14 +27,6 @@ const GRNMultiSelect = ({
     );
 
     const toggleChallan = (id) => {
-        const challan = challans.find(c => c.id === id);
-        // If remainingQty is 0 and not already selected, prevent selection
-        // Assuming challan object has remainingQty or similar. 
-        // Based on user request: grn.remainingQty > 0
-        if (challan && challan.remainingQty <= 0 && !selectedIds.includes(id)) {
-            return;
-        }
-
         const newSelectedIds = selectedIds.includes(id)
             ? selectedIds.filter(idx => idx !== id)
             : [...selectedIds, id];
@@ -109,13 +101,13 @@ const GRNMultiSelect = ({
                         {filteredChallans.length > 0 ? (
                             filteredChallans.map(c => {
                                 const isSelected = selectedIds.includes(c.id);
-                                const isDisabled = (c.remainingQty ?? 1) <= 0; // If remainingQty is 0, disable
+                                const isDisabled = (c.remainingQty ?? 1) <= 0 && !isSelected; // Only disable if 0 AND not already selected
 
                                 return (
                                     <div
                                         key={c.id}
-                                        onClick={() => !isDisabled && toggleChallan(c.id)}
-                                        className={`flex items-center gap-3 px-3 py-2.5 rounded-[10px] cursor-pointer transition-all group ${isDisabled ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:bg-emerald-50'}`}
+                                        onClick={() => toggleChallan(c.id)}
+                                        className={`flex items-center gap-3 px-3 py-2.5 rounded-[10px] cursor-pointer transition-all group ${isDisabled ? 'bg-gray-50' : 'hover:bg-emerald-50'}`}
                                     >
                                         <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${isSelected ? 'bg-[#073318] border-[#073318]' : 'bg-white border-gray-300 group-hover:border-[#073318]'}`}>
                                             {isSelected && <Check size={14} className="text-white" />}

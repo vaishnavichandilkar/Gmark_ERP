@@ -66,7 +66,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
         setItems(newItems);
     };
 
-    const handleSelectProduct = async (product, rowIndex) => {
+    const handleSelectProduct = async (product, rowIndex = null) => {
         const qty = 1;
         const rate = parseFloat(product.purchaseRate) || 0;
         const taxPct = (parseFloat(product.tax_rate) || (product.hsn?.gst_rate ? parseFloat(product.hsn.gst_rate) : 0));
@@ -84,9 +84,16 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
             }
         }
 
-        const newItems = [...items];
-        newItems[rowIndex] = {
-            ...newItems[rowIndex],
+        const updatedItems = [...items];
+        let finalTargetIndex = rowIndex;
+
+        if (finalTargetIndex === null) {
+            const emptyIndex = updatedItems.findIndex(i => !i.productId);
+            finalTargetIndex = emptyIndex === -1 ? updatedItems.length : emptyIndex;
+        }
+
+        const newItem = {
+            id: updatedItems[finalTargetIndex]?.id || Date.now(),
             productId: product.id,
             productCode: product.product_code,
             productName: product.product_name,
@@ -106,7 +113,22 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
             remainingQty: (0 - receivedCount - qty).toFixed(2)
         };
 
-        setItems(newItems);
+        if (finalTargetIndex < updatedItems.length) {
+            updatedItems[finalTargetIndex] = newItem;
+        } else {
+            updatedItems.push(newItem);
+        }
+
+        // Auto-add an empty row
+        if (!updatedItems.some(i => !i.productId)) {
+            updatedItems.push({ 
+                id: Date.now() + 1, productId: null, productCode: '', productName: '', quantity: 0, rate: 0, 
+                uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0, 
+                taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0 
+            });
+        }
+
+        setItems(updatedItems);
         setIsProductSearchOpen(false);
         setTableSearch('');
         setActiveRowIndex(null);
@@ -159,10 +181,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                             {filteredProducts.map(p => (
                                 <button
                                     key={p.id}
-                                    onClick={() => {
-                                        const emptyIndex = items.findIndex(i => !i.productId);
-                                        handleSelectProduct(p, emptyIndex === -1 ? items.length - 1 : emptyIndex);
-                                    }}
+                                    onClick={() => handleSelectProduct(p)}
                                     className="w-full px-5 py-4 flex items-center justify-between hover:bg-emerald-50 transition-all border-b border-[#F3F4F6] text-left outline-none group"
                                 >
                                     <div className="flex flex-col gap-1">
@@ -265,7 +284,22 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                     {isGRN && (
                                         <>
                                             <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                                <input type="text" value={item.totalPoQty || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed" />
+                                                {isPoSelected ? (
+                                                    <input 
+                                                        type="text" 
+                                                        value={item.totalPoQty || 0} 
+                                                        readOnly 
+                                                        className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed" 
+                                                    />
+                                                ) : (
+                                                    <input
+                                                        type="number"
+                                                        value={item.totalPoQty === 0 ? '' : item.totalPoQty}
+                                                        onChange={(e) => handleItemChange(index, 'totalPoQty', e.target.value)}
+                                                        className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm"
+                                                        placeholder="0"
+                                                    />
+                                                )}
                                             </td>
                                             <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                                 <input type="text" value={item.receivedPoQty || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed" />

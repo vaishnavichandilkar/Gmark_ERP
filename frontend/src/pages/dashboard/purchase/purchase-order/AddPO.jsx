@@ -296,6 +296,30 @@ const AddPO = () => {
         return displayDate;
     };
 
+    // 🔄 Auto-calculate Expiry Date: creation_date + credit_days
+    useEffect(() => {
+        if (formData.creation_date && formData.credit_days !== undefined) {
+            const creationIso = toIsoDate(formData.creation_date);
+            const days = parseInt(formData.credit_days) || 0;
+            const date = new Date(creationIso);
+            
+            if (!isNaN(date.getTime())) {
+                date.setDate(date.getDate() + days);
+                const calculatedIso = date.toISOString().split('T')[0];
+                
+                // Compare normalized ISO dates to avoid redundant updates/loops
+                const currentExpiryIso = toIsoDate(formData.expiry_date);
+                
+                if (currentExpiryIso !== calculatedIso) {
+                    setFormData(prev => ({ 
+                        ...prev, 
+                        expiry_date: calculatedIso 
+                    }));
+                }
+            }
+        }
+    }, [formData.creation_date, formData.credit_days]);
+
     const handleDateTextChange = (e, field) => {
         const inputVal = e.target.value;
         const digits = inputVal.replace(/\D/g, "").substring(0, 8);
@@ -559,8 +583,18 @@ const AddPO = () => {
 
         if (!formData.expiry_date) {
             newErrors.expiry_date = "Required";
-        } else if (!isValidIso(toIsoDate(formData.expiry_date))) {
-            newErrors.expiry_date = "Enter valid date (DD-MM-YYYY)";
+        } else {
+            const isoExpiry = toIsoDate(formData.expiry_date);
+            if (!isValidIso(isoExpiry)) {
+                newErrors.expiry_date = "Enter valid date (DD-MM-YYYY)";
+            } else {
+                const expiryDate = new Date(isoExpiry);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                if (expiryDate < today) {
+                    newErrors.expiry_date = "Expiry date cannot be in the past";
+                }
+            }
         }
 
         // Validate items
@@ -872,6 +906,7 @@ const AddPO = () => {
                                     ref={expiryDateRef}
                                     className="absolute opacity-0 pointer-events-none w-0 h-0"
                                     value={formData.expiry_date}
+                                    min={new Date().toISOString().split('T')[0]}
                                     onChange={(e) => setFormData(prev => ({ ...prev, expiry_date: e.target.value }))}
                                 />
                                 <input
