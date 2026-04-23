@@ -633,19 +633,54 @@ const AddSalesInvoice = () => {
                          <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
                         Basic Details
                     </h2>
-                    <InvoiceForm
-                        formData={formData}
-                        setFormData={setFormData}
-                        handleCustomerChange={handleCustomerChange}
-                        handleSOChange={handleSOChange}
-                        handleChallanChange={handleChallanChange}
-                        customers={customers}
-                        sos={sos}
-                        challans={filteredChallans}
-                        errors={errors}
-                        invoiceDateRef={invoiceDateRef}
-                        onAddCustomer={handleAddNewCustomer}
-                    />
+                    {(() => {
+                        const today = new Date().toISOString().split('T')[0];
+                        const hasLink = !!(formData.soId || (formData.challanIds && formData.challanIds.length > 0));
+                        
+                        let minDate = '';
+                        let isLocked = false;
+
+                        if (!hasLink) {
+                            // Condition 3: Without SO and Challan -> Locked to Today
+                            minDate = today;
+                            isLocked = true;
+                        } else {
+                            // Multiple Challan Rule: Use the latest challan date
+                            if (formData.challanIds && formData.challanIds.length > 0) {
+                                const selectedChallans = challans.filter(c => formData.challanIds.includes(c.id));
+                                if (selectedChallans.length > 0) {
+                                    const latestDate = selectedChallans.reduce((latest, c) => {
+                                        const cDate = c.challanDate?.split('T')[0] || c.bookingDate?.split('T')[0];
+                                        return (!latest || cDate > latest) ? cDate : latest;
+                                    }, '');
+                                    minDate = latestDate;
+                                }
+                            } else if (formData.soId) {
+                                // Fallback to SO Creation Date if only SO is selected
+                                const selectedSO = sos.find(s => s.id === parseInt(formData.soId));
+                                minDate = selectedSO?.soCreationDate?.split('T')[0] || '';
+                            }
+                        }
+
+                        return (
+                            <InvoiceForm
+                                formData={formData}
+                                setFormData={setFormData}
+                                handleCustomerChange={handleCustomerChange}
+                                handleSOChange={handleSOChange}
+                                handleChallanChange={handleChallanChange}
+                                customers={customers}
+                                sos={sos}
+                                challans={filteredChallans}
+                                errors={errors}
+                                invoiceDateRef={invoiceDateRef}
+                                onAddCustomer={handleAddNewCustomer}
+                                minDate={minDate}
+                                maxDate={today}
+                                isLocked={isLocked}
+                            />
+                        );
+                    })()}
                 </div>
 
                 <div className="p-8 border-b border-[#F3F4F6]">

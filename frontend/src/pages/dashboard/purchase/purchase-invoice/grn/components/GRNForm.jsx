@@ -231,12 +231,12 @@ const GRNForm = ({
                             type="text"
                             placeholder="DD/MM/YYYY"
                             value={toDisplayDate(formData.document_date)}
-                            onChange={(e) => handleDateTextChange(e, 'document_date')}
-                            readOnly={isDocumentDateReadOnly}
+                            readOnly={true}
+                            onClick={() => !isDocumentDateReadOnly && (challanDateRef.current?.showPicker?.() || challanDateRef.current?.focus())}
                             className={`w-full h-[48px] rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all ${
                                 isDocumentDateReadOnly 
                                     ? 'bg-gray-50 border-[#E5E7EB] text-gray-500 cursor-not-allowed' 
-                                    : `bg-white border ${errors.document_date ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`
+                                    : `bg-white border cursor-pointer ${errors.document_date ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`
                             }`}
                         />
                         <Calendar

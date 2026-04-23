@@ -13,7 +13,29 @@ export class ChallanService {
   ) { }
 
   private async calculateChallanTotals(dto: CreateChallanDto, userId: number, existingId?: number) {
-    const bookingDate = dto.bookingDate ? new Date(dto.bookingDate) : new Date();
+    const bookingDate = new Date(); // Enforced (Condition 1 & 2)
+    const challanDate = new Date(dto.challanDate || new Date());
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    if (challanDate > today) {
+      throw new BadRequestException('Challan Date cannot be in the future');
+    }
+
+    if (dto.soId) {
+      const so = await this.prisma.salesOrder.findUnique({ where: { id: Number(dto.soId) } });
+      if (so) {
+        const soDate = new Date(so.soCreationDate);
+        soDate.setHours(0, 0, 0, 0);
+        const challanOnlyDate = new Date(challanDate);
+        challanOnlyDate.setHours(0, 0, 0, 0);
+        
+        if (challanOnlyDate < soDate) {
+          throw new BadRequestException(`Challan Date cannot be before SO Creation Date (${soDate.toLocaleDateString()})`);
+        }
+      }
+    }
+
     const company = await this.prisma.shopDetail.findUnique({ where: { userId } });
     const customer = await this.prisma.accountMaster.findFirst({
       where: { userId, accountName: { equals: dto.customerName, mode: 'insensitive' } }

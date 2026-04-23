@@ -167,13 +167,13 @@ const ChallanForm = ({
                     <div className="relative">
                         <input
                             type="text"
-                            value={toDisplayDate(formData.bookingDate)}
+                            value={toDisplayDate(new Date().toISOString().split('T')[0])}
                             readOnly
                             className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-[#111827] cursor-not-allowed"
                         />
                         <Calendar
                             size={18}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#111827] pointer-events-none"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
                         />
                     </div>
                 </div>
@@ -214,7 +214,7 @@ const ChallanForm = ({
                         placeholder={`Enter customer ${numLabel.toLowerCase()} number`}
                         value={formData.customerChallanNumber || ''}
                         onChange={(e) => setFormData({ ...formData, customerChallanNumber: e.target.value })}
-                        className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all ${errors.customerChallanNumber ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                        className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm ${errors.customerChallanNumber ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                     />
                     {errors.customerChallanNumber && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.customerChallanNumber}</p>}
                 </div>
@@ -230,18 +230,20 @@ const ChallanForm = ({
                             value={formData.customerChallanDate || ''}
                             min={formData.soCreationDate ? formData.soCreationDate.split('T')[0] : ''}
                             max={new Date().toISOString().split('T')[0]}
+                            onKeyDown={(e) => e.preventDefault()}
                             onChange={(e) => setFormData({ ...formData, customerChallanDate: e.target.value })}
                         />
                         <input
                             type="text"
                             placeholder="DD-MM-YYYY"
                             value={toDisplayDate(formData.customerChallanDate)}
-                            onChange={(e) => handleDateTextChange(e, 'customerChallanDate')}
-                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all ${errors.customerChallanDate ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                            readOnly
+                            onClick={() => challanDateRef.current?.showPicker?.()}
+                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all cursor-pointer shadow-sm ${errors.customerChallanDate ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                         />
                         <Calendar
                             size={18}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#111827] cursor-pointer pointer-events-auto hover:text-[#073318]"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto hover:text-[#073318]"
                             onClick={() => challanDateRef.current?.showPicker?.()}
                         />
                     </div>

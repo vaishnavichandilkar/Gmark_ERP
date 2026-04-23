@@ -16,7 +16,10 @@ const InvoiceForm = ({
     errors = {},
     bookingDateRef,
     invoiceDateRef,
-    onAddCustomer
+    onAddCustomer,
+    minDate,
+    maxDate,
+    isLocked
 }) => {
     const navigate = useNavigate();
     const [customerSearch, setCustomerSearch] = useState(formData.customerName || '');
@@ -26,6 +29,13 @@ const InvoiceForm = ({
         setCustomerSearch(formData.customerName || '');
     }, [formData.customerName]);
 
+    // Condition 3 & General Sync: If locked, force invoiceDate to minDate (which is today)
+    React.useEffect(() => {
+        if (isLocked && minDate && formData.customerInvoiceDate !== minDate) {
+            setFormData(prev => ({ ...prev, customerInvoiceDate: minDate }));
+        }
+    }, [isLocked, minDate, formData.customerInvoiceDate]);
+
     const filteredCustomers = useMemo(() => {
         return (customers || []).filter(c =>
             c.accountName?.toLowerCase().includes(customerSearch.toLowerCase())
@@ -34,24 +44,20 @@ const InvoiceForm = ({
 
     const toDisplayDate = (dateStr) => {
         if (!dateStr) return "";
-        const parts = dateStr.split("-");
+        const separator = dateStr.includes("-") ? "-" : "/";
+        const parts = dateStr.split(separator);
         if (parts.length === 3) {
-            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            // Check if ISO (YYYY-MM-DD) or Display (DD/MM/YYYY)
+            if (parts[0].length === 4) {
+                return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+            return dateStr.replace(/-/g, '/');
         }
         return dateStr;
     };
 
     const handleDateTextChange = (e, field) => {
-        const val = e.target.value;
-        const digits = val.replace(/\D/g, '').substring(0, 8);
-        
-        // Auto-format as they type
-        let formatted = digits;
-        if (digits.length >= 3) formatted = digits.substring(0, 2) + '/' + digits.substring(2);
-        if (digits.length >= 5) formatted = formatted.substring(0, 5) + '/' + digits.substring(5);
-
-        // Update state with formatted string to allow typing
-        setFormData(prev => ({ ...prev, [field]: formatted }));
+        // Handled via readOnly + picker
     };
 
     return (
@@ -205,45 +211,46 @@ const InvoiceForm = ({
                             ref={invoiceDateRef}
                             className="absolute opacity-0 pointer-events-none w-0 h-0"
                             value={formData.customerInvoiceDate || ''}
+                            min={minDate}
+                            max={maxDate}
+                            onKeyDown={(e) => e.preventDefault()}
                             onChange={(e) => setFormData({ ...formData, customerInvoiceDate: e.target.value })}
                         />
                         <input
                             type="text"
                             placeholder="DD/MM/YYYY"
                             value={toDisplayDate(formData.customerInvoiceDate)}
-                            onChange={(e) => handleDateTextChange(e, 'customerInvoiceDate')}
-                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all ${errors.customerInvoiceDate ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                            readOnly
+                            onClick={() => !isLocked && invoiceDateRef.current?.showPicker?.()}
+                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all shadow-sm ${
+                                isLocked ? 'bg-gray-50 text-gray-500 cursor-not-allowed border-[#E5E7EB]' : 
+                                `cursor-pointer ${errors.customerInvoiceDate ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`
+                            }`}
                         />
                         <Calendar
                             size={18}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto hover:text-[#073318]"
-                            onClick={() => invoiceDateRef.current?.showPicker?.()}
+                            className={`absolute right-4 top-1/2 -translate-y-1/2 transition-colors ${
+                                isLocked ? 'text-gray-300 pointer-events-none' : 'text-gray-400 cursor-pointer pointer-events-auto hover:text-[#073318]'
+                            }`}
+                            onClick={() => !isLocked && invoiceDateRef.current?.showPicker?.()}
                         />
                     </div>
                 </div>
 
                 {/* 8. Booking Date */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Booking Date <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">Booking Date (Current Date) <span className="text-red-500">*</span></label>
                     <div className="relative">
                         <input
-                            type="date"
-                            ref={bookingDateRef}
-                            className="absolute opacity-0 pointer-events-none w-0 h-0"
-                            value={formData.bookingDate || ''}
-                            onChange={(e) => setFormData({ ...formData, bookingDate: e.target.value })}
-                        />
-                        <input
                             type="text"
-                            value={toDisplayDate(formData.bookingDate)}
-                            onChange={(e) => handleDateTextChange(e, 'bookingDate')}
-                            className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all focus:border-[#073318]"
+                            value={toDisplayDate(new Date().toISOString().split('T')[0])}
+                            readOnly
+                            className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all text-gray-500 cursor-not-allowed shadow-sm"
                             placeholder="DD/MM/YYYY"
                         />
                         <Calendar
                             size={18}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto hover:text-[#073318]"
-                            onClick={() => bookingDateRef.current?.showPicker?.()}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"
                         />
                     </div>
                 </div>

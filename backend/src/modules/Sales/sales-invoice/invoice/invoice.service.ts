@@ -129,6 +129,63 @@ export class SalesInvoiceService {
   async create(createDto: CreateSalesInvoiceDto, userId: number, uploadedFilePath?: string) {
     const invoiceNumber = await this.generateInvoiceNumber(userId);
     const customerInvoiceNumber = await this.generateCustomerInvoiceNumber(userId);
+
+    const bookingDate = new Date(); // Enforced (Condition 1, 2, 3)
+    const invoiceDate = new Date(createDto.invoiceDate || new Date());
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    if (invoiceDate > today) {
+        throw new BadRequestException('Customer Invoice Date cannot be in the future');
+    }
+
+    const hasLink = (createDto.soId) || (createDto.challanNumbers && createDto.challanNumbers.length > 0);
+    
+    if (hasLink) {
+        let minDate: Date | null = null;
+        
+        // Multiple Challan Rule: Use the latest challan date
+        if (createDto.challanNumbers && createDto.challanNumbers.length > 0) {
+            const challanIds = createDto.challanNumbers.map(n => Number(n)).filter(n => !isNaN(n));
+            const challans = await this.prisma.salesChallan.findMany({
+                where: { id: { in: challanIds } }
+            });
+            challans.forEach(c => {
+                const cDate = c.challanDate || c.bookingDate;
+                if (!minDate || cDate > minDate) minDate = cDate;
+            });
+        }
+        
+        // Fallback to SO if no Challans or SO is newer (though usually Challan is after SO)
+        if (!minDate && createDto.soId) {
+             const so = await this.prisma.salesOrder.findUnique({
+                 where: { id: Number(createDto.soId) }
+             });
+             if (so) minDate = so.soCreationDate;
+        }
+
+        if (minDate) {
+            const minOnlyDate = new Date(minDate);
+            minOnlyDate.setHours(0, 0, 0, 0);
+            const invOnlyDate = new Date(invoiceDate);
+            invOnlyDate.setHours(0, 0, 0, 0);
+
+            if (invOnlyDate < minOnlyDate) {
+                throw new BadRequestException(`Customer Invoice Date cannot be before latest Challan/SO date (${minOnlyDate.toLocaleDateString()})`);
+            }
+        }
+    } else {
+        // Condition 3: Without SO and Challan -> Must be Today
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const invOnlyDate = new Date(invoiceDate);
+        invOnlyDate.setHours(0, 0, 0, 0);
+
+        if (invOnlyDate.getTime() !== startOfToday.getTime()) {
+            throw new BadRequestException('Standalone invoices must be dated today');
+        }
+    }
+
     const customer = await this.prisma.accountMaster.findUnique({
       where: { id: createDto.customerId },
     });

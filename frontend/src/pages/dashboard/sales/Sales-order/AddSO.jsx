@@ -732,6 +732,7 @@ const AddSO = () => {
                                     type="date"
                                     value={formData.expiry_date}
                                     min={new Date().toISOString().split('T')[0]}
+                                    onKeyDown={(e) => e.preventDefault()}
                                     onClick={(e) => {
                                         try {
                                             e.target.showPicker();
@@ -740,7 +741,7 @@ const AddSO = () => {
                                     onChange={(e) => {
                                         setFormData({ ...formData, expiry_date: e.target.value });
                                     }}
-                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-12 text-[14px] outline-none transition-all placeholder:text-gray-400 custom-date-input ${errors.expiry_date ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
+                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-12 text-[14px] outline-none transition-all placeholder:text-gray-400 custom-date-input cursor-pointer ${errors.expiry_date ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                                 />
                                 <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover/date:text-[#073318] transition-colors" size={20} />
                             </div>

@@ -125,6 +125,7 @@ export class SalesOrderService {
                     address: createDto.address || customer.address,
                     creditDays: createDto.creditDays,
                     soCreationDate: new Date(),
+                    soBookingDate: new Date(),
                     expiryDate: new Date(createDto.expiryDate),
                     gstNumber: customer.gstNumber || createDto.gstNo || '',
                     panNumber: customer.panNumber || createDto.panNo || '',

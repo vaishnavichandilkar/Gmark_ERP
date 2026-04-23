@@ -904,15 +904,16 @@ const AddPO = () => {
                                     ref={expiryDateRef}
                                     className="absolute opacity-0 pointer-events-none w-0 h-0"
                                     value={formData.expiry_date}
-                                    min={new Date().toISOString().split('T')[0]}
+                                    min={formData.creation_date || new Date().toISOString().split('T')[0]}
                                     onChange={(e) => setFormData(prev => ({ ...prev, expiry_date: e.target.value }))}
                                 />
                                 <input
                                     type="text"
                                     placeholder="DD-MM-YYYY"
                                     value={toDisplayDate(formData.expiry_date)}
-                                    onChange={(e) => handleDateTextChange(e, 'expiry_date')}
-                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-11 text-[14px] outline-none transition-all ${errors.expiry_date ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
+                                    readOnly
+                                    onClick={() => expiryDateRef.current?.showPicker?.() || expiryDateRef.current?.focus()}
+                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-11 text-[14px] outline-none cursor-pointer transition-all ${errors.expiry_date ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                                 />
                                 <Calendar
                                     size={18}
