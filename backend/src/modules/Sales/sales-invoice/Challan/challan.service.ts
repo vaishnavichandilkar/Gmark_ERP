@@ -166,51 +166,157 @@ export class ChallanService {
     };
   }
 
+  async getCustomerSOsForChallan(customerName: string, userId: number) {
+    if (!customerName) return [];
+
+    const sos = await this.prisma.salesOrder.findMany({
+      where: {
+        userId,
+        customerName: { equals: customerName, mode: 'insensitive' },
+        status: { notIn: ['DELETED', 'CHALLAN_COMPLETED', 'INVOICE_COMPLETED'] as any },
+      },
+      include: {
+        items: true,
+        salesChallans: {
+          where: { status: { not: 'DELETED' } },
+          include: { items: true }
+        }
+      },
+      orderBy: { soNumber: 'desc' },
+    });
+
+    // Filter SOs where total delivered quantity < total SO quantity
+    return sos.filter(so => {
+      const totalSoQty = so.items.reduce((sum, item) => sum + item.quantity, 0);
+      const totalDeliveredQty = so.salesChallans.reduce((sum, ch) => {
+        return sum + ch.items.reduce((iSum, i) => iSum + i.challanQty, 0);
+      }, 0);
+      
+      return totalDeliveredQty < totalSoQty;
+    }).map(so => ({
+      id: so.id,
+      soNumber: so.soNumber,
+      soCreationDate: so.soCreationDate,
+      items: so.items
+    }));
+  }
+
+  async updateSOStatusAfterChallan(soId: number, tx: any) {
+    if (!soId) return;
+
+    const so = await tx.salesOrder.findUnique({
+      where: { id: soId },
+      include: {
+        items: true,
+        salesChallans: {
+          where: { status: { not: 'DELETED' } },
+          include: { items: true }
+        }
+      }
+    });
+
+    if (!so) return;
+
+    const totalSoQty = so.items.reduce((sum, item) => sum + item.quantity, 0);
+    const totalDeliveredQty = so.salesChallans.reduce((sum, ch) => {
+      return sum + ch.items.reduce((iSum, i) => iSum + i.challanQty, 0);
+    }, 0);
+
+    let newStatus = so.status;
+    if (totalDeliveredQty >= totalSoQty) {
+      if (so.status !== 'INVOICE_COMPLETED') {
+        newStatus = 'CHALLAN_COMPLETED';
+      }
+    } else {
+      newStatus = 'PENDING';
+    }
+
+    if (so.status !== newStatus) {
+      await tx.salesOrder.update({
+        where: { id: soId },
+        data: { status: newStatus }
+      });
+    }
+  }
+
   async create(createDto: CreateChallanDto, userId: number, uploadedFilePath?: string) {
     const totals = await this.calculateChallanTotals(createDto, userId);
-    return this.prisma.salesChallan.create({
-      data: {
-        challanDate: createDto.challanDate ? new Date(createDto.challanDate) : new Date(),
-        bookingDate: totals.bookingDate,
-        customerName: createDto.customerName,
-        address: createDto.address,
-        gstNumber: createDto.gstNumber || totals.customerGst || null,
-        soNumber: createDto.soNumber,
-        challanNumber: createDto.challanNumber,
-        creditDays: createDto.creditDays || 0,
-        totalQuantity: totals.totalQuantity,
-        taxableAmount: totals.taxableAmount,
-        cgstAmount: totals.cgstAmount,
-        sgstAmount: totals.sgstAmount,
-        igstAmount: totals.igstAmount,
-        grandTotal: totals.grandTotal,
-        cumulativeBalance: totals.cumulativeBalance,
-        isInterState: totals.isInterState,
-        isRcm: totals.isRcm,
-        userId,
-        soId: createDto.soId,
-        items: { create: totals.itemsToCreate },
-        expenses: { create: totals.expensesToCreate }
-      },
-      include: { items: true, expenses: true }
+    return this.prisma.$transaction(async (tx) => {
+      const challan = await tx.salesChallan.create({
+        data: {
+          challanDate: createDto.challanDate ? new Date(createDto.challanDate) : new Date(),
+          bookingDate: totals.bookingDate,
+          customerName: createDto.customerName,
+          address: createDto.address,
+          gstNumber: createDto.gstNumber || totals.customerGst || null,
+          soNumber: createDto.soNumber,
+          challanNumber: createDto.challanNumber,
+          creditDays: createDto.creditDays || 0,
+          totalQuantity: totals.totalQuantity,
+          taxableAmount: totals.taxableAmount,
+          cgstAmount: totals.cgstAmount,
+          sgstAmount: totals.sgstAmount,
+          igstAmount: totals.igstAmount,
+          grandTotal: totals.grandTotal,
+          cumulativeBalance: totals.cumulativeBalance,
+          isInterState: totals.isInterState,
+          isRcm: totals.isRcm,
+          userId,
+          soId: createDto.soId,
+          items: { create: totals.itemsToCreate },
+          expenses: { create: totals.expensesToCreate }
+        },
+        include: { items: true, expenses: true }
+      });
+
+      if (createDto.soId) {
+        await this.updateSOStatusAfterChallan(createDto.soId, tx);
+      }
+      return challan;
     });
   }
 
-  async getCustomerChallans(customerName: string, userId: number, soNumber?: string) {
-    const where: any = {
-      userId,
-      customerName: { equals: customerName, mode: 'insensitive' },
-      status: { not: 'DELETED' }
-    };
-
-    if (soNumber && soNumber.trim() !== '') {
-      where.soNumber = { equals: soNumber.trim(), mode: 'insensitive' };
-    }
-
-    return this.prisma.salesChallan.findMany({
-      where,
-      select: { id: true, challanNumber: true, bookingDate: true, grandTotal: true, soId: true, soNumber: true },
+  async getCustomerChallans(customerName: string, userId: number, soNumber?: string, excludeInvoiceId?: number) {
+    // 1. Fetch all Challans for the customer
+    const challans = await this.prisma.salesChallan.findMany({
+      where: {
+        userId,
+        customerName: { equals: customerName, mode: 'insensitive' },
+        status: { not: 'DELETED' },
+        ...(soNumber && soNumber.trim() !== '' ? { soNumber: { equals: soNumber.trim(), mode: 'insensitive' } } : {})
+      },
+      include: {
+        items: true,
+      },
       orderBy: { createdAt: 'desc' }
+    });
+
+    // 2. Fetch all invoices that might refer to these Challans
+    const invoices = await this.prisma.salesInvoice.findMany({
+      where: { 
+        userId, 
+        status: { not: 'DELETED' },
+        ...(excludeInvoiceId ? { id: { not: excludeInvoiceId } } : {})
+      },
+      include: { items: true }
+    });
+
+    // 3. Filter Challans based on invoiced quantity
+    return challans.filter(ch => {
+      const totalChallanQty = ch.items.reduce((sum, item) => sum + item.challanQty, 0);
+      
+      // Calculate how much of this Challan has been invoiced
+      const totalInvoicedQty = invoices.reduce((sum, inv) => {
+        if (inv.challanNumber) {
+          const challanIds = inv.challanNumber.split(',').map(id => id.trim());
+          if (challanIds.includes(ch.id.toString()) || challanIds.includes(ch.challanNumber)) {
+            return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
+          }
+        }
+        return sum;
+      }, 0);
+
+      return totalInvoicedQty < totalChallanQty;
     });
   }
 
@@ -285,10 +391,9 @@ export class ChallanService {
       };
 
       const totals = await this.calculateChallanTotals(totalsDto, userId, id);
-      return tx.salesChallan.update({
+      const challan = await tx.salesChallan.update({
         where: { id },
         data: {
-          // Only pass known Prisma schema fields — never spread raw DTO
           customerName: updateDto.customerName,
           address: updateDto.address,
           gstNumber: updateDto.gstNumber,
@@ -313,11 +418,28 @@ export class ChallanService {
         },
         include: { items: true, expenses: true }
       });
+
+      if (updateDto.soId) {
+        await this.updateSOStatusAfterChallan(updateDto.soId, tx);
+      } else if (existing.soId) {
+        await this.updateSOStatusAfterChallan(existing.soId, tx);
+      }
+
+      return challan;
     });
   }
 
   async remove(id: number, userId: number) {
-    return this.prisma.salesChallan.update({ where: { id, userId }, data: { status: 'DELETED' } });
+    return this.prisma.$transaction(async (tx) => {
+      const challan = await tx.salesChallan.update({ 
+        where: { id, userId }, 
+        data: { status: 'DELETED' } 
+      });
+      if (challan.soId) {
+        await this.updateSOStatusAfterChallan(challan.soId, tx);
+      }
+      return challan;
+    });
   }
 
   async downloadSample() {

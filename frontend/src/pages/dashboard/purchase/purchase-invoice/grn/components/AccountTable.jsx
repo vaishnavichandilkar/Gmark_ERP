@@ -173,6 +173,7 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
                                 <td className="px-6 py-3 border-l border-[#F1F5F9]">
                                     <input 
                                         type="number" 
+                                        min="0"
                                         value={exp.amount || ''} 
                                         placeholder="0.00"
                                         onChange={(e) => handleExpenseChange(exp.id, 'amount', e.target.value)}
@@ -287,6 +288,7 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
                                 <td className="px-6 py-3 border-l border-[#F1F5F9]">
                                     <input 
                                         type="number" 
+                                        min="0"
                                         value={exp.amount || ''} 
                                         placeholder="0.00"
                                         onChange={(e) => handleExpenseChange(exp.id, 'amount', e.target.value)}

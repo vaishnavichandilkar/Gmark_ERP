@@ -13,7 +13,38 @@ export class GrnService {
   ) { }
 
   private async calculateGrnTotals(dto: CreateGrnDto, userId: number, existingId?: number) {
-    const bookingDate = dto.bookingDate ? new Date(dto.bookingDate) : new Date();
+    const bookingDate = new Date(); // Enforced (Condition 1 & 2)
+    const grnDate = new Date(dto.grnDate || new Date());
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    if (grnDate > today) {
+      throw new BadRequestException('Supplier Challan Date cannot be in the future');
+    }
+
+    if (dto.poId) {
+      const po = await this.prisma.purchaseOrder.findUnique({ where: { id: Number(dto.poId) } });
+      if (po) {
+        const poDate = new Date(po.poCreationDate);
+        poDate.setHours(0, 0, 0, 0);
+        const grnOnlyDate = new Date(grnDate);
+        grnOnlyDate.setHours(0, 0, 0, 0);
+        
+        if (grnOnlyDate < poDate) {
+          throw new BadRequestException(`Supplier Challan Date cannot be before PO Creation Date (${poDate.toLocaleDateString()})`);
+        }
+      }
+    } else {
+      const now = new Date();
+      const fyStart = new Date(now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear(), 3, 1);
+      fyStart.setHours(0, 0, 0, 0);
+      const grnOnlyDate = new Date(grnDate);
+      grnOnlyDate.setHours(0, 0, 0, 0);
+
+      if (grnOnlyDate < fyStart) {
+        throw new BadRequestException(`Supplier Challan Date cannot be before Financial Year Start (${fyStart.toLocaleDateString()})`);
+      }
+    }
 
     const company = await this.prisma.shopDetail.findUnique({
       where: { userId },
@@ -211,6 +242,40 @@ export class GrnService {
     };
   }
 
+  private async updatePOStatusAfterGrn(poId: number, tx: any) {
+    const po = await tx.purchaseOrder.findUnique({
+      where: { id: poId },
+      include: {
+        items: true,
+        grn: {
+          where: { status: { not: 'DELETED' } },
+          include: { items: true }
+        }
+      }
+    });
+
+    if (po) {
+      const totalPoQty = po.items.reduce((sum, item) => sum + item.quantity, 0);
+      const totalReceivedQty = po.grn.reduce((sum, grn) => {
+        return sum + grn.items.reduce((iSum, i) => iSum + i.receivedQty, 0);
+      }, 0);
+
+      if (totalReceivedQty >= totalPoQty) {
+        await tx.purchaseOrder.update({
+          where: { id: poId },
+          data: { status: 'GRN_COMPLETED' }
+        });
+      } else {
+        if (po.status === 'GRN_COMPLETED') {
+          await tx.purchaseOrder.update({
+            where: { id: poId },
+            data: { status: 'PENDING' }
+          });
+        }
+      }
+    }
+  }
+
   async create(createDto: CreateGrnDto, userId: number, uploadedFilePath?: string) {
     const totals = await this.calculateGrnTotals(createDto, userId);
 
@@ -242,26 +307,89 @@ export class GrnService {
         include: { items: true, expenses: true },
       });
 
+      if (createDto.poId) {
+        await this.updatePOStatusAfterGrn(Number(createDto.poId), tx);
+      }
+
       return grn;
     });
   }
 
-  async getSupplierChallans(supplierName: string, userId: number) {
-    return this.prisma.grn.findMany({
+  async getSupplierPOsForGrn(supplierName: string, userId: number) {
+    if (!supplierName) return [];
+
+    const pos = await this.prisma.purchaseOrder.findMany({
+      where: {
+        userId,
+        supplierName: { equals: supplierName, mode: 'insensitive' },
+        status: { notIn: ['DELETED', 'GRN_COMPLETED', 'INVOICE_COMPLETED'] as any },
+      },
+      include: {
+        items: true,
+        grn: {
+          where: { status: { not: 'DELETED' } },
+          include: { items: true }
+        }
+      },
+      orderBy: { poNumber: 'desc' },
+    });
+
+    // Filter POs where total received quantity < total PO quantity
+    return pos.filter(po => {
+      const totalPoQty = po.items.reduce((sum, item) => sum + item.quantity, 0);
+      const totalReceivedQty = po.grn.reduce((sum, grn) => {
+        return sum + grn.items.reduce((iSum, i) => iSum + i.receivedQty, 0);
+      }, 0);
+      
+      return totalReceivedQty < totalPoQty;
+    }).map(po => ({
+      id: po.id,
+      poNumber: po.poNumber,
+    }));
+  }
+
+  async getSupplierChallans(supplierName: string, userId: number, excludeInvoiceId?: number) {
+    // 1. Fetch all GRNs for the supplier
+    const grns = await this.prisma.grn.findMany({
       where: {
         userId,
         supplierName: { equals: supplierName, mode: 'insensitive' },
         status: { not: 'DELETED' }
       },
-      select: {
-        id: true,
-        challanNumber: true,
-        bookingDate: true,
-        grandTotal: true,
-        poId: true,
-        poNumber: true
+      include: {
+        items: true,
       },
       orderBy: { createdAt: 'desc' }
+    });
+
+    // 2. Fetch all invoices that might refer to these GRNs
+    const invoices = await this.prisma.purchaseInvoice.findMany({
+      where: { 
+        userId, 
+        status: { not: 'DELETED' },
+        ...(excludeInvoiceId ? { id: { not: excludeInvoiceId } } : {})
+      },
+      include: { items: true }
+    });
+
+    // 3. Filter GRNs based on invoiced quantity
+    return grns.filter(grn => {
+      const totalGrnQty = grn.items.reduce((sum, item) => sum + item.receivedQty, 0);
+      
+      // Calculate how much of this GRN has been invoiced
+      const totalInvoicedQty = invoices.reduce((sum, inv) => {
+        if (inv.challanNumber) {
+          const challanIds = inv.challanNumber.split(',').map(id => id.trim());
+          if (challanIds.includes(grn.id.toString()) || challanIds.includes(grn.challanNumber)) {
+            // If the invoice is for this GRN, count its items
+            // This is a simplification: we assume the invoice items correspond to the GRNs listed
+            return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
+          }
+        }
+        return sum;
+      }, 0);
+
+      return totalInvoicedQty < totalGrnQty;
     });
   }
 
@@ -363,7 +491,7 @@ export class GrnService {
       await tx.grnItem.deleteMany({ where: { grnId: id } });
       await tx.grnExpense.deleteMany({ where: { grnId: id } });
 
-      return tx.grn.update({
+      const updated = await tx.grn.update({
         where: { id },
         data: {
           supplierName: updateDto.supplierName ?? existing.supplierName,
@@ -389,15 +517,34 @@ export class GrnService {
         },
         include: { items: true, expenses: true },
       });
+
+      if (updated.poId) {
+        await this.updatePOStatusAfterGrn(Number(updated.poId), tx);
+      }
+      
+      // If the poId changed, we might need to update the old PO too
+      if (existing.poId && existing.poId !== updated.poId) {
+        await this.updatePOStatusAfterGrn(Number(existing.poId), tx);
+      }
+
+      return updated;
     });
   }
 
   async remove(id: number, userId: number) {
     const existing = await this.prisma.grn.findUnique({ where: { id } });
     if (!existing || existing.userId !== userId) throw new NotFoundException('GRN not found');
-    return this.prisma.grn.update({ 
-      where: { id },
-      data: { status: 'DELETED' }
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.grn.update({ 
+        where: { id },
+        data: { status: 'DELETED' }
+      });
+      
+      if (updated.poId) {
+        await this.updatePOStatusAfterGrn(Number(updated.poId), tx);
+      }
+      
+      return updated;
     });
   }
 

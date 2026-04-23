@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import { 
     ArrowLeft, 
-    RefreshCw
+    RefreshCw,
+    Printer
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -107,6 +108,17 @@ const ViewSalesInvoice = () => {
                                 Edit
                             </button>
                         )}
+                        <button 
+                            onClick={() => navigate(ROUTES.SALES_INVOICE_PRINT, { 
+                                state: { 
+                                    invoiceData: invoice, 
+                                    from: window.location.pathname 
+                                } 
+                            })}
+                            className="px-6 h-[44px] border border-[#073318] text-[#073318] bg-white rounded-[10px] text-[15px] font-bold hover:bg-emerald-50 transition-all flex items-center gap-2"
+                        >
+                            <Printer size={18} /> Preview & Print
+                        </button>
                         <button 
                             onClick={() => navigate(-1)}
                             className="flex items-center gap-2 px-6 h-[44px] border border-[#E5E7EB] rounded-[10px] text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all"

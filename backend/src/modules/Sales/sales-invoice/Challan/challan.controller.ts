@@ -28,19 +28,22 @@ export class ChallanController {
   @ApiOperation({ summary: 'Get list of SOs for a specific customer (for Challan)' })
   @ApiQuery({ name: 'customerName', required: true, type: String })
   async getCustomerSOs(@Query('customerName') customerName: string, @Request() req) {
-    return this.siService.getCustomerSOs(customerName, req.user.id);
+    return this.challanService.getCustomerSOsForChallan(customerName, req.user.id);
   }
 
   @Get('customer-challans')
   @ApiOperation({ summary: 'Get list of Challan Numbers for a specific customer' })
   @ApiQuery({ name: 'customerName', required: true, type: String })
   @ApiQuery({ name: 'soNumber', required: false, type: String })
+  @ApiQuery({ name: 'excludeInvoiceId', required: false, type: Number })
   async getCustomerChallans(
     @Query('customerName') customerName: string,
     @Query('soNumber') soNumber: string,
+    @Query('excludeInvoiceId') excludeInvoiceId: string,
     @Request() req
   ) {
-    return this.challanService.getCustomerChallans(customerName, req.user.id, soNumber);
+    const excId = excludeInvoiceId ? parseInt(excludeInvoiceId, 10) : undefined;
+    return this.challanService.getCustomerChallans(customerName, req.user.id, soNumber, excId);
   }
 
   @Get('product-received-qty')

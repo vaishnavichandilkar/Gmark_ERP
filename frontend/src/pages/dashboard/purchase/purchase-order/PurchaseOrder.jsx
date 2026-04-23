@@ -299,9 +299,20 @@ const PurchaseOrder = () => {
     try {
       setIsRefreshing(true);
       const fullPo = await purchaseOrderService.getPurchaseOrderById(poData.id);
+      const poToPrint = fullPo.data || fullPo;
+      
+      // Ensure items have both printDescription and description for preview compatibility
+      if (poToPrint.items) {
+        poToPrint.items = poToPrint.items.map(it => ({
+          ...it,
+          printDescription: it.printDescription || it.description || it.print_description || it.productName || it.product_name || '',
+          description: it.description || it.printDescription || it.print_description || it.productName || it.product_name || ''
+        }));
+      }
+
       navigate(ROUTES.PURCHASE_ORDER_PRINT, { 
         state: { 
-          poData: fullPo, 
+          poData: poToPrint, 
           from: '/seller/purchase/order' 
         } 
       });

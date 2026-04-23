@@ -39,6 +39,7 @@ const AddGRN = () => {
         supplier_challan_number: '',
         po_id: '',
         po_number: '',
+        po_date: '', // Track PO date for constraints
         attachment: null
     });
 
@@ -70,6 +71,11 @@ const AddGRN = () => {
     const [errors, setErrors] = useState({});
     const [companyInfo, setCompanyInfo] = useState(null);
     const [gstType, setGstType] = useState({ type: 'NONE' });
+    const getFinancialYearStart = () => {
+        const now = new Date();
+        const year = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
+        return `${year}-04-01`;
+    };
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -106,6 +112,7 @@ const AddGRN = () => {
                         credit_days: grn.creditDays,
                         po_id: grn.poId || '',
                         po_number: grn.poNumber || '',
+                        po_date: grn.poDate?.split('T')[0] || '', // Load PO date if exists
                         gst_no: grn.gstNumber || grn.gstNo || "",
                         supplier_state: suppState
                     });
@@ -316,7 +323,12 @@ const AddGRN = () => {
 
         try {
             const poDetails = await purchaseOrderService.getPurchaseOrderById(poId);
-            setFormData(prev => ({ ...prev, po_id: poDetails.id, po_number: poDetails.poNumber }));
+            setFormData(prev => ({ 
+                ...prev, 
+                po_id: poDetails.id, 
+                po_number: poDetails.poNumber,
+                po_date: poDetails.poCreationDate?.split('T')[0] || '' 
+            }));
 
             const poItems = await Promise.all(poDetails.items.map(async (item) => {
                 const qty = item.quantity || 0;
@@ -337,7 +349,17 @@ const AddGRN = () => {
                 const remainingInPO = qty - receivedCount;
                 const effectiveQty = remainingInPO > 0 ? remainingInPO : 0;
                 const baseAmount = effectiveQty * rate;
-                const befTax = baseAmount - discAmt;
+
+                // Recalculate discount amount based on percentage or proportionally
+                let currentDiscAmt = 0;
+                if (discPct > 0) {
+                    currentDiscAmt = parseFloat(((baseAmount * discPct) / 100).toFixed(2));
+                } else if (qty > 0 && discAmt > 0) {
+                    // Proportional scaling if only amount is provided
+                    currentDiscAmt = parseFloat(((discAmt / qty) * effectiveQty).toFixed(2));
+                }
+
+                const befTax = baseAmount - currentDiscAmt;
                 
                 const type = calculateGST(formData.gst_no || poDetails.gstNumber, formData.supplier_state);
                 let taxAmt = 0;
@@ -353,7 +375,7 @@ const AddGRN = () => {
                     quantity: effectiveQty, 
                     rate: rate,
                     uom: item.uom,
-                    discountAmount: discAmt,
+                    discountAmount: currentDiscAmt,
                     discountPercent: discPct,
                     hsnCode: item.hsnCode || item.hsn_code || '',
                     taxPercent: taxPct,
@@ -383,6 +405,18 @@ const AddGRN = () => {
             const today = new Date().toISOString().split('T')[0];
             if (formData.document_date > today) {
                 newErrors.document_date = "Date cannot be in the future";
+            }
+            
+            // Validation based on PO or FY
+            if (formData.po_id && formData.po_date) {
+                if (formData.document_date < formData.po_date) {
+                    newErrors.document_date = `Date cannot be before PO date (${formData.po_date})`;
+                }
+            } else {
+                const fyStart = getFinancialYearStart();
+                if (formData.document_date < fyStart) {
+                    newErrors.document_date = `Date cannot be before FY start (${fyStart})`;
+                }
             }
         }
 
@@ -574,17 +608,26 @@ const AddGRN = () => {
                 </div>
 
                 <div className="p-8 border-b border-[#F3F4F6]">
-                    <GRNForm 
-                        formData={formData}
-                        setFormData={setFormData}
-                        handleSupplierChange={handleSupplierChange}
-                        handlePOChange={handlePOChange}
-                        suppliers={suppliers}
-                        pos={pos}
-                        errors={errors}
-                        challanDateRef={challanDateRef}
-                        onAddSupplier={handleAddNewSupplier}
-                    />
+                    {(() => {
+                        const minDate = formData.po_id ? formData.po_date : getFinancialYearStart();
+                        const today = new Date().toISOString().split('T')[0];
+
+                        return (
+                            <GRNForm 
+                                formData={formData}
+                                setFormData={setFormData}
+                                handleSupplierChange={handleSupplierChange}
+                                handlePOChange={handlePOChange}
+                                suppliers={suppliers}
+                                pos={pos}
+                                errors={errors}
+                                challanDateRef={challanDateRef}
+                                onAddSupplier={handleAddNewSupplier}
+                                minDate={minDate}
+                                maxDate={today}
+                            />
+                        );
+                    })()}
                 </div>
 
                 <div className="p-8 border-b border-[#F3F4F6]">
@@ -596,6 +639,8 @@ const AddGRN = () => {
                         handleAddNewProduct={handleAddNewProduct}
                         gstType={gstType}
                         isPoSelected={!!formData.po_id}
+                        poNumber={formData.po_number || formData.poNumber}
+                        linkedPoItems={pos.find(p => p.id === parseInt(formData.po_id))?.items}
                         supplierName={formData.supplier_name}
                     />
                 </div>

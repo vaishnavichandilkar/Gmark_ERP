@@ -4,7 +4,8 @@ import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString
 
 export enum POStatus {
   PENDING = 'PENDING',
-  INVOICE_GENERATED = 'INVOICE_GENERATED',
+  GRN_COMPLETED = 'GRN_COMPLETED',
+  INVOICE_COMPLETED = 'INVOICE_COMPLETED',
   DELETED = 'DELETED',
 }
 
@@ -68,6 +69,11 @@ export class CreatePurchaseOrderItemDto {
   @IsString()
   @IsOptional()
   printDescription?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  description?: string;
 }
 
 export class CreatePurchaseOrderDto {

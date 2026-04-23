@@ -71,7 +71,7 @@ export class PurchaseOrderService {
       beforeTaxAmount,
       taxAmount,
       totalAmount,
-      printDescription: item.printDescription || '',
+      printDescription: item.printDescription || item.description || item.productName || '',
     };
   }
 
@@ -94,7 +94,7 @@ export class PurchaseOrderService {
           supplierName: supplier.supplierName,
           address: createDto.address || supplier.address,
           creditDays: createDto.creditDays,
-          poCreationDate: createDto.poCreationDate ? new Date(createDto.poCreationDate) : new Date(),
+          poCreationDate: new Date(), // Enforce current date (Condition 1)
           expiryDate: new Date(createDto.expiryDate),
           gstNumber: createDto.gstNo || supplier.gstNumber,
           taxAmount: totalTaxAmount,
@@ -115,6 +115,7 @@ export class PurchaseOrderService {
               taxAmount: Number(item.taxAmount) || 0,
               beforeTaxAmount: Number(item.beforeTaxAmount) || 0,
               totalAmount: Number(item.totalAmount) || 0,
+              printDescription: item.printDescription,
             })),
           },
         } as any,
@@ -145,7 +146,7 @@ export class PurchaseOrderService {
         where.expiryDate = { lt: startOfToday };
         break;
       case 'completed':
-        where.status = 'INVOICE_GENERATED';
+        where.status = 'INVOICE_COMPLETED' as any;
         break;
       case 'deleted':
         where.status = 'DELETED';
@@ -209,7 +210,7 @@ export class PurchaseOrderService {
 
   async update(id: number, updateDto: UpdatePurchaseOrderDto, userId: number) {
     const po = await this.findOne(id, userId);
-    if (po.status === 'INVOICE_GENERATED' || po.status === 'DELETED') {
+    if (po.status === 'INVOICE_COMPLETED' || po.status === 'DELETED') {
       throw new ForbiddenException(`Update forbidden in status ${po.status}`);
     }
 
@@ -502,7 +503,8 @@ export class PurchaseOrderService {
       expDate.setHours(23, 59, 59, 999);
       const currentTime = new Date();
 
-      if (status === 'INVOICE_GENERATED') return 'COMPLETED';
+      if (status === 'INVOICE_COMPLETED') return 'COMPLETED';
+      if (status === 'GRN_COMPLETED') return 'GRN COMPLETED';
       if (status === 'DELETED') return 'DELETED';
       if (expDate < currentTime) return 'EXPIRED';
 

@@ -17,7 +17,17 @@ const InvoiceTable = ({
 
     const handleItemChange = (index, field, value) => {
         const newItems = [...items];
-        newItems[index][field] = value;
+        
+        let finalValue = value;
+        if (field === 'discount_amount') {
+            const valStr = value.toString();
+            if (valStr.includes('.') && valStr.split('.')[1].length > 2) {
+                const [int, dec] = valStr.split('.');
+                finalValue = parseFloat(`${int}.${dec.slice(0, 2)}`);
+            }
+        }
+        
+        newItems[index][field] = finalValue;
         setItems(newItems);
     };
 
@@ -85,6 +95,7 @@ const InvoiceTable = ({
                                 <td className="px-4 py-3 border-l border-[#F3F4F6] align-top">
                                     <input 
                                         type="number" 
+                                        min="0"
                                         value={item.quantity === 0 ? '' : item.quantity} 
                                         onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
                                         className="w-full h-[44px] bg-white border border-[#E5E7EB] rounded-[10px] px-3 text-[14px] font-bold text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318] shadow-sm transition-all"
@@ -95,6 +106,7 @@ const InvoiceTable = ({
                                 <td className="px-4 py-3 border-l border-[#F3F4F6] align-top">
                                     <input 
                                         type="number" 
+                                        min="0"
                                         value={item.rate === 0 ? '' : item.rate} 
                                         onChange={(e) => handleItemChange(idx, 'rate', parseFloat(e.target.value) || 0)}
                                         className="w-full h-[44px] bg-white border border-[#E5E7EB] rounded-[10px] px-3 text-[14px] font-bold text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318] shadow-sm transition-all"
@@ -109,8 +121,10 @@ const InvoiceTable = ({
                                 <td className="px-4 py-3 border-l border-[#F3F4F6] align-top">
                                     <input 
                                         type="number" 
+                                        step="0.01"
+                                        min="0"
                                         value={item.discount_amount === 0 ? '' : item.discount_amount} 
-                                        onChange={(e) => handleItemChange(idx, 'discount_amount', parseFloat(e.target.value) || 0)}
+                                        onChange={(e) => handleItemChange(idx, 'discount_amount', e.target.value)}
                                         className="w-full h-[44px] bg-white border border-[#E5E7EB] rounded-[10px] px-3 text-[14px] font-bold text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318] shadow-sm transition-all"
                                         placeholder="0.00"
                                     />

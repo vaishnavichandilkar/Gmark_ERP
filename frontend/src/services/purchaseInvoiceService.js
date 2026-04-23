@@ -68,13 +68,15 @@ const purchaseInvoiceService = {
     return response.data;
   },
 
-  getSupplierPOs: async (supplierId) => {
-    const response = await axiosInstance.get(`/purchase-invoices/supplier-pos?supplierId=${supplierId}`);
+  getSupplierPOs: async (supplierId, excludeInvoiceId) => {
+    const url = `/purchase-invoices/supplier-pos?supplierId=${supplierId}${excludeInvoiceId ? `&excludeInvoiceId=${excludeInvoiceId}` : ''}`;
+    const response = await axiosInstance.get(url);
     return response.data;
   },
 
-  getSupplierGRNs: async (supplierId) => {
-    const response = await axiosInstance.get(`/grn?supplierId=${supplierId}`);
+  getSupplierGRNs: async (supplierId, excludeInvoiceId) => {
+    const url = `/grn?supplierId=${supplierId}${excludeInvoiceId ? `&excludeInvoiceId=${excludeInvoiceId}` : ''}`;
+    const response = await axiosInstance.get(url);
     return response.data;
   },
 

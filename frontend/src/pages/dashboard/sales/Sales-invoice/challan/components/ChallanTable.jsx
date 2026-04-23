@@ -3,7 +3,7 @@ import { Search, Trash2, Plus, AlertCircle, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import challanService from '@/services/challanService';
 
-const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isSoSelected, type = 'Challan', customerName }) => {
+const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isSoSelected, soNumber, linkedSoItems, type = 'Challan', customerName }) => {
     const isChallan = type === 'Challan';
     const [tableSearch, setTableSearch] = useState('');
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
@@ -57,27 +57,36 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
         const newItems = [...items];
         const item = { ...newItems[index] };
 
-        // Update the specific field
-        item[field] = value;
+        // Update the specific field with decimal limit for discounts
+        let finalValue = value;
+        if (field === 'discountAmount' || field === 'discountPercent') {
+            if (value.includes('.') && value.split('.')[1].length > 2) {
+                const [int, dec] = value.split('.');
+                finalValue = `${int}.${dec.slice(0, 2)}`;
+            }
+        }
+        item[field] = finalValue;
 
-        // Current values for calculation
-        const qty       = parseFloat(field === 'quantity'       ? value : item.quantity)       || 0;
-        const rate      = parseFloat(field === 'rate'           ? value : item.rate)            || 0;
-        const taxPct    = parseFloat(field === 'taxPercent'     ? value : item.taxPercent)      || 0;
-        const totalSO   = parseFloat(field === 'totalSoQty'     ? value : item.totalSoQty)      || 0;
+        const qty       = parseFloat(field === 'quantity'       ? finalValue : item.quantity)       || 0;
+        const rate      = parseFloat(field === 'rate'           ? finalValue : item.rate)            || 0;
+        const taxPct    = parseFloat(field === 'taxPercent'     ? finalValue : item.taxPercent)      || 0;
+        const totalSO   = parseFloat(field === 'totalSoQty'     ? finalValue : item.totalSoQty)      || 0;
         const givenSO   = parseFloat(item.givenSoQty)                                           || 0;
 
         // Recalculate if any dependent field changed
         if (['quantity', 'rate', 'taxPercent', 'discountPercent', 'discountAmount', 'totalSoQty'].includes(field)) {
             const baseAmount = qty * rate;
 
-            let discPct = parseFloat(field === 'discountPercent' ? value : item.discountPercent) || 0;
-            let discAmt = parseFloat(field === 'discountAmount'  ? value : item.discountAmount)  || 0;
+            let discPct = parseFloat(field === 'discountPercent' ? finalValue : item.discountPercent) || 0;
+            let discAmt = parseFloat(field === 'discountAmount'  ? finalValue : item.discountAmount)  || 0;
 
             if (field === 'discountPercent') {
                 discAmt = parseFloat(((baseAmount * discPct) / 100).toFixed(2));
             } else if (field === 'discountAmount') {
                 discPct = baseAmount > 0 ? parseFloat(((discAmt / baseAmount) * 100).toFixed(2)) : 0;
+            } else {
+                // If quantity or rate changed, preserve the discount percentage and update the amount
+                discAmt = parseFloat(((baseAmount * discPct) / 100).toFixed(2));
             }
 
             // Clamp discount
@@ -91,11 +100,13 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             const isApplicable = gstType?.applicable !== false;
             const taxAmt = isApplicable ? parseFloat(((befTax * taxPct) / 100).toFixed(2)) : 0;
 
-            item.quantity        = qty; // Ensure numeric
-            item.rate            = rate;
-            item.taxPercent      = taxPct;
-            item.discountPercent = discPct;
-            item.discountAmount  = discAmt;
+            // Preserve the original string value for the field currently being changed
+            if (field !== 'quantity')        item.quantity        = qty;
+            if (field !== 'rate')            item.rate            = rate;
+            if (field !== 'taxPercent')      item.taxPercent      = taxPct;
+            if (field !== 'discountPercent') item.discountPercent = parseFloat(parseFloat(discPct).toFixed(2));
+            if (field !== 'discountAmount')  item.discountAmount  = parseFloat(parseFloat(discAmt).toFixed(2));
+
             item.beforeTaxAmount = befTax;
             item.taxAmount       = taxAmt;
             item.totalAmount     = parseFloat((befTax + taxAmt).toFixed(2));
@@ -119,11 +130,23 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
         const taxAmt = isApplicable ? (baseAmount * taxPct) / 100 : 0;
         const total = parseFloat((baseAmount + taxAmt).toFixed(2));
 
+        let soQty = 0;
         let givenCount = 0;
-        if (customerName) {
+        if (customerName && isSoSelected && soNumber) {
             try {
-                const history = await challanService.getReceivedQty(customerName, product.product_code || product.productCode);
+                const history = await challanService.getReceivedQty(customerName, product.product_code || product.productCode, soNumber);
                 givenCount = history.givenSoQty || history.totalQty || 0;
+                
+                // Find total qty in linked SO items if available
+                if (Array.isArray(linkedSoItems)) {
+                    const soItem = linkedSoItems.find(i => 
+                        (i.productCode === (product.product_code || product.productCode)) ||
+                        (i.productId === product.id)
+                    );
+                    if (soItem) {
+                        soQty = parseFloat(soItem.quantity) || 0;
+                    }
+                }
             } catch (e) {
                 console.error("Failed to fetch given history", e);
             }
@@ -153,9 +176,9 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             taxAmount: taxAmt,
             totalAmount: total,
             printDescription: product.print_description || product.product_name,
-            totalSoQty: 0,
+            totalSoQty: soQty,
             givenSoQty: givenCount,
-            remainingQty: (0 - givenCount - qty).toFixed(2)
+            remainingQty: Math.max(0, soQty - givenCount - qty).toFixed(2)
         };
 
         if (finalTargetIndex < updatedItems.length) {
@@ -270,6 +293,7 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                             <th className="px-4 py-4 w-[60px] text-center text-[13px] font-bold text-[#4B5563] border-l border-[#F3F4F6]">Select</th>
                             <th className="px-4 py-4 w-[160px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Product Code</th>
                             <th className="px-4 py-4 w-[350px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Product Name</th>
+                            <th className="px-4 py-4 w-[300px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Print Description</th>
                             {isChallan && (
                                 <>
                                     <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">total so qty</th>
@@ -286,11 +310,10 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                             <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Discount (₹)</th>
                             <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Discount (%)</th>
                             <th className="px-4 py-4 w-[140px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">HSN Code</th>
-                            <th className="px-4 py-4 w-[100px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Tax (%)</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Tax (%)</th>
                             <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Bef. Tax Amount</th>
                             <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Tax Amount</th>
                             <th className="px-4 py-4 w-[150px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Amount</th>
-                            <th className="px-4 py-4 w-[300px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Print Description</th>
                             <th className="px-4 py-4 w-[80px] text-center text-[13px] font-bold text-gray-500 border-l border-[#F3F4F6] sticky right-0 bg-white z-10">Action</th>
                         </tr>
                     </thead>
@@ -336,35 +359,34 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                         />
                                     </td>
 
+                                    {/* Print Description */}
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                        <input
+                                            type="text"
+                                            value={item.printDescription || ''}
+                                            onChange={(e) => handleItemChange(index, 'printDescription', e.target.value)}
+                                            placeholder="Description for print..."
+                                            className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-semibold outline-none focus:border-[#073318]"
+                                        />
+                                    </td>
+
                                     {isChallan && (
                                         <>
                                             <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                                {isSoSelected ? (
-                                                    // SO selected → frozen, auto-filled from SO
-                                                    <input
-                                                        type="text"
-                                                        value={item.totalSoQty || 0}
-                                                        readOnly
-                                                        className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed"
-                                                    />
-                                                ) : (
-                                                    // No SO → user can enter total SO qty manually
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        value={item.totalSoQty === 0 ? '' : item.totalSoQty}
-                                                        onChange={(e) => handleItemChange(index, 'totalSoQty', e.target.value)}
-                                                        placeholder="0"
-                                                        className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm"
-                                                    />
-                                                )}
+                                                <input
+                                                    type="number"
+                                                    value={item.totalSoQty || 0}
+                                                    readOnly
+                                                    className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed"
+                                                />
                                             </td>
                                             <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                                <input type="text" value={item.givenSoQty || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed" />
+                                                <input type="number" min="0" value={item.givenSoQty || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed" />
                                             </td>
                                             <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                                 <input
                                                     type="number"
+                                                    min="0"
                                                     value={item.quantity === 0 ? '' : item.quantity}
                                                     onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                                                     className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
@@ -379,6 +401,7 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                         <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                             <input
                                                 type="number"
+                                                min="0"
                                                 value={item.quantity === 0 ? '' : item.quantity}
                                                 onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                                                 className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
@@ -390,9 +413,11 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input
                                             type="number"
+                                            min="0"
                                             value={item.rate === 0 ? '' : item.rate}
                                             onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
-                                            className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm ${errors?.itemErrors?.[index]?.rate ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                                            readOnly={isSoSelected}
+                                            className={`w-full h-[36px] border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none transition-all shadow-sm ${isSoSelected ? 'bg-gray-50 text-gray-500 cursor-not-allowed border-[#E5E7EB]' : 'bg-white text-[#111827] focus:border-[#073318] border-[#E5E7EB]'} ${errors?.itemErrors?.[index]?.rate ? 'border-red-500' : ''}`}
                                         />
                                     </td>
 
@@ -414,9 +439,12 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400">₹</span>
                                             <input
                                                 type="number"
+                                                step="0.01"
+                                                min="0"
                                                 value={item.discountAmount === 0 ? '' : item.discountAmount}
                                                 onChange={(e) => handleItemChange(index, 'discountAmount', e.target.value)}
-                                                className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] pl-5 pr-2 text-[13px] font-bold text-right outline-none focus:border-[#073318]"
+                                                readOnly={isSoSelected}
+                                                className={`w-full h-[36px] border border-[#E5E7EB] rounded-[8px] pl-5 pr-2 text-[13px] font-bold text-right outline-none ${isSoSelected ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white text-[#111827] focus:border-[#073318]'}`}
                                             />
                                         </div>
                                     </td>
@@ -427,9 +455,12 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-emerald-800">%</span>
                                             <input
                                                 type="number"
+                                                step="0.01"
+                                                min="0"
                                                 value={item.discountPercent === 0 ? '' : item.discountPercent}
                                                 onChange={(e) => handleItemChange(index, 'discountPercent', e.target.value)}
-                                                className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] pr-5 pl-2 text-[13px] font-bold text-right outline-none focus:border-[#073318]"
+                                                readOnly={isSoSelected}
+                                                className={`w-full h-[36px] border border-[#E5E7EB] rounded-[8px] pr-5 pl-2 text-[13px] font-bold text-right outline-none ${isSoSelected ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white text-emerald-800 focus:border-[#073318]'}`}
                                             />
                                         </div>
                                     </td>
@@ -472,17 +503,6 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                     {/* Amount */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6] text-right text-[14px] font-black text-[#073318] px-4">
                                         ₹{parseFloat(item.totalAmount || 0).toFixed(2)}
-                                    </td>
-
-                                    {/* Print Description */}
-                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                        <input
-                                            type="text"
-                                            value={item.printDescription || ''}
-                                            onChange={(e) => handleItemChange(index, 'printDescription', e.target.value)}
-                                            placeholder="Description for print..."
-                                            className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-semibold outline-none focus:border-[#073318]"
-                                        />
                                     </td>
 
                                     {/* Action */}
@@ -541,6 +561,7 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                             <td colSpan={2} className="px-4 py-4 text-[13px] font-black text-[#111827]">Total</td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
+                            <td className="border-l border-[#F3F4F6]"></td>
                             {isChallan && (
                                 <>
                                     <td className="border-l border-[#F3F4F6]"></td>
@@ -571,7 +592,6 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                             <td className="px-4 py-4 text-right text-[15px] font-black text-[#073318] border-l border-[#F3F4F6]">
                                 ₹ {items.reduce((sum, item) => sum + (parseFloat(item.totalAmount) || 0), 0).toFixed(2)}
                             </td>
-                            <td className="border-l border-[#F3F4F6]"></td>
                             <td className="sticky right-0 bg-[#F9FAFB] border-l border-[#F3F4F6]"></td>
                         </tr>
                     </tfoot>

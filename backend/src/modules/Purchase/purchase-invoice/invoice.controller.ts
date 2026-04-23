@@ -30,8 +30,10 @@ export class PurchaseInvoiceController {
   @Get('supplier-pos')
   @ApiOperation({ summary: 'Get list of POs for a specific supplier' })
   @ApiQuery({ name: 'supplierId', required: true, type: String })
-  async getSupplierPOs(@Query('supplierId') supplierId: string, @Request() req) {
-    return this.service.getSupplierPOs(supplierId, req.user.id);
+  @ApiQuery({ name: 'excludeInvoiceId', required: false, type: Number })
+  async getSupplierPOs(@Query('supplierId') supplierId: string, @Query('excludeInvoiceId') excludeInvoiceId: string, @Request() req) {
+    const excId = excludeInvoiceId ? parseInt(excludeInvoiceId, 10) : undefined;
+    return this.service.getSupplierPOs(supplierId, req.user.id, excId);
   }
 
   @Post()

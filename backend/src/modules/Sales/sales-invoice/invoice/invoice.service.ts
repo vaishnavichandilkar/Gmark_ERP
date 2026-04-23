@@ -34,7 +34,7 @@ export class SalesInvoiceService {
     });
   }
 
-  async getCustomerSOs(customerIdOrName: string, userId: number) {
+  async getCustomerSOs(customerIdOrName: string, userId: number, excludeInvoiceId?: number) {
     if (!customerIdOrName) return [];
     
     let accountName = String(customerIdOrName).trim();
@@ -49,43 +49,30 @@ export class SalesInvoiceService {
       where: {
         userId,
         customerName: { equals: accountName, mode: 'insensitive' },
-        status: { not: 'DELETED' },
+        status: { notIn: ['DELETED', 'INVOICE_COMPLETED'] as any },
       },
       include: {
         items: true,
+        salesInvoices: {
+          where: { 
+            status: { not: 'DELETED' },
+            ...(excludeInvoiceId ? { id: { not: excludeInvoiceId } } : {})
+          },
+          include: { items: true }
+        }
       },
       orderBy: { soNumber: 'desc' },
     });
 
-    // Calculate remaining quantity for each item
-    const formattedSos = await Promise.all(sos.map(async (so) => {
-      const items = await Promise.all(so.items.map(async (item) => {
-        // Find all invoice items for this SO and product
-        const invoicedItems = await this.prisma.salesInvoiceItem.findMany({
-          where: {
-            salesInvoice: {
-              soNumber: { contains: so.soNumber },
-              status: { not: 'DELETED' }
-            },
-            productCode: item.productCode
-          },
-          select: { quantity: true }
-        });
-
-        const invoicedQty = invoicedItems.reduce((sum, i) => sum + (i.quantity || 0), 0);
-        return {
-          ...item,
-          remainingQty: Math.max(0, (item.quantity || 0) - invoicedQty)
-        };
-      }));
-
-      return {
-        ...so,
-        items: items
-      };
-    }));
-
-    return formattedSos;
+    // Filter SOs where total invoiced quantity < total SO quantity
+    return sos.filter(so => {
+      const totalSoQty = so.items.reduce((sum, item) => sum + item.quantity, 0);
+      const totalInvoicedQty = so.salesInvoices.reduce((sum, inv) => {
+        return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
+      }, 0);
+      
+      return totalInvoicedQty < totalSoQty;
+    });
   }
 
   async generateInvoiceNumber(userId: number): Promise<string> {
@@ -185,7 +172,7 @@ export class SalesInvoiceService {
         beforeTaxAmount: befTax,
         totalAmount: befTax + taxAmt,
         totalSoQty: Number(i.totalSoQty || 0),
-        printDescription: i.printDescription || i.productName || ""
+        printDescription: i.printDescription || i.description || i.productName || ""
       });
     }
 
@@ -268,37 +255,49 @@ export class SalesInvoiceService {
     const cumulativeBalance = (lastInvoice?.cumulativeBalance || 0) + grandTotal;
 
     try {
-      return await this.prisma.salesInvoice.create({
-        data: {
-          invoiceNumber: createDto.invoiceNumber || invoiceNumber,
-          customerInvoiceNumber: createDto.customerInvoiceNumber || customerInvoiceNumber,
-          customerInvoiceDate: (createDto.customerInvoiceDate && createDto.customerInvoiceDate.trim() !== "") ? new Date(createDto.customerInvoiceDate) : (createDto.invoiceDate && createDto.invoiceDate.trim() !== "" ? new Date(createDto.invoiceDate) : new Date()),
-          bookingDate: (createDto.bookingDate && createDto.bookingDate.trim() !== "") ? new Date(createDto.bookingDate) : new Date(),
-          customerId: customer.id,
-          soId: createDto.soId || null,
-          customerName: customer.accountName,
-          address,
-          creditDays,
-          gstNumber: gstNo,
-          soNumber: Array.isArray(createDto.soNumbers) ? createDto.soNumbers.join(',') : (createDto['soNumber'] || null),
-          challanNumber: Array.isArray(createDto.challanNumbers) ? createDto.challanNumbers.join(',') : (createDto['challanNumber'] || null),
-          cgstAmount: cgst,
-          sgstAmount: sgst,
-          igstAmount: igst,
-          isRcm,
-          taxableAmount: totalTaxable,
-          grandTotal,
-          cumulativeBalance,
-          userId,
-          uploadedFilePath: uploadedFilePath || null,
-          items: { create: itemsToCreate },
-          expenses: { create: expensesToCreate }
-        },
-        include: { items: true, expenses: true }
+      const soNumbersArr = Array.isArray(createDto.soNumbers) ? createDto.soNumbers : [];
+      const soId = createDto.soId || (soNumbersArr.length === 1 && !isNaN(Number(soNumbersArr[0])) ? Number(soNumbersArr[0]) : null);
+
+      return await this.prisma.$transaction(async (tx) => {
+        const inv = await tx.salesInvoice.create({
+          data: {
+            invoiceNumber: createDto.invoiceNumber || invoiceNumber,
+            customerInvoiceNumber: createDto.customerInvoiceNumber || customerInvoiceNumber,
+            customerInvoiceDate: (createDto.customerInvoiceDate && createDto.customerInvoiceDate.trim() !== "") ? new Date(createDto.customerInvoiceDate) : (createDto.invoiceDate && createDto.invoiceDate.trim() !== "" ? new Date(createDto.invoiceDate) : new Date()),
+            bookingDate: (createDto.bookingDate && createDto.bookingDate.trim() !== "") ? new Date(createDto.bookingDate) : new Date(),
+            customerId: customer.id,
+            soId: soId,
+            customerName: customer.accountName,
+            address,
+            creditDays,
+            gstNumber: gstNo,
+            soNumber: soNumbersArr.length > 0 ? soNumbersArr.join(',') : (createDto['soNumber'] || null),
+            challanNumber: Array.isArray(createDto.challanNumbers) ? createDto.challanNumbers.join(',') : (createDto['challanNumber'] || null),
+            cgstAmount: cgst,
+            sgstAmount: sgst,
+            igstAmount: igst,
+            isRcm,
+            taxableAmount: totalTaxable,
+            grandTotal,
+            cumulativeBalance,
+            userId,
+            uploadedFilePath: uploadedFilePath || null,
+            items: { create: itemsToCreate },
+            expenses: { create: expensesToCreate }
+          },
+          include: { items: true, expenses: true }
+        });
+
+        await this.updateCompletionStatusesAfterInvoice(inv.id, tx);
+        return inv;
       });
     } catch (e) {
       const fs = require('fs');
       fs.appendFileSync('D:\\USERS\\vaishnavi\\Desktop\\weighting_scale\\backend\\service_error.log', `[${new Date().toISOString()}] CREATE ERROR: ${e.message}\n${e.stack}\n\n`);
+      if (e.code === 'P2002' && e.meta && e.meta.target.includes('invoiceNumber')) {
+        const { BadRequestException } = require('@nestjs/common');
+        throw new BadRequestException('Invoice number already exists. Please generate a new invoice number.');
+      }
       throw e;
     }
   }
@@ -398,7 +397,7 @@ export class SalesInvoiceService {
           beforeTaxAmount: befTax,
           totalAmount: befTax + taxAmt,
           totalSoQty: Number(i.totalSoQty || 0),
-          printDescription: i.printDescription || i.productName || ""
+          printDescription: i.printDescription || i.description || i.productName || ""
         });
       }
     }
@@ -466,7 +465,7 @@ export class SalesInvoiceService {
       if (updateDto.items) await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: id } });
       if (updateDto.expenses) await tx.salesInvoiceExpense.deleteMany({ where: { salesInvoiceId: id } });
 
-      return tx.salesInvoice.update({
+      const inv = await tx.salesInvoice.update({
         where: { id },
         data: {
           invoiceNumber: updateDto.invoiceNumber,
@@ -481,26 +480,126 @@ export class SalesInvoiceService {
           gstNumber: updateDto.gstNumber,
           soNumber: updateDto.soNumbers ? updateDto.soNumbers.join(',') : undefined,
           challanNumber: updateDto.challanNumbers ? updateDto.challanNumbers.join(',') : undefined,
+          soId: updateDto.soId ?? (updateDto.soNumbers && updateDto.soNumbers.length === 1 && !isNaN(Number(updateDto.soNumbers[0])) ? Number(updateDto.soNumbers[0]) : existing.soId),
           status: updateDto.status as any,
           taxableAmount: totalTaxable,
           cgstAmount: cgst,
           sgstAmount: sgst,
           igstAmount: igst,
-          soId: updateDto.soId,
           grandTotal: grandTotal,
           items: updateDto.items ? { create: itemsToCreate } : undefined,
           expenses: updateDto.expenses ? { create: expensesToCreate } : undefined,
         },
         include: { items: true, expenses: true }
       });
+
+      await this.updateCompletionStatusesAfterInvoice(inv.id, tx);
+      return inv;
     });
   }
 
   async remove(id: number, userId: number) {
-    return this.prisma.salesInvoice.update({
-      where: { id, userId },
-      data: { status: 'DELETED' }
+    return this.prisma.$transaction(async (tx) => {
+      const invoice = await tx.salesInvoice.update({
+        where: { id, userId },
+        data: { status: 'DELETED' }
+      });
+      await this.updateCompletionStatusesAfterInvoice(id, tx);
+      return invoice;
     });
+  }
+
+  private async updateCompletionStatusesAfterInvoice(invoiceId: number, tx: any) {
+    const invoice = await tx.salesInvoice.findUnique({
+      where: { id: invoiceId },
+      include: { items: true }
+    });
+
+    if (!invoice) return;
+
+    // 1. Update SO Status
+    const soIds = invoice.soNumber ? invoice.soNumber.split(',').map(n => n.trim()).filter(n => !isNaN(Number(n))).map(Number) : [];
+    if (invoice.soId) soIds.push(invoice.soId);
+    const uniqueSoIds = [...new Set(soIds)];
+
+    for (const soId of uniqueSoIds) {
+        const so = await tx.salesOrder.findUnique({
+            where: { id: soId },
+            include: { 
+                items: true,
+                salesInvoices: { where: { status: { not: 'DELETED' } }, include: { items: true } }
+            }
+        });
+        if (so) {
+            const totalSoQty = so.items.reduce((sum, item) => sum + item.quantity, 0);
+            const totalInvoicedQty = so.salesInvoices.reduce((sum, inv) => {
+                return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
+            }, 0);
+
+            let newStatus = 'PENDING';
+            if (totalInvoicedQty >= totalSoQty) {
+                newStatus = 'INVOICE_COMPLETED';
+            } else {
+                // Check challan completion
+                const challans = await tx.salesChallan.findMany({
+                    where: { soId: so.id, status: { not: 'DELETED' } },
+                    include: { items: true }
+                });
+                const totalDeliveredQty = challans.reduce((sum, ch) => sum + ch.items.reduce((iSum, i) => iSum + i.challanQty, 0), 0);
+                if (totalDeliveredQty >= totalSoQty) {
+                    newStatus = 'CHALLAN_COMPLETED';
+                }
+            }
+
+            if (so.status !== newStatus) {
+                await tx.salesOrder.update({ where: { id: so.id }, data: { status: newStatus } });
+            }
+        }
+    }
+
+    // 2. Update Challan Status
+    const challanNums = invoice.challanNumber ? invoice.challanNumber.split(',').map(n => n.trim()).filter(Boolean) : [];
+    if (challanNums.length > 0) {
+        const challans = await tx.salesChallan.findMany({
+            where: {
+                OR: [
+                    { challanNumber: { in: challanNums } },
+                    { id: { in: challanNums.filter(n => !isNaN(Number(n))).map(Number) } }
+                ],
+                userId: invoice.userId,
+                status: { not: 'DELETED' }
+            },
+            include: { items: true }
+        });
+
+        for (const challan of challans) {
+            const totalChallanQty = challan.items.reduce((sum, item) => sum + item.challanQty, 0);
+            
+            // Find all invoices for this challan
+            const invoices = await tx.salesInvoice.findMany({
+                where: { 
+                    userId: invoice.userId, 
+                    status: { not: 'DELETED' }
+                },
+                include: { items: true }
+            });
+
+            const totalInvoicedQty = invoices.reduce((sum, inv) => {
+                if (inv.challanNumber) {
+                    const ids = inv.challanNumber.split(',').map(id => id.trim());
+                    if (ids.includes(challan.id.toString()) || ids.includes(challan.challanNumber)) {
+                        return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
+                    }
+                }
+                return sum;
+            }, 0);
+
+            const newStatus = totalInvoicedQty >= totalChallanQty ? 'COMPLETED' : 'GENERATED';
+            if (challan.status !== newStatus) {
+                await tx.salesChallan.update({ where: { id: challan.id }, data: { status: newStatus } });
+            }
+        }
+    }
   }
 
   async generateNextNumber(userId: number) {

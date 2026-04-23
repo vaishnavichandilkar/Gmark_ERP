@@ -16,13 +16,15 @@ import {
   RefreshCw,
   Trash2,
   Upload,
-  FileEdit
+  FileEdit,
+  Printer
 } from "lucide-react";
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 
 import salesInvoiceService from "@/services/salesInvoiceService";
+import { ROUTES } from "@/constants/routes";
 import ScrollableTable from "@/components/common/ScrollableTable";
 import ImportModal from "./components/ImportModal";
 
@@ -211,6 +213,35 @@ const SalesInvoice = () => {
         }
     };
 
+    const handlePrint = async (invoice) => {
+        try {
+            setIsLoading(true);
+            const fullInvoice = await salesInvoiceService.getInvoiceById(invoice.id);
+            const invoiceToPrint = fullInvoice.data || fullInvoice;
+
+            // Ensure items have both printDescription and description for preview compatibility
+            if (invoiceToPrint.items) {
+                invoiceToPrint.items = invoiceToPrint.items.map(it => ({
+                    ...it,
+                    printDescription: it.printDescription || it.description || it.print_description || it.productName || it.product_name || '',
+                    description: it.description || it.printDescription || it.print_description || it.productName || it.product_name || ''
+                }));
+            }
+
+            navigate(ROUTES.SALES_INVOICE_PRINT, {
+                state: {
+                    invoiceData: invoiceToPrint,
+                    from: '/seller/sales/invoice'
+                }
+            });
+        } catch (error) {
+            console.error("Print error:", error);
+            toast.error("Failed to load print preview");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleClearFilter = () => {
         setFilterInputs(defaultFilters);
         setAppliedFilters(defaultFilters);
@@ -370,9 +401,17 @@ const SalesInvoice = () => {
                                                         {row.status === 'Deleted' ? 'View Invoice' : 'View/Edit Invoice'}
                                                     </button>
                                                     {row.status !== 'Deleted' && (
-                                                        <button onClick={() => { setActiveDropdown(null); handleDeleteClick(row.id); }} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50">
-                                                            <Trash2 size={18} /> Delete
-                                                        </button>
+                                                        <>
+                                                            <button 
+                                                                onClick={() => { setActiveDropdown(null); handlePrint(row); }} 
+                                                                className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"
+                                                            >
+                                                                <Printer size={18} className="text-[#073318]" /> Print Invoice
+                                                            </button>
+                                                            <button onClick={() => { setActiveDropdown(null); handleDeleteClick(row.id); }} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50">
+                                                                <Trash2 size={18} /> Delete
+                                                            </button>
+                                                        </>
                                                     )}
                                                 </div>,
                                                 document.body

@@ -237,9 +237,20 @@ const SalesOrder = () => {
     try {
       setIsRefreshing(true);
       const fullSo = await salesOrderService.getSalesOrderById(soData.id);
+      const soToPrint = fullSo.data || fullSo;
+
+      // Ensure items have both printDescription and description for preview compatibility
+      if (soToPrint.items) {
+        soToPrint.items = soToPrint.items.map(it => ({
+          ...it,
+          printDescription: it.printDescription || it.description || it.print_description || it.productName || it.product_name || '',
+          description: it.description || it.printDescription || it.print_description || it.productName || it.product_name || ''
+        }));
+      }
+
       navigate(ROUTES.SALES_ORDER_PRINT, {
         state: {
-          soData: fullSo.data || fullSo,
+          soData: soToPrint,
           from: '/seller/sales/order'
         }
       });

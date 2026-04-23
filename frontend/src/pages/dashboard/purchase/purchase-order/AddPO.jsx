@@ -296,29 +296,7 @@ const AddPO = () => {
         return displayDate;
     };
 
-    // 🔄 Auto-calculate Expiry Date: creation_date + credit_days
-    useEffect(() => {
-        if (formData.creation_date && formData.credit_days !== undefined) {
-            const creationIso = toIsoDate(formData.creation_date);
-            const days = parseInt(formData.credit_days) || 0;
-            const date = new Date(creationIso);
-            
-            if (!isNaN(date.getTime())) {
-                date.setDate(date.getDate() + days);
-                const calculatedIso = date.toISOString().split('T')[0];
-                
-                // Compare normalized ISO dates to avoid redundant updates/loops
-                const currentExpiryIso = toIsoDate(formData.expiry_date);
-                
-                if (currentExpiryIso !== calculatedIso) {
-                    setFormData(prev => ({ 
-                        ...prev, 
-                        expiry_date: calculatedIso 
-                    }));
-                }
-            }
-        }
-    }, [formData.creation_date, formData.credit_days]);
+
 
     const handleDateTextChange = (e, field) => {
         const inputVal = e.target.value;
@@ -494,8 +472,15 @@ const AddPO = () => {
         const newItems = [...items];
         const item = { ...newItems[index] };
 
-        // Update the direct field value from input
-        item[field] = value;
+        // Update with decimal limit for discounts
+        let finalValue = value;
+        if (['discount_amount', 'discount_percent'].includes(field)) {
+            if (value.includes('.') && value.split('.')[1].length > 2) {
+                const [int, dec] = value.split('.');
+                finalValue = `${int}.${dec.slice(0, 2)}`;
+            }
+        }
+        item[field] = finalValue;
 
         // Perform numerical conversions for computation
         const qty = parseFloat(item.quantity) || 0;
@@ -510,25 +495,26 @@ const AddPO = () => {
         if (baseAmount === 0) {
             discAmt = 0;
             discPct = 0;
-            item.discount_amount = 0;
-            item.discount_percent = 0;
+            if (field !== 'discount_amount')  item.discount_amount = 0;
+            if (field !== 'discount_percent') item.discount_percent = 0;
         } else {
             if (field === 'discount_percent') {
                 // If user enters Discount %: Auto-calculate Discount Amount
                 if (discPct > 100) discPct = 100;
                 discAmt = (baseAmount * discPct) / 100;
-                item.discount_percent = discPct;
+                // item.discount_percent is already finalValue
                 item.discount_amount = parseFloat(discAmt.toFixed(2));
             } else if (field === 'discount_amount') {
                 // If user enters Discount Amount: Auto-calculate Discount %
                 if (discAmt > baseAmount) discAmt = baseAmount;
                 discPct = (discAmt / baseAmount) * 100;
-                item.discount_amount = discAmt;
+                // item.discount_amount is already finalValue
                 item.discount_percent = parseFloat(discPct.toFixed(2));
             } else {
                 // For changes in Quantity or Rate: Keep % constant and sync Amount
                 discAmt = (baseAmount * discPct) / 100;
                 item.discount_amount = parseFloat(discAmt.toFixed(2));
+                item.discount_percent = parseFloat(discPct.toFixed(2));
             }
         }
 
@@ -544,6 +530,11 @@ const AddPO = () => {
         // Step 3: Final Amount (Per Row)
         const totalAmount = beforeTaxAmount + taxAmount;
         item.total_amount = parseFloat(totalAmount.toFixed(2));
+
+        // Ensure numeric fields (other than the one being edited) are correctly typed but not overwriting active typing
+        if (field !== 'quantity')    item.quantity    = qty;
+        if (field !== 'rate')        item.rate        = rate;
+        if (field !== 'tax_percent') item.tax_percent = taxPct;
 
         newItems[index] = item;
         setItems(newItems);
@@ -741,7 +732,14 @@ const AddPO = () => {
         sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
         navigate(ROUTES.PURCHASE_ORDER_PRINT, {
             state: {
-                poData: fullPOData,
+                poData: {
+                    ...fullPOData,
+                    items: fullPOData.items.map(it => ({
+                        ...it,
+                        printDescription: it.description || it.printDescription || it.productName || it.product_name || '',
+                        description: it.description || it.printDescription || it.productName || it.product_name || ''
+                    }))
+                },
                 from: isEditMode ? ROUTES.PURCHASE_ORDER_EDIT.replace(':id', id) : ROUTES.PURCHASE_ORDER_ADD
             }
         });
@@ -835,6 +833,7 @@ const AddPO = () => {
                             <label className="text-[14px] font-semibold text-[#374151]">Credit Days <span className="text-red-500">*</span></label>
                             <input
                                 type="number"
+                                min="0"
                                 placeholder="Auto-filled from supplier"
                                 value={formData.credit_days}
                                 onChange={(e) => setFormData({ ...formData, credit_days: e.target.value })}
@@ -878,8 +877,7 @@ const AddPO = () => {
                                 />
                                 <Calendar
                                     size={18}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto"
-                                    onClick={() => creationDateRef.current?.showPicker?.() || creationDateRef.current?.focus()}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"
                                 />
                             </div>
                             {errors.creation_date && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.creation_date}</p>}
@@ -1141,6 +1139,7 @@ const AddPO = () => {
                                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[12px] text-gray-400 font-bold">₹</span>
                                                 <input
                                                     type="number"
+                                                    step="0.01"
                                                     min="0"
                                                     value={item.discount_amount || ''}
                                                     onChange={(e) => handleItemChange(index, 'discount_amount', e.target.value)}
@@ -1153,6 +1152,7 @@ const AddPO = () => {
                                                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[12px] text-[#073318] font-bold">%</span>
                                                 <input
                                                     type="number"
+                                                    step="0.01"
                                                     min="0"
                                                     value={item.discount_percent || ''}
                                                     onChange={(e) => handleItemChange(index, 'discount_percent', e.target.value)}

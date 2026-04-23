@@ -101,7 +101,7 @@ export class SalesOrderService {
             beforeTaxAmount,
             taxAmount,
             totalAmount,
-            printDescription: item.printDescription || '',
+            printDescription: item.printDescription || item.description || item.productName || '',
         };
     }
 
@@ -176,7 +176,7 @@ export class SalesOrderService {
                 where.expiryDate = { lt: startOfToday };
                 break;
             case 'completed':
-                where.status = 'INVOICE_GENERATED';
+                where.status = 'INVOICE_COMPLETED';
                 break;
             case 'deleted':
                 where.status = 'DELETED';
@@ -211,7 +211,7 @@ export class SalesOrderService {
 
     async update(id: number, updateDto: UpdateSalesOrderDto, userId: number) {
         const so = await this.findOne(id, userId);
-        if (so.status === 'INVOICE_GENERATED' || so.status === 'DELETED') {
+        if (so.status === 'INVOICE_COMPLETED' || so.status === 'DELETED') {
             throw new ForbiddenException(`Update forbidden in status ${so.status}`);
         }
 
@@ -478,7 +478,7 @@ export class SalesOrderService {
             expDate.setHours(23, 59, 59, 999);
             const currentTime = new Date();
 
-            if (status === 'INVOICE_GENERATED') return 'COMPLETED';
+            if (status === 'INVOICE_COMPLETED') return 'COMPLETED';
             if (status === 'DELETED') return 'DELETED';
             if (expDate < currentTime) return 'EXPIRED';
 

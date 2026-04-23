@@ -45,6 +45,7 @@ const InvoiceForm = ({ formData, setFormData, handleSupplierChange, handlePOChan
                     <label className="text-[14px] font-semibold text-[#374151]">Credit Days</label>
                     <input
                         type="number"
+                        min="0"
                         placeholder="Auto-filled from supplier"
                         value={formData.credit_days === 0 ? '' : formData.credit_days}
                         onChange={(e) => setFormData({ ...formData, credit_days: parseInt(e.target.value) || 0 })}

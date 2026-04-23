@@ -13,6 +13,105 @@ export class PurchaseInvoiceService {
     private poService: PurchaseOrderService
   ) { }
 
+  private async updateCompletionStatusesAfterInvoice(invoiceId: number, tx: any) {
+    const inv = await tx.purchaseInvoice.findUnique({
+      where: { id: invoiceId },
+      include: { items: true }
+    });
+    if (!inv) return;
+
+    // 1. Update PO Status
+    if (inv.poId) {
+      const po = await tx.purchaseOrder.findUnique({
+        where: { id: inv.poId },
+        include: {
+          items: true,
+          purchaseInvoices: {
+            where: { status: { not: 'DELETED' } },
+            include: { items: true }
+          }
+        }
+      });
+      if (po) {
+        const totalPoQty = po.items.reduce((sum, item) => sum + item.quantity, 0);
+        const totalInvoicedQty = po.purchaseInvoices.reduce((sum, i) => {
+          return sum + i.items.reduce((iSum, it) => iSum + it.quantity, 0);
+        }, 0);
+
+        if (totalInvoicedQty >= totalPoQty) {
+          await tx.purchaseOrder.update({
+            where: { id: po.id },
+            data: { status: 'INVOICE_COMPLETED' }
+          });
+        } else {
+          // If not fully invoiced, check if it's GRN completed or just pending
+          const grns = await tx.grn.findMany({
+            where: { poId: po.id, status: { not: 'DELETED' } },
+            include: { items: true }
+          });
+          const totalReceivedQty = grns.reduce((sum, g) => sum + g.items.reduce((iSum, i) => iSum + i.receivedQty, 0), 0);
+          
+          const newStatus = totalReceivedQty >= totalPoQty ? 'GRN_COMPLETED' : 'PENDING';
+          if (po.status !== newStatus) {
+            await tx.purchaseOrder.update({
+              where: { id: po.id },
+              data: { status: newStatus }
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Update GRN Statuses
+    if (inv.challanNumber) {
+      const challanIds = inv.challanNumber.split(',').map(id => id.trim());
+      for (const cid of challanIds) {
+        const grn = await tx.grn.findFirst({
+          where: {
+            OR: [
+              { id: /^\d+$/.test(cid) ? parseInt(cid, 10) : -1 },
+              { challanNumber: cid }
+            ],
+            status: { not: 'DELETED' }
+          },
+          include: { items: true }
+        });
+
+        if (grn) {
+          const totalGrnQty = grn.items.reduce((sum, item) => sum + item.receivedQty, 0);
+          
+          // Find all invoices that reference this GRN
+          const grnInvoices = await tx.purchaseInvoice.findMany({
+            where: {
+              status: { not: 'DELETED' },
+              OR: [
+                { challanNumber: { contains: grn.id.toString() } },
+                { challanNumber: { contains: grn.challanNumber } }
+              ]
+            },
+            include: { items: true }
+          });
+
+          const totalInvoicedForGrn = grnInvoices.reduce((sum, oInv) => {
+            const oIds = oInv.challanNumber.split(',').map(id => id.trim());
+            if (oIds.includes(grn.id.toString()) || oIds.includes(grn.challanNumber)) {
+              return sum + oInv.items.reduce((iSum, i) => iSum + i.quantity, 0);
+            }
+            return sum;
+          }, 0);
+
+          if (totalInvoicedForGrn >= totalGrnQty) {
+            await tx.grn.update({ where: { id: grn.id }, data: { status: 'COMPLETED' } });
+          } else {
+            if (grn.status === 'COMPLETED') {
+              await tx.grn.update({ where: { id: grn.id }, data: { status: 'GENERATED' } });
+            }
+          }
+        }
+      }
+    }
+  }
+
   async getSuppliers(userId: number) {
     return this.prisma.accountMaster.findMany({
       where: {
@@ -33,12 +132,20 @@ export class PurchaseInvoiceService {
     });
   }
 
-  async getSupplierPOs(supplierIdOrName: string, userId: number) {
+  async getSupplierAccount(supplierId: string | number, userId: number) {
+    const id = typeof supplierId === 'string' ? parseInt(supplierId, 10) : supplierId;
+    const account = await this.prisma.accountMaster.findUnique({
+      where: { id, userId },
+    });
+    if (!account) throw new NotFoundException('Supplier not found');
+    return account;
+  }
+
+  async getSupplierPOs(supplierIdOrName: string, userId: number, excludeInvoiceId?: number) {
     if (!supplierIdOrName) return [];
     
     let accountName = String(supplierIdOrName).trim();
     
-    // If it's a numeric ID, find the actual account name first
     if (/^\d+$/.test(accountName)) {
       const account = await this.prisma.accountMaster.findUnique({
         where: { id: parseInt(accountName, 10) },
@@ -48,18 +155,40 @@ export class PurchaseInvoiceService {
       }
     }
 
-    return this.prisma.purchaseOrder.findMany({
+    const pos = await this.prisma.purchaseOrder.findMany({
       where: {
         userId,
         supplierName: { equals: accountName, mode: 'insensitive' },
-        status: { not: 'DELETED' },
+        status: { notIn: ['DELETED', 'INVOICE_COMPLETED'] as any },
       },
-      select: {
-        id: true,
-        poNumber: true,
+      include: {
+        items: true,
+        purchaseInvoices: {
+          where: { 
+            status: { not: 'DELETED' },
+            ...(excludeInvoiceId ? { id: { not: excludeInvoiceId } } : {})
+          },
+          include: { items: true }
+        }
       },
       orderBy: { poNumber: 'desc' },
     });
+
+    // Filter POs where total invoiced quantity < total PO quantity
+    return pos.filter(po => {
+      const totalPoQty = po.items.reduce((sum, item) => sum + item.quantity, 0);
+      const totalInvoicedQty = po.purchaseInvoices.reduce((sum, inv) => {
+        // We need to sum up items that belong to THIS PO
+        // Since PurchaseInvoiceItem doesn't directly link to PurchaseOrderItem, 
+        // we sum all items in the invoice (assuming the invoice is specifically for this PO if poId is set)
+        return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
+      }, 0);
+      
+      return totalInvoicedQty < totalPoQty;
+    }).map(po => ({
+      id: po.id,
+      poNumber: po.poNumber,
+    }));
   }
 
   async generateInvoiceNumber(userId: number): Promise<string> {
@@ -80,6 +209,63 @@ export class PurchaseInvoiceService {
 
   async create(createDto: CreatePurchaseInvoiceDto, userId: number, uploadedFilePath?: string) {
     const invoiceNumber = await this.generateInvoiceNumber(userId);
+
+    const bookingDate = new Date(); // Enforced (Condition 1, 2, 3)
+    const invoiceDate = new Date(createDto.invoiceDate || new Date());
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    if (invoiceDate > today) {
+        throw new BadRequestException('Supplier Invoice Date cannot be in the future');
+    }
+
+    const hasLink = (createDto.poIds && createDto.poIds.length > 0) || (createDto.challanNumbers && createDto.challanNumbers.length > 0);
+    
+    if (hasLink) {
+        let minDate: Date | null = null;
+        
+        // Check GRNs (Challans)
+        if (createDto.challanNumbers && createDto.challanNumbers.length > 0) {
+            const grns = await this.prisma.grn.findMany({
+                where: { id: { in: createDto.challanNumbers.map(n => Number(n)) } }
+            });
+            grns.forEach(g => {
+                if (!minDate || g.grnDate > minDate) minDate = g.grnDate;
+            });
+        }
+        
+        // Fallback to PO if no GRN or PO is newer? 
+        // User says "Supplier Invoice Date... range: Supplier Challan Date -> Current Date"
+        if (!minDate && createDto.poIds && createDto.poIds.length > 0) {
+             const pos = await this.prisma.purchaseOrder.findMany({
+                 where: { poNumber: { in: createDto.poIds } }
+             });
+             pos.forEach(p => {
+                 if (!minDate || p.poCreationDate > minDate) minDate = p.poCreationDate;
+             });
+        }
+
+        if (minDate) {
+            const minOnlyDate = new Date(minDate);
+            minOnlyDate.setHours(0, 0, 0, 0);
+            const invOnlyDate = new Date(invoiceDate);
+            invOnlyDate.setHours(0, 0, 0, 0);
+
+            if (invOnlyDate < minOnlyDate) {
+                throw new BadRequestException(`Supplier Invoice Date cannot be before latest Challan/PO date (${minOnlyDate.toLocaleDateString()})`);
+            }
+        }
+    } else {
+        // Condition 3: Without PO and GRN -> Must be Today
+        const startOfToday = new Date();
+        startOfToday.setHours(0,0,0,0);
+        const invOnlyDate = new Date(invoiceDate);
+        invOnlyDate.setHours(0,0,0,0);
+
+        if (invOnlyDate.getTime() !== startOfToday.getTime()) {
+            throw new BadRequestException('Standalone invoices must be dated today');
+        }
+    }
 
     // Supplier Logic
     const supplier = await this.prisma.accountMaster.findFirst({
@@ -285,51 +471,58 @@ export class PurchaseInvoiceService {
             }))
         }, userId);
 
-        // Mark PO as generated so it doesn't show as pending
-        await this.prisma.purchaseOrder.update({
-            where: { id: autoPo.id },
-            data: { status: 'INVOICE_GENERATED' }
-        });
-
+        // Mark PO as generated and update its status based on completion
         autoPoId = autoPo.id;
         finalPoIds = [autoPo.poNumber];
+        
+        await this.updateCompletionStatusesAfterInvoice(autoPoId, this.prisma); // Dummy call to handle auto-created PO logic if needed
+        // Actually, for auto-created PO, it's usually 1-to-1 and completed immediately.
+        await this.prisma.purchaseOrder.update({
+            where: { id: autoPoId },
+            data: { status: 'INVOICE_COMPLETED' }
+        });
     }
 
     const poNumberStr = finalPoIds.length > 0 ? finalPoIds.join(',') : null;
     const challanNumbers = createDto.challanNumbers || [];
     const grnNumberStr = challanNumbers.length > 0 ? challanNumbers.join(',') : null;
 
-    const invoice = await this.prisma.purchaseInvoice.create({
-      data: {
-        invoiceNumber: createDto.invoiceNumber || invoiceNumber,
-        bookingDate: createDto.bookingDate ? new Date(createDto.bookingDate) : new Date(),
-        supplierInvoiceNumber: createDto.supplierInvoiceNumber,
-        supplierInvoiceDate: createDto.invoiceDate ? new Date(createDto.invoiceDate) : new Date(),
-        supplierId: supplier.id,
-        supplierName: supplier.accountName,
-        address: createDto.address,
-        creditDays: createDto.creditDays,
-        gstNumber: createDto.gstNumber,
-        poNumber: poNumberStr,
-        poId: autoPoId,
-        challanNumber: grnNumberStr,
-        cgstAmount: cgst,
-        sgstAmount: sgst,
-        igstAmount: igst,
-        isRcm: isRcm,
-        taxableAmount: totalTaxable,
-        grandTotal: grandTotal,
-        cumulativeBalance: cumulativeBalance,
-        userId,
-        uploadedFilePath: uploadedFilePath || null,
-        items: {
-          create: itemsToCreate
+    const invoice = await this.prisma.$transaction(async (tx) => {
+      const inv = await tx.purchaseInvoice.create({
+        data: {
+          invoiceNumber: createDto.invoiceNumber || invoiceNumber,
+          bookingDate: createDto.bookingDate ? new Date(createDto.bookingDate) : new Date(),
+          supplierInvoiceNumber: createDto.supplierInvoiceNumber,
+          supplierInvoiceDate: createDto.invoiceDate ? new Date(createDto.invoiceDate) : new Date(),
+          supplierId: supplier.id,
+          supplierName: supplier.accountName,
+          address: createDto.address,
+          creditDays: createDto.creditDays,
+          gstNumber: createDto.gstNumber,
+          poNumber: poNumberStr,
+          poId: autoPoId || (finalPoIds.length === 1 && !isNaN(Number(finalPoIds[0])) ? Number(finalPoIds[0]) : null),
+          challanNumber: grnNumberStr,
+          cgstAmount: cgst,
+          sgstAmount: sgst,
+          igstAmount: igst,
+          isRcm: isRcm,
+          taxableAmount: totalTaxable,
+          grandTotal: grandTotal,
+          cumulativeBalance: cumulativeBalance,
+          userId,
+          uploadedFilePath: uploadedFilePath || null,
+          items: {
+            create: itemsToCreate
+          },
+          expenses: {
+            create: expensesToCreate
+          }
         },
-        expenses: {
-          create: expensesToCreate
-        }
-      },
-      include: { items: true, expenses: true }
+        include: { items: true, expenses: true }
+      });
+
+      await this.updateCompletionStatusesAfterInvoice(inv.id, tx);
+      return inv;
     });
 
     return invoice;
@@ -537,35 +730,42 @@ export class PurchaseInvoiceService {
         });
       }
 
-      const updated = await tx.purchaseInvoice.update({
-        where: { id },
-        data: {
-          invoiceNumber: updateDto.invoiceNumber ?? existing.invoiceNumber,
-          supplierInvoiceNumber: updateDto.supplierInvoiceNumber ?? existing.supplierInvoiceNumber,
-          supplierInvoiceDate: updateDto.invoiceDate ? new Date(updateDto.invoiceDate) : existing.supplierInvoiceDate,
-          bookingDate: updateDto.bookingDate ? new Date(updateDto.bookingDate) : existing.bookingDate,
-          supplierName: updateDto.supplierName ?? existing.supplierName,
-          address: updateDto.address ?? existing.address,
-          poNumber: updateDto.poIds ? updateDto.poIds.join(',') : existing.poNumber,
-          challanNumber: updateDto.challanNumbers ? updateDto.challanNumbers.join(',') : existing.challanNumber,
-          creditDays: updateDto.creditDays ?? existing.creditDays,
-          status: (updateDto.status as any) ?? existing.status,
-          uploadedFilePath: (updateDto as any).removeAttachment === 'true' ? null : (uploadedFilePath || existing.uploadedFilePath),
-          taxableAmount: totalTaxable,
-          cgstAmount: cgst,
-          sgstAmount: sgst,
-          igstAmount: igst,
-          isRcm: isRcm,
-          grandTotal: grandTotal,
-          items: pItems ? {
-            create: itemsToCreate
-          } : undefined,
-          expenses: updateDto.expenses ? {
-            create: expensesToCreate
-          } : undefined,
-        },
-        include: { items: true, expenses: true },
-      });
+        const updated = await tx.purchaseInvoice.update({
+          where: { id },
+          data: {
+            invoiceNumber: updateDto.invoiceNumber ?? existing.invoiceNumber,
+            supplierInvoiceNumber: updateDto.supplierInvoiceNumber ?? existing.supplierInvoiceNumber,
+            supplierInvoiceDate: updateDto.invoiceDate ? new Date(updateDto.invoiceDate) : existing.supplierInvoiceDate,
+            bookingDate: updateDto.bookingDate ? new Date(updateDto.bookingDate) : existing.bookingDate,
+            supplierName: updateDto.supplierName ?? existing.supplierName,
+            address: updateDto.address ?? existing.address,
+            poNumber: updateDto.poIds ? updateDto.poIds.join(',') : existing.poNumber,
+            poId: updateDto.poIds && updateDto.poIds.length === 1 ? Number(updateDto.poIds[0]) : (updateDto.poIds && updateDto.poIds.length > 1 ? null : existing.poId),
+            challanNumber: updateDto.challanNumbers ? updateDto.challanNumbers.join(',') : existing.challanNumber,
+            creditDays: updateDto.creditDays ?? existing.creditDays,
+            status: (updateDto.status as any) ?? existing.status,
+            uploadedFilePath: (updateDto as any).removeAttachment === 'true' ? null : (uploadedFilePath || existing.uploadedFilePath),
+            taxableAmount: totalTaxable,
+            cgstAmount: cgst,
+            sgstAmount: sgst,
+            igstAmount: igst,
+            isRcm: isRcm,
+            grandTotal: grandTotal,
+            items: pItems ? {
+              create: itemsToCreate
+            } : undefined,
+            expenses: updateDto.expenses ? {
+              create: expensesToCreate
+            } : undefined,
+          },
+          include: { items: true, expenses: true },
+        });
+
+        await this.updateCompletionStatusesAfterInvoice(id, tx);
+        
+        // If the poId was changed (though not explicitly handled in updateDto yet), 
+        // we might need to update the old PO too. 
+        // But the current update logic doesn't seem to support changing poId easily.
 
         return updated;
       });
@@ -943,18 +1143,15 @@ export class PurchaseInvoiceService {
     if (existing.userId !== userId) throw new ForbiddenException('You do not have permission to delete this invoice');
 
     return this.prisma.$transaction(async (tx) => {
-      // If linked to a PO, reset PO status
-      if (existing.poId) {
-        await tx.purchaseOrder.update({
-          where: { id: existing.poId },
-          data: { status: 'PENDING' }
-        });
-      }
-
-      return tx.purchaseInvoice.update({
+      const updated = await tx.purchaseInvoice.update({
         where: { id },
         data: { status: 'DELETED' }
       });
+
+      // Update completion statuses of linked POs and GRNs
+      await this.updateCompletionStatusesAfterInvoice(id, tx);
+
+      return updated;
     });
   }
 }

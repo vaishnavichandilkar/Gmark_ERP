@@ -6,24 +6,84 @@ export class BusinessService {
     constructor(private prisma: PrismaService) { }
 
     async getBusinessProfile(userId: number) {
-        return this.prisma.user.findUnique({
+        const user = await this.prisma.user.findUnique({
             where: { id: userId },
             include: {
                 shopDetail: true,
                 sellerDocuments: true
             }
         });
+
+        if (!user) return null;
+
+        // Extract GST Number from documents - be more robust
+        const gstDoc = user.sellerDocuments.find(doc => doc.type === 'GST' && doc.name && doc.name.length >= 10) || 
+                      user.sellerDocuments.find(doc => doc.type === 'GST');
+        
+        return {
+            ...user,
+            gstNumber: gstDoc ? gstDoc.name : null
+        };
     }
 
     // Compatibility method for AdminBusinessController
     async createBusinessDetails(userId: number, dto: any) {
-        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        const user = await this.prisma.user.findUnique({ 
+            where: { id: userId }
+        });
         if (!user) throw new BadRequestException('User not found');
 
-        // Note: This maps the old "all-in-one" business details to the new split tables
-        // In a real scenario, we'd want to use the Step-by-Step OnboardingService instead.
+        const sellerProfile = await this.prisma.sellerProfile.findUnique({
+            where: { userId }
+        });
 
+        // Save Shop Details
+        await this.prisma.shopDetail.upsert({
+            where: { userId },
+            update: {
+                shopName: dto.businessName || dto.shopName,
+                address: dto.addressLine || dto.address,
+                pinCode: dto.pincode || dto.pinCode,
+                state: dto.state,
+                district: dto.city || dto.district,
+            },
+            create: {
+                userId,
+                shopName: dto.businessName || dto.shopName,
+                address: dto.addressLine || dto.address,
+                pinCode: dto.pincode || dto.pinCode,
+                state: dto.state,
+                district: dto.city || dto.district,
+            }
+        });
 
+        // Save GST Number if provided
+        if (dto.gstNumber) {
+            const profileId = sellerProfile?.id || null;
+            
+            // Check if GST doc already exists
+            const existingGst = await this.prisma.sellerDocument.findFirst({
+                where: { uploadedByUserId: userId, type: 'GST', url: 'N/A' }
+            });
+
+            if (existingGst) {
+                await this.prisma.sellerDocument.update({
+                    where: { id: existingGst.id },
+                    data: { name: String(dto.gstNumber) }
+                });
+            } else {
+                await this.prisma.sellerDocument.create({
+                    data: {
+                        profileId,
+                        uploadedByUserId: userId,
+                        type: 'GST',
+                        url: 'N/A',
+                        name: String(dto.gstNumber),
+                        size: BigInt(0)
+                    }
+                });
+            }
+        }
 
         await this.prisma.user.update({
             where: { id: userId },
@@ -33,7 +93,7 @@ export class BusinessService {
             }
         });
 
-        return { message: 'Business details saved for legacy flow.' };
+        return { message: 'Business details saved successfully.' };
     }
 
     async updateBusinessStatus(userId: number, isApproved: boolean) {

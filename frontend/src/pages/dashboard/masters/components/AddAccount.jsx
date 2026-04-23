@@ -1326,6 +1326,7 @@ const AddAccount = ({
                       <div className="flex w-full gap-2">
                         <input
                           type="number"
+                          min="0"
                           placeholder={t("modules:enter_op_balance")}
                           value={formData.vendorOpBalance}
                           onChange={(e) =>
@@ -1413,6 +1414,7 @@ const AddAccount = ({
                       <div className="flex w-full gap-2">
                         <input
                           type="number"
+                          min="0"
                           placeholder={t("modules:enter_op_balance")}
                           value={formData.customerOpBalance}
                           onChange={(e) =>

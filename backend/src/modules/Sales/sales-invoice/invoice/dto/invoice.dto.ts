@@ -82,6 +82,11 @@ export class SalesInvoiceItemDto {
   @IsString()
   @IsOptional()
   printDescription?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  description?: string;
 }
 
 export class SalesInvoiceAccountSummaryDto {

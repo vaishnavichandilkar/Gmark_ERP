@@ -1,11 +1,12 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { CustomerType } from '@prisma/client';
 
 export enum SOStatus {
     PENDING = 'PENDING',
-    INVOICE_GENERATED = 'INVOICE_GENERATED',
+    CHALLAN_COMPLETED = 'CHALLAN_COMPLETED',
+    INVOICE_COMPLETED = 'INVOICE_COMPLETED',
     DELETED = 'DELETED',
 }
 
@@ -69,6 +70,11 @@ export class CreateSalesOrderItemDto {
     @IsString()
     @IsOptional()
     printDescription?: string;
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    description?: string;
 }
 
 export class CreateSalesOrderDto {

@@ -107,8 +107,8 @@ const AddSalesInvoice = () => {
 
                     // Fetch SOs and Challans for the customer (Strictly filter challans by SO if present)
                     const [soData, challanList] = await Promise.all([
-                        salesInvoiceService.getCustomerSOs(invoice.customerName),
-                        challanService.getCustomerChallans(invoice.customerName, soNum)
+                        salesInvoiceService.getCustomerSOs(invoice.customerName, id),
+                        challanService.getCustomerChallans(invoice.customerName, soNum, id)
                     ]);
 
                     // Robust SO restoration: prioritizes backend-provided soNumber/soId
@@ -200,8 +200,8 @@ const AddSalesInvoice = () => {
                     // Fetch customer-specific data for dropdowns
                     try {
                         const [soData, challanData] = await Promise.all([
-                            salesInvoiceService.getCustomerSOs(invoice.customerName),
-                            challanService.getCustomerChallans(invoice.customerName)
+                            salesInvoiceService.getCustomerSOs(invoice.customerName, id),
+                            challanService.getCustomerChallans(invoice.customerName, '', id)
                         ]);
                         setSos(soData || []);
                         setChallans(challanData || []);
@@ -298,8 +298,8 @@ const AddSalesInvoice = () => {
         try {
             // Fix: Use accountName instead of id because backend getCustomerSOs expects a name string
             const [soData, challanData] = await Promise.all([
-                salesInvoiceService.getCustomerSOs(customer.accountName),
-                challanService.getCustomerChallans(customer.accountName)
+                salesInvoiceService.getCustomerSOs(customer.accountName, id),
+                challanService.getCustomerChallans(customer.accountName, '', id)
             ]);
             setSos(soData || []);
             setChallans(challanData || []);
@@ -319,24 +319,36 @@ const AddSalesInvoice = () => {
             challanIds: [] // Clear previously selected challans when SO changes
         }));
 
-        const mappedItems = selectedSO.items.map(item => ({
-            id: Date.now() + Math.random(),
-            productId: item.productId,
-            productCode: item.productCode,
-            productName: item.productName,
-            quantity: item.remainingQty || item.quantity, // Fetch remaining if available
-            totalSoQty: item.remainingQty || item.quantity, // Store for comparison
-            rate: item.rate,
-            uom: item.uom,
-            hsnCode: item.hsnCode || '',
-            taxPercent: item.taxPercent || 0,
-            discountAmount: item.discountAmount || 0,
-            discountPercent: item.discountPercent || 0,
-            beforeTaxAmount: 0, // Reset for user confirms
-            taxAmount: 0,
-            totalAmount: 0,
-            printDescription: item.printDescription || item.productName,
-        }));
+        const mappedItems = selectedSO.items.map(item => {
+            const qty = item.remainingQty || item.quantity;
+            const rate = item.rate || 0;
+            const discAmt = item.discountAmount || 0;
+            const taxPct = item.taxPercent || 0;
+            
+            const baseAmt = qty * rate;
+            const befTax = Math.max(0, baseAmt - discAmt);
+            const taxAmt = (befTax * taxPct) / 100;
+            const totalAmt = befTax + taxAmt;
+
+            return {
+                id: Date.now() + Math.random(),
+                productId: item.productId,
+                productCode: item.productCode,
+                productName: item.productName,
+                quantity: qty, 
+                totalSoQty: qty, 
+                rate: rate,
+                uom: item.uom,
+                hsnCode: item.hsnCode || '',
+                taxPercent: taxPct,
+                discountAmount: discAmt,
+                discountPercent: item.discountPercent || 0,
+                beforeTaxAmount: parseFloat(befTax.toFixed(2)),
+                taxAmount: parseFloat(taxAmt.toFixed(2)),
+                totalAmount: parseFloat(totalAmt.toFixed(2)),
+                printDescription: item.printDescription || item.productName || '',
+            };
+        });
 
         setItems(mappedItems);
 
@@ -359,11 +371,17 @@ const AddSalesInvoice = () => {
             const allItems = [];
             const allExpenses = [];
 
+            let latestChallanDate = null;
+
             for (const cid of selectedIds) {
                 const challanResponse = await challanService.getChallanById(cid);
                 const challan = challanResponse.data ? challanResponse.data : challanResponse;
 
                 if (challan) {
+                    const cDate = new Date(challan.challanDate);
+                    if (!latestChallanDate || cDate > latestChallanDate) {
+                        latestChallanDate = cDate;
+                    }
                     if (challan.items) {
                         for (const item of challan.items) {
                             // Find product in master for fallback HSN/Tax
@@ -487,6 +505,8 @@ const AddSalesInvoice = () => {
                 invoiceNumber: formData.customerInvoiceNumber,
                 customerId: parseInt(formData.customerId) || 0,
                 soId: (formData.soId && formData.soId !== '') ? parseInt(formData.soId) : null,
+                soNumbers: formData.soNumber ? [formData.soNumber] : [],
+                challanNumbers: formData.challanIds ? formData.challanIds.map(id => id.toString()) : [],
                 items: items.map(item => ({
                     productId: parseInt(item.productId) || 0,
                     productCode: item.productCode || '',
@@ -563,7 +583,14 @@ const AddSalesInvoice = () => {
 
         navigate(ROUTES.SALES_INVOICE_PRINT, { 
             state: { 
-                invoiceData,
+                invoiceData: {
+                    ...invoiceData,
+                    items: invoiceData.items.map(it => ({
+                        ...it,
+                        printDescription: it.printDescription || it.description || '',
+                        description: it.printDescription || it.description || ''
+                    }))
+                },
                 from: window.location.pathname 
             } 
         });
@@ -633,6 +660,7 @@ const AddSalesInvoice = () => {
                         errors={errors}
                         handleAddNewProduct={handleAddNewProduct}
                         gstType={gstType}
+                        isLinked={!!formData.soId || formData.challanIds.length > 0}
                     />
                 </div>
 

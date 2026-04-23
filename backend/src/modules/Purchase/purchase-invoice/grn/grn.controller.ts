@@ -28,7 +28,7 @@ export class GrnController {
   @ApiOperation({ summary: 'Get list of POs for a specific supplier (for GRN)' })
   @ApiQuery({ name: 'supplierName', required: true, type: String })
   async getSupplierPOs(@Query('supplierName') supplierName: string, @Request() req) {
-    return this.piService.getSupplierPOs(supplierName, req.user.id);
+    return this.grnService.getSupplierPOsForGrn(supplierName, req.user.id);
   }
 
   @Get('supplier-challans')
@@ -77,13 +77,15 @@ export class GrnController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all Goods Receipt Notes' })
-  @ApiQuery({ name: 'search', required: false })
+  @ApiOperation({ summary: 'Get all GRNs with filtering and pagination' })
   @ApiQuery({ name: 'supplierId', required: false })
-  @ApiQuery({ name: 'status', required: false })
-  @ApiQuery({ name: 'page', required: false })
-  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'excludeInvoiceId', required: false, type: Number })
   async findAll(@Query() query: any, @Request() req) {
+    if (query.supplierId && !query.page && !query.limit) {
+      const account = await this.piService.getSupplierAccount(query.supplierId, req.user.id);
+      const excId = query.excludeInvoiceId ? parseInt(query.excludeInvoiceId, 10) : undefined;
+      return this.grnService.getSupplierChallans(account.accountName, req.user.id, excId);
+    }
     return this.grnService.findAll({ ...query, userId: req.user.id });
   }
 

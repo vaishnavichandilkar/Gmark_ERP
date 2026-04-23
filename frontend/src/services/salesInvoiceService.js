@@ -6,15 +6,16 @@ const salesInvoiceService = {
     return response.data;
   },
 
-  getCustomerSOs: async (customerIdOrName) => {
-    const response = await axiosInstance.get(`/sales-invoices/customer-sos?customerId=${customerIdOrName}`);
+  getCustomerSOs: async (customerIdOrName, excludeInvoiceId) => {
+    const url = `/sales-invoices/customer-sos?customerId=${customerIdOrName}${excludeInvoiceId ? `&excludeInvoiceId=${excludeInvoiceId}` : ''}`;
+    const response = await axiosInstance.get(url);
     return response.data;
   },
 
   createInvoice: async (data, file) => {
     const formData = new FormData();
     Object.keys(data).forEach(key => {
-      if (['items', 'accounts', 'accountSummary', 'expenses', 'poIds', 'challanNumbers'].includes(key)) {
+      if (['items', 'accounts', 'accountSummary', 'expenses', 'poIds', 'challanNumbers', 'soNumbers'].includes(key)) {
         formData.append(key, JSON.stringify(data[key]));
       } else if (data[key] !== undefined && data[key] !== null) {
         formData.append(key, data[key]);
@@ -36,7 +37,7 @@ const salesInvoiceService = {
   updateInvoice: async (id, data, file) => {
     const formData = new FormData();
     Object.keys(data).forEach(key => {
-      if (['items', 'accounts', 'accountSummary', 'expenses', 'poIds', 'challanNumbers'].includes(key)) {
+      if (['items', 'accounts', 'accountSummary', 'expenses', 'poIds', 'challanNumbers', 'soNumbers'].includes(key)) {
         formData.append(key, JSON.stringify(data[key]));
       } else if (data[key] !== undefined && data[key] !== null) {
         formData.append(key, data[key]);

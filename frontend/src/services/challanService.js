@@ -11,9 +11,10 @@ const challanService = {
     return response.data;
   },
 
-  getCustomerChallans: async (customerName, soNumber = '') => {
+  getCustomerChallans: async (customerName, soNumber = '', excludeInvoiceId) => {
     let url = `/challans/customer-challans?customerName=${encodeURIComponent(customerName)}`;
     if (soNumber) url += `&soNumber=${encodeURIComponent(soNumber)}`;
+    if (excludeInvoiceId) url += `&excludeInvoiceId=${excludeInvoiceId}`;
     const response = await axiosInstance.get(url);
     return response.data;
   },

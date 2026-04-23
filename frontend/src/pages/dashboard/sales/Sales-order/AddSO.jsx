@@ -275,29 +275,7 @@ const AddSO = () => {
         }
     }, [formData, items]);
 
-    // Auto-calculate Expiry Date based on Credit Days
-    useEffect(() => {
-        if (formData.creation_date && formData.credit_days) {
-            try {
-                const credit = parseInt(formData.credit_days);
-                if (!isNaN(credit)) {
-                    const creation = new Date(formData.creation_date);
-                    const expiry = new Date(creation);
-                    expiry.setDate(creation.getDate() + credit);
-                    
-                    const formattedExpiry = expiry.toLocaleDateString('en-CA');
-                    if (formattedExpiry !== formData.expiry_date) {
-                        setFormData(prev => ({
-                            ...prev,
-                            expiry_date: formattedExpiry
-                        }));
-                    }
-                }
-            } catch (error) {
-                console.error("Error calculating expiry date:", error);
-            }
-        }
-    }, [formData.creation_date, formData.credit_days]);
+
 
     const filteredCustomers = useMemo(() => {
         return (customers || []).filter(c =>
@@ -432,7 +410,16 @@ const AddSO = () => {
     const handleItemChange = (index, field, value) => {
         const newItems = [...items];
         const item = { ...newItems[index] };
-        item[field] = value;
+
+        // Update the specific field with decimal limit for discounts
+        let finalValue = value;
+        if (['discount_amount', 'discount_percent', 'discount_percentage', 'discount_amt'].includes(field)) {
+            if (value.includes('.') && value.split('.')[1].length > 2) {
+                const [int, dec] = value.split('.');
+                finalValue = `${int}.${dec.slice(0, 2)}`;
+            }
+        }
+        item[field] = finalValue;
 
         const qty = parseFloat(item.quantity) || 0;
         const rate = parseFloat(item.rate) || 0;
@@ -533,7 +520,8 @@ const AddSO = () => {
                 uom: item.uom,
                 discountPercent: parseFloat(item.discount_percent) || 0,
                 discountAmount: parseFloat(item.discount_amount) || 0,
-                taxPercent: parseFloat(item.tax_percent) || 0
+                taxPercent: parseFloat(item.tax_percent) || 0,
+                printDescription: item.description || item.printDescription || ''
             }))
         };
 
@@ -686,6 +674,7 @@ const AddSO = () => {
                             <label className="text-[14px] font-semibold text-[#374151]">Credit Days <span className="text-red-500">*</span></label>
                             <input
                                 type="number"
+                                min="0"
                                 value={formData.credit_days}
                                 onChange={(e) => setFormData({ ...formData, credit_days: e.target.value })}
                                 className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318]"
@@ -709,7 +698,17 @@ const AddSO = () => {
                             <label className="text-[14px] font-semibold text-[#374151]">SO Creation Date</label>
                             <input
                                 type="text"
-                                value={formData.creation_date}
+                                value={new Date().toLocaleDateString('en-CA')}
+                                readOnly
+                                className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[14px] font-semibold text-[#374151]">SO Booking Date</label>
+                            <input
+                                type="text"
+                                value={new Date().toLocaleDateString('en-CA')}
                                 readOnly
                                 className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium"
                             />
@@ -1161,6 +1160,7 @@ const AddSO = () => {
                                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[12px] text-gray-400 font-bold">₹</span>
                                                 <input
                                                     type="number"
+                                                    step="0.01"
                                                     min="0"
                                                     value={item.discount_amount || ''}
                                                     onChange={(e) => handleItemChange(index, 'discount_amount', e.target.value)}
@@ -1173,6 +1173,7 @@ const AddSO = () => {
                                                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[12px] text-[#073318] font-bold">%</span>
                                                 <input
                                                     type="number"
+                                                    step="0.01"
                                                     min="0"
                                                     value={item.discount_percent || ''}
                                                     onChange={(e) => handleItemChange(index, 'discount_percent', e.target.value)}
@@ -1303,7 +1304,15 @@ const AddSO = () => {
 
                             navigate(ROUTES.SALES_ORDER_PRINT, {
                                 state: {
-                                    soData: { ...formData, items },
+                                    soData: { 
+                                        ...formData, 
+                                        items: items.filter(it => it.product_name).map(it => ({
+                                            ...it,
+                                            // Ensure both are present for maximum compatibility with preview
+                                            printDescription: it.description || it.printDescription || it.productName || it.product_name || '',
+                                            description: it.description || it.printDescription || it.productName || it.product_name || ''
+                                        }))
+                                    },
                                     from: id ? `/seller/sales/order/edit/${id}` : ROUTES.SALES_ORDER_ADD
                                 }
                             });

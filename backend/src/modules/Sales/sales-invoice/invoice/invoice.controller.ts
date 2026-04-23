@@ -29,8 +29,10 @@ export class SalesInvoiceController {
   @Get('customer-sos')
   @ApiOperation({ summary: 'Get list of SOs for a specific customer' })
   @ApiQuery({ name: 'customerId', required: true, type: String })
-  async getCustomerPOs(@Query('customerId') customerId: string, @Request() req) {
-    return this.service.getCustomerSOs(customerId, req.user.id);
+  @ApiQuery({ name: 'excludeInvoiceId', required: false, type: Number })
+  async getCustomerSOs(@Query('customerId') customerId: string, @Query('excludeInvoiceId') excludeInvoiceId: string, @Request() req) {
+    const excId = excludeInvoiceId ? parseInt(excludeInvoiceId, 10) : undefined;
+    return this.service.getCustomerSOs(customerId, req.user.id, excId);
   }
 
   @Post()

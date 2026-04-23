@@ -143,6 +143,7 @@ const InvoiceForm = ({
                     <label className="text-[14px] font-semibold text-[#374151]">Credit Days <span className="text-red-500">*</span></label>
                     <input
                         type="number"
+                        min="0"
                         placeholder="Enter credit days"
                         value={formData.creditDays || ''}
                         onChange={(e) => setFormData(prev => ({ ...prev, creditDays: e.target.value }))}

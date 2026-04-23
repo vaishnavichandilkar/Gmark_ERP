@@ -43,6 +43,8 @@ const AddPurchaseInvoice = () => {
         grn_ids: [],
         po_id: '',
         po_number: '',
+        po_date: '', // Track PO date
+        challan_date: '', // Track latest challan date
         attachment: null,
         supplier_state: ''
     });
@@ -117,8 +119,8 @@ const AddPurchaseInvoice = () => {
                     if (invoice.supplierId) {
                         try {
                             const [poResponse, grnResponse] = await Promise.all([
-                                purchaseInvoiceService.getSupplierPOs(invoice.supplierId),
-                                purchaseInvoiceService.getSupplierGRNs(invoice.supplierId)
+                                purchaseInvoiceService.getSupplierPOs(invoice.supplierId, id),
+                                purchaseInvoiceService.getSupplierGRNs(invoice.supplierId, id)
                             ]);
                             const poList = Array.isArray(poResponse) ? poResponse : (poResponse.data || []);
                             setPos(poList.filter(p => p.status !== 'DELETED'));
@@ -145,6 +147,8 @@ const AddPurchaseInvoice = () => {
                         credit_days: invoice.creditDays,
                         po_id: invoice.poId || '',
                         po_number: invoice.poNumber || '',
+                        po_date: invoice.poDate?.split('T')[0] || '',
+                        challan_date: invoice.latestChallanDate?.split('T')[0] || '',
                         gst_no: supplierGST,
                         grn_ids: numericGrnIds,
                         supplier_state: supplierState,
@@ -331,8 +335,8 @@ const AddPurchaseInvoice = () => {
 
         try {
             const [poResponse, grnResponse] = await Promise.all([
-                purchaseInvoiceService.getSupplierPOs(supplier.id),
-                purchaseInvoiceService.getSupplierGRNs(supplier.id)
+                purchaseInvoiceService.getSupplierPOs(supplier.id, id),
+                purchaseInvoiceService.getSupplierGRNs(supplier.id, id)
             ]);
             
             const poList = Array.isArray(poResponse) ? poResponse : (poResponse.data || []);
@@ -476,7 +480,12 @@ const AddPurchaseInvoice = () => {
 
             setFormData(prev => ({ 
                 ...prev, 
-                grn_ids: selectedGrnIds
+                grn_ids: selectedGrnIds,
+                challan_date: grns.reduce((latest, g) => {
+                    const gDate = g.grnDate || g.bookingDate;
+                    if (!latest || (gDate && gDate > latest)) return gDate?.split('T')[0];
+                    return latest;
+                }, '')
             }));
         } catch (error) {
             console.error("Error fetching GRN details:", error);
@@ -506,6 +515,7 @@ const AddPurchaseInvoice = () => {
                 ...prev, 
                 po_id: poDetails.id, 
                 po_number: poDetails.poNumber,
+                po_date: poDetails.poCreationDate?.split('T')[0] || '',
                 grn_ids: [] // Clear previously selected GRNs when PO changes
             }));
 
@@ -527,8 +537,18 @@ const AddPurchaseInvoice = () => {
 
                 const remainingInPO = quantity - receivedCount;
                 const effectiveQty = remainingInPO > 0 ? remainingInPO : 0;
+                const baseAmount = effectiveQty * rate;
 
-                const befTax = (effectiveQty * rate) - discAmt;
+                // Recalculate discount amount based on percentage or proportionally
+                let currentDiscAmt = 0;
+                if (discPct > 0) {
+                    currentDiscAmt = parseFloat(((baseAmount * discPct) / 100).toFixed(2));
+                } else if (quantity > 0 && discAmt > 0) {
+                    // Proportional scaling if only amount is provided
+                    currentDiscAmt = parseFloat(((discAmt / quantity) * effectiveQty).toFixed(2));
+                }
+
+                const befTax = baseAmount - currentDiscAmt;
                 const taxAmt = (befTax * taxPct) / 100;
                 return {
                     id: Date.now() + Math.random(),
@@ -538,7 +558,7 @@ const AddPurchaseInvoice = () => {
                     quantity: effectiveQty,
                     rate: Number(item.rate) || 0,
                     uom: item.uom,
-                    discountAmount: discAmt,
+                    discountAmount: currentDiscAmt,
                     discountPercent: item.discountPercent || 0,
                     hsnCode: item.hsnCode || '',
                     taxPercent: taxPct,
@@ -571,6 +591,19 @@ const AddPurchaseInvoice = () => {
             const today = new Date().toISOString().split('T')[0];
             if (isoDocDate > today) {
                 newErrors.document_date = "Date cannot be in the future";
+            }
+
+            const hasLink = formData.po_id || (formData.grn_ids && formData.grn_ids.length > 0);
+            if (hasLink) {
+                const minAllowed = formData.challan_date || formData.po_date;
+                if (minAllowed && isoDocDate < minAllowed) {
+                    newErrors.document_date = `Date cannot be before ${formData.challan_date ? 'challan' : 'PO'} date (${minAllowed})`;
+                }
+            } else {
+                // Without PO and GRN, must be today (Condition 3)
+                if (isoDocDate !== today) {
+                    newErrors.document_date = "Date must be current date for standalone invoices";
+                }
             }
         }
 
@@ -747,6 +780,17 @@ const AddPurchaseInvoice = () => {
         }
     }, [formData, items, expenses, isEditMode]);
 
+    // Date locking logic for standalone invoices (Condition 3)
+    useEffect(() => {
+        const hasLink = !!(formData.po_id || (formData.grn_ids && formData.grn_ids.length > 0));
+        if (!hasLink) {
+            const today = new Date().toISOString().split('T')[0];
+            if (formData.document_date !== today) {
+                setFormData(prev => ({ ...prev, document_date: today }));
+            }
+        }
+    }, [formData.po_id, formData.grn_ids, formData.document_date]);
+
     if (isLoading && !isEditMode) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
@@ -769,20 +813,34 @@ const AddPurchaseInvoice = () => {
                 </div>
 
                 <div className="p-8 border-b border-[#F3F4F6]">
-                    <GRNForm 
-                        formData={formData}
-                        setFormData={setFormData}
-                        handleSupplierChange={handleSupplierChange}
-                        handlePOChange={handlePOChange}
-                        handleChallanChange={handleChallanChange}
-                        suppliers={suppliers}
-                        pos={pos}
-                        challans={filteredChallans}
-                        errors={errors}
-                        challanDateRef={challanDateRef}
-                        type="Invoice"
-                        onAddSupplier={handleAddNewSupplier}
-                    />
+                    {(() => {
+                        const hasLink = !!(formData.po_id || (formData.grn_ids && formData.grn_ids.length > 0));
+                        const today = new Date().toISOString().split('T')[0];
+                        
+                        // Condition 3: No PO and No GRN -> Locked to Today
+                        const isLocked = !hasLink;
+                        const minDate = hasLink ? (formData.challan_date || formData.po_date) : today;
+
+                        return (
+                            <GRNForm 
+                                formData={formData}
+                                setFormData={setFormData}
+                                handleSupplierChange={handleSupplierChange}
+                                handlePOChange={handlePOChange}
+                                handleChallanChange={handleChallanChange}
+                                suppliers={suppliers}
+                                pos={pos}
+                                challans={filteredChallans}
+                                errors={errors}
+                                challanDateRef={challanDateRef}
+                                type="Invoice"
+                                onAddSupplier={handleAddNewSupplier}
+                                minDate={minDate}
+                                maxDate={today}
+                                isDocumentDateReadOnly={isLocked}
+                            />
+                        );
+                    })()}
                 </div>
 
                 <div className="p-8 border-b border-[#F3F4F6]">
@@ -793,7 +851,7 @@ const AddPurchaseInvoice = () => {
                         errors={errors}
                         handleAddNewProduct={handleAddNewProduct}
                         type="Invoice"
-                        isPoSelected={!!formData.po_id}
+                        isPoSelected={!!formData.po_id || (formData.grn_ids && formData.grn_ids.length > 0)}
                         gstType={gstType}
                         supplierName={formData.supplier_name}
                     />

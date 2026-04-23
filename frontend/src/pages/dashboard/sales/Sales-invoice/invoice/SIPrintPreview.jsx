@@ -14,19 +14,19 @@ const SIPrintPreview = () => {
     const [sellerInfo, setSellerInfo] = useState(null);
 
     const getStateName = (gstin) => {
-        if (!gstin || gstin.length < 2) return "Maharashtra";
+        if (!gstin || gstin.length < 2) return "Not Available";
         const code = gstin.substring(0, 2);
         const states = {
             "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand",
             "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar",
             "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", "15": "Mizoram",
-            "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal", "20": "Workhand",
+            "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal", "20": "Jharkhand",
             "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat", "25": "Daman & Diu",
             "26": "Dadra & Nagar Haveli", "27": "Maharashtra", "28": "Andhra Pradesh", "29": "Karnataka", "30": "Goa",
             "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman & Nicobar Islands",
             "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh"
         };
-        return states[code] || "Maharashtra";
+        return states[code] || "Not Available";
     };
 
     useEffect(() => {
@@ -35,13 +35,16 @@ const SIPrintPreview = () => {
                 const response = await axiosInstance.get('/business/profile');
                 if (response.data) {
                     const { shopDetail, phone, email, websiteUrl, gstNumber } = response.data;
+                    const fullGst = gstNumber || shopDetail?.gstNumber || "";
                     setSellerInfo({
                         shopName: shopDetail?.shopName || "ARDHYA AGRO SERVICE",
                         address: shopDetail ? `${shopDetail.address}, ${shopDetail.village || ''}, ${shopDetail.district}, ${shopDetail.state} - ${shopDetail.pinCode}` : "Near Mahalaxmi Temple, Hitani",
                         phone: phone || "+91 2855943035",
                         email: email || "ardhya123@gmail.com",
                         website: websiteUrl || "",
-                        gstNumber: gstNumber || shopDetail?.gstNumber || ""
+                        gstNumber: fullGst || "Not Available",
+                        panNumber: fullGst.length >= 12 ? fullGst.substring(2, 12) : "Not Available",
+                        stateInfo: fullGst.length >= 2 ? `${fullGst.substring(0, 2)} - ${getStateName(fullGst)}` : "Not Available"
                     });
                 }
             } catch (error) {
@@ -65,6 +68,15 @@ const SIPrintPreview = () => {
         );
     }
 
+    if (!sellerInfo) {
+        return (
+            <div className="flex flex-col items-center justify-center h-screen gap-4">
+                <Loader2 className="animate-spin text-[#073318]" size={40} />
+                <p className="text-gray-500 font-outfit text-[14px] font-bold uppercase tracking-widest">Loading Seller Information...</p>
+            </div>
+        );
+    }
+
     const formatDate = (dateStr) => {
         if (!dateStr || dateStr === "N/A") return "-";
         try {
@@ -80,25 +92,26 @@ const SIPrintPreview = () => {
     };
 
     const {
-        invoiceNumber, customerInvoiceNumber,
-        customerName,
+        invoiceNumber, customerInvoiceNumber, invoice_number,
+        customerName, customer_name,
         address,
-        invoiceDate, customerInvoiceDate,
-        soNumber, soDate,
-        gstNumber, gstNo,
-        creditDays,
+        invoiceDate, customerInvoiceDate, invoice_date,
+        soNumber, so_number,
+        soDate, so_date,
+        gstNumber, gstNo, gst_number,
+        creditDays, credit_days,
         items = [],
         expenses = [],
-        panNo
+        panNo, pan_number
     } = invoiceData;
 
-    const final_invoice_no = invoiceNumber || customerInvoiceNumber || "N/A";
-    const final_invoice_date = invoiceDate || customerInvoiceDate || "N/A";
-    const final_customer_name = customerName || "N/A";
-    const final_gst_number = gstNumber || gstNo || "-";
+    const final_invoice_no = invoiceNumber || customerInvoiceNumber || invoice_number || "N/A";
+    const final_invoice_date = invoiceDate || customerInvoiceDate || invoice_date || "N/A";
+    const final_customer_name = customerName || customer_name || "N/A";
+    const final_gst_number = gstNumber || gstNo || gst_number || "-";
 
-    const subTotal = items.reduce((sum, item) => sum + (parseFloat(item.beforeTaxAmount || (item.quantity * item.rate - (item.discountAmount || 0))) || 0), 0);
-    const materialTax = items.reduce((sum, item) => sum + (parseFloat(item.taxAmount || ((item.quantity * item.rate - (item.discountAmount || 0)) * (item.taxPercent || 0) / 100)) || 0), 0);
+    const subTotal = items.reduce((sum, item) => sum + (parseFloat(item.beforeTaxAmount || item.before_tax || (item.quantity * item.rate - (item.discountAmount || item.discount_amount || 0))) || 0), 0);
+    const materialTax = items.reduce((sum, item) => sum + (parseFloat(item.taxAmount || item.tax_amount || ((item.quantity * item.rate - (item.discountAmount || item.discount_amount || 0)) * (item.taxPercent || item.tax_percent || 0) / 100)) || 0), 0);
     
     // Taxable base for GST = material cost + direct expenses (not post-gst)
     const directExpenses = expenses.filter(e => !e.isPostGst).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
@@ -259,10 +272,10 @@ const SIPrintPreview = () => {
                             SALES INVOICE
                         </div>
 
-                        <div className="flex border-b border-black text-[12px] font-black">
-                            <div className="w-[38%] py-3 px-4">GSTIN : {sellerInfo?.gstNumber || "N/A"}</div>
-                            <div className="w-[30%] py-3 px-4 text-center">State Code : {sellerInfo?.gstNumber ? `${sellerInfo.gstNumber.substring(0, 2)} ${getStateName(sellerInfo.gstNumber)}` : "N/A"}</div>
-                            <div className="flex-1 py-3 px-4 text-right pr-6 uppercase whitespace-nowrap">PAN No : {panNo || (sellerInfo?.gstNumber ? sellerInfo.gstNumber.substring(2, 12) : "N/A")}</div>
+                        <div className="flex border-b border-black text-[12px] font-black uppercase">
+                            <div className="w-[38%] py-3 px-4">GSTIN : {sellerInfo?.gstNumber}</div>
+                            <div className="w-[30%] py-3 px-4 text-center">State Code : {sellerInfo?.stateInfo}</div>
+                            <div className="flex-1 py-3 px-4 text-right pr-6 whitespace-nowrap">PAN No : {sellerInfo?.panNumber}</div>
                         </div>
 
                         <div className="flex border-b border-black min-h-[160px]">
@@ -320,24 +333,25 @@ const SIPrintPreview = () => {
                             </thead>
                             <tbody>
                                  {items.map((item, idx) => (
-                                    <tr key={item.id || idx} className="text-[12px] font-semibold min-h-[40px]">
-                                        <td className="border-b border-r border-black text-center">{idx + 1}</td>
-                                        <td className="border-b border-r border-black px-4 py-2 leading-tight">
-                                            <div className="font-bold text-[13px]">{item.productName}</div>
-                                            {item.printDescription && (
-                                                <div className="text-[10px] text-gray-400 mt-0.5 leading-tight font-medium">
-                                                    {item.printDescription}
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="border-b border-r border-black text-center">{item.hsnCode}</td>
-                                        <td className="border-b border-r border-black text-center">{item.taxPercent}</td>
-                                        <td className="border-b border-r border-black text-center">{item.quantity}</td>
-                                        <td className="border-b border-r border-black text-center uppercase">{item.uom}</td>
-                                        <td className="border-b border-r border-black text-center">{item.rate}</td>
-                                        <td className="border-b border-black text-right px-4 font-black">{(parseFloat(item.totalAmount) || 0).toFixed(2)}</td>
-                                    </tr>
-                                ))}
+                                     <tr key={item.id || idx} className="text-[12px] font-semibold min-h-[40px]">
+                                         <td className="border-b border-r border-black text-center">{idx + 1}</td>
+                                         <td className="border-b border-r border-black px-4 py-2 leading-tight">
+                                             <div className="font-bold text-[13px]">
+                                                 {item.productName || item.product_name || "N/A"}
+                                                 {(() => {
+                                                     const desc = item.printDescription || item.print_description || item.description || item.product_description;
+                                                     return desc ? ` (${desc})` : '';
+                                                 })()}
+                                             </div>
+                                         </td>
+                                         <td className="border-b border-r border-black text-center">{item.hsnCode || item.hsn_code || item.hsn}</td>
+                                         <td className="border-b border-r border-black text-center">{item.taxPercent || item.tax_percent}</td>
+                                         <td className="border-b border-r border-black text-center">{item.quantity}</td>
+                                         <td className="border-b border-r border-black text-center uppercase">{item.uom}</td>
+                                         <td className="border-b border-r border-black text-center">{item.rate}</td>
+                                         <td className="border-b border-black text-right px-4 font-black">{(parseFloat(item.totalAmount || item.total_amount) || 0).toFixed(2)}</td>
+                                     </tr>
+                                 ))}
                             </tbody>
                         </table>
 

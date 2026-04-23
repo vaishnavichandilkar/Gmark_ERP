@@ -14,18 +14,22 @@ const GRNForm = ({
     pos,
     challans = [],
     errors,
-    bookingDateRef,
     challanDateRef,
+    minDate,
+    maxDate,
+    isDocumentDateReadOnly = false,
     type = 'GRN',
     onAddSupplier
 }) => {
     const isGRN = type === 'GRN';
     const numLabel = isGRN ? 'Challan' : 'Invoice';
-    const dateLabel = isGRN ? 'Supplier Challan' : 'Supplier Invoice';
     const navigate = useNavigate();
     const fieldForNumber = isGRN ? 'supplier_challan_number' : 'supplier_invoice_number';
     const [supplierSearch, setSupplierSearch] = useState(formData.supplier_name || '');
     const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
+
+    // Dynamic Label Correction
+    const displayDateLabel = isGRN ? 'Supplier Challan' : 'Supplier Invoice';
 
     React.useEffect(() => {
         setSupplierSearch(formData.supplier_name || '');
@@ -50,6 +54,7 @@ const GRNForm = ({
     };
 
     const handleDateTextChange = (e, field) => {
+        if (isDocumentDateReadOnly) return;
         const val = e.target.value;
         const digits = val.replace(/\D/g, '').substring(0, 8);
         
@@ -132,6 +137,7 @@ const GRNForm = ({
                     <label className="text-[14px] font-semibold text-[#374151]">Credit Days <span className="text-red-500">*</span></label>
                     <input
                         type="number"
+                        min="0"
                         placeholder="0"
                         value={formData.credit_days || ''}
                         onChange={(e) => setFormData(prev => ({ ...prev, credit_days: e.target.value }))}
@@ -175,6 +181,7 @@ const GRNForm = ({
                             onChange={(e) => handlePOChange(e.target.value)}
                         >
                             <option value="" disabled>Select PO Number</option>
+                            <option value="">None (Manual Entry)</option>
                             {pos.map(p => <option key={p.id} value={p.id}>{p.poNumber}</option>)}
                         </select>
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
@@ -206,29 +213,40 @@ const GRNForm = ({
                     </div>
                 )}
 
-                {/* 7. Challan Date */}
+                {/* 7. Challan/Invoice Date */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">{dateLabel} Date <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{displayDateLabel} Date <span className="text-red-500">*</span></label>
                     <div className="relative">
                         <input
                             type="date"
                             ref={challanDateRef}
                             className="absolute opacity-0 pointer-events-none w-0 h-0"
                             value={formData.document_date || ''}
-                            max={new Date().toISOString().split('T')[0]}
+                            min={minDate}
+                            max={maxDate || new Date().toISOString().split('T')[0]}
                             onChange={(e) => setFormData({ ...formData, document_date: e.target.value })}
+                            readOnly={isDocumentDateReadOnly}
                         />
                         <input
                             type="text"
                             placeholder="DD/MM/YYYY"
                             value={toDisplayDate(formData.document_date)}
                             onChange={(e) => handleDateTextChange(e, 'document_date')}
-                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all ${errors.document_date ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
+                            readOnly={isDocumentDateReadOnly}
+                            className={`w-full h-[48px] rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all ${
+                                isDocumentDateReadOnly 
+                                    ? 'bg-gray-50 border-[#E5E7EB] text-gray-500 cursor-not-allowed' 
+                                    : `bg-white border ${errors.document_date ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`
+                            }`}
                         />
                         <Calendar
                             size={18}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto shadow-sm hover:text-[#073318]"
-                            onClick={() => challanDateRef.current?.showPicker?.()}
+                            className={`absolute right-4 top-1/2 -translate-y-1/2 shadow-sm ${
+                                isDocumentDateReadOnly 
+                                    ? 'text-gray-300 pointer-events-none' 
+                                    : 'text-gray-400 cursor-pointer pointer-events-auto hover:text-[#073318]'
+                            }`}
+                            onClick={() => !isDocumentDateReadOnly && challanDateRef.current?.showPicker?.()}
                         />
                     </div>
                     {errors.document_date && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.document_date}</p>}

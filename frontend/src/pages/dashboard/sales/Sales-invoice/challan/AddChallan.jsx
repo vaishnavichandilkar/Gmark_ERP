@@ -235,7 +235,8 @@ const AddChallan = () => {
         setFormData(prev => ({
             ...prev,
             soId: selectedSO.id,
-            soNumber: selectedSO.soNumber
+            soNumber: selectedSO.soNumber,
+            soCreationDate: selectedSO.soCreationDate
         }));
 
         // Build items with totalSoQty from SO, then fetch givenSoQty for each product
@@ -264,10 +265,23 @@ const AddChallan = () => {
 
             const rate = parseFloat(item.rate || product?.sale_rate || product?.saleRate || 0);
             const taxPercent = parseFloat(item.taxPercent || product?.tax_rate || product?.taxRate || 0);
+            const discAmt = parseFloat(item.discountAmount || 0);
+            const discPct = parseFloat(item.discountPercent || 0);
             const baseAmount = remainingQty * rate;
+
+            // Recalculate discount amount based on percentage or proportionally
+            let currentDiscAmt = 0;
+            if (discPct > 0) {
+                currentDiscAmt = parseFloat(((baseAmount * discPct) / 100).toFixed(2));
+            } else if (totalSoQty > 0 && discAmt > 0) {
+                // Proportional scaling if only amount is provided
+                currentDiscAmt = parseFloat(((discAmt / totalSoQty) * remainingQty).toFixed(2));
+            }
+
+            const befTax = Math.max(0, baseAmount - currentDiscAmt);
             const isApplicable = gstType?.applicable !== false;
-            const taxAmount = isApplicable ? (baseAmount * taxPercent) / 100 : 0;
-            const totalAmount = baseAmount + taxAmount;
+            const taxAmount = isApplicable ? (befTax * taxPercent) / 100 : 0;
+            const totalAmount = befTax + taxAmount;
 
             return {
                 id: Date.now() + Math.random(),
@@ -278,13 +292,13 @@ const AddChallan = () => {
                 uom: item.uom || product?.uom?.gst_uom || product?.uom?.unit_name || '',
                 hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
                 taxPercent,
-                discountAmount: 0,
-                discountPercent: 0,
+                discountAmount: currentDiscAmt,
+                discountPercent: discPct,
                 totalSoQty,
                 givenSoQty,
                 quantity: remainingQty,
-                remainingQty,
-                beforeTaxAmount: parseFloat(baseAmount.toFixed(2)),
+                remainingQty: 0, // Since we set quantity to remainingQty, the new remaining would be 0
+                beforeTaxAmount: parseFloat(befTax.toFixed(2)),
                 taxAmount: parseFloat(taxAmount.toFixed(2)),
                 totalAmount: parseFloat(totalAmount.toFixed(2)),
                 printDescription: item.printDescription || item.productName || '',
@@ -500,6 +514,8 @@ const AddChallan = () => {
                         handleAddNewProduct={handleAddNewProduct}
                         gstType={gstType}
                         isSoSelected={!!formData.soId}
+                        soNumber={formData.soNumber}
+                        linkedSoItems={sos.find(s => s.id === parseInt(formData.soId))?.items}
                         customerName={formData.customerName}
                     />
                 </div>

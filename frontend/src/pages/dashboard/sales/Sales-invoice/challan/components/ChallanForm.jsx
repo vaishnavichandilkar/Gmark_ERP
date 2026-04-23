@@ -228,6 +228,8 @@ const ChallanForm = ({
                             ref={challanDateRef}
                             className="absolute opacity-0 pointer-events-none w-0 h-0"
                             value={formData.customerChallanDate || ''}
+                            min={formData.soCreationDate ? formData.soCreationDate.split('T')[0] : ''}
+                            max={new Date().toISOString().split('T')[0]}
                             onChange={(e) => setFormData({ ...formData, customerChallanDate: e.target.value })}
                         />
                         <input
