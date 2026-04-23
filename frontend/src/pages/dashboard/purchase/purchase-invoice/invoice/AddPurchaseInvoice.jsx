@@ -499,7 +499,7 @@ const AddPurchaseInvoice = () => {
             const resetItems = items.map(p => ({
                 ...p,
                 totalPoQty: 0,
-                received_po_qty: 0,
+                receivedPoQty: 0,
                 remainingQty: 0
             }));
             setItems(resetItems);
@@ -529,7 +529,7 @@ const AddPurchaseInvoice = () => {
                 // Fetch received count for this product & supplier from GRN history
                 let receivedCount = item.receivedQty || 0;
                 try {
-                   const history = await grnService.getReceivedQty(formData.supplier_name, item.productCode || item.product_code);
+                   const history = await grnService.getReceivedQty(formData.supplier_name, item.productCode || item.product_code, poDetails.poNumber);
                    receivedCount = history.receivedPoQty;
                 } catch (e) {
                    console.error("Failed to fetch received history", e);
@@ -852,6 +852,8 @@ const AddPurchaseInvoice = () => {
                         handleAddNewProduct={handleAddNewProduct}
                         type="Invoice"
                         isPoSelected={!!formData.po_id || (formData.grn_ids && formData.grn_ids.length > 0)}
+                        poNumber={formData.po_number}
+                        linkedPoItems={items}
                         gstType={gstType}
                         supplierName={formData.supplier_name}
                     />

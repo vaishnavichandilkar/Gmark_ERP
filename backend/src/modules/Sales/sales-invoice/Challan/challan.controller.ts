@@ -17,6 +17,13 @@ export class ChallanController {
     private readonly challanService: ChallanService,
     private readonly siService: SalesInvoiceService
   ) { }
+  
+  @Get('next-number')
+  @ApiOperation({ summary: 'Get next available Challan Number' })
+  async getNextNumber(@Request() req) {
+    const challanNumber = await this.challanService.generateChallanNumber(req.user.id);
+    return { challanNumber };
+  }
 
   @Get('customers')
   @ApiOperation({ summary: 'Get list of customers for Challan' })

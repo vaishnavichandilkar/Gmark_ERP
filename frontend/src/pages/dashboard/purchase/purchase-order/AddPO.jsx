@@ -1043,6 +1043,7 @@ const AddPO = () => {
                                 {[
                                     { label: "Product Code", width: "160px" },
                                     { label: "Product Name", width: "350px" },
+                                    { label: "Print Description", width: "300px" },
                                     { label: "Quantity", width: "120px" },
                                     { label: "Rate", width: "120px" },
                                     { label: "UOM", width: "140px" },
@@ -1052,8 +1053,7 @@ const AddPO = () => {
                                     { label: "Tax (%)", width: "120px" },
                                     { label: "Bef. Tax Amount", width: "160px" },
                                     { label: "Tax Amount", width: "140px" },
-                                    { label: "Amount", width: "160px" },
-                                    { label: "Print Description", width: "300px" }
+                                    { label: "Amount", width: "160px" }
                                 ].map((col, i) => (
                                     <th key={i} className="px-4 py-4 text-left text-[13px] font-medium text-[#6B7280] border-l border-[#F3F4F6]" style={{ width: col.width }}>
                                         {col.label}
@@ -1101,6 +1101,15 @@ const AddPO = () => {
                                                 }}
                                                 placeholder={item.product_name ? "" : "Select product..."}
                                                 className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#111827] outline-none hover:bg-gray-50 rounded-md transition-all cursor-pointer ${!item.product_name ? 'italic text-gray-400 font-normal' : ''}`}
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input
+                                                type="text"
+                                                value={item.description}
+                                                onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                                                className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] text-[#111827] outline-none focus:border-[#073318] transition-all shadow-sm"
+                                                placeholder="Description"
                                             />
                                         </td>
                                         <td className="px-2 py-2 border-l border-[#F3F4F6]">
@@ -1212,15 +1221,6 @@ const AddPO = () => {
                                                 className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#073318] text-right outline-none cursor-not-allowed"
                                             />
                                         </td>
-                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                            <input
-                                                type="text"
-                                                value={item.description}
-                                                onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                                                className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] text-[#111827] outline-none focus:border-[#073318] transition-all shadow-sm"
-                                                placeholder="Description"
-                                            />
-                                        </td>
                                         <td className="px-2 py-2 border-l border-[#F3F4F6] text-center">
                                             <button
                                                 type="button"
@@ -1326,6 +1326,7 @@ const AddPO = () => {
                                 <td className="px-4 py-4 text-[13px] font-bold text-[#111827]">Total</td>
                                 <td className="border-l border-[#F3F4F6]"></td>
                                 <td className="border-l border-[#F3F4F6]"></td>
+                                <td className="border-l border-[#F3F4F6]"></td>
                                 <td className="px-4 py-4 text-right text-[13px] font-bold text-[#111827] border-l border-[#F3F4F6]">
                                     {items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0)}
                                 </td>
@@ -1344,7 +1345,6 @@ const AddPO = () => {
                                 <td className="px-4 py-4 text-right text-[13px] font-bold text-[#073318] border-l border-[#F3F4F6]">
                                     ₹ {totalBillAmount.toFixed(2)}
                                 </td>
-                                <td className="border-l border-[#F3F4F6]"></td>
                                 <td className="border-l border-[#F3F4F6]"></td>
                             </tr>
                         </tfoot>

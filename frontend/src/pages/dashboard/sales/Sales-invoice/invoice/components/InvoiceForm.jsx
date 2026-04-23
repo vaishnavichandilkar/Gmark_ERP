@@ -128,20 +128,13 @@ const InvoiceForm = ({
                 {/* 2. Customer Type */}
                 <div className="space-y-2">
                     <label className="text-[14px] font-semibold text-[#374151]">Customer Type <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                        <select
-                            className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-10 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
-                            value={formData.customerType || ""}
-                            onChange={(e) => setFormData(prev => ({ ...prev, customerType: e.target.value }))}
-                        >
-                            <option value="">Select Customer type</option>
-                            <option value="industrial">Industrial</option>
-                            <option value="institutional">Institutional</option>
-                            <option value="dealer">Dealer</option>
-                            <option value="retailer">Retailer</option>
-                        </select>
-                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
-                    </div>
+                    <input
+                        type="text"
+                        readOnly
+                        value={formData.customerType || ''}
+                        placeholder="Auto-fetched on customer select"
+                        className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed shadow-sm"
+                    />
                 </div>
 
                 {/* 3. Credit Days */}
@@ -163,10 +156,10 @@ const InvoiceForm = ({
                     <label className="text-[14px] font-semibold text-[#374151]">Address <span className="text-red-500">*</span></label>
                     <input
                         type="text"
-                        placeholder="Enter address"
+                        readOnly
                         value={formData.address || ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                        className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm ${errors.address ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                        placeholder="Auto-fetched on customer select"
+                        className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed shadow-sm"
                     />
                     {errors.address && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.address}</p>}
                 </div>
@@ -176,10 +169,10 @@ const InvoiceForm = ({
                     <label className="text-[14px] font-semibold text-[#374151]">GST Number (Optional)</label>
                     <input
                         type="text"
-                        placeholder="Enter gst number"
+                        readOnly
                         value={formData.gstNo || ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, gstNo: e.target.value }))}
-                        className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm"
+                        placeholder="Auto-fetched on customer select"
+                        className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed shadow-sm"
                     />
                 </div>
 

@@ -686,10 +686,10 @@ const AddSO = () => {
                             <label className="text-[14px] font-semibold text-[#374151]">Address</label>
                             <input
                                 type="text"
-                                value={formData.address}
-                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                                className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318]"
-                                placeholder="Enter address"
+                                value={formData.address || ''}
+                                readOnly
+                                className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium"
+                                placeholder="Auto-fetched from Account Master"
                             />
                         </div>
 
@@ -941,6 +941,7 @@ const AddSO = () => {
                                     {[
                                         { label: "Product Code", width: "160px" },
                                         { label: "Product", width: "350px" },
+                                        { label: "Description", width: "300px" },
                                         { label: "Qty", width: "120px" },
                                         { label: "UOM", width: "100px" },
                                         { label: "Rate", width: "120px" },
@@ -950,8 +951,7 @@ const AddSO = () => {
                                         { label: "Tax %", width: "120px" },
                                         { label: "Before Tax", width: "160px" },
                                         { label: "Tax Amt", width: "140px" },
-                                        { label: "Total Amt", width: "160px" },
-                                        { label: "Description", width: "300px" }
+                                        { label: "Total Amt", width: "160px" }
                                     ].map((col, i) => (
                                         <th key={i} className="px-4 py-4 text-left text-[13px] font-medium text-[#6B7280] border-l border-[#F3F4F6]" style={{ width: col.width }}>
                                             {col.label}
@@ -1065,9 +1065,14 @@ const AddSO = () => {
                                                                         <span className="text-[10px] text-white/70 font-bold uppercase tracking-tight">{p.category?.name || p.category || 'Fruit'}</span>
                                                                     </div>
 
-                                                                    {/* HIT ENTER Col - Width: 120px */}
+                                                                    {/* Description Col - Width: 300px */}
+                                                                    <div className="w-[300px] px-8 flex items-center justify-center suggestion-col-divider italic text-[12px] font-bold text-white/80 shrink-0">
+                                                                        Select this item to continue
+                                                                    </div>
+
+                                                                    {/* Qty Col - Width: 120px */}
                                                                     <div className="w-[120px] flex items-center justify-center suggestion-col-divider shrink-0">
-                                                                        <span className="italic text-[11px] font-black text-white/90 uppercase tracking-widest">HIT ENTER</span>
+                                                                        <span className="italic text-[11px] font-black text-white/90 uppercase tracking-widest">QTY</span>
                                                                     </div>
 
                                                                     {/* UOM Col - Width: 100px */}
@@ -1078,11 +1083,6 @@ const AddSO = () => {
                                                                     {/* Rate Col - Width: 120px */}
                                                                     <div className="w-[120px] px-4 flex items-center justify-center suggestion-col-divider font-bold text-[16px] shrink-0">
                                                                         ₹{p.sellingRate || p.rate || 0}
-                                                                    </div>
-
-                                                                    {/* Description Col - Multi-span logic */}
-                                                                    <div className="flex-1 px-8 flex items-center justify-center suggestion-col-divider italic text-[12px] font-bold text-white/80 shrink-0">
-                                                                        Select this item to continue
                                                                     </div>
 
                                                                     {/* HSN Col - Width: 140px */}
@@ -1097,7 +1097,7 @@ const AddSO = () => {
                                                                     <div className="w-[160px] suggestion-col-divider shrink-0"></div>
                                                                     <div className="w-[140px] suggestion-col-divider shrink-0"></div>
                                                                     <div className="w-[160px] suggestion-col-divider shrink-0"></div>
-                                                                    <div className="w-[300px] suggestion-col-divider shrink-0"></div>
+                                                                    <div className="w-[160px] suggestion-col-divider shrink-0"></div>
                                                                     <div className="w-[80px] shrink-0"></div>
                                                                 </button>
                                                             ))}
@@ -1122,6 +1122,16 @@ const AddSO = () => {
                                                     </div>
                                                 </div>
                                             )}
+                                        </td>
+
+                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                            <input
+                                                type="text"
+                                                value={item.description}
+                                                onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                                                className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] text-[#111827] outline-none focus:border-[#073318] transition-all shadow-sm"
+                                                placeholder="Description"
+                                            />
                                         </td>
 
                                         <td className="px-2 py-2 border-l border-[#F3F4F6]">
@@ -1233,15 +1243,7 @@ const AddSO = () => {
                                                 className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#073318] text-right outline-none cursor-not-allowed"
                                             />
                                         </td>
-                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                            <input
-                                                type="text"
-                                                value={item.description}
-                                                onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                                                className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] text-[#111827] outline-none focus:border-[#073318] transition-all shadow-sm"
-                                                placeholder="Description"
-                                            />
-                                        </td>
+
                                         <td className="px-2 py-2 border-l border-[#F3F4F6] text-center">
                                             <button
                                                 type="button"
@@ -1267,6 +1269,7 @@ const AddSO = () => {
                             <tfoot className="bg-[#F9FAFB] border-t-2 border-[#E5E7EB]">
                                 <tr className="h-[52px] font-bold text-[#111827]">
                                     <td colSpan={3} className="px-4 py-2 text-[14px] text-left">Total</td>
+                                    <td className="border-l border-[#F3F4F6]"></td>
                                     <td className="px-4 py-2 text-right text-[15px] border-l border-[#F3F4F6]">{tableTotals.quantity}</td>
                                     <td className="border-l border-[#F3F4F6]"></td>
                                     <td className="border-l border-[#F3F4F6]"></td>
@@ -1283,7 +1286,6 @@ const AddSO = () => {
                                     <td className="px-4 py-2 text-right text-[13px] font-bold text-[#073318] border-l border-[#F3F4F6]">
                                         ₹ {tableTotals.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                     </td>
-                                    <td className="border-l border-[#F3F4F6]"></td>
                                     <td className="border-l border-[#F3F4F6]"></td>
                                 </tr>
                             </tfoot>

@@ -222,6 +222,26 @@ export class ChallanService {
       items: so.items
     }));
   }
+  
+  async generateChallanNumber(userId: number): Promise<string> {
+    const lastChallan = await this.prisma.salesChallan.findFirst({
+      where: { 
+        userId,
+        challanNumber: { startsWith: 'CH' } 
+      },
+      orderBy: { challanNumber: 'desc' },
+      select: { challanNumber: true },
+    });
+
+    if (!lastChallan) return 'CH0001';
+    
+    const lastNumStr = lastChallan.challanNumber.replace('CH', '');
+    const lastNumber = parseInt(lastNumStr, 10);
+    
+    if (isNaN(lastNumber)) return 'CH0001';
+    
+    return `CH${(lastNumber + 1).toString().padStart(4, '0')}`;
+  }
 
   async updateSOStatusAfterChallan(soId: number, tx: any) {
     if (!soId) return;

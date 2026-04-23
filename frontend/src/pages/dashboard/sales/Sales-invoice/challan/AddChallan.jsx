@@ -133,6 +133,17 @@ const AddChallan = () => {
                          setFormData(draft.formData);
                          setItems(draft.items);
                          setExpenses(draft.expenses);
+                    } else {
+                        // Auto-generate Challan Number
+                        try {
+                            const nextRes = await challanService.getNextNumber();
+                            setFormData(prev => ({
+                                ...prev,
+                                customerChallanNumber: nextRes.challanNumber
+                            }));
+                        } catch (error) {
+                            console.error("Error fetching next challan number:", error);
+                        }
                     }
                 }
             } catch (error) {

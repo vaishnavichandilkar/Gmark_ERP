@@ -258,7 +258,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                             {isGRN && (
                                 <>
                                     <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">total po qty</th>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">received po qty</th>
+                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">previous po qty</th>
                                     <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">received qty</th>
                                     <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">remaining qty</th>
                                 </>
