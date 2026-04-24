@@ -35,9 +35,16 @@ const ChallanForm = ({
 
     const toDisplayDate = (dateStr) => {
         if (!dateStr) return "";
-        const parts = dateStr.split("-");
+        const parts = dateStr.includes("-") ? dateStr.split("-") : dateStr.split("/");
         if (parts.length === 3) {
-            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+            // If ISO (YYYY-MM-DD), convert to DD/MM/YY
+            if (parts[0].length === 4) {
+                const yearShort = parts[0].slice(-2);
+                return `${parts[2]}/${parts[1]}/${yearShort}`;
+            }
+            // If already DD-MM-YYYY or DD/MM/YYYY, convert to DD/MM/YY
+            const yearShort = parts[2].slice(-2);
+            return `${parts[0]}/${parts[1]}/${yearShort}`;
         }
         return dateStr;
     };

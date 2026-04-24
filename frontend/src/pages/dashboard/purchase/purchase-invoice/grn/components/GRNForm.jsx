@@ -43,12 +43,23 @@ const GRNForm = ({
 
     const toDisplayDate = (dateStr) => {
         if (!dateStr) return "";
-        // If it looks like formatted DD/MM/YYYY, return as is
-        if (dateStr.includes("/") && dateStr.split("/").length >= 2) return dateStr;
-        // If it looks like ISO YYYY-MM-DD
-        const parts = dateStr.split("-");
-        if (parts.length === 3 && parts[0].length === 4) {
-            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        // If it already contains / and parts are short, it might be already formatted
+        const partsSlash = dateStr.split("/");
+        if (partsSlash.length === 3 && partsSlash[2].length === 2) return dateStr;
+        
+        // If it looks like ISO YYYY-MM-DD or DD/MM/YYYY
+        const separator = dateStr.includes("-") ? "-" : "/";
+        const parts = dateStr.split(separator);
+        
+        if (parts.length === 3) {
+            // ISO Case: YYYY-MM-DD
+            if (parts[0].length === 4) {
+                const yearShort = parts[0].slice(-2);
+                return `${parts[2]}/${parts[1]}/${yearShort}`;
+            }
+            // DD/MM/YYYY Case
+            const yearShort = parts[2].slice(-2);
+            return `${parts[0]}/${parts[1]}/${yearShort}`;
         }
         return dateStr;
     };

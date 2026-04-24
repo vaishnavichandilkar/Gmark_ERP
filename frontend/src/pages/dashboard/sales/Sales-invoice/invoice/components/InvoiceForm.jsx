@@ -47,11 +47,14 @@ const InvoiceForm = ({
         const separator = dateStr.includes("-") ? "-" : "/";
         const parts = dateStr.split(separator);
         if (parts.length === 3) {
-            // Check if ISO (YYYY-MM-DD) or Display (DD/MM/YYYY)
+            // If ISO (YYYY-MM-DD), convert to DD/MM/YY
             if (parts[0].length === 4) {
-                return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                const yearShort = parts[0].slice(-2);
+                return `${parts[2]}/${parts[1]}/${yearShort}`;
             }
-            return dateStr.replace(/-/g, '/');
+            // If already DD/MM/YYYY or DD-MM-YYYY, convert to DD/MM/YY
+            const lastPart = parts[2].slice(-2);
+            return `${parts[0]}/${parts[1]}/${lastPart}`;
         }
         return dateStr;
     };

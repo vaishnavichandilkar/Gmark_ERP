@@ -291,7 +291,12 @@ const AddPO = () => {
         // If it's in ISO format YYYY-MM-DD
         if (dateStr.length === 10 && dateStr.charAt(4) === '-') {
             const [y, m, d] = dateStr.split("-");
-            return `${d}-${m}-${y}`;
+            return `${d}/${m}/${y.slice(-2)}`;
+        }
+        // If already DD-MM-YYYY or DD/MM/YYYY
+        const parts = dateStr.includes("-") ? dateStr.split("-") : dateStr.split("/");
+        if (parts.length === 3 && parts[2].length === 4) {
+            return `${parts[0]}/${parts[1]}/${parts[2].slice(-2)}`;
         }
         return dateStr;
     };

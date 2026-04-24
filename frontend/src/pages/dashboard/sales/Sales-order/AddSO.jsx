@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ROUTES } from '../../../../constants/routes';
 import { toast } from 'react-hot-toast';
 import { getStandardGstUom } from '@/utils/uomUtils';
+import { formatDate } from "@/utils/dateUtils";
 import {
     ArrowLeft,
     Search,
@@ -717,7 +718,7 @@ const AddSO = () => {
                             <label className="text-[14px] font-semibold text-[#374151]">SO Creation Date</label>
                             <input
                                 type="text"
-                                value={new Date().toLocaleDateString('en-CA')}
+                                value={formatDate(new Date())}
                                 readOnly
                                 className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium"
                             />
@@ -727,7 +728,7 @@ const AddSO = () => {
                             <label className="text-[14px] font-semibold text-[#374151]">SO Booking Date</label>
                             <input
                                 type="text"
-                                value={new Date().toLocaleDateString('en-CA')}
+                                value={formatDate(new Date())}
                                 readOnly
                                 className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium"
                             />
