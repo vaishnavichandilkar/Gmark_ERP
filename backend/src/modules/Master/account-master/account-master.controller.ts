@@ -183,7 +183,10 @@ export class AccountMasterController {
     const errors = await validate(dto);
     
     if (errors.length > 0) {
-      throw new BadRequestException(flattenErrors(errors));
+      const errorMessages = flattenErrors(errors);
+      console.log('--- VALIDATION ERRORS ---');
+      console.log(errorMessages);
+      throw new BadRequestException(errorMessages);
     }
 
     return this.accountMasterService.create(dto, req.user.id, files);
@@ -449,7 +452,10 @@ export class AccountMasterController {
     const dto = plainToInstance(UpdateAccountMasterDto, body);
     const errors = await validate(dto);
     if (errors.length > 0) {
-      throw new BadRequestException(flattenErrors(errors));
+      const errorMessages = flattenErrors(errors);
+      console.log('--- VALIDATION ERRORS ---');
+      console.log(errorMessages);
+      throw new BadRequestException(errorMessages);
     }
 
     return this.accountMasterService.update(id, dto, req.user.id, files);

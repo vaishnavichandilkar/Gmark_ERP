@@ -52,6 +52,7 @@ import ViewChallan from "../pages/dashboard/sales/Sales-invoice/challan/ViewChal
 import Challan from "../pages/dashboard/sales/Sales-invoice/challan/Challan";
 
 import SystemSettings from "../features/settings/pages/SystemSettings";
+import ReportDashboard from "../features/reports/pages/ReportDashboard";
 
 import { ROUTES } from "../constants/routes";
 
@@ -206,7 +207,7 @@ export const router = createBrowserRouter([
               },
               {
                 path: "reports",
-                element: <Placeholder title="Reports" />,
+                element: <ReportDashboard />,
               },
               {
                 path: "masters",
