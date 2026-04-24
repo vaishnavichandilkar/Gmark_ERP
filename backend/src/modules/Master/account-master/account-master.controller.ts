@@ -212,9 +212,6 @@ export class AccountMasterController {
     @Query('limit') limit?: string,
     @Req() req?: any
   ) {
-    const fs = require('fs');
-    const logInfo = `[${new Date().toISOString()}] findAll called. User: ${JSON.stringify(req?.user)}, Params: ${JSON.stringify({groupName, search, page, limit})}\n`;
-    fs.appendFileSync('d:/USERS/vaishnavi/Desktop/weighting_scale/backend/debug_account_master.log', logInfo);
     return this.accountMasterService.findAll({ 
       groupName, 
       gstNo, 
