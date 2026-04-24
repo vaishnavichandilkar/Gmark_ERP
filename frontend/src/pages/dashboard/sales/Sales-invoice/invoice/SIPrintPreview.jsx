@@ -4,6 +4,7 @@ import { Loader2, ArrowLeft } from 'lucide-react';
 import html2pdf from "html2pdf.js";
 import { toast } from 'react-hot-toast';
 import axiosInstance from '@/services/axiosInstance';
+import { getStandardGstUom } from '@/utils/uomUtils';
 
 const SIPrintPreview = () => {
     const location = useLocation();
@@ -17,14 +18,14 @@ const SIPrintPreview = () => {
         if (!gstin || gstin.length < 2) return "Not Available";
         const code = gstin.substring(0, 2);
         const states = {
-            "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand",
-            "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar",
-            "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", "15": "Mizoram",
-            "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal", "20": "Jharkhand",
-            "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat", "25": "Daman & Diu",
-            "26": "Dadra & Nagar Haveli", "27": "Maharashtra", "28": "Andhra Pradesh", "29": "Karnataka", "30": "Goa",
-            "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman & Nicobar Islands",
-            "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh"
+            "01": "JK", "02": "HP", "03": "PB", "04": "CH", "05": "UK",
+            "06": "HR", "07": "DL", "08": "RJ", "09": "UP", "10": "BR",
+            "11": "SK", "12": "AR", "13": "NL", "14": "MN", "15": "MZ",
+            "16": "TR", "17": "ML", "18": "AS", "19": "WB", "20": "JH",
+            "21": "OR", "22": "CG", "23": "MP", "24": "GJ", "25": "DD",
+            "26": "DN", "27": "MH", "28": "AP", "29": "KA", "30": "GA",
+            "31": "LD", "32": "KL", "33": "TN", "34": "PY", "35": "AN",
+            "36": "TS", "37": "AD", "38": "LA"
         };
         return states[code] || "Not Available";
     };
@@ -347,7 +348,7 @@ const SIPrintPreview = () => {
                                          <td className="border-b border-r border-black text-center">{item.hsnCode || item.hsn_code || item.hsn}</td>
                                          <td className="border-b border-r border-black text-center">{item.taxPercent || item.tax_percent}</td>
                                          <td className="border-b border-r border-black text-center">{item.quantity}</td>
-                                         <td className="border-b border-r border-black text-center uppercase">{item.uom}</td>
+                                         <td className="border-b border-r border-black text-center uppercase">{getStandardGstUom(item.uom)}</td>
                                          <td className="border-b border-r border-black text-center">{item.rate}</td>
                                          <td className="border-b border-black text-right px-4 font-black">{(parseFloat(item.totalAmount || item.total_amount) || 0).toFixed(2)}</td>
                                      </tr>

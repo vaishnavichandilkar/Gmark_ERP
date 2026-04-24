@@ -19,6 +19,8 @@ import {
     AlertCircle
 } from 'lucide-react';
 import purchaseOrderService from '@/services/purchaseOrderService';
+import axiosInstance from '../../../../services/axiosInstance';
+import { getStandardGstUom } from '@/utils/uomUtils';
 import accountService from '@/services/accountService';
 import productService from '@/services/productService';
 
@@ -56,6 +58,7 @@ const AddPO = () => {
 
     const [errors, setErrors] = useState({});
     const [isRestoringDraft, setIsRestoringDraft] = useState(false);
+    const [businessProfile, setBusinessProfile] = useState(null);
 
     const [items, setItems] = useState([
         {
@@ -88,6 +91,14 @@ const AddPO = () => {
     useEffect(() => {
         const fetchInitialLists = async () => {
             try {
+                // Fetch Business Profile
+                try {
+                    const profile = await accountService.getBusinessProfile();
+                    setBusinessProfile(profile);
+                } catch (e) {
+                    console.error("Error fetching business profile:", e);
+                }
+
                 const response = await accountService.getAllAccounts({
                     groupName: 'SUNDRY_CREDITORS',
                     limit: 1000
@@ -341,6 +352,13 @@ const AddPO = () => {
         });
     }, [products, items, tableSearch]);
 
+    const isIntraState = useMemo(() => {
+        const sellerGst = businessProfile?.gstNumber || businessProfile?.shopDetail?.gstNumber || "";
+        const supplierGst = formData.gst_number || "";
+        if (!sellerGst || !supplierGst) return true; // Default to true (CGST/SGST)
+        return sellerGst.substring(0, 2) === supplierGst.substring(0, 2);
+    }, [businessProfile, formData.gst_number]);
+
     const handleSelectSupplier = async (supplier) => {
         try {
             // Requirement 1: Optionally fetch fresh details for PO creation
@@ -382,7 +400,7 @@ const AddPO = () => {
             product_name: product.product_name || product.productName || '',
             quantity: 1,
             rate: product.purchaseRate || product.purchase_rate || product.rate || 0,
-            uom: product.uom?.gst_uom || 'NOS',
+            uom: getStandardGstUom(product.uom),
             discount_amount: 0,
             discount_percent: 0,
             hsn: product.hsn_code || product.hsn || '',
@@ -1282,7 +1300,7 @@ const AddPO = () => {
                                                         ₹{p.purchaseRate || p.rate || 0}
                                                     </td>
                                                     <td className={`px-4 py-3 border-l border-emerald-100 text-center whitespace-nowrap ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-800 font-bold'}`}>
-                                                        {p.uom?.gst_uom || 'NOS'}
+                                                        {getStandardGstUom(p.uom)}
                                                     </td>
                                                     <td colSpan={2} className={`px-4 py-3 border-l border-emerald-100 text-center italic text-[11px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-400'}`}>
                                                         Select this item to continue
@@ -1349,6 +1367,37 @@ const AddPO = () => {
                             </tr>
                         </tfoot>
                     </table>
+                </div>
+
+                {/* Tax Summary Section */}
+                <div className="flex justify-end p-4 sm:p-8 bg-gray-50/30 border-t border-[#F3F4F6]">
+                    <div className="w-full max-w-[400px] space-y-3 font-outfit">
+                        <div className="flex justify-between text-[14px]">
+                            <span className="text-[#6B7280] font-medium">Material Sub Total</span>
+                            <span className="text-[#111827] font-bold">₹ {items.reduce((sum, item) => sum + (parseFloat(item.before_tax) || 0), 0).toFixed(2)}</span>
+                        </div>
+                        {isIntraState ? (
+                            <>
+                                <div className="flex justify-between text-[14px]">
+                                    <span className="text-[#6B7280] font-medium">CGST</span>
+                                    <span className="text-[#111827] font-bold">₹ {(items.reduce((sum, item) => sum + (parseFloat(item.tax_amount) || 0), 0) / 2).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-[14px]">
+                                    <span className="text-[#6B7280] font-medium">SGST</span>
+                                    <span className="text-[#111827] font-bold">₹ {(items.reduce((sum, item) => sum + (parseFloat(item.tax_amount) || 0), 0) / 2).toFixed(2)}</span>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex justify-between text-[14px]">
+                                <span className="text-[#6B7280] font-medium">IGST</span>
+                                <span className="text-[#111827] font-bold">₹ {items.reduce((sum, item) => sum + (parseFloat(item.tax_amount) || 0), 0).toFixed(2)}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between text-[18px] pt-4 border-t border-[#E5E7EB] mt-2">
+                            <span className="text-[#111827] font-black uppercase tracking-tight">Grand Total</span>
+                            <span className="text-[#073318] font-black">₹ {totalBillAmount.toFixed(2)}</span>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Card Footer Actions */}

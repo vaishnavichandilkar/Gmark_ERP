@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useSearchParams, useNavigate, useLocation, useParams } from "react-router-dom";
 import {
-  Plus,
   Search,
   Download,
+  Upload,
+  Plus,
   Filter,
   MoreVertical,
   X,
@@ -16,9 +17,9 @@ import {
   ChevronsUpDown,
   CheckCircle2,
   RefreshCw,
-  ChevronDown,
-  Upload
+  ChevronDown
 } from "lucide-react";
+import { getStandardGstUom } from "@/utils/uomUtils";
 import { useTranslation } from "react-i18next";
 import ProductForm from "./components/ProductForm";
 import ViewProduct from "./components/ViewProduct";
@@ -643,8 +644,8 @@ const ProductMaster = () => {
                         <td className="font-bold text-[#111827] border-r border-[#F3F4F6]">
                           {translateDynamic(row.product_name, t)}
                         </td>
-                        <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">
-                          {translateDynamic(row.uom?.gst_uom, t)}
+                        <td className="font-bold text-[#073318] border-r border-[#F3F4F6] text-center uppercase">
+                          {getStandardGstUom(row.uom)}
                         </td>
                         <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">
                           {translateDynamic(row.product_type, t)}

@@ -508,8 +508,25 @@ export class ProductMasterService {
                 let uomName = String(getVal(row, 'uom')).trim();
                 let uom = uomName && uomName !== '-' ? await prisma.unitMaster.findFirst({ where: { user_id: userId, unit_name: uomName } }) : null;
                 if (!uom && uomName && uomName !== '-') {
+                    // Standardize GST UOM based on unit name
+                    let gstUom = 'OTH';
+                    const nameLower = uomName.toLowerCase();
+                    if (nameLower.includes('weight') || nameLower.includes('kilogram') || nameLower === 'kg' || nameLower === 'kgs') gstUom = 'KGS';
+                    else if (nameLower.includes('number') || nameLower.includes('nos') || nameLower === 'unit' || nameLower === 'pc' || nameLower === 'pcs') gstUom = 'NOS';
+                    else if (nameLower.includes('gram')) gstUom = 'GMS';
+                    else if (nameLower.includes('liter') || nameLower.includes('litre')) gstUom = 'LTR';
+                    else if (nameLower.includes('meter') || nameLower.includes('metre')) gstUom = 'MTR';
+                    else if (nameLower.includes('packet') || nameLower.includes('pkt')) gstUom = 'PAC';
+                    else if (nameLower.includes('box')) gstUom = 'BOX';
+
                     uom = await prisma.unitMaster.create({
-                        data: { user_id: userId, unit_name: uomName, gst_uom: 'OTH', full_name_of_measurement: uomName, source: 'USER' }
+                        data: { 
+                            user_id: userId, 
+                            unit_name: uomName, 
+                            gst_uom: gstUom, 
+                            full_name_of_measurement: uomName, 
+                            source: 'USER' 
+                        }
                     });
                 }
                 if (!uom) uom = await prisma.unitMaster.findFirst({ where: { user_id: userId } });

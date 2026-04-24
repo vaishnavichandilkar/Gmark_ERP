@@ -4,6 +4,7 @@ import { Loader2, ArrowLeft } from 'lucide-react';
 import html2pdf from "html2pdf.js";
 import { toast } from 'react-hot-toast';
 import axiosInstance from '../../../../services/axiosInstance';
+import { getStandardGstUom } from '../../../../utils/uomUtils';
 
 const POPrintPreview = () => {
     const location = useLocation();
@@ -17,14 +18,14 @@ const POPrintPreview = () => {
         if (!gstin || gstin.length < 2) return "Not Available";
         const code = gstin.substring(0, 2);
         const states = {
-            "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand",
-            "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar",
-            "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", "15": "Mizoram",
-            "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal", "20": "Jharkhand",
-            "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat", "25": "Daman & Diu",
-            "26": "Dadra & Nagar Haveli", "27": "Maharashtra", "28": "Andhra Pradesh", "29": "Karnataka", "30": "Goa",
-            "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman & Nicobar Islands",
-            "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh"
+            "01": "JK", "02": "HP", "03": "PB", "04": "CH", "05": "UK",
+            "06": "HR", "07": "DL", "08": "RJ", "09": "UP", "10": "BR",
+            "11": "SK", "12": "AR", "13": "NL", "14": "MN", "15": "MZ",
+            "16": "TR", "17": "ML", "18": "AS", "19": "WB", "20": "JH",
+            "21": "OR", "22": "CG", "23": "MP", "24": "GJ", "25": "DD",
+            "26": "DN", "27": "MH", "28": "AP", "29": "KA", "30": "GA",
+            "31": "LD", "32": "KL", "33": "TN", "34": "PY", "35": "AN",
+            "36": "TS", "37": "AD", "38": "LA"
         };
         return states[code] || "Not Available";
     };
@@ -129,10 +130,19 @@ const POPrintPreview = () => {
         return sum + (taxAmt || 0);
     }, 0);
     
-    // For PO, expenses are not currently present in form, but we keep logic consistent
     const totalTaxOnCombined = materialTax;
-    const cgst = totalTaxOnCombined / 2;
-    const sgst = totalTaxOnCombined / 2;
+    
+    // Determine if it's Intra-state or Inter-state based on GST state codes
+    const sellerStateCode = sellerInfo?.gstNumber ? sellerInfo.gstNumber.substring(0, 2) : "";
+    const supplierStateCode = gst_number ? gst_number.substring(0, 2) : "";
+    
+    // Default to CGST/SGST if either code is missing or if they match
+    const isIntraState = !sellerStateCode || !supplierStateCode || sellerStateCode === supplierStateCode;
+    
+    const cgst = isIntraState ? totalTaxOnCombined / 2 : 0;
+    const sgst = isIntraState ? totalTaxOnCombined / 2 : 0;
+    const igst = isIntraState ? 0 : totalTaxOnCombined;
+    
     const totalAmount = subTotal + totalTaxOnCombined;
 
     const numberToWords = (num) => {
@@ -355,7 +365,7 @@ const POPrintPreview = () => {
                                         <td className="border-b border-r border-black text-center">{item.hsnCode || item.hsn}</td>
                                         <td className="border-b border-r border-black text-center">{item.taxPercent || item.tax_percent}</td>
                                         <td className="border-b border-r border-black text-center">{item.quantity}</td>
-                                        <td className="border-b border-r border-black text-center uppercase">{item.uom}</td>
+                                        <td className="border-b border-r border-black text-center uppercase">{getStandardGstUom(item.uom)}</td>
                                         <td className="border-b border-r border-black text-center">{item.rate}</td>
                                         <td className="border-b border-r border-black text-center">{item.discountPercent || item.discount_percent || 0}</td>
                                         <td className="border-b border-black text-right px-4 font-black">{(parseFloat(item.before_tax || item.beforeTaxAmount || (item.quantity * item.rate - (item.discountAmount || item.discount_amount || 0)))).toFixed(2)}</td>
@@ -369,14 +379,23 @@ const POPrintPreview = () => {
                                 <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">Material Sub Total</div>
                                 <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(subTotal || 0).toFixed(2)}</div>
                             </div>
-                            <div className="flex border-b border-black h-[30px]">
-                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">CGST</div>
-                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(cgst || 0).toFixed(2)}</div>
-                            </div>
-                            <div className="flex border-b border-black h-[30px]">
-                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">SGST</div>
-                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(sgst || 0).toFixed(2)}</div>
-                            </div>
+                            {isIntraState ? (
+                                <>
+                                    <div className="flex border-b border-black h-[30px]">
+                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">CGST</div>
+                                        <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(cgst || 0).toFixed(2)}</div>
+                                    </div>
+                                    <div className="flex border-b border-black h-[30px]">
+                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">SGST</div>
+                                        <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(sgst || 0).toFixed(2)}</div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex border-b border-black h-[30px]">
+                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">IGST</div>
+                                    <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(igst || 0).toFixed(2)}</div>
+                                </div>
+                            )}
                             <div className="flex h-[45px]">
                                 <div className="flex-1 border-r border-black p-4 py-2 font-black text-[10px] flex items-center">
                                     <span className="mr-2">Amount In Words :</span>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ROUTES } from '../../../../constants/routes';
 import { toast } from 'react-hot-toast';
+import { getStandardGstUom } from '@/utils/uomUtils';
 import {
     ArrowLeft,
     Search,
@@ -84,6 +85,7 @@ const AddSO = () => {
     const [showValidationPopup, setShowValidationPopup] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [businessProfile, setBusinessProfile] = useState(null);
 
     // Fetch Customers and Handle Draft Recovery
     useEffect(() => {
@@ -192,6 +194,16 @@ const AddSO = () => {
     useEffect(() => {
         const fetchProducts = async () => {
             try {
+                // Fetch Business Profile if not already fetched
+                if (!businessProfile) {
+                    try {
+                        const profile = await accountService.getBusinessProfile();
+                        setBusinessProfile(profile);
+                    } catch (e) {
+                        console.error("Error fetching business profile:", e);
+                    }
+                }
+
                 const response = await productService.getProducts({
                     search: tableSearch.trim() || '',
                     limit: tableSearch.trim() ? 50 : 20
@@ -203,7 +215,7 @@ const AddSO = () => {
         };
         const timer = setTimeout(fetchProducts, 150);
         return () => clearTimeout(timer);
-    }, [tableSearch]);
+    }, [tableSearch, businessProfile]);
 
     // Initial load for Edit Mode or SO Number generation
     useEffect(() => {
@@ -305,6 +317,13 @@ const AddSO = () => {
         });
     }, [products, tableSearch, items]);
 
+    const isIntraState = useMemo(() => {
+        const sellerGst = businessProfile?.gstNumber || businessProfile?.shopDetail?.gstNumber || "";
+        const customerGst = formData.gst_number || "";
+        if (!sellerGst || !customerGst) return true; // Default to true (CGST/SGST)
+        return sellerGst.substring(0, 2) === customerGst.substring(0, 2);
+    }, [businessProfile, formData.gst_number]);
+
     const handleSelectCustomer = async (customer) => {
         setFormData(prev => ({
             ...prev,
@@ -328,7 +347,7 @@ const AddSO = () => {
             product_name: product.product_name || '',
             quantity: 1,
             rate: product.sellingRate || product.rate || 0,
-            uom: product.uom?.unit_name || 'NOS',
+            uom: getStandardGstUom(product.uom),
             discount_amount: 0,
             discount_percent: 0,
             hsn: product.hsn_code || '',
@@ -1077,7 +1096,7 @@ const AddSO = () => {
 
                                                                     {/* UOM Col - Width: 100px */}
                                                                     <div className="w-[100px] flex items-center justify-center suggestion-col-divider font-bold text-[14px] shrink-0">
-                                                                        {p.uom?.unit_name || 'Weight'}
+                                                                        {p.uom?.gst_uom || p.uom?.unit_name || 'NOS'}
                                                                     </div>
 
                                                                     {/* Rate Col - Width: 120px */}
@@ -1290,6 +1309,37 @@ const AddSO = () => {
                                 </tr>
                             </tfoot>
                         </table>
+                    </div>
+                </div>
+
+                {/* Tax Summary Section */}
+                <div className="flex justify-end p-5 bg-gray-50/20 border-t border-[#E5E7EB] font-outfit">
+                    <div className="w-full max-w-[400px] space-y-3">
+                        <div className="flex justify-between text-[14px]">
+                            <span className="text-[#64748B] font-medium tracking-tight">Material Sub Total</span>
+                            <span className="text-[#1E293B] font-bold">₹ {tableTotals.beforeTax.toFixed(2)}</span>
+                        </div>
+                        {isIntraState ? (
+                            <>
+                                <div className="flex justify-between text-[14px]">
+                                    <span className="text-[#64748B] font-medium tracking-tight">CGST</span>
+                                    <span className="text-[#1E293B] font-bold">₹ {(tableTotals.taxAmount / 2).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-[14px]">
+                                    <span className="text-[#64748B] font-medium tracking-tight">SGST</span>
+                                    <span className="text-[#1E293B] font-bold">₹ {(tableTotals.taxAmount / 2).toFixed(2)}</span>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex justify-between text-[14px]">
+                                <span className="text-[#64748B] font-medium tracking-tight">IGST</span>
+                                <span className="text-[#1E293B] font-bold">₹ {tableTotals.taxAmount.toFixed(2)}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between text-[19px] pt-4 border-t border-[#E2E8F0] mt-2">
+                            <span className="text-[#0F172A] font-black uppercase tracking-tighter">Grand Total</span>
+                            <span className="text-[#073318] font-black">₹ {tableTotals.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
                     </div>
                 </div>
 

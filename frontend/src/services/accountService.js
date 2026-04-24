@@ -72,6 +72,11 @@ export const generateAccountCode = async (groupName) => {
     return response.data;
 };
 
+export const getBusinessProfile = async () => {
+    const response = await axiosInstance.get('/business/profile');
+    return response.data;
+};
+
 export default {
     getAllAccounts,
     getAccountById,
@@ -84,5 +89,6 @@ export default {
     downloadSample,
     generateAccountCode,
     generateCustomerCode,
-    generateSupplierCode
+    generateSupplierCode,
+    getBusinessProfile
 };

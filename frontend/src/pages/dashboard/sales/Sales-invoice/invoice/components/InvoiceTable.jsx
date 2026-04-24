@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Trash2, Plus } from 'lucide-react';
+import { getStandardGstUom } from '@/utils/uomUtils';
 
 const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isLinked }) => {
     const [tableSearch, setTableSearch] = useState('');
@@ -127,7 +128,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             productCode: product.product_code || product.productCode,
             productName: product.product_name || product.productName,
             hsnCode: product.hsn_code || product.hsnCode || (product.hsn?.hsn_code),
-            uom: product.uom?.gst_uom || product.uom?.unit_name || product.uom || product.unit || 'Nos',
+            uom: getStandardGstUom(product.uom),
             rate: rate,
             quantity: qty,
             taxPercent: taxPct,
@@ -420,7 +421,10 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                                 <td className="px-4 py-3 text-center"><div className={`w-2 h-2 rounded-full mx-auto ${selectedSuggestionIndex === pIdx ? 'bg-white font-outfit' : 'bg-emerald-200'}`}></div></td>
                                                 <td colSpan={2} className="px-4 py-3 border-l border-emerald-100 font-mono text-[13px] font-black underline decoration-emerald-300">{p.product_code}</td>
                                                 <td className="px-4 py-3 border-l border-emerald-100 font-bold uppercase text-[15px]">{p.product_name}</td>
-                                                <td colSpan={10} className="px-4 py-3 border-l border-emerald-100 text-right font-black">₹{p.sale_rate || 0}</td>
+                                                <td className="px-4 py-3 border-l border-emerald-100 text-center font-bold text-emerald-800 uppercase text-[12px]">
+                                                    {getStandardGstUom(p.uom)}
+                                                </td>
+                                                <td colSpan={9} className="px-4 py-3 border-l border-emerald-100 text-right font-black">₹{p.sale_rate || 0}</td>
                                                 <td className="sticky right-0 bg-transparent"></td>
                                             </tr>
                                         ))}
