@@ -447,24 +447,24 @@ model Product {
 }
 
 model PurchaseOrder {
-  id              Int                 @id @default(autoincrement())
-  poNumber        String              @unique
-  supplierName    String
-  address         String
-  creditDays      Int
-  poCreationDate  DateTime            @default(now())
-  expiryDate      DateTime
-  gstNumber       String?
-  status          POStatus            @default(PENDING)
-  taxAmount       Float               @default(0)
-  userId          Int
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  totalAmount     Float               @default(0)
-  grn             Grn[]
+  id               Int                 @id @default(autoincrement())
+  poNumber         String              @unique
+  supplierName     String
+  address          String
+  creditDays       Int
+  poCreationDate   DateTime            @default(now())
+  expiryDate       DateTime
+  gstNumber        String?
+  status           POStatus            @default(PENDING)
+  taxAmount        Float               @default(0)
+  userId           Int
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  totalAmount      Float               @default(0)
+  grn              Grn[]
   purchaseInvoices PurchaseInvoice[]
-  items           PurchaseOrderItem[]
-  user            User                @relation(fields: [userId], references: [id])
+  items            PurchaseOrderItem[]
+  user             User                @relation(fields: [userId], references: [id])
 
   @@map("purchase_orders")
 }
@@ -484,8 +484,8 @@ model PurchaseOrderItem {
   taxAmount        Float
   beforeTaxAmount  Float         @default(0)
   totalAmount      Float
-  productId        Int?
   printDescription String?
+  productId        Int?
   purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
 
   @@map("purchase_order_items")
@@ -499,7 +499,6 @@ model SalesOrder {
   address        String
   creditDays     Int
   soCreationDate DateTime         @default(now())
-  soBookingDate  DateTime         @default(now())
   expiryDate     DateTime
   gstNumber      String?
   panNumber      String?
@@ -510,9 +509,9 @@ model SalesOrder {
   userId         Int
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
-  items          SalesOrderItem[]
   salesChallans  SalesChallan[]
   salesInvoices  SalesInvoice[]
+  items          SalesOrderItem[]
   user           User             @relation(fields: [userId], references: [id])
 
   @@map("sales_orders")
@@ -567,8 +566,8 @@ model PurchaseInvoice {
   isRcm                 Boolean                  @default(false)
   supplierId            Int?
   taxableAmount         Float                    @default(0)
-  items                 PurchaseInvoiceItem[]
   expenses              PurchaseInvoiceExpense[]
+  items                 PurchaseInvoiceItem[]
   purchaseOrder         PurchaseOrder?           @relation(fields: [poId], references: [id])
   user                  User                     @relation(fields: [userId], references: [id])
 
@@ -580,7 +579,6 @@ model PurchaseInvoiceItem {
   purchaseInvoiceId Int
   productCode       String
   productName       String
-  hsnCode           String?
   quantity          Float
   rate              Float
   uom               String
@@ -588,48 +586,44 @@ model PurchaseInvoiceItem {
   beforeTaxAmount   Float           @default(0)
   totalPoQty        Float           @default(0)
   productId         Int?
-  discountPercent   Float           @default(0)
-  discountAmount    Float           @default(0)
   taxAmount         Float           @default(0)
   taxPercent        Float           @default(0)
+  discountAmount    Float           @default(0)
+  discountPercent   Float           @default(0)
+  hsnCode           String?
   purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
 
   @@map("purchase_invoice_items")
 }
 
 model Grn {
-  id            Int      @id @default(autoincrement())
-  supplierName  String
-  creditDays    Int
-  address       String
-  gstNumber     String?
-  poNumber      String?
-  challanNumber String
-  grnDate       DateTime @default(now())
-  bookingDate   DateTime @default(now())
-  poId          Int?
-
-  grandTotal Float    @default(0)
-  userId     Int
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  cgstAmount Float    @default(0)
-
-  cumulativeBalance Float @default(0)
-
-  sgstAmount    Float @default(0)
-  taxableAmount Float @default(0)
-  totalQuantity Float @default(0)
-
-  status       GrnStatus @default(GENERATED)
-  igstAmount   Float     @default(0)
-  isInterState Boolean   @default(false)
-
-  items         GrnItem[]
-  expenses      GrnExpense[]
-  isRcm         Boolean        @default(false)
-  purchaseOrder PurchaseOrder? @relation(fields: [poId], references: [id])
-  user          User           @relation(fields: [userId], references: [id])
+  id                Int            @id @default(autoincrement())
+  supplierName      String
+  creditDays        Int
+  address           String
+  gstNumber         String?
+  poNumber          String?
+  challanNumber     String
+  grnDate           DateTime       @default(now())
+  bookingDate       DateTime       @default(now())
+  poId              Int?
+  grandTotal        Float          @default(0)
+  userId            Int
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  cgstAmount        Float          @default(0)
+  cumulativeBalance Float          @default(0)
+  sgstAmount        Float          @default(0)
+  taxableAmount     Float          @default(0)
+  totalQuantity     Float          @default(0)
+  status            GrnStatus      @default(GENERATED)
+  igstAmount        Float          @default(0)
+  isInterState      Boolean        @default(false)
+  isRcm             Boolean        @default(false)
+  expenses          GrnExpense[]
+  items             GrnItem[]
+  purchaseOrder     PurchaseOrder? @relation(fields: [poId], references: [id])
+  user              User           @relation(fields: [userId], references: [id])
 
   @@map("grns")
 }
@@ -716,8 +710,8 @@ model SalesInvoice {
   isRcm                 Boolean               @default(false)
   customerId            Int?
   taxableAmount         Float                 @default(0)
-  items                 SalesInvoiceItem[]
   expenses              SalesInvoiceExpense[]
+  items                 SalesInvoiceItem[]
   salesOrder            SalesOrder?           @relation(fields: [soId], references: [id])
   user                  User                  @relation(fields: [userId], references: [id])
 
@@ -727,21 +721,21 @@ model SalesInvoice {
 model SalesInvoiceItem {
   id               Int          @id @default(autoincrement())
   salesInvoiceId   Int
-  productId        Int
   productCode      String
   productName      String
-  hsnCode          String?
   quantity         Float
   rate             Float
   uom              String
-  discountPercent  Float        @default(0)
-  discountAmount   Float        @default(0)
-  taxPercent       Float        @default(0)
-  taxAmount        Float        @default(0)
   beforeTaxAmount  Float        @default(0)
-  totalAmount      Float        @default(0)
   totalSoQty       Float        @default(0)
+  productId        Int
+  taxAmount        Float        @default(0)
+  taxPercent       Float        @default(0)
+  discountAmount   Float        @default(0)
+  discountPercent  Float        @default(0)
+  hsnCode          String?
   printDescription String?
+  totalAmount      Float        @default(0)
   salesInvoice     SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
 
   @@map("sales_invoice_items")
@@ -784,9 +778,9 @@ model SalesChallan {
   status            SalesChallanStatus    @default(GENERATED)
   igstAmount        Float                 @default(0)
   isInterState      Boolean               @default(false)
-  items             SalesChallanItem[]
-  expenses          SalesChallanExpense[]
   isRcm             Boolean               @default(false)
+  expenses          SalesChallanExpense[]
+  items             SalesChallanItem[]
   salesOrder        SalesOrder?           @relation(fields: [soId], references: [id])
   user              User                  @relation(fields: [userId], references: [id])
 
@@ -902,6 +896,7 @@ enum CustomerType {
   institutional
   dealer
   retailer
+  wholesaler
 }
 
 enum UnitStatus {
@@ -923,11 +918,13 @@ enum POStatus {
   PENDING
   GRN_COMPLETED
   INVOICE_COMPLETED
+  INVOICE_GENERATED
   DELETED
 }
 
 enum PIStatus {
   GENERATED
+  COMPLETED
   DELETED
 }
 
@@ -939,6 +936,7 @@ enum GrnStatus {
 
 enum SalesInvoiceStatus {
   GENERATED
+  COMPLETED
   DELETED
 }
 
@@ -952,5 +950,6 @@ enum SOStatus {
   PENDING
   CHALLAN_COMPLETED
   INVOICE_COMPLETED
+  INVOICE_GENERATED
   DELETED
 }

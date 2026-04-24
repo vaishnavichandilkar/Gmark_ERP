@@ -1,3 +1,4 @@
+// Trigger restart 2
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CreateSalesOrderDto, UpdateSalesOrderDto } from './dto/sales-order.dto';
@@ -114,46 +115,51 @@ export class SalesOrderService {
         const totalTaxAmount = processedItems.reduce((sum, item) => sum + item.taxAmount, 0);
         const grandTotal = processedItems.reduce((sum, item) => sum + item.totalAmount, 0);
 
-        return this.prisma.$transaction(async (tx) => {
-            const finalSoNumber = await this.generateSONumber(userId, tx);
+        try {
+            return await this.prisma.$transaction(async (tx) => {
+                const finalSoNumber = await this.generateSONumber(userId, tx);
 
-            return tx.salesOrder.create({
-                data: {
-                    soNumber: finalSoNumber,
-                    customerName: customer.customerName,
-                    customerType: (customer.customerType as any) || 'retailer',
-                    address: createDto.address || customer.address,
-                    creditDays: createDto.creditDays,
-                    soCreationDate: new Date(),
-                    soBookingDate: new Date(),
-                    expiryDate: new Date(createDto.expiryDate),
-                    gstNumber: customer.gstNumber || createDto.gstNo || '',
-                    panNumber: customer.panNumber || createDto.panNo || '',
-                    totalAmount,
-                    taxAmount: totalTaxAmount,
-                    grandTotal,
-                    userId,
-                    status: 'PENDING',
-                    items: {
-                        create: processedItems.map(item => ({
-                            productCode: item.productCode,
-                            productName: item.productName,
-                            hsnCode: item.hsnCode,
-                            quantity: item.quantity,
-                            rate: item.rate,
-                            uom: item.uom,
-                            discountPercent: item.discountPercent,
-                            discountAmount: item.discountAmount,
-                            taxPercent: item.taxPercent,
-                            taxAmount: item.taxAmount,
-                            totalAmount: item.totalAmount,
-                            printDescription: item.printDescription,
-                        })),
+                return tx.salesOrder.create({
+                    data: {
+                        soNumber: finalSoNumber,
+                        customerName: customer.customerName,
+                        customerType: (customer.customerType as any) || 'retailer',
+                        address: createDto.address || customer.address,
+                        creditDays: createDto.creditDays,
+                        soCreationDate: new Date(),
+                        expiryDate: new Date(createDto.expiryDate),
+                        gstNumber: customer.gstNumber || createDto.gstNo || '',
+                        panNumber: customer.panNumber || createDto.panNo || '',
+                        totalAmount,
+                        taxAmount: totalTaxAmount,
+                        grandTotal,
+                        userId,
+                        status: 'PENDING',
+                        items: {
+                            create: processedItems.map(item => ({
+                                productCode: item.productCode,
+                                productName: item.productName,
+                                hsnCode: item.hsnCode,
+                                quantity: item.quantity,
+                                rate: item.rate,
+                                uom: item.uom,
+                                discountPercent: item.discountPercent,
+                                discountAmount: item.discountAmount,
+                                taxPercent: item.taxPercent,
+                                taxAmount: item.taxAmount,
+                                totalAmount: item.totalAmount,
+                                printDescription: item.printDescription,
+                            })),
+                        },
                     },
-                },
-                include: { items: true },
+                    include: { items: true },
+                });
             });
-        });
+        } catch (e) {
+            const fs = require('fs');
+            fs.appendFileSync('D:\\USERS\\vaishnavi\\Desktop\\weighting_scale\\backend\\service_error.log', `[${new Date().toISOString()}] SO CREATE ERROR: ${e.message}\n${e.stack}\n\n`);
+            throw e;
+        }
     }
 
     async findAll(userId: number, query: { filter?: 'all' | 'pending' | 'expiring' | 'expired' | 'completed' | 'deleted', search?: string }) {

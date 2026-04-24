@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Search, Trash2, Plus, AlertCircle, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import grnService from '@/services/grnService';
+import { getStandardGstUom } from '@/utils/uomUtils';
 
 const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isPoSelected, poNumber, linkedPoItems, type = 'GRN', supplierName }) => {
     const isGRN = type === 'GRN';
@@ -378,7 +379,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input
                                             type="text"
-                                            value={item.uom}
+                                            value={getStandardGstUom(item.uom)}
                                             onChange={(e) => handleItemChange(index, 'uom', e.target.value)}
                                             className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-[#6B7280] outline-none focus:border-[#073318]"
                                         />

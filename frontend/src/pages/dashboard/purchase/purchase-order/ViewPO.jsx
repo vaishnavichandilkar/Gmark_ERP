@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import purchaseOrderService from '@/services/purchaseOrderService';
+import { getStandardGstUom } from '@/utils/uomUtils';
 
 const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1, renderEdit2 }) => (
     <div className={`flex flex-col sm:flex-row border-[#E5E7EB] border-b last:border-0 font-outfit`}>
@@ -295,7 +296,7 @@ const ViewPO = () => {
                                         <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                             <div className="px-2 text-right text-[13px] font-medium">{parseFloat(item.quantity).toFixed(2)}</div>
                                         </td>
-                                        <td className="px-4 py-4 text-center text-[13px] border-l border-[#F3F4F6] text-[#6B7280]">{item.uom}</td>
+                                        <td className="px-4 py-4 text-center text-[13px] border-l border-[#F3F4F6] text-[#6B7280]">{getStandardGstUom(item.uom)}</td>
                                         <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                             <div className="px-2 text-right text-[13px]">{parseFloat(item.rate).toFixed(2)}</div>
                                         </td>

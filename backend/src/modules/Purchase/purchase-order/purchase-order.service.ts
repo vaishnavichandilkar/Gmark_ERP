@@ -87,8 +87,9 @@ export class PurchaseOrderService {
     const totalTaxAmount = processedItems.reduce((sum, item) => sum + (Number(item.taxAmount) || 0), 0);
     const totalGrandTotal = processedItems.reduce((sum, item) => sum + (Number(item.totalAmount) || 0), 0);
 
+    console.log('Creating PO with Number:', poNumber, 'for User:', userId);
     return this.prisma.$transaction(async (tx) => {
-      return tx.purchaseOrder.create({
+      const po = await tx.purchaseOrder.create({
         data: {
           poNumber,
           supplierName: supplier.supplierName,
@@ -115,12 +116,15 @@ export class PurchaseOrderService {
               taxAmount: Number(item.taxAmount) || 0,
               beforeTaxAmount: Number(item.beforeTaxAmount) || 0,
               totalAmount: Number(item.totalAmount) || 0,
+              productId: item.productId ? parseInt(item.productId, 10) : null,
               printDescription: item.printDescription,
             })),
           },
-        } as any,
+        },
         include: { items: true },
       });
+      console.log('Created PO Object:', JSON.stringify(po, null, 2));
+      return po;
     });
   }
 

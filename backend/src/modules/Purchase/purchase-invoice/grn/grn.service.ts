@@ -277,7 +277,9 @@ export class GrnService {
   }
 
   async create(createDto: CreateGrnDto, userId: number, uploadedFilePath?: string) {
+    console.log('Creating GRN for Supplier:', createDto.supplierName, 'PO:', createDto.poNumber, 'User:', userId);
     const totals = await this.calculateGrnTotals(createDto, userId);
+    console.log('GRN Calculated Totals:', JSON.stringify(totals, null, 2));
 
     return this.prisma.$transaction(async (tx) => {
       const grn = await tx.grn.create({
@@ -311,6 +313,7 @@ export class GrnService {
         await this.updatePOStatusAfterGrn(Number(createDto.poId), tx);
       }
 
+      console.log('Created GRN Object:', JSON.stringify(grn, null, 2));
       return grn;
     });
   }
@@ -334,15 +337,16 @@ export class GrnService {
       orderBy: { poNumber: 'desc' },
     });
 
-    // Filter POs where total received quantity < total PO quantity
-    return pos.filter(po => {
+    const filteredPos = pos.filter(po => {
       const totalPoQty = po.items.reduce((sum, item) => sum + item.quantity, 0);
       const totalReceivedQty = po.grn.reduce((sum, grn) => {
         return sum + grn.items.reduce((iSum, i) => iSum + i.receivedQty, 0);
       }, 0);
       
       return totalReceivedQty < totalPoQty;
-    }).map(po => ({
+    });
+
+    return filteredPos.map(po => ({
       id: po.id,
       poNumber: po.poNumber,
     }));

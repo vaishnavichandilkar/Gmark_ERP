@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Trash2, Plus, AlertCircle, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import challanService from '@/services/challanService';
+import { getStandardGstUom } from '@/utils/uomUtils';
 
 const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isSoSelected, soNumber, linkedSoItems, type = 'Challan', customerName }) => {
     const isChallan = type === 'Challan';
@@ -425,7 +426,7 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input
                                             type="text"
-                                            value={item.uom}
+                                            value={getStandardGstUom(item.uom)}
                                             readOnly={!!item.productId}
                                             onFocus={() => { if (!item.productId) { setActiveRowIndex(index); setIsProductSearchOpen(true); } }}
                                             placeholder="UOM"

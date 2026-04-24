@@ -25,8 +25,6 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
     // MODULE 6: Sync items with gstType changes (e.g. when customer is selected)
     useEffect(() => {
         const updatedItems = items.map(item => {
-            if (!item.productId) return item;
-            
             const qty = parseFloat(item.quantity) || 0;
             const rate = parseFloat(item.rate) || 0;
             const taxPct = parseFloat(item.taxPercent) || 0;
@@ -45,18 +43,17 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             };
         });
 
-        // Only update if there's a real change to avoid infinite loops
         const hasChange = JSON.stringify(updatedItems) !== JSON.stringify(items);
         if (hasChange) {
             setItems(updatedItems);
         }
-    }, [gstType, setItems]); // Re-calculate when gstType changes
+    }, [gstType, setItems]);
 
     const handleItemChange = (index, field, value) => {
         const newItems = [...items];
         const item = { ...newItems[index] };
 
-        // Update the specific field with decimal limit for discounts
+        // Update the specific field
         let finalValue = value;
         if (field === 'discountAmount' || field === 'discountPercent') {
             if (value.includes('.') && value.split('.')[1].length > 2) {
@@ -66,6 +63,18 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
         }
         item[field] = finalValue;
 
+        // Auto-match logic
+        if (!item.productId && (field === 'productCode' || field === 'productName') && finalValue.trim().length > 0) {
+            const match = (products || []).find(p => 
+                String(p.product_code).toLowerCase() === finalValue.trim().toLowerCase() || 
+                String(p.product_name).toLowerCase() === finalValue.trim().toLowerCase()
+            );
+            if (match) {
+                handleSelectProduct(match, index);
+                return;
+            }
+        }
+
         if (field === 'quantity' || field === 'rate' || field === 'taxPercent' || field === 'discountPercent' || field === 'discountAmount') {
             let qty = parseFloat(field === 'quantity' ? finalValue : item.quantity) || 0;
             const rate = parseFloat(field === 'rate' ? finalValue : item.rate) || 0;
@@ -73,19 +82,13 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             let discPct = parseFloat(field === 'discountPercent' ? finalValue : item.discountPercent) || 0;
             let discAmt = parseFloat(field === 'discountAmount' ? finalValue : item.discountAmount) || 0;
 
-            // MODULE 6: Validation Logic
-            // Qty is unlimited as per user request
-            // Previously enforced limit against totalSoQty here
-
             const baseAmount = qty * rate;
 
-            // MODULE 6: Discount Auto-conversion
             if (field === 'discountPercent') {
                 discAmt = (baseAmount * discPct) / 100;
             } else if (field === 'discountAmount') {
                 discPct = baseAmount > 0 ? (discAmt / baseAmount) * 100 : 0;
             } else {
-                // If quantity or rate changed, preserve the discount percentage and update the amount
                 discAmt = (baseAmount * discPct) / 100;
             }
 
@@ -239,6 +242,11 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                             </div>
                         </div>
                     )}
+                    {errors?.items && (
+                        <p className="text-red-500 text-[12px] mt-1.5 font-bold italic animate-pulse">
+                            * {errors.items}
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -294,10 +302,20 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                             value={item.productName}
                                             readOnly={!!item.productId}
                                             onFocus={() => { if (!item.productId) { setActiveRowIndex(index); setIsProductSearchOpen(true); } }}
-                                            onChange={(e) => { setTableSearch(e.target.value); setActiveRowIndex(index); setIsProductSearchOpen(true); }}
+                                            onChange={(e) => { 
+                                                setTableSearch(e.target.value); 
+                                                setActiveRowIndex(index); 
+                                                setIsProductSearchOpen(true);
+                                                handleItemChange(index, 'productName', e.target.value);
+                                            }}
                                             placeholder="Select product..."
-                                            className={`w-full h-[36px] bg-transparent border-none px-2 text-[14px] font-bold outline-none ${item.productId ? 'text-[#111827]' : 'text-[#073318]'}`}
+                                            className={`w-full h-[36px] bg-transparent px-2 text-[14px] font-bold outline-none rounded-[8px] border transition-all ${item.productId ? 'text-[#111827] border-transparent' : 'text-[#073318] border-transparent'} ${errors?.itemErrors?.[index]?.productId ? 'border-red-500 bg-red-50 animate-pulse' : ''}`}
                                         />
+                                        {errors?.itemErrors?.[index]?.productId && (
+                                            <p className="text-red-500 text-[10px] font-bold mt-1 ml-2">
+                                                * Required: Select from list
+                                            </p>
+                                        )}
                                     </td>
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input
@@ -336,7 +354,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input 
                                             type="text" 
-                                            value={item.uom} 
+                                            value={getStandardGstUom(item.uom)} 
                                             readOnly={!!item.productId} 
                                             onFocus={() => { if (!item.productId) { setActiveRowIndex(index); setIsProductSearchOpen(true); } }}
                                             placeholder="UOM"

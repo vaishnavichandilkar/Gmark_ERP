@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronDown, Calendar, Plus } from 'lucide-react';
+import { ChevronDown, Calendar, Plus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from "@/constants/routes";
 import GRNMultiSelect from './GRNMultiSelect';
@@ -94,8 +94,31 @@ const GRNForm = ({
                                 setSupplierSearch(e.target.value);
                                 setIsSupplierDropdownOpen(true);
                             }}
-                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all ${errors.supplier_name ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
+                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-14 text-[14px] font-bold outline-none transition-all ${errors.supplier_name ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                         />
+                        {formData.supplier_id && !isSupplierDropdownOpen && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        supplier_id: '',
+                                        supplier_name: '',
+                                        address: '',
+                                        gst_no: '',
+                                        credit_days: 0,
+                                        supplier_state: '',
+                                        po_id: '',
+                                        po_number: ''
+                                    }));
+                                    setSupplierSearch('');
+                                }}
+                                className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
 
                         {isSupplierDropdownOpen && (

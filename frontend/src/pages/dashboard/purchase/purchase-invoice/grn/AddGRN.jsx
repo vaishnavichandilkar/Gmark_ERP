@@ -268,10 +268,11 @@ const AddGRN = () => {
         }));
 
         try {
-            const poData = await grnService.getSupplierPOs(supplier.accountName);
-            setPos(poData || []);
+            const poResponse = await grnService.getSupplierPOs(supplier.accountName);
+            const poList = Array.isArray(poResponse) ? poResponse : (poResponse.data || []);
+            setPos(poList.filter(p => p.status !== 'DELETED'));
         } catch (error) {
-            console.error("Error fetching supplier POs:", error);
+            console.error("Error fetching supplier data:", error);
         }
     };
 

@@ -34,6 +34,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
             const targetStr = Array.isArray(target) ? target.join(', ') : target;
             message = `The ${targetStr || 'field'} is already registered or taken. Please provide a different one.`;
             status = HttpStatus.CONFLICT;
+        } else if (exception && (exception.constructor.name === 'PrismaClientValidationError' || (exception as any).name === 'PrismaClientValidationError')) {
+            message = `Validation Error: ${(exception as any).message.split('\n').pop()}`;
+            status = HttpStatus.BAD_REQUEST;
         }
 
         response.status(status).json({

@@ -221,10 +221,8 @@ const AddPO = () => {
     // Initial load for Edit Mode or PO Number generation
     useEffect(() => {
         const loadInitialData = async () => {
-            // Skip initial data load if we're already restoring a draft 
-            // or if a restoration is intended (restore=true in URL)
             const urlParams = new URLSearchParams(window.location.search);
-            if (isRestoringDraft || urlParams.get('restore') === 'true') return;
+            const isRestoring = isRestoringDraft || urlParams.get('restore') === 'true';
 
             if (isEditMode) {
                 try {
@@ -266,11 +264,14 @@ const AddPO = () => {
                     navigate(ROUTES.PURCHASE_ORDER);
                 }
             } else {
-                try {
-                    const response = await purchaseOrderService.getNextNumber();
-                    setFormData(prev => ({ ...prev, po_number: response.poNumber }));
-                } catch (error) {
-                    console.error("Error fetching next PO number:", error);
+                // If not in edit mode, fetch next number if not already present (even if restoring draft)
+                if (!formData.po_number) {
+                    try {
+                        const response = await purchaseOrderService.getNextNumber();
+                        setFormData(prev => ({ ...prev, po_number: response.poNumber }));
+                    } catch (error) {
+                        console.error("Error fetching next PO number:", error);
+                    }
                 }
             }
         };
@@ -670,13 +671,14 @@ const AddPO = () => {
             if (isEditMode) {
                 await purchaseOrderService.updatePurchaseOrder(id, poPayload);
                 toast.success("Purchase Order updated successfully");
+                sessionStorage.removeItem('add_po_draft');
+                navigate(ROUTES.PURCHASE_ORDER);
             } else {
-                await purchaseOrderService.createPurchaseOrder(poPayload);
-                toast.success("Purchase Order saved successfully");
+                const response = await purchaseOrderService.createPurchaseOrder(poPayload);
+                toast.success(`Purchase Order ${response.poNumber} saved successfully`);
+                sessionStorage.removeItem('add_po_draft');
+                navigate(`${ROUTES.PURCHASE_ORDER}/view/${response.id}`);
             }
-            // Clear draft only on successful submission
-            sessionStorage.removeItem('add_po_draft');
-            navigate(ROUTES.PURCHASE_ORDER);
         } catch (error) {
             console.error("Error saving PO:", error);
             toast.error(error.response?.data?.message || "Failed to save Purchase Order");
@@ -806,8 +808,28 @@ const AddPO = () => {
                                         setSupplierSearch(e.target.value);
                                         setIsSupplierDropdownOpen(true);
                                     }}
-                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none transition-all ${errors.supplier_name ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
+                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-14 text-[14px] outline-none transition-all ${errors.supplier_name ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                                 />
+                                {formData.supplier_id && !isSupplierDropdownOpen && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                supplier_id: '',
+                                                supplier_name: '',
+                                                address: '',
+                                                gst_number: '',
+                                                credit_days: ''
+                                            }));
+                                            setSupplierSearch('');
+                                        }}
+                                        className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                )}
                                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                                 {errors.supplier_name && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.supplier_name}</p>}
 

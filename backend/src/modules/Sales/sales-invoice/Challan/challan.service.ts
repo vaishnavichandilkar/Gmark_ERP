@@ -349,7 +349,7 @@ export class ChallanService {
       
       // Calculate how much of this Challan has been invoiced
       const totalInvoicedQty = invoices.reduce((sum, inv) => {
-        if (inv.challanNumber) {
+        if (inv.challanNumber && typeof inv.challanNumber === 'string') {
           const challanIds = inv.challanNumber.split(',').map(id => id.trim());
           if (challanIds.includes(ch.id.toString()) || challanIds.includes(ch.challanNumber)) {
             return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);

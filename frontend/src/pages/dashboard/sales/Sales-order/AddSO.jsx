@@ -631,8 +631,30 @@ const AddSO = () => {
                                         setCustomerSearch(e.target.value);
                                         setIsCustomerDropdownOpen(true);
                                     }}
-                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none transition-all ${errors.customer_name ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
+                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-14 text-[14px] outline-none transition-all ${errors.customer_name ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                                 />
+                                {formData.customer_id && !isCustomerDropdownOpen && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                customer_id: '',
+                                                customer_name: '',
+                                                address: '',
+                                                gst_number: '',
+                                                credit_days: '',
+                                                pan_number: '',
+                                                customer_type: ''
+                                            }));
+                                            setCustomerSearch('');
+                                        }}
+                                        className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                )}
                                 <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition-transform duration-200 pointer-events-none ${isCustomerDropdownOpen ? 'rotate-180' : ''}`} size={18} />
 
                                 {isCustomerDropdownOpen && (

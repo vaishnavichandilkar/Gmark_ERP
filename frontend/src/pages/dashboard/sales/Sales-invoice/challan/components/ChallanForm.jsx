@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronDown, Calendar, Plus } from 'lucide-react';
+import { ChevronDown, Calendar, Plus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from "@/constants/routes";
 
@@ -82,8 +82,33 @@ const ChallanForm = ({
                                 setCustomerSearch(e.target.value);
                                 setIsCustomerDropdownOpen(true);
                             }}
-                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all ${errors.customerName ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
+                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-14 text-[14px] font-bold outline-none transition-all ${errors.customerName ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                         />
+                        {formData.customerId && !isCustomerDropdownOpen && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        customerId: '',
+                                        customerName: '',
+                                        customerType: '',
+                                        address: '',
+                                        gstNo: '',
+                                        creditDays: 0,
+                                        customerState: '',
+                                        soId: '',
+                                        soNumber: '',
+                                        challanIds: []
+                                    }));
+                                    setCustomerSearch('');
+                                }}
+                                className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
 
                         {isCustomerDropdownOpen && (

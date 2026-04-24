@@ -442,7 +442,8 @@ const AddSalesInvoice = () => {
         navigate(`/seller/masters/product-master/add?redirect=${ROUTES.SALES_INVOICE_ADD}`);
     };
 
-    const validateForm = () => {
+    const validateForm = (currentItems) => {
+        const itemsToValidate = currentItems || items;
         const newErrors = {};
         if (!formData.customerId) newErrors.customerName = "Customer is required";
         if (!formData.customerInvoiceNumber) newErrors.customerInvoiceNumber = "Invoice Number is required";
@@ -451,14 +452,21 @@ const AddSalesInvoice = () => {
             newErrors.customerInvoiceDate = "Invoice Date is required";
         }
 
-        if (!items || items.length === 0 || (items.length === 1 && !items[0].productId)) {
+        if (!itemsToValidate || itemsToValidate.length === 0) {
             newErrors.items = "At least one product is required";
         } else {
-            const itemErrors = items.map((item, idx) => {
+            const hasValidProduct = itemsToValidate.some(item => item.productId);
+            if (!hasValidProduct) {
+                newErrors.items = "Please select at least one product from the dropdown list";
+            }
+
+            const itemErrors = itemsToValidate.map((item, idx) => {
                 const errors = {};
                 if (item.productId) {
-                    if (!item.quantity || parseFloat(item.quantity) <= 0) errors.quantity = "Qty > 0";
-                    if (!item.rate || parseFloat(item.rate) <= 0) errors.rate = "Rate > 0";
+                    if (!item.quantity || parseFloat(item.quantity) <= 0) errors.quantity = "Quantity must be greater than 0";
+                    if (!item.rate || parseFloat(item.rate) <= 0) errors.rate = "Rate must be greater than 0";
+                } else if (item.productName || item.productCode) {
+                    errors.productId = "Please select this product from the search results";
                 }
                 return Object.keys(errors).length > 0 ? errors : null;
             });
@@ -490,7 +498,38 @@ const AddSalesInvoice = () => {
     }, [challans, formData.soNumber, formData.soId, formData.challanIds]);
 
     const handleSave = async () => {
-        if (!validateForm()) {
+        // Attempt to auto-match any products that were typed but not selected
+        const updatedItems = items.map((item, index) => {
+            if (!item.productId && (item.productCode || item.productName)) {
+                const match = products.find(p => 
+                    (item.productCode && String(p.product_code).toLowerCase() === String(item.productCode).trim().toLowerCase()) || 
+                    (item.productName && String(p.product_name).toLowerCase() === String(item.productName).trim().toLowerCase())
+                );
+                if (match) {
+                    const rate = parseFloat(match.saleRate) || 0;
+                    const taxPct = (parseFloat(match.tax_rate) || (match.hsn?.gst_rate ? parseFloat(match.hsn.gst_rate) : 0));
+                    return {
+                        ...item,
+                        productId: match.id,
+                        productCode: match.product_code,
+                        productName: match.product_name,
+                        hsnCode: match.hsn_code || match.hsn?.hsn_code || item.hsnCode,
+                        taxPercent: taxPct,
+                        rate: item.rate || rate,
+                        printDescription: item.printDescription || match.product_name
+                    };
+                }
+            }
+            return item;
+        });
+        
+        const hasChanges = JSON.stringify(updatedItems) !== JSON.stringify(items);
+        if (hasChanges) {
+            setItems(updatedItems);
+            // We return and wait for the re-render or just use updatedItems for validation
+        }
+
+        if (!validateForm(updatedItems)) {
             toast.error("Please fill all required fields correctly");
             return;
         }
@@ -552,7 +591,37 @@ const AddSalesInvoice = () => {
     };
 
     const handlePrintPreview = () => {
-        if (!validateForm()) {
+        // Attempt to auto-match any products that were typed but not selected
+        const updatedItems = items.map((item, index) => {
+            if (!item.productId && (item.productCode || item.productName)) {
+                const match = products.find(p => 
+                    (item.productCode && String(p.product_code).toLowerCase() === String(item.productCode).trim().toLowerCase()) || 
+                    (item.productName && String(p.product_name).toLowerCase() === String(item.productName).trim().toLowerCase())
+                );
+                if (match) {
+                    const rate = parseFloat(match.saleRate) || 0;
+                    const taxPct = (parseFloat(match.tax_rate) || (match.hsn?.gst_rate ? parseFloat(match.hsn.gst_rate) : 0));
+                    return {
+                        ...item,
+                        productId: match.id,
+                        productCode: match.product_code,
+                        productName: match.product_name,
+                        hsnCode: match.hsn_code || match.hsn?.hsn_code || item.hsnCode,
+                        taxPercent: taxPct,
+                        rate: item.rate || rate,
+                        printDescription: item.printDescription || match.product_name
+                    };
+                }
+            }
+            return item;
+        });
+
+        const hasChanges = JSON.stringify(updatedItems) !== JSON.stringify(items);
+        if (hasChanges) {
+            setItems(updatedItems);
+        }
+
+        if (!validateForm(updatedItems)) {
             toast.error("Please fill all required fields before previewing");
             return;
         }
@@ -565,7 +634,7 @@ const AddSalesInvoice = () => {
             bookingDate: toIsoDate(formData.bookingDate),
             invoiceNumber: formData.customerInvoiceNumber,
             customerId: parseInt(formData.customerId) || 0,
-            items: items.map(item => ({
+            items: updatedItems.map(item => ({
                 ...item,
                 quantity: parseFloat(item.quantity) || 0,
                 rate: parseFloat(item.rate) || 0,

@@ -63,7 +63,7 @@ export class PurchaseInvoiceService {
     }
 
     // 2. Update GRN Statuses
-    if (inv.challanNumber) {
+    if (inv.challanNumber && typeof inv.challanNumber === 'string') {
       const challanIds = inv.challanNumber.split(',').map(id => id.trim());
       for (const cid of challanIds) {
         const grn = await tx.grn.findFirst({
@@ -93,6 +93,7 @@ export class PurchaseInvoiceService {
           });
 
           const totalInvoicedForGrn = grnInvoices.reduce((sum, oInv) => {
+            if (!oInv.challanNumber) return sum;
             const oIds = oInv.challanNumber.split(',').map(id => id.trim());
             if (oIds.includes(grn.id.toString()) || oIds.includes(grn.challanNumber)) {
               return sum + oInv.items.reduce((iSum, i) => iSum + i.quantity, 0);
@@ -174,18 +175,16 @@ export class PurchaseInvoiceService {
       orderBy: { poNumber: 'desc' },
     });
 
-    // Filter POs where total invoiced quantity < total PO quantity
-    return pos.filter(po => {
+    const filteredPos = pos.filter(po => {
       const totalPoQty = po.items.reduce((sum, item) => sum + item.quantity, 0);
       const totalInvoicedQty = po.purchaseInvoices.reduce((sum, inv) => {
-        // We need to sum up items that belong to THIS PO
-        // Since PurchaseInvoiceItem doesn't directly link to PurchaseOrderItem, 
-        // we sum all items in the invoice (assuming the invoice is specifically for this PO if poId is set)
         return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
       }, 0);
       
       return totalInvoicedQty < totalPoQty;
-    }).map(po => ({
+    });
+
+    return filteredPos.map(po => ({
       id: po.id,
       poNumber: po.poNumber,
     }));

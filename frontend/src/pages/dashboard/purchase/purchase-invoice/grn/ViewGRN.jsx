@@ -9,6 +9,7 @@ import {
 import toast from 'react-hot-toast';
 
 import grnService from '@/services/grnService';
+import { getStandardGstUom } from '@/utils/uomUtils';
 
 const InfoTableRow = ({ label1, value1, label2, value2 }) => (
     <div className="flex flex-col sm:flex-row border-[#E5E7EB] border-b last:border-0 font-outfit">
@@ -159,7 +160,7 @@ const ViewGRN = () => {
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-[#111827]">{item.productCode}</td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] font-bold text-[#111827]">{item.productName}</td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right font-medium">{parseFloat(item.quantity).toFixed(2)}</td>
-                                        <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-center text-gray-500 uppercase">{item.uom}</td>
+                                        <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-center text-gray-500 uppercase">{getStandardGstUom(item.uom)}</td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right">₹{parseFloat(item.rate).toFixed(2)}</td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right font-bold text-emerald-800">{parseFloat(item.taxPercent).toFixed(2)}%</td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right">₹{parseFloat(item.beforeTaxAmount).toFixed(2)}</td>

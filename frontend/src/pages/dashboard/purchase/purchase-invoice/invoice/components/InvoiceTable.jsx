@@ -1,5 +1,6 @@
 import React from 'react';
 import { Trash2 } from 'lucide-react';
+import { getStandardGstUom } from '@/utils/uomUtils';
 import ProductDropdown from '../../shared/ProductDropdown';
 
 const InvoiceTable = ({
@@ -115,7 +116,7 @@ const InvoiceTable = ({
                                 </td>
 
                                 <td className="px-4 py-3 border-l border-[#F3F4F6] align-top">
-                                    <input type="text" value={item.uom} readOnly className="w-full h-[44px] bg-transparent text-[14px] font-bold text-gray-500 outline-none cursor-not-allowed" placeholder="---" />
+                                    <input type="text" value={getStandardGstUom(item.uom)} readOnly className="w-full h-[44px] bg-transparent text-[14px] font-bold text-gray-500 outline-none cursor-not-allowed" placeholder="---" />
                                 </td>
 
                                 <td className="px-4 py-3 border-l border-[#F3F4F6] align-top">

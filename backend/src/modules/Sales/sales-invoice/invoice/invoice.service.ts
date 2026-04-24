@@ -642,7 +642,7 @@ export class SalesInvoiceService {
             });
 
             const totalInvoicedQty = invoices.reduce((sum, inv) => {
-                if (inv.challanNumber) {
+                if (inv.challanNumber && typeof inv.challanNumber === 'string') {
                     const ids = inv.challanNumber.split(',').map(id => id.trim());
                     if (ids.includes(challan.id.toString()) || ids.includes(challan.challanNumber)) {
                         return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
