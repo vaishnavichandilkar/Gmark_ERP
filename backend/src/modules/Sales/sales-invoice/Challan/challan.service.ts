@@ -54,19 +54,21 @@ export class ChallanService {
     const companyState = (company.state || "").trim().toLowerCase();
     const customerState = (customer.state || "").trim().toLowerCase();
 
-    let isGstApplicable = true;
+    const isValidGst = (name?: string | null) => Boolean(name && name.trim().toUpperCase() !== 'N/A' && name.trim().length >= 10);
+    let isGstApplicable = isValidGst(userGst);
     let isRcm = false;
     let isInterState = false;
 
-    const userCode = userGst ? userGst.substring(0, 2) : null;
-    const customerCode = customerGst ? customerGst.substring(0, 2) : null;
+    if (isGstApplicable) {
+      const userCode = userGst.substring(0, 2);
+      const customerCode = customerGst ? customerGst.substring(0, 2) : null;
 
-    if (userGst && customerGst) {
-      if (/^\d{2}$/.test(userCode) && /^\d{2}$/.test(customerCode)) isInterState = userCode !== customerCode;
-      else isInterState = companyState !== customerState;
-    } else if (userGst && !customerGst) isRcm = true;
-    else if (!userGst && customerGst) isInterState = companyState !== customerState;
-    else isGstApplicable = false;
+      if (customerGst && /^\d{2}$/.test(userCode) && /^\d{2}$/.test(customerCode)) {
+        isInterState = userCode !== customerCode;
+      } else {
+        isInterState = companyState !== customerState;
+      }
+    }
 
     let totalQuantity = 0;
     let taxableAmount = 0;
@@ -95,7 +97,7 @@ export class ChallanService {
       const discountAmount = Number(item.discountAmt || 0);
       const beforeTaxAmount = (currentQty * Number(item.rate)) - discountAmount;
       const taxPercent = Number(item.taxPercent || 0);
-      const itemTaxAmount = (beforeTaxAmount * taxPercent) / 100;
+      const itemTaxAmount = isGstApplicable ? (beforeTaxAmount * taxPercent) / 100 : 0;
       const totalAmount = beforeTaxAmount + itemTaxAmount;
 
       totalQuantity += currentQty;
@@ -207,15 +209,16 @@ export class ChallanService {
       orderBy: { soNumber: 'desc' },
     });
 
-    // Filter SOs where total delivered quantity < total SO quantity
-    return sos.filter(so => {
+    const filteredSos = sos.filter(so => {
       const totalSoQty = so.items.reduce((sum, item) => sum + item.quantity, 0);
       const totalDeliveredQty = so.salesChallans.reduce((sum, ch) => {
         return sum + ch.items.reduce((iSum, i) => iSum + i.challanQty, 0);
       }, 0);
       
       return totalDeliveredQty < totalSoQty;
-    }).map(so => ({
+    });
+
+    return filteredSos.map(so => ({
       id: so.id,
       soNumber: so.soNumber,
       soCreationDate: so.soCreationDate,

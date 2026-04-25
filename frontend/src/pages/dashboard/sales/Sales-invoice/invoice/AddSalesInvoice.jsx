@@ -232,26 +232,34 @@ const AddSalesInvoice = () => {
     }, [id, isEditMode]);
 
     const calculateGST = (custGST, custState) => {
-        if (!companyInfo) return { type: 'INTRA', applicable: true, isRcm: false };
+        if (!companyInfo) return { type: 'INTRA', applicable: false, isRcm: false };
         
         const companyGST = companyInfo?.gstNumber || "";
         const companyState = (companyInfo?.state || "").trim().toLowerCase();
         
-        const customerGST = custGST || "";
+        // Strict validation: must be ≥10 chars and not 'N/A'
+        const isValidGstStr = (g) => Boolean(g && String(g).trim().toUpperCase() !== 'N/A' && String(g).trim().length >= 10);
+
+        // Sales Invoice Rule: GST applicable ONLY if User (Company) has a valid GST
+        const applicable = isValidGstStr(companyGST);
+        
+        if (!applicable) {
+            return { type: 'INTRA', applicable: false, isRcm: false };
+        }
+
+        const customerGST = isValidGstStr(custGST) ? custGST : "";
         const customerState = (custState || "").trim().toLowerCase();
 
-        // Step 1 & 2: Extract State Codes from GST if available
-        const companyStateCode = companyGST.substring(0, 2);
-        const customerStateCode = customerGST.substring(0, 2);
+        const companyStateCode = companyGST.trim().substring(0, 2);
+        const customerStateCode = customerGST ? customerGST.trim().substring(0, 2) : "";
 
         let isInterState = false;
 
-        // Requirement: If GST present, use GST state code. If not, use address state.
-        if (companyGST && customerGST && /^\d{2}$/.test(companyStateCode) && /^\d{2}$/.test(customerStateCode)) {
-            // Step 3: Compare GST State Codes
+        if (companyStateCode && customerStateCode && /^\d{2}$/.test(companyStateCode) && /^\d{2}$/.test(customerStateCode)) {
+            // Primary: compare state codes from GST numbers
             isInterState = companyStateCode !== customerStateCode;
         } else {
-            // Step 3 (B2C Fallback): Use Address States
+            // Fallback: compare state names
             isInterState = companyState !== customerState;
         }
 
@@ -575,11 +583,11 @@ const AddSalesInvoice = () => {
             if (isEditMode) {
                 await salesInvoiceService.updateInvoice(id, payload);
                 toast.success("Sales Invoice updated successfully!");
-                navigate(ROUTES.SALES_INVOICE_VIEW.replace(':id', id));
+                navigate(ROUTES.SALES_INVOICE);
             } else {
                 const response = await salesInvoiceService.createInvoice(payload);
                 toast.success("Sales Invoice created successfully!");
-                navigate(ROUTES.SALES_INVOICE_VIEW.replace(':id', response.id));
+                navigate(ROUTES.SALES_INVOICE);
             }
             sessionStorage.removeItem('add_si_draft');
         } catch (error) {

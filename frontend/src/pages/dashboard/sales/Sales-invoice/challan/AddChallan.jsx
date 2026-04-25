@@ -157,19 +157,29 @@ const AddChallan = () => {
     }, [id, isEditMode]);
 
     const calculateGST = (custGST, custState) => {
-        if (!companyInfo) return { type: 'INTRA', applicable: true, isRcm: false };
-        const userGst = companyInfo?.gstNumber;
-        const userState = (companyInfo?.state || "").trim().toLowerCase();
-        const cState = (custState || "").trim().toLowerCase();
+        if (!companyInfo) return { type: 'INTRA', applicable: false, isRcm: false };
+        
+        const companyGST = companyInfo?.gstNumber || "";
+        const companyState = (companyInfo?.state || "").trim().toLowerCase();
+        
+        // Sales Side Rule: Applicable if User (Company) has GST
+        const applicable = Boolean(companyGST);
+        
+        if (!applicable) {
+            return { type: 'INTRA', applicable: false, isRcm: false };
+        }
 
-        const userCode = userGst ? userGst.substring(0, 2) : null;
-        const custCode = custGST ? custGST.substring(0, 2) : null;
+        const customerGST = custGST || "";
+        const customerState = (custState || "").trim().toLowerCase();
+
+        const userCode = companyGST.substring(0, 2);
+        const custCode = customerGST.substring(0, 2);
 
         let isInterState = false;
-        if (userGst && custGST && /^\d{2}$/.test(userCode) && /^\d{2}$/.test(custCode)) {
+        if (companyGST && customerGST && /^\d{2}$/.test(userCode) && /^\d{2}$/.test(custCode)) {
             isInterState = userCode !== custCode;
         } else {
-            isInterState = userState !== cState;
+            isInterState = companyState !== customerState;
         }
         return { type: isInterState ? 'INTER' : 'INTRA', applicable: true, isRcm: false };
     };

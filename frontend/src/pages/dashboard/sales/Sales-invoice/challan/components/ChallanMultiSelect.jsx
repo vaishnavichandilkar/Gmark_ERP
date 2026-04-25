@@ -92,6 +92,37 @@ const ChallanMultiSelect = ({
                                 onClick={(e) => e.stopPropagation()}
                             />
                         </div>
+                        {challans.length > 0 && (
+                            <div className="flex items-center justify-between mt-3 px-1">
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const allIds = filteredChallans.map(c => c.id);
+                                        const newSelected = Array.from(new Set([...selectedIds, ...allIds]));
+                                        onChange(newSelected);
+                                    }}
+                                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 uppercase tracking-tight transition-colors flex items-center gap-1"
+                                >
+                                    Select All {searchTerm && `(${filteredChallans.length})`}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (searchTerm) {
+                                            const filteredIds = filteredChallans.map(c => c.id);
+                                            onChange(selectedIds.filter(id => !filteredIds.includes(id)));
+                                        } else {
+                                            onChange([]);
+                                        }
+                                    }}
+                                    className="text-[11px] font-bold text-red-600 hover:text-red-800 uppercase tracking-tight transition-colors flex items-center gap-1"
+                                >
+                                    Deselect All
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div className="max-h-[280px] overflow-y-auto custom-scrollbar p-1">

@@ -277,33 +277,32 @@ const AddGRN = () => {
     };
 
     const calculateGST = (supplierGST, supplierState) => {
-        const userGst = companyInfo?.gstNumber;
+        const userGst = companyInfo?.gstNumber || "";
         const userState = (companyInfo?.state || "").trim().toLowerCase();
         const suppState = (supplierState || "").trim().toLowerCase();
+
+        // Purchase Side Rule: Applicable if Supplier has GST
+        const applicable = Boolean(supplierGST);
+
+        if (!applicable) {
+            return { type: 'NONE', applicable: false, isRcm: false };
+        }
 
         const userCode = userGst ? userGst.substring(0, 2) : null;
         const supplierCode = supplierGST ? supplierGST.substring(0, 2) : null;
 
-        if (userGst && supplierGST) {
-            // Case 1: Both have GST
-            let isInterState = false;
-            if (/^\d{2}$/.test(userCode) && /^\d{2}$/.test(supplierCode)) {
-                isInterState = userCode !== supplierCode;
-            } else {
-                isInterState = userState !== suppState;
-            }
-            return { type: isInterState ? 'INTER' : 'INTRA', applicable: true, isRcm: false };
-        } else if (userGst && !supplierGST) {
-            // Case 2: Supplier NO, Buyer YES (RCM)
-            return { type: 'NONE', applicable: true, isRcm: true };
-        } else if (!userGst && supplierGST) {
-            // Case 3: Buyer NO, Supplier YES (Normal GST)
-            const isInterState = userState !== suppState;
-            return { type: isInterState ? 'INTER' : 'INTRA', applicable: true, isRcm: false };
+        let isInterState = false;
+        if (userGst && supplierGST && /^\d{2}$/.test(userCode) && /^\d{2}$/.test(supplierCode)) {
+            isInterState = userCode !== supplierCode;
         } else {
-            // Case 4: Both NO
-            return { type: 'NONE', applicable: false, isRcm: false };
+            isInterState = userState !== suppState;
         }
+        
+        return { 
+            type: isInterState ? 'INTER' : 'INTRA', 
+            applicable: true, 
+            isRcm: false 
+        };
     };
 
     const handlePOChange = async (poId) => {

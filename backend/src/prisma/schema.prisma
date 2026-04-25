@@ -448,7 +448,7 @@ model Product {
 
 model PurchaseOrder {
   id               Int                 @id @default(autoincrement())
-  poNumber         String              @unique
+  poNumber         String
   supplierName     String
   address          String
   creditDays       Int
@@ -466,6 +466,7 @@ model PurchaseOrder {
   items            PurchaseOrderItem[]
   user             User                @relation(fields: [userId], references: [id])
 
+  @@unique([poNumber, userId])
   @@map("purchase_orders")
 }
 
@@ -493,7 +494,7 @@ model PurchaseOrderItem {
 
 model SalesOrder {
   id             Int              @id @default(autoincrement())
-  soNumber       String           @unique
+  soNumber       String
   customerName   String
   customerType   CustomerType?
   address        String
@@ -514,6 +515,7 @@ model SalesOrder {
   items          SalesOrderItem[]
   user           User             @relation(fields: [userId], references: [id])
 
+  @@unique([soNumber, userId])
   @@map("sales_orders")
 }
 
@@ -540,7 +542,7 @@ model SalesOrderItem {
 
 model PurchaseInvoice {
   id                    Int                      @id @default(autoincrement())
-  invoiceNumber         String                   @unique
+  invoiceNumber         String
   supplierInvoiceNumber String
   supplierInvoiceDate   DateTime
   invoiceDate           DateTime                 @default(now())
@@ -571,6 +573,7 @@ model PurchaseInvoice {
   purchaseOrder         PurchaseOrder?           @relation(fields: [poId], references: [id])
   user                  User                     @relation(fields: [userId], references: [id])
 
+  @@unique([invoiceNumber, userId])
   @@map("purchase_invoices")
 }
 
@@ -684,7 +687,7 @@ model GrnExpense {
 
 model SalesInvoice {
   id                    Int                   @id @default(autoincrement())
-  invoiceNumber         String                @unique
+  invoiceNumber         String
   customerInvoiceNumber String
   customerInvoiceDate   DateTime
   invoiceDate           DateTime              @default(now())
@@ -715,6 +718,7 @@ model SalesInvoice {
   salesOrder            SalesOrder?           @relation(fields: [soId], references: [id])
   user                  User                  @relation(fields: [userId], references: [id])
 
+  @@unique([invoiceNumber, userId])
   @@map("sales_invoices")
 }
 

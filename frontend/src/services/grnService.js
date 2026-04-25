@@ -7,7 +7,7 @@ const grnService = {
   },
 
   getSupplierPOs: async (supplierName) => {
-    const response = await axiosInstance.get(`/grn/supplier-pos?supplierName=${supplierName}`);
+    const response = await axiosInstance.get(`/grn/supplier-pos?supplierName=${encodeURIComponent(supplierName)}`);
     return response.data;
   },
 

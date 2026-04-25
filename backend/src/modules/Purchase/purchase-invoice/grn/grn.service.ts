@@ -73,32 +73,19 @@ export class GrnService {
     const supplierState = (supplier.state || "").trim().toLowerCase();
     const supplierGst = dto.gstNumber || supplier.gstNo;
 
-    let isGstApplicable = true;
+    let isGstApplicable = Boolean(supplierGst);
     let isRcm = false;
     let isInterState = false;
 
-    const userCode = userGst ? userGst.substring(0, 2) : null;
-    const supplierCode = supplierGst ? supplierGst.substring(0, 2) : null;
+    if (isGstApplicable) {
+        const userCode = userGst ? userGst.substring(0, 2) : null;
+        const supplierCode = supplierGst.substring(0, 2);
 
-    if (userGst && supplierGst) {
-        // Case 1: Both have GST
-        if (/^\d{2}$/.test(userCode) && /^\d{2}$/.test(supplierCode)) {
+        if (userGst && /^\d{2}$/.test(userCode) && /^\d{2}$/.test(supplierCode)) {
             isInterState = userCode !== supplierCode;
         } else {
             isInterState = companyState !== supplierState;
         }
-    } else if (userGst && !supplierGst) {
-        // Case 2: Supplier NO, Buyer YES (RCM)
-        isRcm = true;
-        isGstApplicable = true;
-    } else if (!userGst && supplierGst) {
-        // Case 3: Buyer NO, Supplier YES (Normal GST)
-        isRcm = false;
-        isGstApplicable = true;
-        isInterState = companyState !== supplierState;
-    } else {
-        // Case 4: Both NO
-        isGstApplicable = false;
     }
 
     let totalQuantity = 0;
@@ -133,7 +120,7 @@ export class GrnService {
       const discountAmount = Number(item.discountAmt || 0);
       const beforeTaxAmount = (currentReceived * Number(item.rate)) - discountAmount;
       const taxPercent = Number(item.taxPercent || 0);
-      const itemTaxAmount = (beforeTaxAmount * taxPercent) / 100;
+      const itemTaxAmount = isGstApplicable ? (beforeTaxAmount * taxPercent) / 100 : 0;
       const totalAmount = beforeTaxAmount + itemTaxAmount;
 
       totalQuantity += currentReceived;

@@ -358,6 +358,10 @@ const AddPO = () => {
         });
     }, [products, items, tableSearch]);
 
+    const isGstApplicable = useMemo(() => {
+        return Boolean(formData.gst_number);
+    }, [formData.gst_number]);
+
     const isIntraState = useMemo(() => {
         const sellerGst = businessProfile?.gstNumber || businessProfile?.shopDetail?.gstNumber || "";
         const supplierGst = formData.gst_number || "";
@@ -412,8 +416,8 @@ const AddPO = () => {
             hsn: product.hsn_code || product.hsn || '',
             tax_percent: product.tax_rate || product.tax || 0,
             before_tax: (product.purchaseRate || 0).toFixed(2),
-            tax_amount: ((product.purchaseRate || 0) * (product.tax_rate || 0) / 100).toFixed(2),
-            total_amount: ((product.purchaseRate || 0) * (1 + (product.tax_rate || 0) / 100)).toFixed(2),
+            tax_amount: isGstApplicable ? ((product.purchaseRate || 0) * (product.tax_rate || 0) / 100).toFixed(2) : "0.00",
+            total_amount: isGstApplicable ? ((product.purchaseRate || 0) * (1 + (product.tax_rate || 0) / 100)).toFixed(2) : (product.purchaseRate || 0).toFixed(2),
             description: product.description || product.printDescription || ''
         };
 
@@ -548,12 +552,11 @@ const AddPO = () => {
         item.before_tax = parseFloat(beforeTaxAmount.toFixed(2));
 
         // Step 2: Tax Amount = (Before Tax Amount × Tax %) / 100
-        const taxAmount = (beforeTaxAmount * taxPct) / 100;
+        const taxAmount = isGstApplicable ? ((beforeTaxAmount * taxPct) / 100) : 0;
         item.tax_amount = parseFloat(taxAmount.toFixed(2));
 
-        // Step 3: Final Amount (Per Row)
-        const totalAmount = beforeTaxAmount + taxAmount;
-        item.total_amount = parseFloat(totalAmount.toFixed(2));
+        // Step 3: Total Amount = Before Tax Amount + Tax Amount
+        item.total_amount = parseFloat((beforeTaxAmount + taxAmount).toFixed(2));
 
         // Ensure numeric fields (other than the one being edited) are correctly typed but not overwriting active typing
         if (field !== 'quantity')    item.quantity    = qty;
@@ -677,7 +680,7 @@ const AddPO = () => {
                 const response = await purchaseOrderService.createPurchaseOrder(poPayload);
                 toast.success(`Purchase Order ${response.poNumber} saved successfully`);
                 sessionStorage.removeItem('add_po_draft');
-                navigate(`${ROUTES.PURCHASE_ORDER}/view/${response.id}`);
+                navigate(ROUTES.PURCHASE_ORDER);
             }
         } catch (error) {
             console.error("Error saving PO:", error);

@@ -4,6 +4,7 @@ import { CreateSalesInvoiceDto, UpdateSalesInvoiceDto, SalesInvoiceStatus } from
 import { SalesOrderService } from '../../sales-order/sales-order.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
+import { isValidGst, determineSalesGst } from '../../../../common/utils/gst.helper';
 
 @Injectable()
 export class SalesInvoiceService {
@@ -269,39 +270,26 @@ export class SalesInvoiceService {
     });
     const userGst = userGstDoc?.name;
 
-    const companyState = (company.state || "").trim().toLowerCase();
-    const customerState = (customer.state || "").trim().toLowerCase();
+    const companyState = (company.state || "").trim();
+    const customerState = (customer.state || "").trim();
 
-    // MODULE 3: GST DETERMINATION LOGIC
-    let isGstApplicable = true;
-    let isInterState = false;
-    let isRcm = false;
+    // MODULE 3: GST DETERMINATION LOGIC (centralized)
+    // Sales rule: GST only if User/Company has valid GST
+    const gstResult = determineSalesGst(
+      userGst,
+      gstNo,          // customer GST (used for state code comparison only)
+      companyState,
+      customerState,
+      finalTax,       // the total tax amount to be split into CGST/SGST or IGST
+    );
 
-    const userCode = userGst ? userGst.substring(0, 2) : null;
-    const customerCode = gstNo ? gstNo.substring(0, 2) : null;
+    const cgst = gstResult.cgstAmount;
+    const sgst = gstResult.sgstAmount;
+    const igst = gstResult.igstAmount;
+    const effectiveTax = gstResult.totalGstAmount;
+    const isRcm = false;
 
-    if (userGst && gstNo) {
-      if (/^\d{2}$/.test(userCode) && /^\d{2}$/.test(customerCode)) {
-        isInterState = userCode !== customerCode;
-      } else {
-        isInterState = companyState !== customerState;
-      }
-    } else {
-      // Step 4: No GST Number present -> Still apply GST based on state comparison
-      isInterState = companyState !== customerState;
-    }
-
-    let cgst = 0, sgst = 0, igst = 0;
-    const effectiveTax = isGstApplicable ? finalTax : 0;
-    if (isGstApplicable) {
-      if (isInterState) igst = effectiveTax;
-      else {
-        cgst = effectiveTax / 2;
-        sgst = effectiveTax / 2;
-      }
-    }
-
-    const taxInTotal = isRcm ? 0 : effectiveTax;
+    const taxInTotal = effectiveTax;
     const grandTotal = totalTaxable + expenseTotal + taxInTotal + postGstChargeTotal;
 
     const lastInvoice = await this.prisma.salesInvoice.findFirst({
@@ -498,25 +486,25 @@ export class SalesInvoiceService {
       where: { uploadedByUserId: existing.userId, type: 'GST' },
       select: { name: true }
     });
-    const companyGST = companyGstDoc?.name || "";
+    const companyGST = isValidGst(companyGstDoc?.name) ? companyGstDoc!.name : null;
 
-    let isInterState = false;
-    if (company && customer) {
-        const companyState = (company.state || "").trim().toLowerCase();
-        const customerState = (customer.state || "").trim().toLowerCase();
-        const customerGST = (updateDto.gstNumber || customer.gstNo || "");
-        
-        if (companyGST && customerGST && /^\d{2}$/.test(companyGST.substring(0, 2)) && /^\d{2}$/.test(customerGST.substring(0, 2))) {
-            isInterState = companyGST.substring(0, 2) !== customerGST.substring(0, 2);
-        } else {
-            isInterState = companyState !== customerState;
-        }
-    }
+    const companyState = (company?.state || "").trim();
+    const customerState = (customer?.state || "").trim();
+    const customerGST = updateDto.gstNumber || customer?.gstNo || null;
 
-    const cgst = isInterState ? 0 : finalTax / 2;
-    const sgst = isInterState ? 0 : finalTax / 2;
-    const igst = isInterState ? finalTax : 0;
-    const grandTotal = totalTaxable + expenseTotal + (isInterState ? igst : (cgst + sgst));
+    // MODULE 3: GST DETERMINATION LOGIC (centralized) — Sales rule: user GST required
+    const gstResult = determineSalesGst(
+      companyGST,
+      customerGST,
+      companyState,
+      customerState,
+      finalTax,
+    );
+
+    const cgst = gstResult.cgstAmount;
+    const sgst = gstResult.sgstAmount;
+    const igst = gstResult.igstAmount;
+    const grandTotal = totalTaxable + expenseTotal + gstResult.totalGstAmount;
 
     return this.prisma.$transaction(async (tx) => {
       if (updateDto.items) await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: id } });

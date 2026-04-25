@@ -5,6 +5,7 @@ import { Prisma, PIStatus } from '@prisma/client';
 import { PurchaseOrderService } from '../purchase-order/purchase-order.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
+import { isValidGst, determinePurchaseGst } from '../../../common/utils/gst.helper';
 
 @Injectable()
 export class PurchaseInvoiceService {
@@ -290,6 +291,15 @@ export class PurchaseInvoiceService {
 
     if (!company) throw new BadRequestException('Company detail not found for this user');
 
+    // Fetch user's registered GST early for tax logic
+    const userGstDoc = await this.prisma.sellerDocument.findFirst({
+        where: { uploadedByUserId: userId, type: 'GST' },
+        select: { name: true }
+    });
+    const userGst = userGstDoc?.name;
+    // Purchase rule: applicable only if supplier has a valid GST
+    const isGstApplicable = isValidGst(gstNo);
+
     // As per spec: items and accountSummary are prioritized
     const pItems = createDto.items || createDto.products || [];
     let summary = createDto.accountSummary;
@@ -304,7 +314,7 @@ export class PurchaseInvoiceService {
         const discAmt = Number(i.discount || 0);
         const befTax = (qty * rate) - discAmt;
         const taxPct = Number(i.taxPercent || 0);
-        const taxAmt = (befTax * taxPct) / 100;
+        const taxAmt = isGstApplicable ? (befTax * taxPct) / 100 : 0;
         const discPct = (qty * rate) > 0 ? (discAmt / (qty * rate)) * 100 : 0;
         
         totalTaxable += befTax;
@@ -376,56 +386,27 @@ export class PurchaseInvoiceService {
 
     const finalTax = materialTax + expenseTax;
 
-    // Fetch user's registered GST
-    const userGstDoc = await this.prisma.sellerDocument.findFirst({
-        where: { uploadedByUserId: userId, type: 'GST' },
-        select: { name: true }
-    });
-    const userGst = userGstDoc?.name;
+    const companyState = (company.state || "").trim();
+    const supplierState = (supplier.state || "").trim();
 
-    const companyState = (company.state || "").trim().toLowerCase();
-    const supplierState = (supplier.state || "").trim().toLowerCase();
-    const supplierGst = gstNo;
+    // MODULE 3: GST DETERMINATION LOGIC (centralized)
+    // Purchase rule: GST only if Supplier has a valid GST number
+    const supplierGstForTax = isValidGst(gstNo) ? gstNo : null;
+    const gstResult = determinePurchaseGst(
+      supplierGstForTax,
+      userGst,
+      companyState,
+      supplierState,
+      finalTax,
+    );
 
-    let isGstApplicable = true;
-    let isRcm = false;
-    let isInterState = false;
-
-    const userCode = userGst ? userGst.substring(0, 2) : null;
-    const supplierCode = supplierGst ? supplierGst.substring(0, 2) : null;
-
-    if (userGst && supplierGst) {
-        // Case 1: Both have GST
-        if (/^\d{2}$/.test(userCode) && /^\d{2}$/.test(supplierCode)) {
-            isInterState = userCode !== supplierCode;
-        } else {
-            isInterState = companyState !== supplierState;
-        }
-    } else if (userGst && !supplierGst) {
-        // Case 2: Supplier NO, Buyer YES (RCM)
-        isRcm = true;
-    } else if (!userGst && supplierGst) {
-        // Case 3: Buyer NO, Supplier YES (Normal GST)
-        isInterState = companyState !== supplierState;
-    } else {
-        // Case 4: Both NO
-        isGstApplicable = false;
-    }
-
-    let cgst = 0, sgst = 0, igst = 0;
-    const effectiveTax = isGstApplicable ? finalTax : 0;
-
-    if (isGstApplicable) {
-        if (isInterState) {
-            igst = effectiveTax;
-        } else {
-            cgst = effectiveTax / 2;
-            sgst = effectiveTax / 2;
-        }
-    }
+    const isRcm = false;
+    const cgst = gstResult.cgstAmount;
+    const sgst = gstResult.sgstAmount;
+    const igst = gstResult.igstAmount;
 
     // RCM: Buyer pays tax separately. Supplier invoice doesn't include it in payable total.
-    const taxInTotal = isRcm ? 0 : effectiveTax;
+    const taxInTotal = isRcm ? 0 : gstResult.totalGstAmount;
     const grandTotal = totalTaxable + expenseTotal + taxInTotal + postGstChargeTotal;
 
     const lastPi = await this.prisma.purchaseInvoice.findFirst({
@@ -592,6 +573,17 @@ export class PurchaseInvoiceService {
 
     if (!company) throw new BadRequestException('Company detail not found');
 
+    const gstNo = updateDto.gstNumber || existing.gstNumber;
+
+    // Fetch user's registered GST early
+    const userGstDoc = await this.prisma.sellerDocument.findFirst({
+        where: { uploadedByUserId: existing.userId, type: 'GST' },
+        select: { name: true }
+    });
+    const userGst = userGstDoc?.name;
+    // Purchase rule: applicable only if supplier has a valid GST
+    const isGstApplicable = isValidGst(gstNo);
+
     let pItems = updateDto.items || updateDto.products;
     
     let totalTaxable = 0;
@@ -606,7 +598,7 @@ export class PurchaseInvoiceService {
             const befTax = (qty * rate) - discAmt;
             const taxPct = Number(i.taxPercent || 0);
             const discPct = (qty * rate) > 0 ? (discAmt / (qty * rate)) * 100 : 0;
-            const taxAmt = (befTax * taxPct) / 100;
+            const taxAmt = isGstApplicable ? (befTax * taxPct) / 100 : 0;
             
             totalTaxable += befTax;
             materialTax += taxAmt;
@@ -668,51 +660,33 @@ export class PurchaseInvoiceService {
     }
 
     const finalTax = materialTax + expenseTax;
-    const gstNo = updateDto.gstNumber || existing.gstNumber;
 
-    // Fetch user's registered GST
-    const userGstDoc = await this.prisma.sellerDocument.findFirst({
-        where: { uploadedByUserId: existing.userId, type: 'GST' },
-        select: { name: true }
+    const companyState = (company.state || "").trim();
+
+    // Fetch supplier info for state comparison
+    const supplierInfo = await this.prisma.accountMaster.findFirst({
+      where: { id: existing.supplierId, userId: existing.userId }
     });
-    const userGst = userGstDoc?.name;
+    const supplierState = (supplierInfo?.state || "").trim();
 
-    const companyState = (company.state || "").trim().toLowerCase();
-    
-    let isGstApplicable = true;
     let isRcm = false;
-    let isInterState = false;
 
-    const userCode = userGst ? userGst.substring(0, 2) : null;
-    const supplierCode = gstNo ? gstNo.substring(0, 2) : null;
+    // MODULE 3: GST DETERMINATION LOGIC (centralized)
+    // Purchase rule: GST only if Supplier has a valid GST number
+    const supplierGstForTax = isValidGst(gstNo) ? gstNo : null;
+    const gstResult = determinePurchaseGst(
+      supplierGstForTax,
+      userGst,
+      companyState,
+      supplierState,
+      finalTax,
+    );
 
-    if (userGst && gstNo) {
-        if (/^\d{2}$/.test(userCode) && /^\d{2}$/.test(supplierCode)) {
-            isInterState = userCode !== supplierCode;
-        } else {
-            isInterState = gstNo.substring(0, 2) !== company.state.substring(0, 2);
-        }
-    } else if (userGst && !gstNo) {
-        isRcm = true;
-    } else if (!userGst && gstNo) {
-        isInterState = gstNo.substring(0, 2) !== company.state.substring(0, 2);
-    } else {
-        isGstApplicable = false;
-    }
+    let cgst = gstResult.cgstAmount;
+    let sgst = gstResult.sgstAmount;
+    let igst = gstResult.igstAmount;
 
-    let cgst = 0, sgst = 0, igst = 0;
-    const effectiveTax = isGstApplicable ? finalTax : 0;
-
-    if (isGstApplicable) {
-        if (isInterState) {
-            igst = effectiveTax;
-        } else {
-            cgst = effectiveTax / 2;
-            sgst = effectiveTax / 2;
-        }
-    }
-
-    const taxInTotal = isRcm ? 0 : effectiveTax;
+    const taxInTotal = isRcm ? 0 : gstResult.totalGstAmount;
     const grandTotal = totalTaxable + expenseTotal + taxInTotal + postGstChargeTotal;
 
     try {

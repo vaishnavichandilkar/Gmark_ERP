@@ -7,7 +7,7 @@ const challanService = {
   },
 
   getCustomerSOs: async (customerName) => {
-    const response = await axiosInstance.get(`/challans/customer-sos?customerName=${customerName}`);
+    const response = await axiosInstance.get(`/challans/customer-sos?customerName=${encodeURIComponent(customerName)}`);
     return response.data;
   },
 

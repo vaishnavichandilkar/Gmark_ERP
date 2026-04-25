@@ -46,7 +46,7 @@ export class PurchaseOrderService {
     };
   }
 
-  public calculateItemValues(item: any) {
+  public calculateItemValues(item: any, isGstApplicable: boolean = true) {
     const qty = Number(item.quantity) || 0;
     const rate = Number(item.rate) || 0;
     const baseTotal = qty * rate;
@@ -61,7 +61,7 @@ export class PurchaseOrderService {
     }
 
     const beforeTaxAmount = baseTotal - discountAmount;
-    const taxAmount = (beforeTaxAmount * (Number(item.taxPercent) || 0)) / 100;
+    const taxAmount = isGstApplicable ? ((beforeTaxAmount * (Number(item.taxPercent) || 0)) / 100) : 0;
     const totalAmount = beforeTaxAmount + taxAmount;
 
     return {
@@ -81,7 +81,14 @@ export class PurchaseOrderService {
     // Requirement 4 & 8: Prefer passed poNumber (if validly unique) or generate new
     const poNumber = createDto.poNumber || await this.generatePONumber(userId);
 
-    const processedItems = createDto.items.map(item => this.calculateItemValues(item));
+    const userGstDoc = await this.prisma.sellerDocument.findFirst({
+        where: { uploadedByUserId: userId, type: 'GST' },
+        select: { name: true }
+    });
+    const userGst = userGstDoc?.name;
+
+    const isGstApplicable = Boolean(createDto.gstNo || supplier.gstNumber);
+    const processedItems = createDto.items.map(item => this.calculateItemValues(item, isGstApplicable));
 
     const totalAmount = processedItems.reduce((sum, item) => sum + (item.quantity * item.rate) - item.discountAmount, 0);
     const totalTaxAmount = processedItems.reduce((sum, item) => sum + (Number(item.taxAmount) || 0), 0);
@@ -240,7 +247,14 @@ export class PurchaseOrderService {
       }
 
       if (updateDto.items) {
-        const processedItems = updateDto.items.map(item => this.calculateItemValues(item));
+        const userGstDoc = await tx.sellerDocument.findFirst({
+            where: { uploadedByUserId: userId, type: 'GST' },
+            select: { name: true }
+        });
+        const userGst = userGstDoc?.name;
+        
+        const isGstApplicable = Boolean(updateDto.gstNo || data.gstNumber || po.gstNumber);
+        const processedItems = updateDto.items.map(item => this.calculateItemValues(item, isGstApplicable));
         const totalTaxAmount = processedItems.reduce((sum, item) => sum + (Number(item.taxAmount) || 0), 0);
         const totalGrandTotal = processedItems.reduce((sum, item) => sum + (Number(item.totalAmount) || 0), 0);
         

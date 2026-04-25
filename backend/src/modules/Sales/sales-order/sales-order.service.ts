@@ -77,7 +77,7 @@ export class SalesOrderService {
         };
     }
 
-    public calculateItemValues(item: any) {
+    public calculateItemValues(item: any, isGstApplicable: boolean = true) {
         const qty = Number(item.quantity) || 0;
         const rate = Number(item.rate) || 0;
         const baseTotal = qty * rate;
@@ -92,7 +92,7 @@ export class SalesOrderService {
         }
 
         const beforeTaxAmount = baseTotal - discountAmount;
-        const taxAmount = (beforeTaxAmount * (Number(item.taxPercent) || 0)) / 100;
+        const taxAmount = isGstApplicable ? ((beforeTaxAmount * (Number(item.taxPercent) || 0)) / 100) : 0;
         const totalAmount = beforeTaxAmount + taxAmount;
 
         return {
@@ -108,8 +108,15 @@ export class SalesOrderService {
 
     async create(createDto: CreateSalesOrderDto, userId: number) {
         const customer = await this._getCustomerDetails(createDto.customerId);
+        
+        const userGstDoc = await this.prisma.sellerDocument.findFirst({
+            where: { uploadedByUserId: userId, type: 'GST' },
+            select: { name: true }
+        });
+        const isValidGst = (name?: string | null) => Boolean(name && name.trim().toUpperCase() !== 'N/A' && name.trim().length >= 10);
+        const isGstApplicable = isValidGst(userGstDoc?.name);
 
-        const processedItems = createDto.items.map(item => this.calculateItemValues(item));
+        const processedItems = createDto.items.map(item => this.calculateItemValues(item, isGstApplicable));
 
         const totalAmount = processedItems.reduce((sum, item) => sum + (item.quantity * item.rate) - item.discountAmount, 0);
         const totalTaxAmount = processedItems.reduce((sum, item) => sum + item.taxAmount, 0);
@@ -247,7 +254,14 @@ export class SalesOrderService {
             }
 
             if (updateDto.items) {
-                const processedItems = updateDto.items.map(item => this.calculateItemValues(item));
+                const userGstDoc = await tx.sellerDocument.findFirst({
+                    where: { uploadedByUserId: userId, type: 'GST' },
+                    select: { name: true }
+                });
+                const isValidGst = (name?: string | null) => Boolean(name && name.trim().toUpperCase() !== 'N/A' && name.trim().length >= 10);
+                const isGstApplicable = isValidGst(userGstDoc?.name);
+
+                const processedItems = updateDto.items.map(item => this.calculateItemValues(item, isGstApplicable));
                 data.totalAmount = processedItems.reduce((sum, item) => sum + (item.quantity * item.rate) - item.discountAmount, 0);
                 data.taxAmount = processedItems.reduce((sum, item) => sum + item.taxAmount, 0);
                 data.grandTotal = processedItems.reduce((sum, item) => sum + item.totalAmount, 0);

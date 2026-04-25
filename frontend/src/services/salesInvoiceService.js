@@ -7,7 +7,7 @@ const salesInvoiceService = {
   },
 
   getCustomerSOs: async (customerIdOrName, excludeInvoiceId) => {
-    const url = `/sales-invoices/customer-sos?customerId=${customerIdOrName}${excludeInvoiceId ? `&excludeInvoiceId=${excludeInvoiceId}` : ''}`;
+    const url = `/sales-invoices/customer-sos?customerId=${encodeURIComponent(customerIdOrName)}${excludeInvoiceId ? `&excludeInvoiceId=${excludeInvoiceId}` : ''}`;
     const response = await axiosInstance.get(url);
     return response.data;
   },

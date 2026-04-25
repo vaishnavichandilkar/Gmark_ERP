@@ -318,11 +318,27 @@ const AddSO = () => {
         });
     }, [products, tableSearch, items]);
 
+    const isGstApplicable = useMemo(() => {
+        const gst = businessProfile?.gstNumber || businessProfile?.shopDetail?.gstNumber;
+        // Reject placeholder values like 'N/A'
+        return Boolean(gst && gst.trim().toUpperCase() !== 'N/A' && gst.trim().length >= 10);
+    }, [businessProfile]);
+
     const isIntraState = useMemo(() => {
         const sellerGst = businessProfile?.gstNumber || businessProfile?.shopDetail?.gstNumber || "";
         const customerGst = formData.gst_number || "";
-        if (!sellerGst || !customerGst) return true; // Default to true (CGST/SGST)
-        return sellerGst.substring(0, 2) === customerGst.substring(0, 2);
+        
+        // State comparison still useful for determining type if applicable
+        const sellerState = (businessProfile?.state || businessProfile?.shopDetail?.state || "").trim().toLowerCase();
+        const customerState = (formData.address_state || "").trim().toLowerCase(); // Might need to ensure state is available
+
+        const sellerCode = sellerGst.substring(0, 2);
+        const customerCode = customerGst.substring(0, 2);
+
+        if (sellerGst && customerGst && /^\d{2}$/.test(sellerCode) && /^\d{2}$/.test(customerCode)) {
+            return sellerCode === customerCode;
+        }
+        return true; // Default to Intra if can't determine
     }, [businessProfile, formData.gst_number]);
 
     const handleSelectCustomer = async (customer) => {
@@ -341,21 +357,25 @@ const AddSO = () => {
     };
 
     const handleQuickAddProduct = (product, targetIndex = null) => {
+        const productRate = product.sellingRate || product.rate || 0;
+        const taxRate = product.tax_rate || 0;
+        const beforeTax = (1 * productRate); // qty=1 initially, no discount
+        const taxAmt = isGstApplicable ? (beforeTax * taxRate / 100) : 0;
         const newItem = {
             id: Date.now(),
             product_id: product.id,
             product_code: product.product_code || '',
             product_name: product.product_name || '',
             quantity: 1,
-            rate: product.sellingRate || product.rate || 0,
+            rate: productRate,
             uom: getStandardGstUom(product.uom),
             discount_amount: 0,
             discount_percent: 0,
             hsn: product.hsn_code || '',
-            tax_percent: product.tax_rate || 0,
-            before_tax: (product.sellingRate || 0).toFixed(2),
-            tax_amount: ((product.sellingRate || 0) * (product.tax_rate || 0) / 100).toFixed(2),
-            total_amount: ((product.sellingRate || 0) * (1 + (product.tax_rate || 0) / 100)).toFixed(2),
+            tax_percent: taxRate,
+            before_tax: beforeTax.toFixed(2),
+            tax_amount: taxAmt.toFixed(2),
+            total_amount: (beforeTax + taxAmt).toFixed(2),
             description: product.description || ''
         };
 
@@ -471,7 +491,7 @@ const AddSO = () => {
         const beforeTaxAmount = baseAmount - discAmt;
         item.before_tax = parseFloat(beforeTaxAmount.toFixed(2));
 
-        const taxAmount = (beforeTaxAmount * taxPct) / 100;
+        const taxAmount = isGstApplicable ? ((beforeTaxAmount * taxPct) / 100) : 0;
         item.tax_amount = parseFloat(taxAmount.toFixed(2));
         item.total_amount = parseFloat((beforeTaxAmount + taxAmount).toFixed(2));
 
