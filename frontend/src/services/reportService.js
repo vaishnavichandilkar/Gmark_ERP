@@ -3,6 +3,8 @@ import salesOrderService from './salesOrderService';
 import purchaseOrderService from './purchaseOrderService';
 import productService from './productService';
 import grnService from './grnService';
+import salesInvoiceService from './salesInvoiceService';
+import challanService from './challanService';
 
 const reportService = {
     getReportData: async () => {
@@ -13,21 +15,17 @@ const reportService = {
             const poRes = await purchaseOrderService.getPurchaseOrders({ limit: 10000 });
             const productsRes = await productService.getProducts({ limit: 10000 });
             const grnRes = await grnService.getAllGRNs({ limit: 10000 });
-
-            // Mocking Challan data since there is no backend API yet
-            const mockChallanData = [
-                { id: 1, challanNumber: 'CH-0001', status: 'GENERATED', amount: 15400, createdAt: new Date().toISOString() },
-                { id: 2, challanNumber: 'CH-0002', status: 'PENDING', amount: 8200, createdAt: new Date().toISOString() },
-                { id: 3, challanNumber: 'CH-0003', status: 'DELETED', amount: 4500, createdAt: new Date().toISOString() },
-            ];
+            const salesInvoicesRes = await salesInvoiceService.getAllInvoices({ limit: 10000 });
+            const challanRes = await challanService.getAllChallans({ limit: 10000 });
 
             return {
                 purchaseInvoices: purchaseRes?.data || purchaseRes || [],
                 salesOrders: salesRes?.data || salesRes || [],
+                salesInvoices: salesInvoicesRes?.data || salesInvoicesRes || [],
                 purchaseOrders: poRes?.data || poRes || [],
                 products: productsRes?.data || productsRes || [],
                 grnData: grnRes?.data || grnRes || [],
-                challanData: mockChallanData,
+                challanData: challanRes?.data || challanRes || [],
             };
         } catch (error) {
             console.error("ReportService Error:", error);

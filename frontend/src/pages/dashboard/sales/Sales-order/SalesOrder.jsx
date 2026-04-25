@@ -191,20 +191,20 @@ const SalesOrder = () => {
 
       // Calculate days diff
       const diffTime = expiryDate ? expiryDate - today : null;
-      const diffDays = diffTime ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : null;
-      const isExpiringSoon = !isExpired && diffDays !== null && diffDays <= 3;
+      const diffHrs = diffTime ? diffTime / (1000 * 60 * 60) : null;
+      const isExpiringSoon = !isExpired && diffHrs !== null && diffHrs > 0 && diffHrs <= 48;
 
       let computedStatusLabel = "Pending";
-      let bgClass = "bg-gray-100 text-gray-600";
+      let bgClass = "bg-orange-100 text-orange-600";
 
       if (status === 'DELETED' || status === 'deleted') {
         computedStatusLabel = "Deleted"; bgClass = "bg-red-100 text-red-600";
-      } else if (status === 'INVOICE_GENERATED' || status === 'completed' || status === 'COMPLETED') {
-        computedStatusLabel = "Completed"; bgClass = "bg-emerald-100 text-emerald-600";
       } else if (isExpired) {
         computedStatusLabel = "Expired"; bgClass = "bg-slate-100 text-slate-500 border border-slate-200";
       } else if (isExpiringSoon) {
         computedStatusLabel = "Expiring Soon"; bgClass = "bg-amber-100 text-amber-600 border border-amber-200";
+      } else if (status === 'INVOICE_GENERATED' || status === 'INVOICE_COMPLETED' || status === 'completed' || status === 'COMPLETED') {
+        computedStatusLabel = "Completed"; bgClass = "bg-emerald-100 text-emerald-600";
       } else {
         computedStatusLabel = "Pending"; bgClass = "bg-orange-100 text-orange-600";
       }

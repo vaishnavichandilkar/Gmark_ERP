@@ -14,7 +14,7 @@ import ReportTable from '../components/ReportTable';
 const ReportDashboard = () => {
     const { t } = useTranslation(['reports', 'common']);
     const dispatch = useDispatch();
-    const { purchaseData, salesData, poData, productData, loading, error, grnData, challanData } = useSelector(state => state.reports);
+    const { purchaseData, salesData, salesInvoicesData, poData, productData, loading, error, grnData, challanData } = useSelector(state => state.reports);
 
     const [activeTab, setActiveTab] = useState('ALL'); // 'ALL', 'PURCHASE', 'SALES'
     const [timeFilter, setTimeFilter] = useState('MONTHLY'); // 'DAILY', 'WEEKLY', 'MONTHLY'
@@ -39,34 +39,54 @@ const ReportDashboard = () => {
     }, [detailView]);
 
     const metrics = useMemo(() => {
-        const completedSales = (salesData || []).filter(s => s.status === 'INVOICE_GENERATED');
-        const totalPurchases = (purchaseData || []).reduce((sum, item) => sum + (item.grandTotal || 0), 0);
+        const completedSales = (salesInvoicesData || []).filter(s => s.status === 'GENERATED' || s.status === 'INVOICE_GENERATED');
+        const validPurchases = (purchaseData || []).filter(p => p.status === 'GENERATED');
+        
+        const totalPurchases = validPurchases.reduce((sum, item) => sum + (item.grandTotal || 0), 0);
         const totalSales = completedSales.reduce((sum, item) => sum + (item.grandTotal || 0), 0);
-        const totalPurchaseTax = (purchaseData || []).reduce((sum, item) => sum + ((item.cgstAmount || 0) + (item.sgstAmount || 0) + (item.igstAmount || 0)), 0);
+        const totalPurchaseTax = validPurchases.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
         const totalSalesTax = completedSales.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
         const profit = totalSales - totalPurchases;
+
+        const parseSafeDate = (d) => {
+            if (!d) return null;
+            if (d instanceof Date) return isNaN(d.getTime()) ? null : d;
+            let date = new Date(d);
+            if (isNaN(date.getTime()) && typeof d === 'string') {
+                const parts = d.split(/[-/]/);
+                if (parts.length === 3) {
+                    const day = parseInt(parts[0], 10);
+                    const month = parseInt(parts[1], 10) - 1;
+                    let year = parseInt(parts[2], 10);
+                    if (year < 100) year += 2000;
+                    date = new Date(year, month, day);
+                }
+            }
+            return isNaN(date.getTime()) ? null : date;
+        };
 
         const calcStatuses = (data) => {
             let created = 0, pending = 0, expired = 0, expiringSoon = 0, completed = 0, deleted = 0;
             const now = new Date();
-            const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+            // Align with backend/Purchase module: 48 hours for "Expiring Soon"
+            const expiringSoonLimit = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
             data.forEach(item => {
                 created++;
                 if (item.status === 'DELETED') {
                     deleted++;
-                } else if (item.status === 'INVOICE_GENERATED') {
-                    completed++;
                 } else {
-                    // PENDING or other statuses
-                    const expiry = item.expiryDate ? new Date(item.expiryDate) : null;
+                    const expiry = parseSafeDate(item.expiryDate);
+                    const isCompleted = item.status === 'INVOICE_GENERATED' || item.status === 'INVOICE_COMPLETED' || item.status === 'COMPLETED';
+                    
                     if (expiry && expiry < now) {
                         expired++;
+                    } else if (expiry && expiry <= expiringSoonLimit) {
+                        expiringSoon++;
+                    } else if (isCompleted) {
+                        completed++;
                     } else {
                         pending++;
-                        if (expiry && expiry <= sevenDaysFromNow) {
-                            expiringSoon++;
-                        }
                     }
                 }
             });
@@ -121,11 +141,9 @@ const ReportDashboard = () => {
         const calcSiStatuses = (data) => {
             let total = 0, generated = 0, deleted = 0;
             (data || []).forEach(item => {
-                if (item.status === 'INVOICE_GENERATED' || item.status === 'DELETED') {
-                    total++;
-                    if (item.status === 'DELETED') deleted++;
-                    else if (item.status === 'INVOICE_GENERATED') generated++;
-                }
+                total++;
+                if (item.status === 'DELETED') deleted++;
+                else if (item.status === 'GENERATED' || item.status === 'INVOICE_GENERATED') generated++;
             });
             return { total, generated, deleted };
         };
@@ -136,7 +154,7 @@ const ReportDashboard = () => {
             totalPurchaseTax,
             totalSalesTax,
             profit,
-            purchaseCount: (purchaseData || []).length,
+            purchaseCount: validPurchases.length,
             salesCount: completedSales.length,
             poStatuses: calcStatuses(poData || []),
             soStatuses: calcStatuses(salesData || []),
@@ -144,26 +162,44 @@ const ReportDashboard = () => {
             grnStatuses: calcGrnStatuses(grnData || []),
             challanStatuses: calcChallanStatuses(challanData || []),
             piStatuses: calcPiStatuses(purchaseData || []),
-            siStatuses: calcSiStatuses(salesData || []),
+            siStatuses: calcSiStatuses(salesInvoicesData || []),
         };
-    }, [purchaseData, salesData, poData, productData, grnData, challanData]);
+    }, [purchaseData, salesData, salesInvoicesData, poData, productData, grnData, challanData]);
 
     // Helper to filter data for detailed view
     const handleCardClick = (type, statusLabel, data) => {
         let filtered = [];
         const now = new Date();
-        const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const expiringSoonLimit = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
         if (type === 'PO' || type === 'SO') {
             filtered = (data || []).filter(item => {
+                const isCompleted = item.status === 'INVOICE_GENERATED' || item.status === 'INVOICE_COMPLETED' || item.status === 'COMPLETED';
+                const parseSafeDate = (d) => {
+                    if (!d) return null;
+                    if (d instanceof Date) return isNaN(d.getTime()) ? null : d;
+                    let date = new Date(d);
+                    if (isNaN(date.getTime()) && typeof d === 'string') {
+                        const parts = d.split(/[-/]/);
+                        if (parts.length === 3) {
+                            const day = parseInt(parts[0], 10);
+                            const month = parseInt(parts[1], 10) - 1;
+                            let year = parseInt(parts[2], 10);
+                            if (year < 100) year += 2000;
+                            date = new Date(year, month, day);
+                        }
+                    }
+                    return isNaN(date.getTime()) ? null : date;
+                };
+
+                const expiry = parseSafeDate(item.expiryDate);
+
                 if (statusLabel === 'Created') return true;
                 if (statusLabel === 'Deleted') return item.status === 'DELETED';
-                if (statusLabel === 'Completed') return item.status === 'INVOICE_GENERATED';
-
-                const expiry = item.expiryDate ? new Date(item.expiryDate) : null;
-                if (statusLabel === 'Expired') return expiry && expiry < now && item.status !== 'DELETED' && item.status !== 'INVOICE_GENERATED';
-                if (statusLabel === 'Pending') return (!expiry || expiry >= now) && item.status !== 'DELETED' && item.status !== 'INVOICE_GENERATED';
-                if (statusLabel === 'Expiring Soon') return expiry && expiry >= now && expiry <= sevenDaysFromNow && item.status !== 'DELETED' && item.status !== 'INVOICE_GENERATED';
+                if (statusLabel === 'Expired') return expiry && expiry < now && item.status !== 'DELETED';
+                if (statusLabel === 'Expiring Soon') return expiry && expiry >= now && expiry <= expiringSoonLimit && item.status !== 'DELETED';
+                if (statusLabel === 'Completed') return isCompleted && item.status !== 'DELETED' && !(expiry && expiry < now) && !(expiry && expiry <= expiringSoonLimit);
+                if (statusLabel === 'Pending') return (!expiry || expiry > expiringSoonLimit) && item.status !== 'DELETED' && !isCompleted;
 
                 return false;
             });
@@ -202,9 +238,9 @@ const ReportDashboard = () => {
             });
         } else if (type === 'SI') {
             filtered = (data || []).filter(item => {
-                if (statusLabel === 'Total Invoices') return (item.status === 'INVOICE_GENERATED' || item.status === 'DELETED');
+                if (statusLabel === 'Total Invoices') return true;
                 if (statusLabel === 'Deleted') return item.status === 'DELETED';
-                if (statusLabel === 'Generated') return item.status === 'INVOICE_GENERATED';
+                if (statusLabel === 'Generated') return item.status === 'GENERATED' || item.status === 'INVOICE_GENERATED';
                 return false;
             });
         }
@@ -237,7 +273,8 @@ const ReportDashboard = () => {
             }
         };
 
-        purchaseData.forEach(item => {
+        const validPurchasesForChart = (purchaseData || []).filter(p => p.status === 'GENERATED');
+        validPurchasesForChart.forEach(item => {
             const rawDate = item.createdAt || item.bookingDate || new Date();
             const date = new Date(rawDate);
             const key = getGroupKey(rawDate);
@@ -255,9 +292,9 @@ const ReportDashboard = () => {
             aggregated[key].Purchases += (item.grandTotal || 0);
         });
 
-        const completedSalesForChart = (salesData || []).filter(s => s.status === 'INVOICE_GENERATED');
+        const completedSalesForChart = (salesInvoicesData || []).filter(s => s.status === 'GENERATED' || s.status === 'INVOICE_GENERATED');
         completedSalesForChart.forEach(item => {
-            const rawDate = item.createdAt || item.soCreationDate || new Date();
+            const rawDate = item.createdAt || item.invoiceDate || item.soCreationDate || new Date();
             const date = new Date(rawDate);
             const key = getGroupKey(rawDate);
             // Rough timestamp for sorting reliably
@@ -297,7 +334,7 @@ const ReportDashboard = () => {
         });
 
         return Object.values(aggregated).sort((a, b) => a.timestamp - b.timestamp);
-    }, [purchaseData, salesData, productData, timeFilter]);
+    }, [purchaseData, salesInvoicesData, productData, timeFilter]);
 
     // Tab configurations
     const tabs = [
@@ -347,7 +384,7 @@ const ReportDashboard = () => {
                             <div>
                                 <p className="text-sm font-medium text-blue-800/70 mb-1">Total Sales</p>
                                 <h4 className="text-2xl font-bold text-blue-900">{formatCurrency(metrics.totalSales)}</h4>
-                                <p className="text-xs text-blue-600 mt-1">{metrics.salesCount} Orders</p>
+                                <p className="text-xs text-blue-600 mt-1">{metrics.salesCount} Invoices</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -628,7 +665,6 @@ const ReportDashboard = () => {
         } else {
             cards = [
                 { label: 'Total Challans', count: statuses.total, icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100 hover:border-blue-300' },
-                { label: 'Pending', count: statuses.pending, icon: Clock, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100 hover:border-indigo-300' },
                 { label: 'Generated', count: statuses.generated, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100 hover:border-emerald-300' },
                 { label: 'Deleted', count: statuses.deleted, icon: Trash2, color: 'text-gray-500', bg: 'bg-gray-50', border: 'border-gray-100 hover:border-gray-300' },
             ];
@@ -710,7 +746,7 @@ const ReportDashboard = () => {
                 <div className="mb-2">
                     {renderStatusCards('Sales Orders Status', metrics.soStatuses, 'SO', salesData)}
                     {renderGrnChallanCards('Challan Status', metrics.challanStatuses, 'Challan', challanData)}
-                    {renderGrnChallanCards('Sales Invoice Status', metrics.siStatuses, 'SI', salesData)}
+                    {renderGrnChallanCards('Sales Invoice Status', metrics.siStatuses, 'SI', salesInvoicesData)}
                 </div>
             );
         }

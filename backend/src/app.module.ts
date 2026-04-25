@@ -16,6 +16,7 @@ import { MasterModule } from './modules/Master/master.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { PurchaseModule } from './modules/Purchase/purchase.module';
 import { SalesModule } from './modules/Sales/sales.module';
+import { ReportsModule } from './modules/Reports/reports.module';
 import { AppController } from './app.controller';
 @Module({
     imports: [
@@ -34,6 +35,7 @@ import { AppController } from './app.controller';
         ProfileModule,
         PurchaseModule,
         SalesModule,
+        ReportsModule,
     ],
     controllers: [AppController],
     providers: [],

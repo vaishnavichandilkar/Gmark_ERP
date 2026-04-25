@@ -69,7 +69,7 @@ const ScrollableTable = ({ children, className = "" }) => {
         <div
           ref={containerRef}
           onScroll={checkScroll}
-          className="w-full flex-1 overflow-x-auto overflow-y-visible custom-table-scrollbar selection:bg-emerald-100"
+          className="w-full flex-1 overflow-x-auto overflow-y-visible custom-table-scrollbar selection:bg-emerald-100 min-h-[300px]"
         >
           {children}
         </div>

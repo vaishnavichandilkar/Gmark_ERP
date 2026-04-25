@@ -276,8 +276,6 @@ export class AccountMasterService {
     isExport?: boolean;
     userId: number;
   }) {
-    const fs = require('fs');
-    fs.appendFileSync('d:/USERS/vaishnavi/Desktop/weighting_scale/backend/debug_service.log', `[${new Date().toISOString()}] Service.findAll User: ${filter.userId}, Filter: ${JSON.stringify(filter)}\n`);
     const where: Prisma.AccountMasterWhereInput = { userId: filter.userId };
     
     if (filter.groupName) {
@@ -525,8 +523,12 @@ export class AccountMasterService {
       }
 
       // If not in DB, fetch from API
-      const response = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(`https://api.postalpincode.in/pincode/${pincode}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
       const data = await response.json();
+
 
       if (data && data[0] && data[0].Status === 'Success' && data[0].PostOffice && data[0].PostOffice.length > 0) {
         const postOffices = data[0].PostOffice;

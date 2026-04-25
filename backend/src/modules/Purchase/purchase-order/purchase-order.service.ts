@@ -150,7 +150,7 @@ export class PurchaseOrderService {
         where.expiryDate = { lt: startOfToday };
         break;
       case 'completed':
-        where.status = 'INVOICE_COMPLETED' as any;
+        where.status = { in: ['INVOICE_COMPLETED', 'INVOICE_GENERATED'] } as any;
         break;
       case 'deleted':
         where.status = 'DELETED';

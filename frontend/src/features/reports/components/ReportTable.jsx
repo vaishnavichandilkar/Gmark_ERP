@@ -27,7 +27,21 @@ const ReportTable = ({ data, type, status, onClose }) => {
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '-';
-        const date = new Date(dateStr);
+        if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? '-' : dateStr.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        
+        let date = new Date(dateStr);
+        if (isNaN(date.getTime()) && typeof dateStr === 'string') {
+            const parts = dateStr.split(/[-/]/);
+            if (parts.length === 3) {
+                const day = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10) - 1;
+                let year = parseInt(parts[2], 10);
+                if (year < 100) year += 2000;
+                date = new Date(year, month, day);
+            }
+        }
+        
+        if (isNaN(date.getTime())) return '-';
         return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     };
 
@@ -37,6 +51,45 @@ const ReportTable = ({ data, type, status, onClose }) => {
             currency: 'INR',
             maximumFractionDigits: 2
         }).format(amount || 0);
+    };
+
+    const renderStatus = (val, item) => {
+        // Priority: Deleted -> Expired -> Expiring Soon -> Completed -> Pending
+        if (['PO', 'SO'].includes(type) && item) {
+            if (item.status === 'DELETED') return 'DELETED';
+            
+            const parseSafeDate = (d) => {
+                if (!d) return null;
+                if (d instanceof Date) return isNaN(d.getTime()) ? null : d;
+                let date = new Date(d);
+                if (isNaN(date.getTime()) && typeof d === 'string') {
+                    const parts = d.split(/[-/]/);
+                    if (parts.length === 3) {
+                        const day = parseInt(parts[0], 10);
+                        const month = parseInt(parts[1], 10) - 1;
+                        let year = parseInt(parts[2], 10);
+                        if (year < 100) year += 2000;
+                        date = new Date(year, month, day);
+                    }
+                }
+                return isNaN(date.getTime()) ? null : date;
+            };
+
+            const now = new Date();
+            const expiringSoonLimit = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+            const expiry = parseSafeDate(item.expiryDate);
+            const isCompleted = item.status === 'INVOICE_GENERATED' || item.status === 'INVOICE_COMPLETED' || item.status === 'COMPLETED';
+
+            if (expiry && expiry < now) return 'EXPIRED';
+            if (expiry && expiry <= expiringSoonLimit) return 'EXPIRING SOON';
+            if (isCompleted) return 'COMPLETED';
+            return 'PENDING';
+        }
+
+        if (['Expiring Soon', 'Expired'].includes(status)) {
+            return status.toUpperCase();
+        }
+        return (val || '-').toUpperCase();
     };
 
     const columns = useMemo(() => {
@@ -51,7 +104,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     { header: 'Credit Days', key: 'creditDays' },
                     { header: 'Tax Amount', key: 'taxAmount', render: (val) => formatCurrency(val) },
                     { header: 'Total Amount', key: 'totalAmount', render: (val) => formatCurrency(val) },
-                    { header: 'Status', key: 'status' },
+                    { header: 'Status', key: 'status', render: renderStatus },
                     { header: 'Action', key: 'action', isAction: true }
                 ];
             case 'SO':
@@ -66,13 +119,11 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     { header: 'Credit Days', key: 'creditDays' },
                     { header: 'Tax Amount', key: 'taxAmount', render: (val) => formatCurrency(val) },
                     { header: 'Total Amount', key: 'grandTotal', render: (val) => formatCurrency(val) },
-                    { header: 'Status', key: 'status' },
+                    { header: 'Status', key: 'status', render: renderStatus },
                     { header: 'Action', key: 'action', isAction: true }
                 ];
             case 'PRODUCT':
                 return [
-                    { header: 'Product Code', key: 'product_code' },
-                    { header: 'Product Name', key: 'product_name' },
                     { header: 'UOM', key: 'uom', render: (val) => val?.unit_name || val?.gst_uom || '-' },
                     { header: 'Product Type', key: 'product_type' },
                     { header: 'Category', key: 'category', render: (val) => val?.name || '-' },
@@ -80,7 +131,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     { header: 'Sub Sub Category', key: 'sub_sub_category', render: (val) => val?.name || '-' },
                     { header: 'HSN Code', key: 'hsn_code' },
                     { header: 'Tax Rate', key: 'tax_rate', render: (val) => val ? `${val}%` : '-' },
-                    { header: 'Status', key: 'status' },
+                    { header: 'Status', key: 'status', render: (val) => (val || '-').toUpperCase() },
                     { header: 'Action', key: 'action', isAction: true }
                 ];
             case 'GRN':
@@ -95,7 +146,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     { header: 'Taxable Amount', key: 'taxableAmount', render: (val) => formatCurrency(val) },
                     { header: 'Tax Amount', key: 'taxAmount', render: (val) => formatCurrency(val) },
                     { header: 'Gross Amount', key: 'grandTotal', render: (val) => formatCurrency(val) },
-                    { header: 'Status', key: 'status' },
+                    { header: 'Status', key: 'status', render: (val) => (val || '-').toUpperCase() },
                     { header: 'Action', key: 'action', isAction: true }
                 ];
             case 'CHALLAN':
@@ -111,7 +162,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     { header: 'Taxable Amount', key: 'taxableAmount', render: (val) => formatCurrency(val) },
                     { header: 'Tax Amount', key: 'taxAmount', render: (val) => formatCurrency(val) },
                     { header: 'Gross Amount', key: 'grandTotal', render: (val) => formatCurrency(val) },
-                    { header: 'Status', key: 'status' },
+                    { header: 'Status', key: 'status', render: (val) => (val || '-').toUpperCase() },
                     { header: 'Action', key: 'action', isAction: true }
                 ];
             case 'PI':
@@ -126,7 +177,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     { header: 'Taxable Amount', key: 'taxableAmount', render: (val) => formatCurrency(val) },
                     { header: 'Tax Amount', key: 'taxAmount', render: (val) => formatCurrency(val) },
                     { header: 'Gross Amount', key: 'grandTotal', render: (val) => formatCurrency(val) },
-                    { header: 'Status', key: 'status' },
+                    { header: 'Status', key: 'status', render: (val) => (val || '-').toUpperCase() },
                     { header: 'Action', key: 'action', isAction: true }
                 ];
             case 'SI':
@@ -142,13 +193,13 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     { header: 'Taxable Amount', key: 'taxableAmount', render: (val) => formatCurrency(val) },
                     { header: 'Tax Amount', key: 'taxAmount', render: (val) => formatCurrency(val) },
                     { header: 'Gross Amount', key: 'grandTotal', render: (val) => formatCurrency(val) },
-                    { header: 'Status', key: 'status' },
+                    { header: 'Status', key: 'status', render: (val) => (val || '-').toUpperCase() },
                     { header: 'Action', key: 'action', isAction: true }
                 ];
             default:
                 return [];
         }
-    }, [type]);
+    }, [type, status]);
 
     const renderActionMenu = (item, rowIdx) => {
         const id = item.id || rowIdx;
@@ -200,14 +251,27 @@ const ReportTable = ({ data, type, status, onClose }) => {
                 case 'PRODUCT':
                     return [
                         {
-                            label: 'View & Edit Product',
+                            label: 'View and Edit Product',
                             icon: <Eye size={16} />,
-                            onClick: () => navigate(`/seller/masters/product-master/view/${item.id}`)
+                            onClick: () => navigate(`${ROUTES.PRODUCT_MASTER}/view/${item.id}`)
                         },
                         {
-                            label: itemStatus === 'active' ? 'Deactivate' : 'Activate',
+                            label: itemStatus === 'active' ? 'Inactive' : 'Active',
                             icon: <CheckCircle2 size={16} />,
                             onClick: () => toast.success(`Status updated to ${itemStatus === 'active' ? 'Inactive' : 'Active'}`)
+                        }
+                    ];
+                case 'CHALLAN':
+                    return [
+                        {
+                            label: 'View Challan',
+                            icon: <Eye size={16} />,
+                            onClick: () => navigate(`/seller/sales/challan/view/${item.id}`)
+                        },
+                        {
+                            label: 'Print Challan',
+                            icon: <Printer size={16} />,
+                            onClick: () => toast.success('Print feature available in Sales module')
                         }
                     ];
                 case 'GRN':
@@ -256,16 +320,19 @@ const ReportTable = ({ data, type, status, onClose }) => {
         return (
             <div className="relative action-menu-container">
                 <button
-                    onClick={() => setActiveDropdown(activeDropdown === id ? null : id)}
-                    className={`p-2 rounded-lg transition-all ${activeDropdown === id ? 'bg-emerald-900 text-white shadow-lg' : 'text-gray-400 hover:bg-emerald-50 hover:text-emerald-600'}`}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveDropdown(activeDropdown === id ? null : id);
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className={`p-2 rounded-lg transition-all ${activeDropdown === id ? 'bg-[#004f3b] text-white shadow-lg' : 'text-gray-400 hover:bg-emerald-50 hover:text-emerald-600'}`}
                 >
                     <MoreVertical size={20} />
                 </button>
 
                 {activeDropdown === id && (
                     <div
-                        className={`absolute right-0 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[100] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${rowIdx >= currentItems.length - 2 && currentItems.length > 2 ? 'bottom-full mb-2' : 'top-full mt-2'
-                            }`}
+                        className="absolute right-0 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[500] py-2 animate-in zoom-in-95 duration-200 text-left font-bold top-full mt-2"
                     >
                         {actions.map((action, i) => (
                             <button
@@ -310,7 +377,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
 
     return (
         <div
-            className="bg-white rounded-[16px] md:rounded-[24px] border border-gray-100 shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 mb-8 mx-0 md:mx-0 report-table-element"
+            className="bg-white rounded-[16px] md:rounded-[24px] border border-gray-100 shadow-xl overflow-visible animate-in fade-in slide-in-from-bottom-4 duration-500 mb-8 mx-0 md:mx-0 report-table-element"
             onMouseDown={(e) => e.stopPropagation()}
         >
             {/* Table Header */}
@@ -358,9 +425,9 @@ const ReportTable = ({ data, type, status, onClose }) => {
                 <ScrollableTable>
                     <table className="w-full border-collapse text-left">
                         <thead>
-                            <tr className="bg-[#004f3b]">
+                            <tr className="bg-[#004f3b] sticky top-0 z-20">
                                 {columns.map((col, idx) => (
-                                    <th key={idx} className="px-8 py-4 text-[13px] font-bold text-white uppercase tracking-wider whitespace-nowrap">
+                                    <th key={idx} className="px-8 py-4 text-[13px] font-bold text-white uppercase tracking-wider whitespace-nowrap bg-[#004f3b] sticky top-0">
                                         {col.header}
                                     </th>
                                 ))}
@@ -371,10 +438,10 @@ const ReportTable = ({ data, type, status, onClose }) => {
                                 currentItems.map((item, rowIdx) => (
                                     <tr key={rowIdx} className="hover:bg-gray-50/50 transition-colors group">
                                         {columns.map((col, colIdx) => (
-                                            <td key={colIdx} className="px-8 py-4 text-[14px] text-gray-600 font-medium">
+                                            <td key={colIdx} className={`px-8 py-4 text-[14px] text-gray-600 font-medium ${col.isAction ? 'relative' : ''}`}>
                                                 {col.isAction
                                                     ? renderActionMenu(item, rowIdx)
-                                                    : (col.render ? col.render(item[col.key]) : (item[col.key] || '-'))
+                                                    : (col.key === 'status' ? renderStatus(item[col.key], item) : (col.render ? col.render(item[col.key]) : (item[col.key] || '-')))
                                                 }
                                             </td>
                                         ))}
@@ -385,6 +452,12 @@ const ReportTable = ({ data, type, status, onClose }) => {
                                     <td colSpan={columns.length} className="px-8 py-20 text-center text-gray-400 font-medium">
                                         No matching records found.
                                     </td>
+                                </tr>
+                            )}
+                            {/* Buffer for dropdown visibility */}
+                            {currentItems.length > 0 && currentItems.length < 4 && (
+                                <tr>
+                                    <td colSpan={columns.length} className="h-40 border-none"></td>
                                 </tr>
                             )}
                         </tbody>

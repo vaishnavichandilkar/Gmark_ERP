@@ -211,14 +211,14 @@ const PurchaseOrder = () => {
       let computedStatusLabel = "Pending";
       let bgClass = "bg-orange-100 text-orange-600";
 
-      if (status === 'INVOICE_GENERATED') {
-        computedStatusLabel = "Completed"; bgClass = "bg-emerald-50 text-emerald-600 border border-emerald-100";
-      } else if (status === 'DELETED') {
+      if (status === 'DELETED') {
         computedStatusLabel = "Deleted"; bgClass = "bg-red-50 text-red-600 border border-red-100";
       } else if (expiryEndOfDay < now) {
         computedStatusLabel = "Expired"; bgClass = "bg-red-50 text-red-600 border border-red-100";
       } else if (diffHrs > 0 && diffHrs <= 48) {
         computedStatusLabel = "Expiring Soon"; bgClass = "bg-amber-50 text-amber-600 border border-amber-100";
+      } else if (status === 'INVOICE_GENERATED' || status === 'INVOICE_COMPLETED' || status === 'COMPLETED') {
+        computedStatusLabel = "Completed"; bgClass = "bg-emerald-50 text-emerald-600 border border-emerald-100";
       } else {
         computedStatusLabel = "Pending"; bgClass = "bg-blue-50 text-blue-600 border border-blue-100";
       }

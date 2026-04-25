@@ -3,6 +3,7 @@ import { createSlice } from '@reduxjs/toolkit';
 const initialState = {
     purchaseData: [],
     salesData: [],
+    salesInvoicesData: [],
     poData: [],
     productData: [],
     grnData: [],
@@ -23,6 +24,7 @@ const reportSlice = createSlice({
             state.loading = false;
             state.purchaseData = action.payload.purchaseInvoices || [];
             state.salesData = action.payload.salesOrders || [];
+            state.salesInvoicesData = action.payload.salesInvoices || [];
             state.poData = action.payload.purchaseOrders || [];
             state.productData = action.payload.products || [];
             state.grnData = action.payload.grnData || [];
