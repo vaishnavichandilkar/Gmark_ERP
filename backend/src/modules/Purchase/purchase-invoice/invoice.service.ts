@@ -35,30 +35,32 @@ export class PurchaseInvoiceService {
       });
       if (po) {
         const totalPoQty = po.items.reduce((sum, item) => sum + item.quantity, 0);
-        const totalInvoicedQty = po.purchaseInvoices.reduce((sum, i) => {
-          return sum + i.items.reduce((iSum, it) => iSum + it.quantity, 0);
+        const totalInvoicedQty = (po.purchaseInvoices || []).reduce((sum, i) => {
+          return sum + (i.items || []).reduce((iSum, it) => iSum + (Number(it.quantity) || 0), 0);
         }, 0);
 
-        if (totalInvoicedQty >= totalPoQty) {
-          await tx.purchaseOrder.update({
-            where: { id: po.id },
-            data: { status: 'INVOICE_COMPLETED' }
-          });
-        } else {
-          // If not fully invoiced, check if it's GRN completed or just pending
-          const grns = await tx.grn.findMany({
-            where: { poId: po.id, status: { not: 'DELETED' } },
-            include: { items: true }
-          });
-          const totalReceivedQty = grns.reduce((sum, g) => sum + g.items.reduce((iSum, i) => iSum + i.receivedQty, 0), 0);
-          
-          const newStatus = totalReceivedQty >= totalPoQty ? 'GRN_COMPLETED' : 'PENDING';
-          if (po.status !== newStatus) {
+        const grns = await tx.grn.findMany({
+          where: { poId: po.id, status: { not: 'DELETED' } },
+          include: { items: true }
+        });
+        const totalReceivedQty = (grns || []).reduce((sum, g) => sum + (g.items || []).reduce((iSum, i) => iSum + (Number(i.receivedQty) || 0), 0), 0);
+
+        const consumedQty = Math.max(totalInvoicedQty, totalReceivedQty);
+
+        let newStatus = 'PENDING';
+        if (consumedQty >= totalPoQty) {
+            if (totalInvoicedQty >= totalPoQty) {
+                newStatus = 'INVOICE_COMPLETED';
+            } else {
+                newStatus = 'GRN_COMPLETED';
+            }
+        }
+
+        if (po.status !== newStatus) {
             await tx.purchaseOrder.update({
-              where: { id: po.id },
-              data: { status: newStatus }
+                where: { id: po.id },
+                data: { status: newStatus }
             });
-          }
         }
       }
     }
@@ -161,7 +163,7 @@ export class PurchaseInvoiceService {
       where: {
         userId,
         supplierName: { equals: accountName, mode: 'insensitive' },
-        status: { notIn: ['DELETED', 'INVOICE_COMPLETED'] as any },
+        status: { not: 'DELETED' },
       },
       include: {
         items: true,
@@ -171,6 +173,10 @@ export class PurchaseInvoiceService {
             ...(excludeInvoiceId ? { id: { not: excludeInvoiceId } } : {})
           },
           include: { items: true }
+        },
+        grn: {
+          where: { status: { not: 'DELETED' } },
+          include: { items: true }
         }
       },
       orderBy: { poNumber: 'desc' },
@@ -178,11 +184,18 @@ export class PurchaseInvoiceService {
 
     const filteredPos = pos.filter(po => {
       const totalPoQty = po.items.reduce((sum, item) => sum + item.quantity, 0);
+      
       const totalInvoicedQty = po.purchaseInvoices.reduce((sum, inv) => {
         return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
       }, 0);
+
+      const totalReceivedQty = po.grn.reduce((sum, grn) => {
+        return sum + grn.items.reduce((iSum, i) => iSum + i.receivedQty, 0);
+      }, 0);
+
+      const consumedQty = Math.max(totalInvoicedQty, totalReceivedQty);
       
-      return totalInvoicedQty < totalPoQty;
+      return consumedQty < totalPoQty;
     });
 
     return filteredPos.map(po => ({
@@ -397,7 +410,9 @@ export class PurchaseInvoiceService {
       userGst,
       companyState,
       supplierState,
-      finalTax,
+      totalTaxable,   // the total taxable amount
+      0,              // percent not needed as we pass preCalculated
+      finalTax,       // the total tax amount to be split into CGST/SGST or IGST
     );
 
     const isRcm = false;
@@ -486,6 +501,8 @@ export class PurchaseInvoiceService {
           sgstAmount: sgst,
           igstAmount: igst,
           isRcm: isRcm,
+          isInterState: gstResult.isInterState,
+          gstType: gstResult.gstType as any,
           taxableAmount: totalTaxable,
           grandTotal: grandTotal,
           cumulativeBalance: cumulativeBalance,

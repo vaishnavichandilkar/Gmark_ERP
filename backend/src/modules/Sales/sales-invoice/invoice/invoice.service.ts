@@ -50,7 +50,7 @@ export class SalesInvoiceService {
       where: {
         userId,
         customerName: { equals: accountName, mode: 'insensitive' },
-        status: { notIn: ['DELETED', 'INVOICE_COMPLETED'] as any },
+        status: { not: 'DELETED' },
       },
       include: {
         items: true,
@@ -60,19 +60,30 @@ export class SalesInvoiceService {
             ...(excludeInvoiceId ? { id: { not: excludeInvoiceId } } : {})
           },
           include: { items: true }
+        },
+        salesChallans: {
+          where: { status: { not: 'DELETED' } },
+          include: { items: true }
         }
       },
       orderBy: { soNumber: 'desc' },
     });
 
-    // Filter SOs where total invoiced quantity < total SO quantity
+    // Filter SOs where max(Delivered Qty, Invoiced Qty) < total SO quantity
     return sos.filter(so => {
       const totalSoQty = so.items.reduce((sum, item) => sum + item.quantity, 0);
+      
       const totalInvoicedQty = so.salesInvoices.reduce((sum, inv) => {
         return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
       }, 0);
+
+      const totalDeliveredQty = so.salesChallans.reduce((sum, ch) => {
+        return sum + ch.items.reduce((iSum, i) => iSum + i.challanQty, 0);
+      }, 0);
+
+      const consumedQty = Math.max(totalInvoicedQty, totalDeliveredQty);
       
-      return totalInvoicedQty < totalSoQty;
+      return consumedQty < totalSoQty;
     });
   }
 
@@ -280,6 +291,8 @@ export class SalesInvoiceService {
       gstNo,          // customer GST (used for state code comparison only)
       companyState,
       customerState,
+      totalTaxable,   // the total taxable amount
+      0,              // percent not needed as we pass preCalculated
       finalTax,       // the total tax amount to be split into CGST/SGST or IGST
     );
 
@@ -322,6 +335,8 @@ export class SalesInvoiceService {
             sgstAmount: sgst,
             igstAmount: igst,
             isRcm,
+            isInterState: gstResult.isInterState,
+            gstType: gstResult.gstType as any,
             taxableAmount: totalTaxable,
             grandTotal,
             cumulativeBalance,
@@ -577,21 +592,23 @@ export class SalesInvoiceService {
         });
         if (so) {
             const totalSoQty = so.items.reduce((sum, item) => sum + item.quantity, 0);
-            const totalInvoicedQty = so.salesInvoices.reduce((sum, inv) => {
-                return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
+            const totalInvoicedQty = (so.salesInvoices || []).reduce((sum, inv) => {
+                return sum + (inv.items || []).reduce((iSum, i) => iSum + (Number(i.quantity) || 0), 0);
             }, 0);
 
+            const challans = await tx.salesChallan.findMany({
+                where: { soId: so.id, status: { not: 'DELETED' } },
+                include: { items: true }
+            });
+            const totalDeliveredQty = (challans || []).reduce((sum, ch) => sum + (ch.items || []).reduce((iSum, i) => iSum + (Number(i.challanQty) || 0), 0), 0);
+
+            const consumedQty = Math.max(totalInvoicedQty, totalDeliveredQty);
+
             let newStatus = 'PENDING';
-            if (totalInvoicedQty >= totalSoQty) {
-                newStatus = 'INVOICE_COMPLETED';
-            } else {
-                // Check challan completion
-                const challans = await tx.salesChallan.findMany({
-                    where: { soId: so.id, status: { not: 'DELETED' } },
-                    include: { items: true }
-                });
-                const totalDeliveredQty = challans.reduce((sum, ch) => sum + ch.items.reduce((iSum, i) => iSum + i.challanQty, 0), 0);
-                if (totalDeliveredQty >= totalSoQty) {
+            if (consumedQty >= totalSoQty) {
+                if (totalInvoicedQty >= totalSoQty) {
+                    newStatus = 'INVOICE_COMPLETED';
+                } else {
                     newStatus = 'CHALLAN_COMPLETED';
                 }
             }

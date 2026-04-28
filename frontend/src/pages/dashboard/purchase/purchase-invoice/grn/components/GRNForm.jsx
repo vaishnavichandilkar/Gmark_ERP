@@ -215,7 +215,6 @@ const GRNForm = ({
                             onChange={(e) => handlePOChange(e.target.value)}
                         >
                             <option value="" disabled>Select PO Number</option>
-                            <option value="">None (Manual Entry)</option>
                             {pos.map(p => <option key={p.id} value={p.id}>{p.poNumber}</option>)}
                         </select>
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { isValidGst, determinePurchaseGst } from '../../../../common/utils/gst.helper';
 import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
 import { CreateGrnDto, UpdateGrnDto } from './dto/grn.dto';
 import { PurchaseOrderService } from '../../purchase-order/purchase-order.service';
@@ -128,7 +129,7 @@ export class GrnService {
       totalTaxAmount += itemTaxAmount;
 
       itemsToCreate.push({
-        productId: item.productId ? parseInt(item.productId, 10) : null,
+        productId: (item.productId && !isNaN(Number(item.productId))) ? parseInt(String(item.productId), 10) : null,
         productCode: item.productCode,
         productName: item.productName,
         hsnCode: item.hsnCode,
@@ -182,17 +183,20 @@ export class GrnService {
       }
     }
 
-    const finalTaxTotal = isGstApplicable ? (totalTaxAmount + expenseTaxTotal) : 0;
-    let cgstAmount = 0, sgstAmount = 0, igstAmount = 0;
+    const gstResult = determinePurchaseGst(
+      supplierGst,
+      userGst,
+      company.state,
+      supplier.state,
+      taxableAmount + expenseTotal, // base for percent calculation (if percent was used)
+      0,                            // percent
+      totalTaxAmount + expenseTaxTotal // preCalculated tax
+    );
 
-    if (isGstApplicable) {
-        if (isInterState) {
-            igstAmount = finalTaxTotal;
-        } else {
-            cgstAmount = finalTaxTotal / 2;
-            sgstAmount = finalTaxTotal / 2;
-        }
-    }
+    const cgstAmount = gstResult.cgstAmount;
+    const sgstAmount = gstResult.sgstAmount;
+    const igstAmount = gstResult.igstAmount;
+    const finalTaxTotal = gstResult.totalGstAmount;
 
     // In RCM (Case 2), Buyer calculates and pays tax. Tax should NOT be added to supplier's grand total.
     const taxToAddToTotal = isRcm ? 0 : finalTaxTotal;
@@ -237,72 +241,95 @@ export class GrnService {
         grn: {
           where: { status: { not: 'DELETED' } },
           include: { items: true }
+        },
+        purchaseInvoices: {
+          where: { status: { not: 'DELETED' } },
+          include: { items: true }
         }
       }
     });
 
     if (po) {
       const totalPoQty = po.items.reduce((sum, item) => sum + item.quantity, 0);
-      const totalReceivedQty = po.grn.reduce((sum, grn) => {
-        return sum + grn.items.reduce((iSum, i) => iSum + i.receivedQty, 0);
+      
+      const totalReceivedQty = (po.grn || []).reduce((sum, grn) => {
+        return sum + (grn.items || []).reduce((iSum, i) => iSum + (Number(i.receivedQty) || 0), 0);
       }, 0);
 
-      if (totalReceivedQty >= totalPoQty) {
+      const totalInvoicedQty = (po.purchaseInvoices || []).reduce((sum, inv) => {
+        return sum + (inv.items || []).reduce((iSum, i) => iSum + (Number(i.quantity) || 0), 0);
+      }, 0);
+
+      const consumedQty = Math.max(totalReceivedQty, totalInvoicedQty);
+
+      let newStatus = po.status;
+      if (consumedQty >= totalPoQty) {
+        // If fully processed, decide which completed status to use. 
+        // Invoice completion is generally the final stage.
+        if (totalInvoicedQty >= totalPoQty) {
+            newStatus = 'INVOICE_COMPLETED';
+        } else {
+            newStatus = 'GRN_COMPLETED';
+        }
+      } else {
+        newStatus = 'PENDING';
+      }
+
+      if (po.status !== newStatus) {
         await tx.purchaseOrder.update({
           where: { id: poId },
-          data: { status: 'GRN_COMPLETED' }
+          data: { status: newStatus }
         });
-      } else {
-        if (po.status === 'GRN_COMPLETED') {
-          await tx.purchaseOrder.update({
-            where: { id: poId },
-            data: { status: 'PENDING' }
-          });
-        }
       }
     }
   }
 
   async create(createDto: CreateGrnDto, userId: number, uploadedFilePath?: string) {
     console.log('Creating GRN for Supplier:', createDto.supplierName, 'PO:', createDto.poNumber, 'User:', userId);
-    const totals = await this.calculateGrnTotals(createDto, userId);
-    console.log('GRN Calculated Totals:', JSON.stringify(totals, null, 2));
+    try {
+      const totals = await this.calculateGrnTotals(createDto, userId);
+      console.log('GRN Calculated Totals:', JSON.stringify(totals, null, 2));
 
-    return this.prisma.$transaction(async (tx) => {
-      const grn = await tx.grn.create({
-        data: {
-          grnDate: createDto.grnDate ? new Date(createDto.grnDate) : new Date(),
-          bookingDate: totals.bookingDate,
-          supplierName: createDto.supplierName,
-          address: createDto.address,
-          gstNumber: createDto.gstNumber || totals.supplierGst || null,
-          poNumber: createDto.poNumber,
-          challanNumber: createDto.challanNumber,
-          creditDays: createDto.creditDays || 0,
-          totalQuantity: totals.totalQuantity,
-          taxableAmount: totals.taxableAmount,
-          cgstAmount: totals.cgstAmount,
-          sgstAmount: totals.sgstAmount,
-          igstAmount: totals.igstAmount,
-          grandTotal: totals.grandTotal,
-          cumulativeBalance: totals.cumulativeBalance,
-          isInterState: totals.isInterState,
-          isRcm: totals.isRcm,
-          userId,
-          poId: createDto.poId,
-          items: { create: totals.itemsToCreate },
-          expenses: { create: totals.expensesToCreate }
-        },
-        include: { items: true, expenses: true },
+      return await this.prisma.$transaction(async (tx) => {
+        const grn = await tx.grn.create({
+          data: {
+            grnDate: createDto.grnDate ? new Date(createDto.grnDate) : new Date(),
+            bookingDate: totals.bookingDate,
+            supplierName: createDto.supplierName,
+            address: createDto.address,
+            gstNumber: createDto.gstNumber || totals.supplierGst || null,
+            poNumber: createDto.poNumber,
+            challanNumber: createDto.challanNumber,
+            creditDays: createDto.creditDays || 0,
+            totalQuantity: totals.totalQuantity,
+            taxableAmount: totals.taxableAmount,
+            cgstAmount: totals.cgstAmount,
+            sgstAmount: totals.sgstAmount,
+            igstAmount: totals.igstAmount,
+            grandTotal: totals.grandTotal,
+            cumulativeBalance: totals.cumulativeBalance,
+            isInterState: totals.isInterState,
+            isRcm: totals.isRcm,
+            userId,
+            poId: (createDto.poId && !isNaN(Number(createDto.poId))) ? Number(createDto.poId) : null,
+            items: { create: totals.itemsToCreate },
+            expenses: { create: totals.expensesToCreate }
+          },
+          include: { items: true, expenses: true },
+        });
+
+        if (createDto.poId) {
+          await this.updatePOStatusAfterGrn(Number(createDto.poId), tx);
+        }
+
+        console.log('Created GRN Object:', JSON.stringify(grn, null, 2));
+        return grn;
       });
-
-      if (createDto.poId) {
-        await this.updatePOStatusAfterGrn(Number(createDto.poId), tx);
-      }
-
-      console.log('Created GRN Object:', JSON.stringify(grn, null, 2));
-      return grn;
-    });
+    } catch (error) {
+      console.error('GRN CREATE ERROR:', error);
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException(`Failed to create GRN: ${error.message}`);
+    }
   }
 
   async getSupplierPOsForGrn(supplierName: string, userId: number) {
@@ -312,11 +339,15 @@ export class GrnService {
       where: {
         userId,
         supplierName: { equals: supplierName, mode: 'insensitive' },
-        status: { notIn: ['DELETED', 'GRN_COMPLETED', 'INVOICE_COMPLETED'] as any },
+        status: { not: 'DELETED' },
       },
       include: {
         items: true,
         grn: {
+          where: { status: { not: 'DELETED' } },
+          include: { items: true }
+        },
+        purchaseInvoices: {
           where: { status: { not: 'DELETED' } },
           include: { items: true }
         }
@@ -326,11 +357,18 @@ export class GrnService {
 
     const filteredPos = pos.filter(po => {
       const totalPoQty = po.items.reduce((sum, item) => sum + item.quantity, 0);
+      
       const totalReceivedQty = po.grn.reduce((sum, grn) => {
         return sum + grn.items.reduce((iSum, i) => iSum + i.receivedQty, 0);
       }, 0);
+
+      const totalInvoicedQty = po.purchaseInvoices.reduce((sum, inv) => {
+        return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
+      }, 0);
+
+      const consumedQty = Math.max(totalReceivedQty, totalInvoicedQty);
       
-      return totalReceivedQty < totalPoQty;
+      return consumedQty < totalPoQty;
     });
 
     return filteredPos.map(po => ({
@@ -385,19 +423,37 @@ export class GrnService {
   }
 
   async getReceivedQty(supplierName: string, productCode: string, userId: number, poNumber?: string) {
-    const prev = await this.prisma.grnItem.aggregate({
-      where: {
-        grn: {
-          userId,
-          supplierName: { equals: supplierName, mode: 'insensitive' },
-          poNumber: poNumber || undefined,
-          status: { not: 'DELETED' }
-        },
-        productCode
-      },
-      _sum: { receivedQty: true }
-    });
-    return { receivedPoQty: prev._sum.receivedQty || 0 };
+    const [grnSum, invSum] = await Promise.all([
+        this.prisma.grnItem.aggregate({
+          where: {
+            grn: {
+              userId,
+              supplierName: { equals: supplierName, mode: 'insensitive' },
+              poNumber: poNumber || undefined,
+              status: { not: 'DELETED' }
+            },
+            productCode
+          },
+          _sum: { receivedQty: true }
+        }),
+        this.prisma.purchaseInvoiceItem.aggregate({
+          where: {
+            purchaseInvoice: {
+              userId,
+              supplierName: { equals: supplierName, mode: 'insensitive' },
+              poNumber: poNumber || undefined,
+              status: { not: 'DELETED' }
+            },
+            productCode
+          },
+          _sum: { quantity: true }
+        })
+    ]);
+
+    const totalReceived = grnSum._sum.receivedQty || 0;
+    const totalInvoiced = invSum._sum.quantity || 0;
+
+    return { receivedPoQty: Math.max(totalReceived, totalInvoiced) };
   }
 
   async findAll(query: { search?: string, status?: string, page?: number, limit?: number, supplierId?: string, userId: number }) {

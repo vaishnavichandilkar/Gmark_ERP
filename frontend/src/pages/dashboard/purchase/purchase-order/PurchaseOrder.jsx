@@ -79,7 +79,7 @@ const PurchaseOrder = () => {
   const statusTabs = ["All", "Pending", "Expiring Soon", "Expired", "Completed", "Deleted"];
   const { t } = useTranslation(['modules', 'common']);
   const navigate = useNavigate();
-  
+
   // States
   const [searchQuery, setSearchQuery] = useState("");
   const [activeDropdown, setActiveDropdown] = useState(null);
@@ -148,7 +148,7 @@ const PurchaseOrder = () => {
         limit: itemsPerPage,
         search: searchQuery,
       };
-      
+
       const statusFilter = appliedFilters.status;
       if (statusFilter !== "All") {
         const statusMap = {
@@ -180,11 +180,11 @@ const PurchaseOrder = () => {
   useEffect(() => {
     const handleClickOutside = (event) => {
       // Check if click was outside export trigger/menu
-      const isOutsideExport = 
-          (!exportRef.current || !exportRef.current.contains(event.target));
-      
+      const isOutsideExport =
+        (!exportRef.current || !exportRef.current.contains(event.target));
+
       if (isOutsideExport) {
-          setIsExportOpen(false);
+        setIsExportOpen(false);
       }
 
       if (activeDropdown !== null) {
@@ -233,8 +233,8 @@ const PurchaseOrder = () => {
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const currentItems = filteredData.slice(
-      (currentPage - 1) * itemsPerPage,
-      currentPage * itemsPerPage
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
   );
 
   // Handlers
@@ -275,7 +275,7 @@ const PurchaseOrder = () => {
   const confirmDelete = async () => {
     if (!poToDelete) return;
     setIsDeleting(true);
-    
+
     // Close modal immediately for snappy feel
     setIsDeleteModalOpen(false);
     const deletedId = poToDelete;
@@ -284,7 +284,7 @@ const PurchaseOrder = () => {
     // Optimistic Update: Remove from local state immediately
     const previousOrders = [...purchaseOrders];
     setPurchaseOrders(prev => prev.filter(po => po.id !== deletedId));
-    
+
     try {
       await purchaseOrderService.deletePurchaseOrder(deletedId);
       toast.success("Purchase order deleted successfully");
@@ -305,7 +305,7 @@ const PurchaseOrder = () => {
       setIsRefreshing(true);
       const fullPo = await purchaseOrderService.getPurchaseOrderById(poData.id);
       const poToPrint = fullPo.data || fullPo;
-      
+
       // Ensure items have both printDescription and description for preview compatibility
       if (poToPrint.items) {
         poToPrint.items = poToPrint.items.map(it => ({
@@ -315,11 +315,11 @@ const PurchaseOrder = () => {
         }));
       }
 
-      navigate(ROUTES.PURCHASE_ORDER_PRINT, { 
-        state: { 
-          poData: poToPrint, 
-          from: '/seller/purchase/order' 
-        } 
+      navigate(ROUTES.PURCHASE_ORDER_PRINT, {
+        state: {
+          poData: poToPrint,
+          from: '/seller/purchase/order'
+        }
       });
     } catch (error) {
       console.error("Print error:", error);
@@ -428,8 +428,8 @@ const PurchaseOrder = () => {
               />
               {searchQuery && <X size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer" onClick={() => setSearchQuery("")} />}
             </div>
-            <button 
-              onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)} 
+            <button
+              onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
               className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all shadow-sm ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-white border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
             >
               <Filter size={18} className={isFilterApplied ? "text-red-500" : "text-gray-400"} />
@@ -441,26 +441,26 @@ const PurchaseOrder = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <button 
-                onClick={() => setIsImportModalOpen(true)} 
-                className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all"
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all"
             >
               <Upload size={18} /> Import
             </button>
             <div className="relative" ref={exportRef}>
-              <button 
-                  onClick={() => setIsExportOpen(!isExportOpen)} 
-                  className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all bg-white ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
+              <button
+                onClick={() => setIsExportOpen(!isExportOpen)}
+                className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all bg-white ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
               >
                 <Download size={18} /> Export
               </button>
               {isExportOpen && (
                 <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
                   <button onClick={() => handleExport('pdf')} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
-                      <FileText size={18} className="text-red-500" /> PDF
+                    <FileText size={18} className="text-red-500" /> PDF
                   </button>
                   <button onClick={() => handleExport('xlsx')} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
-                      <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                    <FileSpreadsheet size={18} className="text-green-600" /> Excel
                   </button>
                 </div>
               )}
@@ -497,26 +497,26 @@ const PurchaseOrder = () => {
                     </td>
                     <td className="px-6 py-5 text-center relative" ref={el => dropdownRefs.current[po.id] = el}>
                       <button onClick={() => setActiveDropdown(activeDropdown === po.id ? null : po.id)} className={`p-2 rounded-lg ${activeDropdown === po.id ? 'bg-[#073318] text-white' : 'text-gray-400 hover:bg-gray-100'}`}><MoreVertical size={20} /></button>
-                       {activeDropdown === po.id && (
-                         <div className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= currentItems.length - 2 ? 'bottom-0' : 'top-0'}`}>
-                           {/* VIEW / VIEW & EDIT */}
-                           {['Pending', 'Expiring Soon'].includes(po.computedStatusLabel) ? (
-                             <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50 underline-offset-4 decoration-emerald-500 hover:text-emerald-700"><Eye size={18} /> View and Edit PO</button>
-                           ) : (
-                             <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Eye size={18} /> View PO</button>
-                           )}
+                      {activeDropdown === po.id && (
+                        <div className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= currentItems.length - 2 ? 'bottom-0' : 'top-0'}`}>
+                          {/* VIEW / VIEW & EDIT */}
+                          {['Pending', 'Expiring Soon'].includes(po.computedStatusLabel) ? (
+                            <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50 underline-offset-4 decoration-emerald-500 hover:text-emerald-700"><Eye size={18} /> View and Edit PO</button>
+                          ) : (
+                            <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Eye size={18} /> View PO</button>
+                          )}
 
-                           {/* PRINT */}
-                           {['Pending', 'Expiring Soon', 'Completed', 'Expired'].includes(po.computedStatusLabel) && (
-                             <button onClick={() => handlePrint(po)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Printer size={18} /> Print PO</button>
-                           )}
+                          {/* PRINT */}
+                          {['Pending', 'Expiring Soon', 'Completed', 'Expired'].includes(po.computedStatusLabel) && (
+                            <button onClick={() => handlePrint(po)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Printer size={18} /> Print PO</button>
+                          )}
 
-                           {/* DELETE */}
-                           {['Expired'].includes(po.computedStatusLabel) && (
-                             <button onClick={() => handleDeletePO(po.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50"><Trash2 size={18} /> Delete</button>
-                           )}
-                         </div>
-                       )}
+                          {/* DELETE */}
+                          {['Expired'].includes(po.computedStatusLabel) && (
+                            <button onClick={() => handleDeletePO(po.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50"><Trash2 size={18} /> Delete</button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -551,12 +551,12 @@ const PurchaseOrder = () => {
           <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} />
 
           {isImportModalOpen && (
-              <ImportModal
-                  isOpen={isImportModalOpen}
-                  onClose={() => setIsImportModalOpen(false)}
-                  onImport={handleSubmitImport}
-                  onDownloadSample={handleDownloadSample}
-              />
+            <ImportModal
+              isOpen={isImportModalOpen}
+              onClose={() => setIsImportModalOpen(false)}
+              onImport={handleSubmitImport}
+              onDownloadSample={handleDownloadSample}
+            />
           )}
 
           {isRefreshing && (
@@ -572,48 +572,48 @@ const PurchaseOrder = () => {
           {/* Filter Sidebar */}
           {isFilterOpen && (
             <div
-                className="fixed inset-0 z-[100] bg-slate-900/20 backdrop-blur-[2px] transition-all duration-300 ease-in-out"
-                onClick={() => setIsFilterOpen(false)}
+              className="fixed inset-0 z-[100] bg-slate-900/20 backdrop-blur-[2px] transition-all duration-300 ease-in-out"
+              onClick={() => setIsFilterOpen(false)}
             />
           )}
           <div className={`fixed top-0 right-0 h-full w-screen sm:w-[440px] bg-white shadow-2xl z-[110] transform transition-all duration-300 ease-in-out flex flex-col font-outfit ${isFilterOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'}`}>
             <div className="flex items-center justify-between px-6 py-5 border-b border-[#04200f] bg-emerald-900">
-                <h2 className="text-[20px] font-bold text-white tracking-tight text-transform-none">{t('apply_filters', 'Apply Filters')}</h2>
-                <button onClick={() => setIsFilterOpen(false)} className="text-emerald-100 hover:text-white transition-colors p-1">
-                    <X size={20} />
-                </button>
+              <h2 className="text-[20px] font-bold text-white tracking-tight text-transform-none">{t('apply_filters', 'Apply Filters')}</h2>
+              <button onClick={() => setIsFilterOpen(false)} className="text-emerald-100 hover:text-white transition-colors p-1">
+                <X size={20} />
+              </button>
             </div>
 
             <div className="flex-1 px-5 sm:px-8 py-6 sm:py-8 overflow-y-auto space-y-6 sm:space-y-7 pb-32">
-                <FilterDropdown
-                    label="Status"
-                    name="status"
-                    value={filterInputs.status}
-                    onChange={(e) => setFilterInputs({ ...filterInputs, status: e.target.value })}
-                    options={[
-                        { label: 'All', value: 'All' },
-                        { label: 'Pending', value: 'Pending' },
-                        { label: 'Expiring Soon', value: 'Expiring Soon' },
-                        { label: 'Expired', value: 'Expired' },
-                        { label: 'Completed', value: 'Completed' },
-                        { label: 'Deleted', value: 'Deleted' }
-                    ]}
-                />
+              <FilterDropdown
+                label="Status"
+                name="status"
+                value={filterInputs.status}
+                onChange={(e) => setFilterInputs({ ...filterInputs, status: e.target.value })}
+                options={[
+                  { label: 'All', value: 'All' },
+                  { label: 'Pending', value: 'Pending' },
+                  { label: 'Expiring Soon', value: 'Expiring Soon' },
+                  { label: 'Expired', value: 'Expired' },
+                  { label: 'Completed', value: 'Completed' },
+                  { label: 'Deleted', value: 'Deleted' }
+                ]}
+              />
             </div>
 
             <div className="px-8 py-6 border-t border-[#E5E7EB] flex items-center gap-4 bg-white">
-                <button
-                    onClick={handleClearFilter}
-                    className="flex-1 h-[46px] bg-white border border-[#E5E7EB] text-[#374151] text-[15px] font-semibold rounded-[10px] hover:bg-gray-50 transition-colors shadow-sm"
-                >
-                    {t('common:clear', 'Clear')}
-                </button>
-                <button
-                    onClick={handleApplyFilter}
-                    className="flex-1 h-[46px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-colors shadow-sm"
-                >
-                    {t('common:apply_filter', 'Apply Filter')}
-                </button>
+              <button
+                onClick={handleClearFilter}
+                className="flex-1 h-[46px] bg-white border border-[#E5E7EB] text-[#374151] text-[15px] font-semibold rounded-[10px] hover:bg-gray-50 transition-colors shadow-sm"
+              >
+                {t('common:clear', 'Clear')}
+              </button>
+              <button
+                onClick={handleApplyFilter}
+                className="flex-1 h-[46px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-colors shadow-sm"
+              >
+                {t('common:apply_filter', 'Apply Filter')}
+              </button>
             </div>
           </div>
         </>,

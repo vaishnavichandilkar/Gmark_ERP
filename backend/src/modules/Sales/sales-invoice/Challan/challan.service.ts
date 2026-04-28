@@ -4,6 +4,7 @@ import { CreateChallanDto, UpdateChallanDto } from './dto/challan.dto';
 import { SalesOrderService } from '../../sales-order/sales-order.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
+import { determineSalesGst } from '../../../../common/utils/gst.helper';
 
 @Injectable()
 export class ChallanService {
@@ -153,15 +154,22 @@ export class ChallanService {
       }
     }
 
-    const finalTaxTotal = isGstApplicable ? (totalTaxAmount + expenseTaxTotal) : 0;
-    let cgstAmount = 0, sgstAmount = 0, igstAmount = 0;
-    if (isGstApplicable) {
-      if (isInterState) igstAmount = finalTaxTotal;
-      else {
-        cgstAmount = finalTaxTotal / 2;
-        sgstAmount = finalTaxTotal / 2;
-      }
-    }
+    const gstResult = determineSalesGst(
+      userGst,
+      customerGst,
+      company.state,
+      customer.state,
+      taxableAmount + expenseTotal, // base
+      0,                            // percent
+      totalTaxAmount + expenseTaxTotal // preCalculated
+    );
+
+    const cgstAmount = gstResult.cgstAmount;
+    const sgstAmount = gstResult.sgstAmount;
+    const igstAmount = gstResult.igstAmount;
+    const finalTaxTotal = gstResult.totalGstAmount;
+    isInterState = gstResult.isInterState;
+    isGstApplicable = gstResult.gstType !== 'NONE';
 
     const grandTotal = taxableAmount + expenseTotal + (isRcm ? 0 : finalTaxTotal) + postGstChargeTotal;
 
@@ -197,11 +205,15 @@ export class ChallanService {
       where: {
         userId,
         customerName: { equals: customerName, mode: 'insensitive' },
-        status: { notIn: ['DELETED', 'CHALLAN_COMPLETED', 'INVOICE_COMPLETED'] as any },
+        status: { not: 'DELETED' },
       },
       include: {
         items: true,
         salesChallans: {
+          where: { status: { not: 'DELETED' } },
+          include: { items: true }
+        },
+        salesInvoices: {
           where: { status: { not: 'DELETED' } },
           include: { items: true }
         }
@@ -211,11 +223,18 @@ export class ChallanService {
 
     const filteredSos = sos.filter(so => {
       const totalSoQty = so.items.reduce((sum, item) => sum + item.quantity, 0);
+      
       const totalDeliveredQty = so.salesChallans.reduce((sum, ch) => {
         return sum + ch.items.reduce((iSum, i) => iSum + i.challanQty, 0);
       }, 0);
+
+      const totalInvoicedQty = so.salesInvoices.reduce((sum, inv) => {
+        return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
+      }, 0);
+
+      const consumedQty = Math.max(totalDeliveredQty, totalInvoicedQty);
       
-      return totalDeliveredQty < totalSoQty;
+      return consumedQty < totalSoQty;
     });
 
     return filteredSos.map(so => ({
@@ -256,6 +275,10 @@ export class ChallanService {
         salesChallans: {
           where: { status: { not: 'DELETED' } },
           include: { items: true }
+        },
+        salesInvoices: {
+          where: { status: { not: 'DELETED' } },
+          include: { items: true }
         }
       }
     });
@@ -263,13 +286,22 @@ export class ChallanService {
     if (!so) return;
 
     const totalSoQty = so.items.reduce((sum, item) => sum + item.quantity, 0);
-    const totalDeliveredQty = so.salesChallans.reduce((sum, ch) => {
-      return sum + ch.items.reduce((iSum, i) => iSum + i.challanQty, 0);
+    
+    const totalDeliveredQty = (so.salesChallans || []).reduce((sum, ch) => {
+      return sum + (ch.items || []).reduce((iSum, i) => iSum + (Number(i.challanQty) || 0), 0);
     }, 0);
 
+    const totalInvoicedQty = (so.salesInvoices || []).reduce((sum, inv) => {
+      return sum + (inv.items || []).reduce((iSum, i) => iSum + (Number(i.quantity) || 0), 0);
+    }, 0);
+
+    const consumedQty = Math.max(totalDeliveredQty, totalInvoicedQty);
+
     let newStatus = so.status;
-    if (totalDeliveredQty >= totalSoQty) {
-      if (so.status !== 'INVOICE_COMPLETED') {
+    if (consumedQty >= totalSoQty) {
+      if (totalInvoicedQty >= totalSoQty) {
+        newStatus = 'INVOICE_COMPLETED';
+      } else {
         newStatus = 'CHALLAN_COMPLETED';
       }
     } else {
@@ -366,19 +398,37 @@ export class ChallanService {
   }
 
   async getReceivedQty(customerName: string, productCode: string, userId: number, soNumber?: string) {
-    const prev = await this.prisma.salesChallanItem.aggregate({
-      where: {
-        salesChallan: {
-          userId,
-          customerName: { equals: customerName, mode: 'insensitive' },
-          soNumber: soNumber || undefined,
-          status: { not: 'DELETED' }
-        },
-        productCode
-      },
-      _sum: { challanQty: true }
-    });
-    return { givenSoQty: prev._sum.challanQty || 0 };
+    const [chSum, invSum] = await Promise.all([
+        this.prisma.salesChallanItem.aggregate({
+          where: {
+            salesChallan: {
+              userId,
+              customerName: { equals: customerName, mode: 'insensitive' },
+              soNumber: soNumber || undefined,
+              status: { not: 'DELETED' }
+            },
+            productCode
+          },
+          _sum: { challanQty: true }
+        }),
+        this.prisma.salesInvoiceItem.aggregate({
+          where: {
+            salesInvoice: {
+              userId,
+              customerName: { equals: customerName, mode: 'insensitive' },
+              soNumber: soNumber ? { contains: soNumber } : undefined,
+              status: { not: 'DELETED' }
+            },
+            productCode
+          },
+          _sum: { quantity: true }
+        })
+    ]);
+
+    const totalChallan = chSum._sum.challanQty || 0;
+    const totalInvoiced = invSum._sum.quantity || 0;
+
+    return { givenSoQty: Math.max(totalChallan, totalInvoiced) };
   }
 
   async findAll(query: { search?: string, status?: string, page?: number, limit?: number, customerId?: string, userId: number }) {

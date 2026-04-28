@@ -461,6 +461,14 @@ model PurchaseOrder {
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
   totalAmount      Float               @default(0)
+  
+  // Tracking fields
+  po_qty           Float               @default(0)
+  total_grn_qty    Float               @default(0)
+  total_invoice_qty Float              @default(0)
+  grn_status       DocStatus           @default(PENDING)
+  invoice_status   DocStatus           @default(PENDING)
+
   grn              Grn[]
   purchaseInvoices PurchaseInvoice[]
   items            PurchaseOrderItem[]
@@ -510,6 +518,14 @@ model SalesOrder {
   userId         Int
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
+
+  // Tracking fields
+  so_qty           Float               @default(0)
+  total_challan_qty Float              @default(0)
+  total_invoice_qty Float              @default(0)
+  challan_status    DocStatus           @default(PENDING)
+  invoice_status    DocStatus           @default(PENDING)
+
   salesChallans  SalesChallan[]
   salesInvoices  SalesInvoice[]
   items          SalesOrderItem[]
@@ -566,8 +582,6 @@ model PurchaseInvoice {
   gstNumber             String?
   igstAmount            Float                    @default(0)
   isRcm                 Boolean                  @default(false)
-  isInterState          Boolean                  @default(false)
-  gstType               GstType                  @default(NONE)
   supplierId            Int?
   taxableAmount         Float                    @default(0)
   expenses              PurchaseInvoiceExpense[]
@@ -622,6 +636,12 @@ model Grn {
   taxableAmount     Float          @default(0)
   totalQuantity     Float          @default(0)
   status            GrnStatus      @default(GENERATED)
+  
+  // Tracking fields
+  grn_qty           Float          @default(0)
+  total_invoice_qty Float          @default(0)
+  invoice_status    DocStatus      @default(PENDING)
+
   igstAmount        Float          @default(0)
   isInterState      Boolean        @default(false)
   isRcm             Boolean        @default(false)
@@ -713,8 +733,6 @@ model SalesInvoice {
   gstNumber             String?
   igstAmount            Float                 @default(0)
   isRcm                 Boolean               @default(false)
-  isInterState          Boolean               @default(false)
-  gstType               GstType               @default(NONE)
   customerId            Int?
   taxableAmount         Float                 @default(0)
   expenses              SalesInvoiceExpense[]
@@ -787,12 +805,23 @@ model SalesChallan {
   igstAmount        Float                 @default(0)
   isInterState      Boolean               @default(false)
   isRcm             Boolean               @default(false)
+
+  // Tracking fields
+  challan_qty       Float                 @default(0)
+  total_invoice_qty Float                 @default(0)
+  invoice_status    DocStatus             @default(PENDING)
+
   expenses          SalesChallanExpense[]
   items             SalesChallanItem[]
   salesOrder        SalesOrder?           @relation(fields: [soId], references: [id])
   user              User                  @relation(fields: [userId], references: [id])
 
   @@map("sales_challans")
+}
+
+enum DocStatus {
+  PENDING
+  COMPLETED
 }
 
 model SalesChallanItem {
@@ -849,12 +878,6 @@ enum Role {
   superadmin
   administrator
   operator
-}
-
-enum GstType {
-  CGST_SGST
-  IGST
-  NONE
 }
 
 enum SellerDocumentType {
