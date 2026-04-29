@@ -166,11 +166,13 @@ const ProductForm = ({
     subcategory: initialData?.sub_category || null,
     subsubcategory: initialData?.sub_sub_category || null,
     hsnCode: initialData?.hsn_code || "",
-    tax: initialData?.tax_rate ? initialData.tax_rate + "%" : "",
+    tax: initialData?.tax_rate ? initialData.tax_rate : "",
+    hsnDescription: initialData?.hsn_description || "",
     description: initialData?.description || "",
   };
 
   const [formData, setFormData] = useState(initialFormData);
+  const [taxList, setTaxList] = useState([]);
   const [errors, setErrors] = useState({});
   const [suggestions, setSuggestions] = useState([]);
   const [nameError, setNameError] = useState("");
@@ -383,16 +385,39 @@ const ProductForm = ({
     if (isView) return;
 
     if (!formData.hsnCode || formData.hsnCode.length < 4) {
+      setTaxList([]);
       handleInputChange("tax", "");
+      handleInputChange("hsnDescription", "");
       return;
     }
 
     const timer = setTimeout(async () => {
       try {
         const res = await productService.getTaxByHsn(formData.hsnCode);
-        handleInputChange("tax", res.tax_rate + "%");
+        const details = res.taxDetails || [];
+        setTaxList(details);
+
+        if (details.length === 1) {
+          const selected = details[0];
+          handleInputChange("tax", selected.rateOfTax);
+          handleInputChange("hsnDescription", selected.description);
+        } else if (details.length > 1) {
+          // If we have initial tax (e.g. in edit mode), keep it, otherwise clear it so user picks
+          if (!formData.tax) {
+            handleInputChange("tax", "");
+            handleInputChange("hsnDescription", "");
+          } else {
+            // Find description for existing tax if not present
+            const matched = details.find(d => String(d.rateOfTax) === String(formData.tax));
+            if (matched && !formData.hsnDescription) {
+                handleInputChange("hsnDescription", matched.description);
+            }
+          }
+        }
       } catch (error) {
+        setTaxList([]);
         handleInputChange("tax", "");
+        handleInputChange("hsnDescription", "");
         if (error.response?.status === 404) {
           toast.error(t("modules:invalid_hsn_code", "Invalid HSN Code"));
         } else {
@@ -459,6 +484,8 @@ const ProductForm = ({
         sub_category_id: formData.subcategory?.id,
         sub_sub_category_id: formData.subsubcategory?.id,
         hsn_code: formData.hsnCode,
+        tax_rate: parseFloat(formData.tax) || 0,
+        hsn_description: formData.hsnDescription,
         description: formData.description,
       };
 
@@ -600,7 +627,8 @@ const ProductForm = ({
               ]
             : []),
           { label: t("modules:hsn_code"), value: formData.hsnCode },
-          { label: t("modules:tax_percent"), value: formData.tax },
+          { label: t("modules:tax_percent"), value: formData.tax + "%" },
+          { label: t("modules:hsn_desc", "HSN Description"), value: formData.hsnDescription || "-" },
           {
             label: t("modules:product_desc"),
             value: formData.description || "-",
@@ -788,19 +816,47 @@ const ProductForm = ({
               "hsnCode",
               t("modules:enterHSNCode"),
             )}
-            <div className="flex flex-col gap-1.5 w-full">
-              <label className="text-[13px] font-semibold text-[#4B5563]">
-                {t("modules:tax_percent")}
-              </label>
-              <input
-                type="text"
-                readOnly
-                disabled={true}
-                placeholder={t("modules:tax_auto")}
-                className="w-full h-[44px] border border-[#E5E7EB] rounded-[8px] px-4 text-[14px] text-gray-500 outline-none transition-all bg-gray-50 cursor-not-allowed"
-                value={formData.tax}
+
+            {taxList.length > 1 ? (
+              <CustomSelect
+                label={t("modules:tax_percent")}
+                placeholder={t("modules:select_tax")}
+                options={taxList}
+                value={taxList.find(t => String(t.rateOfTax) === String(formData.tax))}
+                onChange={(val) => {
+                  handleInputChange("tax", val.rateOfTax);
+                  handleInputChange("hsnDescription", val.description);
+                }}
+                getOptionLabel={(opt) => `${opt.rateOfTax}%`}
+                showAsterisk={true}
+                disabled={isView}
               />
+            ) : (
+              <div className="flex flex-col gap-1.5 w-full">
+                <label className="text-[13px] font-semibold text-[#4B5563]">
+                  {t("modules:tax_percent")}
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  disabled={true}
+                  placeholder={t("modules:tax_auto")}
+                  className="w-full h-[44px] border border-[#E5E7EB] rounded-[8px] px-4 text-[14px] text-gray-500 outline-none transition-all bg-gray-50 cursor-not-allowed"
+                  value={formData.tax ? formData.tax + "%" : ""}
+                />
+              </div>
+            )}
+
+            <div className="md:col-span-2">
+              {renderInput(
+                t("modules:hsn_desc", "HSN Description"),
+                "hsnDescription",
+                t("modules:hsn_desc_auto", "HSN Description (Auto)"),
+                false,
+                true,
+              )}
             </div>
+
             <div className="md:col-span-2">
               {renderInput(
                 t("modules:product_desc"),

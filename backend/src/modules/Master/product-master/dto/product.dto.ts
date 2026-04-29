@@ -39,6 +39,16 @@ export class CreateProductDto {
     hsn_code: string;
 
     @ApiProperty()
+    @IsNumber()
+    @IsNotEmpty()
+    tax_rate: number;
+
+    @ApiProperty()
+    @IsString()
+    @IsOptional()
+    hsn_description?: string;
+
+    @ApiProperty()
     @IsString()
     @IsOptional()
     description?: string;
@@ -79,6 +89,16 @@ export class UpdateProductDto {
     @IsString()
     @IsOptional()
     hsn_code?: string;
+
+    @ApiProperty()
+    @IsNumber()
+    @IsOptional()
+    tax_rate?: number;
+
+    @ApiProperty()
+    @IsString()
+    @IsOptional()
+    hsn_description?: string;
 
     @ApiProperty()
     @IsString()

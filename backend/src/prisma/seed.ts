@@ -207,35 +207,6 @@ async function main() {
     }
     console.log('Account Header Groups seeded.');
 
-    console.log('Seeding HSN Master...');
-    const hsnRecords = [
-        { hsn_code: '1001', description: 'Wheat', gst_rate: 0 },
-        { hsn_code: '1006', description: 'Rice', gst_rate: 0 },
-        { hsn_code: '1701', description: 'Sugar', gst_rate: 5 },
-        { hsn_code: '0401', description: 'Milk', gst_rate: 0 },
-        { hsn_code: '0402', description: 'Milk Powder', gst_rate: 5 },
-        { hsn_code: '0901', description: 'Coffee', gst_rate: 5 },
-        { hsn_code: '0902', description: 'Tea', gst_rate: 5 },
-        { hsn_code: '2106', description: 'Food Preparations', gst_rate: 12 },
-        { hsn_code: '3004', description: 'Medicines (Pharmaceuticals)', gst_rate: 12 },
-        { hsn_code: '8517', description: 'Mobile Phones', gst_rate: 18 },
-        { hsn_code: '8471', description: 'Computers & Laptops', gst_rate: 18 },
-        { hsn_code: '8528', description: 'Television', gst_rate: 18 },
-        { hsn_code: '8703', description: 'Motor Cars', gst_rate: 28 },
-        { hsn_code: '2710', description: 'Petroleum Products', gst_rate: 18 },
-        { hsn_code: '6403', description: 'Footwear', gst_rate: 18 },
-        { hsn_code: '6203', description: 'Men’s Clothing', gst_rate: 12 },
-        { hsn_code: '6204', description: 'Women’s Clothing', gst_rate: 12 },
-        { hsn_code: '9403', description: 'Furniture', gst_rate: 18 },
-        { hsn_code: '3923', description: 'Plastic Articles', gst_rate: 18 },
-        { hsn_code: '7323', description: 'Kitchen Utensils (Steel)', gst_rate: 12 }
-    ];
-
-    await prisma.hsnMaster.createMany({
-        data: hsnRecords,
-        skipDuplicates: true
-    });
-    console.log('HSN Master seeded.');
 
     console.log('Seeding completed.');
 }

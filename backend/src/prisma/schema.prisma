@@ -406,17 +406,6 @@ model SubSubCategory {
   @@map("sub_sub_categories")
 }
 
-model HsnMaster {
-  id          Int       @id @default(autoincrement())
-  hsn_code    String    @unique
-  description String
-  gst_rate    Decimal
-  created_by  Int?
-  created_at  DateTime  @default(now())
-  products    Product[]
-
-  @@map("hsn_master")
-}
 
 model Product {
   id                  Int             @id @default(autoincrement())
@@ -429,6 +418,7 @@ model Product {
   hsn_code            String
   tax_rate            Float
   description         String?
+  hsn_description     String?
   status              MasterStatus    @default(ACTIVE)
   is_deleted          Boolean         @default(false)
   created_by          Int
@@ -437,7 +427,7 @@ model Product {
   sub_sub_category_id Int?
   category            Category        @relation(fields: [category_id], references: [id])
   creator             User            @relation(fields: [created_by], references: [id])
-  hsn                 HsnMaster       @relation(fields: [hsn_code], references: [hsn_code])
+  hsn                 Hsn             @relation(fields: [hsn_code], references: [hsnCode])
   sub_category        SubCategory?    @relation(fields: [sub_category_id], references: [id])
   sub_sub_category    SubSubCategory? @relation(fields: [sub_sub_category_id], references: [id])
   uom                 UnitMaster      @relation(fields: [uom_id], references: [id])
@@ -967,3 +957,37 @@ enum SOStatus {
   INVOICE_GENERATED
   DELETED
 }
+
+model Hsn {
+  id              Int          @id @default(autoincrement())
+  hsnCode         String       @unique
+  type            String
+  description     String?
+  effectiveDate   String?
+  rate            Decimal?
+  active          Boolean      @default(true)
+  chapterName     String?
+  chapterNumber   String?
+  slug            String?
+  metaTitle       String?
+  metaDescription String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  taxDetails      TaxDetail[]
+  products        Product[]
+
+  @@index([hsnCode])
+  @@map("hsn")
+}
+
+model TaxDetail {
+  id            Int      @id @default(autoincrement())
+  rateOfTax     String?
+  effectiveDate String?
+  description   String?
+  hsnId         Int
+  hsn           Hsn      @relation(fields: [hsnId], references: [id], onDelete: Cascade)
+
+  @@map("tax_details")
+}
+

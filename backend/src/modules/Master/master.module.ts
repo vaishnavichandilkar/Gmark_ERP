@@ -4,6 +4,7 @@ import { AccountMasterModule } from './account-master/account-master.module';
 import { ProductMasterModule } from './product-master/product-master.module';
 import { UnitMasterModule } from './unit-master/unit-master.module';
 import { CategoryMasterModule } from './category-master/category-master.module';
+import { HsnMasterModule } from './hsn-master/hsn-master.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { CategoryMasterModule } from './category-master/category-master.module';
     ProductMasterModule,
     UnitMasterModule,
     CategoryMasterModule,
+    HsnMasterModule,
   ],
 })
 export class MasterModule {}

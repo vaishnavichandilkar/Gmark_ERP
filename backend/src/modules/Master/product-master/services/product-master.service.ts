@@ -4,6 +4,7 @@ import { CreateProductDto, UpdateProductDto, ToggleProductStatusDto } from '../d
 import { MasterStatus, ProductType } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
+import { HsnMasterService } from '../../hsn-master/hsn-master.service';
 
 interface GetProductsQuery {
     page?: number;
@@ -16,7 +17,10 @@ interface GetProductsQuery {
 
 @Injectable()
 export class ProductMasterService {
-    constructor(private readonly repository: ProductMasterRepository) { }
+    constructor(
+        private readonly repository: ProductMasterRepository,
+        private readonly hsnService: HsnMasterService
+    ) { }
 
     // ... existing methods ...
 
@@ -214,9 +218,7 @@ export class ProductMasterService {
     }
 
     async getTaxByHsn(hsnCode: string) {
-        const hsn = await this.repository.getHsnByCode(hsnCode);
-        if (!hsn) throw new NotFoundException('HSN Code not found');
-        return { tax_rate: Number(hsn.gst_rate) };
+        return this.hsnService.getLatestTaxByCode(hsnCode);
     }
 
     async getCategoryDropdown(userId: number) {
@@ -266,9 +268,6 @@ export class ProductMasterService {
             }
         }
 
-        const hsn = await this.repository.getHsnByCode(dto.hsn_code);
-        if (!hsn) throw new BadRequestException('HSN Code not found in master');
-
         const product_code = await this.generateProductCode(userId);
 
         return this.repository.createProduct({
@@ -280,7 +279,8 @@ export class ProductMasterService {
             sub_category_id: dto.sub_category_id,
             sub_sub_category_id: dto.sub_sub_category_id,
             hsn_code: dto.hsn_code,
-            tax_rate: Number(hsn.gst_rate),
+            tax_rate: dto.tax_rate,
+            hsn_description: dto.hsn_description,
             description: dto.description,
             created_by: userId
         });
@@ -331,12 +331,6 @@ export class ProductMasterService {
                 // If sub_category is removed but sub_sub is somehow present
                  throw new BadRequestException('Cannot have Sub-SubCategory without SubCategory');
             }
-        }
-
-        if (dto.hsn_code) {
-            const hsn = await this.repository.getHsnByCode(dto.hsn_code);
-            if (!hsn) throw new BadRequestException('HSN Code not found in master');
-            updateData.tax_rate = Number(hsn.gst_rate);
         }
 
         return this.repository.updateProduct(id, updateData);
@@ -563,13 +557,24 @@ export class ProductMasterService {
                 let sub_category_id: number = subCat.id;
 
                 let hsnCode = String(getVal(row, 'hsn')).trim();
-                let hsn = hsnCode && hsnCode !== '-' ? await prisma.hsnMaster.findUnique({ where: { hsn_code: hsnCode } }) : null;
-                if (!hsn && hsnCode && hsnCode !== '-') {
-                    hsn = await prisma.hsnMaster.create({ data: { hsn_code: hsnCode, description: 'Auto Created', gst_rate: 0, created_by: userId } });
-                }
-                if (!hsn) hsn = await prisma.hsnMaster.findFirst();
-                if (!hsn) {
-                    hsn = await prisma.hsnMaster.create({ data: { hsn_code: '0000', description: 'Default HSN', gst_rate: 0, created_by: userId } });
+                let hsnDetails: { hsnCode?: string, taxRate: string, description: string } = { taxRate: "0", description: 'Default' };
+                
+                if (hsnCode && hsnCode !== '-') {
+                    try {
+                        const hsnResponse = await this.hsnService.getLatestTaxByCode(hsnCode);
+                        const latest = hsnResponse.taxDetails[0] || { rateOfTax: "0", description: "" };
+                        hsnDetails = {
+                            hsnCode: hsnResponse.hsnCode,
+                            taxRate: latest.rateOfTax,
+                            description: latest.description
+                        };
+                    } catch (e) {
+                        // If HSN not found, we can either fail the row or use 0 tax.
+                        // The requirement says "HSN not found -> return error", so I'll throw to catch it per row.
+                        throw new BadRequestException(`HSN Code ${hsnCode} not found in master`);
+                    }
+                } else {
+                    throw new BadRequestException(`HSN Code is required`);
                 }
 
                 const statusStr = String(getVal(row, 'status')).trim().toUpperCase();
@@ -592,9 +597,10 @@ export class ProductMasterService {
                         product_type: productType,
                         category_id,
                         sub_category_id,
-                        hsn_code: hsn.hsn_code,
-                        tax_rate: Number(hsn.gst_rate),
-                        description: description && description !== '-' ? description : undefined,
+                        hsn_code: hsnCode,
+                        tax_rate: parseFloat(hsnDetails.taxRate),
+                        hsn_description: hsnDetails.description,
+                        description: (description && description !== '-') ? description : '',
                         status
                     });
                 } else {
@@ -605,9 +611,10 @@ export class ProductMasterService {
                         product_type: productType,
                         category_id,
                         sub_category_id,
-                        hsn_code: hsn.hsn_code,
-                        tax_rate: Number(hsn.gst_rate),
-                        description: description && description !== '-' ? description : undefined,
+                        hsn_code: hsnCode,
+                        tax_rate: parseFloat(hsnDetails.taxRate),
+                        hsn_description: hsnDetails.description,
+                        description: (description && description !== '-') ? description : '',
                         status,
                         created_by: userId,
                     });

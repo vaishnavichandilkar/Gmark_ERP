@@ -3,9 +3,10 @@ import { ProductMasterService } from './services/product-master.service';
 import { ProductMasterController } from './controllers/product-master.controller';
 import { ProductMasterRepository } from './repositories/product-master.repository';
 import { PrismaModule } from '../../../infrastructure/prisma/prisma.module';
+import { HsnMasterModule } from '../hsn-master/hsn-master.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, HsnMasterModule],
   providers: [ProductMasterService, ProductMasterRepository],
   controllers: [ProductMasterController],
   exports: [ProductMasterService]

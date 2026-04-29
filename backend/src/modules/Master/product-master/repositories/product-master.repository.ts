@@ -104,10 +104,6 @@ export class ProductMasterRepository {
         return this.prisma.product.update({ where: { id }, data: { is_deleted: true } });
     }
 
-    async getHsnByCode(hsn_code: string) {
-        return this.prisma.hsnMaster.findUnique({ where: { hsn_code } });
-    }
-
     async getUomById(id: number) {
         return this.prisma.unitMaster.findUnique({ where: { id } });
     }
