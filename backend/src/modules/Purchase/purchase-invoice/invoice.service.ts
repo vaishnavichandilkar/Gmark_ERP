@@ -193,9 +193,10 @@ export class PurchaseInvoiceService {
         return sum + grn.items.reduce((iSum, i) => iSum + i.receivedQty, 0);
       }, 0);
 
-      const consumedQty = Math.max(totalInvoicedQty, totalReceivedQty);
-      
-      return consumedQty < totalPoQty;
+      if (!excludeInvoiceId && po.status === 'INVOICE_COMPLETED') {
+        return false;
+      }
+      return (totalPoQty - totalInvoicedQty) > 0.01;
     });
 
     return filteredPos.map(po => ({
@@ -438,6 +439,18 @@ export class PurchaseInvoiceService {
 
     let finalPoIds = Array.isArray(createDto.poIds) ? [...createDto.poIds] : [];
     let autoPoId: number | null = null;
+    let resolvedPoNumberStr: string | null = null;
+    let resolvedPoId: number | null = null;
+
+    if (finalPoIds.length === 0 && createDto.challanNumbers && createDto.challanNumbers.length > 0) {
+        // Retrieve PO from the GRN
+        const firstGrn = await this.prisma.grn.findUnique({
+             where: { id: Number(createDto.challanNumbers[0]) }
+        });
+        if (firstGrn && firstGrn.poId) {
+             finalPoIds = [firstGrn.poId.toString()];
+        }
+    }
 
     if (finalPoIds.length === 0) {
         // Auto-create PO because none was provided
@@ -466,19 +479,34 @@ export class PurchaseInvoiceService {
             }))
         }, userId);
 
-        // Mark PO as generated and update its status based on completion
         autoPoId = autoPo.id;
-        finalPoIds = [autoPo.poNumber];
+        resolvedPoId = autoPo.id;
+        resolvedPoNumberStr = autoPo.poNumber;
         
-        await this.updateCompletionStatusesAfterInvoice(autoPoId, this.prisma); // Dummy call to handle auto-created PO logic if needed
-        // Actually, for auto-created PO, it's usually 1-to-1 and completed immediately.
         await this.prisma.purchaseOrder.update({
             where: { id: autoPoId },
             data: { status: 'INVOICE_COMPLETED' }
         });
+    } else if (finalPoIds.length === 1) {
+        const poVal = finalPoIds[0];
+        if (!isNaN(Number(poVal))) {
+            resolvedPoId = Number(poVal);
+            const po = await this.prisma.purchaseOrder.findUnique({ where: { id: resolvedPoId } });
+            if (po) {
+                resolvedPoNumberStr = po.poNumber;
+            }
+        } else {
+            resolvedPoNumberStr = poVal;
+            const po = await this.prisma.purchaseOrder.findFirst({ where: { poNumber: poVal, userId } });
+            if (po) {
+                resolvedPoId = po.id;
+            }
+        }
+    } else if (finalPoIds.length > 1) {
+        // If multiple POs, we just stringify the IDs for poNumber for now (fallback)
+        resolvedPoNumberStr = finalPoIds.join(',');
     }
 
-    const poNumberStr = finalPoIds.length > 0 ? finalPoIds.join(',') : null;
     const challanNumbers = createDto.challanNumbers || [];
     const grnNumberStr = challanNumbers.length > 0 ? challanNumbers.join(',') : null;
 
@@ -494,8 +522,8 @@ export class PurchaseInvoiceService {
           address: createDto.address,
           creditDays: createDto.creditDays,
           gstNumber: createDto.gstNumber,
-          poNumber: poNumberStr,
-          poId: autoPoId || (finalPoIds.length === 1 && !isNaN(Number(finalPoIds[0])) ? Number(finalPoIds[0]) : null),
+          poNumber: resolvedPoNumberStr,
+          poId: resolvedPoId,
           challanNumber: grnNumberStr,
           cgstAmount: cgst,
           sgstAmount: sgst,
@@ -720,6 +748,31 @@ export class PurchaseInvoiceService {
         });
       }
 
+        let resolvedPoId = existing.poId;
+        let resolvedPoNumberStr = existing.poNumber;
+
+        if (updateDto.poIds && updateDto.poIds.length > 0) {
+            if (updateDto.poIds.length === 1) {
+                const poVal = updateDto.poIds[0];
+                if (!isNaN(Number(poVal))) {
+                    resolvedPoId = Number(poVal);
+                    const po = await tx.purchaseOrder.findUnique({ where: { id: resolvedPoId } });
+                    if (po) {
+                        resolvedPoNumberStr = po.poNumber;
+                    }
+                } else {
+                    resolvedPoNumberStr = poVal;
+                    const po = await tx.purchaseOrder.findFirst({ where: { poNumber: poVal, userId } });
+                    if (po) {
+                        resolvedPoId = po.id;
+                    }
+                }
+            } else {
+                resolvedPoNumberStr = updateDto.poIds.join(',');
+                resolvedPoId = null;
+            }
+        }
+
         const updated = await tx.purchaseInvoice.update({
           where: { id },
           data: {
@@ -729,8 +782,8 @@ export class PurchaseInvoiceService {
             bookingDate: updateDto.bookingDate ? new Date(updateDto.bookingDate) : existing.bookingDate,
             supplierName: updateDto.supplierName ?? existing.supplierName,
             address: updateDto.address ?? existing.address,
-            poNumber: updateDto.poIds ? updateDto.poIds.join(',') : existing.poNumber,
-            poId: updateDto.poIds && updateDto.poIds.length === 1 ? Number(updateDto.poIds[0]) : (updateDto.poIds && updateDto.poIds.length > 1 ? null : existing.poId),
+            poNumber: updateDto.poIds ? resolvedPoNumberStr : existing.poNumber,
+            poId: updateDto.poIds ? resolvedPoId : existing.poId,
             challanNumber: updateDto.challanNumbers ? updateDto.challanNumbers.join(',') : existing.challanNumber,
             creditDays: updateDto.creditDays ?? existing.creditDays,
             status: (updateDto.status as any) ?? existing.status,

@@ -69,21 +69,18 @@ export class SalesInvoiceService {
       orderBy: { soNumber: 'desc' },
     });
 
-    // Filter SOs where max(Delivered Qty, Invoiced Qty) < total SO quantity
+    // Filter SOs based strictly on invoiced quantity, not delivered quantity
     return sos.filter(so => {
+      if (!excludeInvoiceId && so.status === 'INVOICE_COMPLETED') {
+        return false;
+      }
       const totalSoQty = so.items.reduce((sum, item) => sum + item.quantity, 0);
       
       const totalInvoicedQty = so.salesInvoices.reduce((sum, inv) => {
         return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
       }, 0);
 
-      const totalDeliveredQty = so.salesChallans.reduce((sum, ch) => {
-        return sum + ch.items.reduce((iSum, i) => iSum + i.challanQty, 0);
-      }, 0);
-
-      const consumedQty = Math.max(totalInvoicedQty, totalDeliveredQty);
-      
-      return consumedQty < totalSoQty;
+      return (totalSoQty - totalInvoicedQty) > 0.01;
     });
   }
 

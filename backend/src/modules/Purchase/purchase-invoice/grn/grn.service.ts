@@ -362,13 +362,7 @@ export class GrnService {
         return sum + grn.items.reduce((iSum, i) => iSum + i.receivedQty, 0);
       }, 0);
 
-      const totalInvoicedQty = po.purchaseInvoices.reduce((sum, inv) => {
-        return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
-      }, 0);
-
-      const consumedQty = Math.max(totalReceivedQty, totalInvoicedQty);
-      
-      return consumedQty < totalPoQty;
+      return (totalPoQty - totalReceivedQty) > 0.01;
     });
 
     return filteredPos.map(po => ({

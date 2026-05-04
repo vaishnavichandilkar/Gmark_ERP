@@ -228,13 +228,7 @@ export class ChallanService {
         return sum + ch.items.reduce((iSum, i) => iSum + i.challanQty, 0);
       }, 0);
 
-      const totalInvoicedQty = so.salesInvoices.reduce((sum, inv) => {
-        return sum + inv.items.reduce((iSum, i) => iSum + i.quantity, 0);
-      }, 0);
-
-      const consumedQty = Math.max(totalDeliveredQty, totalInvoicedQty);
-      
-      return consumedQty < totalSoQty;
+      return (totalSoQty - totalDeliveredQty) > 0.01;
     });
 
     return filteredSos.map(so => ({
