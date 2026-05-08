@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Menu, User, Globe, ChevronDown, LayoutDashboard, FileBarChart, Database, ShoppingCart, TrendingUp, Settings as SettingsIcon } from 'lucide-react';
+import { Menu, User, Globe, ChevronDown, LayoutDashboard, FileBarChart, Database, ShoppingCart, TrendingUp, Settings as SettingsIcon, IndianRupee, Plus } from 'lucide-react';
 import logo from '../../assets/images/ERP_Logo2.png';
 import ProfilePopup from '../../components/common/ProfilePopup';
 import LogoutModal from '../../components/common/LogoutModal';
@@ -17,6 +17,7 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
 
     // Popup states
     const [activePopupType, setActivePopupType] = useState(null);
+    const [activeQuickAction, setActiveQuickAction] = useState(null);
     const [isLogoutOpen, setIsLogoutOpen] = useState(false);
     const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
     const [userData, setUserData] = useState(JSON.parse(localStorage.getItem('user') || 'null'));
@@ -141,6 +142,19 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
         );
     };
 
+    const quickActions = {
+        purchase: [
+            { label: 'Purchase Order', path: '/seller/purchase/order/add' },
+            { label: 'GRN', path: '/seller/purchase/grn/add' }
+        ],
+        finance: [
+            { label: 'Receipt', path: '/seller/finance?tab=Bank Reconciliation&subTab=Receipts' },
+            { label: 'Payment', path: '/seller/finance?tab=Bank Reconciliation&subTab=Withdrawals' },
+            { label: 'Contra', path: '/seller/finance?tab=Bank Reconciliation&subTab=Contra' },
+            { label: 'Journal', path: '/seller/finance?tab=Bank Reconciliation&subTab=JV' }
+        ]
+    };
+
     return (
         <header className="h-[64px] lg:h-[72px] bg-white border-b border-[#E5E7EB] px-3 md:px-6 flex items-center justify-between shrink-0">
             {/* Left Box: Menu button + Title/Logo */}
@@ -169,6 +183,67 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
 
                 {/* Rightmost Action icons */}
                 <div className="flex items-center gap-2 md:gap-4 relative">
+                    {/* Quick Actions Dropdowns */}
+                    <div className="flex items-center gap-1 md:gap-2 mr-1 md:mr-2 border-r border-gray-200 pr-2 md:pr-4">
+                        {/* Purchase Quick Action */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setActiveQuickAction(activeQuickAction === 'purchase' ? null : 'purchase')}
+                                className={`p-1.5 md:p-2 rounded-lg transition-all ${activeQuickAction === 'purchase' ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-100'}`}
+                                title="Purchase Quick Actions"
+                            >
+                                <ShoppingCart className="w-5 h-5 md:w-[22px] md:h-[22px]" />
+                            </button>
+                            {activeQuickAction === 'purchase' && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setActiveQuickAction(null)} />
+                                    <div className="absolute top-12 right-0 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-2 animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="absolute -top-1.5 right-3 w-3 h-3 bg-white border-t border-l border-gray-200 rotate-45" />
+                                        {quickActions.purchase.map((action, idx) => (
+                                            <button
+                                                key={action.label}
+                                                onClick={() => { navigate(action.path); setActiveQuickAction(null); }}
+                                                className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors ${idx !== quickActions.purchase.length - 1 ? 'border-b border-gray-50' : ''}`}
+                                            >
+                                                <Plus size={16} className="text-gray-400" />
+                                                {action.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Finance Quick Action */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setActiveQuickAction(activeQuickAction === 'finance' ? null : 'finance')}
+                                className={`p-1.5 md:p-2 rounded-lg transition-all ${activeQuickAction === 'finance' ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-100'}`}
+                                title="Finance Quick Actions"
+                            >
+                                <IndianRupee className="w-5 h-5 md:w-[22px] md:h-[22px]" />
+                            </button>
+                            {activeQuickAction === 'finance' && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setActiveQuickAction(null)} />
+                                    <div className="absolute top-12 right-0 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-2 animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="absolute -top-1.5 right-3 w-3 h-3 bg-white border-t border-l border-gray-200 rotate-45" />
+                                        {quickActions.finance.map((action, idx) => (
+                                            <button
+                                                key={action.label}
+                                                onClick={() => { navigate(action.path); setActiveQuickAction(null); }}
+                                                className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors ${idx !== quickActions.finance.length - 1 ? 'border-b border-gray-50' : ''}`}
+                                            >
+                                                <Plus size={16} className="text-gray-400" />
+                                                {action.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
                     <div>
                         <LanguageSwitcher />
                     </div>

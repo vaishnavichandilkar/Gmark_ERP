@@ -53,15 +53,24 @@ import Challan from "../pages/dashboard/sales/Sales-invoice/challan/Challan";
 
 import SystemSettings from "../features/settings/pages/SystemSettings";
 import ReportDashboard from "../features/reports/pages/ReportDashboard";
+import Finance from "../pages/dashboard/finance/Finance";
 
 import { ROUTES } from "../constants/routes";
 
 // Placeholder for new modules
-const Placeholder = ({ title }) => (
-  <div className="flex items-center justify-center h-[calc(100vh-200px)]">
-    <div className="text-center">
-      <h1 className="text-2xl font-bold text-gray-800 mb-2">{title}</h1>
-      <p className="text-gray-500">This module is under development.</p>
+const Placeholder = ({ title, subtitle }) => (
+  <div className="flex flex-col w-full relative h-full">
+    {/* Title & Subtitle */}
+    <div className="flex flex-col gap-1 mb-6 md:mb-8 justify-start items-start font-outfit">
+      <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">{title}</h1>
+      {subtitle && <p className="text-[14px] md:text-[16px] text-[#6B7280] font-medium">{subtitle}</p>}
+    </div>
+    
+    <div className="flex items-center justify-center flex-1 min-h-[50vh]">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">{title}</h2>
+        <p className="text-gray-500">This module is under development.</p>
+      </div>
     </div>
   </div>
 );
@@ -377,6 +386,10 @@ export const router = createBrowserRouter([
                     ],
                   },
                 ],
+              },
+              {
+                path: "finance",
+                element: <Finance />,
               },
               {
                 path: "settings",
