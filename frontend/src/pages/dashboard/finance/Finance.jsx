@@ -1,16 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { MoreVertical, X, Eye, Users, BookOpen, Download, Search, FileText, FileSpreadsheet, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MoreVertical, X, Eye, Users, BookOpen, Download, Search, FileText, FileSpreadsheet, RotateCcw, ChevronLeft, ChevronRight, Plus, Landmark, Trash2, ChevronDown } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import CustomSelect from '../../../components/common/CustomSelect';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import * as XLSX from "xlsx";
 import ScrollableTable from "@/components/common/ScrollableTable";
 
 const Finance = () => {
     const { t } = useTranslation(['modules', 'common']);
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const [activeMainTab, setActiveMainTab] = useState('Ledger');
     const [activeSubTab, setActiveSubTab] = useState('Sundry Creditors');
     const [selectedAccount, setSelectedAccount] = useState(null);
@@ -21,7 +24,16 @@ const Finance = () => {
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [rowsPerPage, setRowsPerPage] = useState(5);
     const [currentPage, setCurrentPage] = useState(1);
-    const [searchParams] = useSearchParams();
+    const [activeFiscalYear, setActiveFiscalYear] = useState('2024-2025');
+
+    const fiscalYears = ['2024-2025', '2025-2026', '2026-2027'];
+
+    const handleFiscalYearChange = (year) => {
+        setActiveFiscalYear(year);
+        const [startYear, endYear] = year.split('-');
+        setStartDate(`${startYear}-04-01`);
+        setEndDate(`${endYear}-03-31`);
+    };
 
     useEffect(() => {
         const tabParam = searchParams.get('tab');
@@ -71,28 +83,71 @@ const Finance = () => {
     const dummyBankData = {
         'Receipts': [
             { id: 1, date: "01-Oct-2023", vchNo: "REC-001", account: "Retail Stores Inc", bank: "HDFC Bank", amount: "5000", status: "Reconciled" },
-            { id: 2, date: "05-Oct-2023", vchNo: "REC-002", account: "Mega Market", bank: "SBI Bank", amount: "12000", status: "Unreconciled" },
-            { id: 3, date: "10-Oct-2023", vchNo: "REC-003", account: "City Wholesale", bank: "HDFC Bank", amount: "8500", status: "Reconciled" },
+            { id: 11, date: "15-May-2024", vchNo: "REC-2024-01", account: "Legacy Systems", bank: "SBI Bank", amount: "18000", status: "Reconciled" },
+            { id: 12, date: "22-Sep-2024", vchNo: "REC-2024-02", account: "Quantum Soft", bank: "HDFC Bank", amount: "4500", status: "Pending" },
+            { id: 6, date: "15-May-2025", vchNo: "REC-2025-01", account: "Future Tech Ltd", bank: "HDFC Bank", amount: "25000", status: "Reconciled" },
+            { id: 7, date: "10-Dec-2025", vchNo: "REC-2025-02", account: "New Age Retail", bank: "SBI Bank", amount: "8000", status: "Unreconciled" },
+            { id: 21, date: "10-Jul-2026", vchNo: "REC-2026-05", account: "Zenith Corp", bank: "ICICI Bank", amount: "32000", status: "Pending" }
         ],
         'Withdrawals': [
             { id: 1, date: "02-Oct-2023", vchNo: "WTH-001", account: "Salary Payment", bank: "SBI Bank", amount: "45000", status: "Reconciled" },
-            { id: 2, date: "08-Oct-2023", vchNo: "WTH-002", account: "Office Rent", bank: "HDFC Bank", amount: "15000", status: "Unreconciled" },
+            { id: 11, date: "20-Nov-2024", vchNo: "WTH-2024-05", account: "Office Supplies", bank: "HDFC Bank", amount: "3500", status: "Reconciled" },
+            { id: 12, date: "05-Jan-2025", vchNo: "WTH-2025-02", account: "Electricity Bill", bank: "ICICI Bank", amount: "1200", status: "Reconciled" },
+            { id: 6, date: "20-Jun-2025", vchNo: "WTH-2025-01", account: "Warehouse Rent", bank: "SBI Bank", amount: "15000", status: "Reconciled" },
+            { id: 7, date: "15-Sep-2025", vchNo: "WTH-2025-09", account: "Petty Cash Refill", bank: "Cash", amount: "2000", status: "Pending" },
+            { id: 21, date: "05-Aug-2026", vchNo: "WTH-2026-09", account: "Fuel Expenses", bank: "SBI Bank", amount: "1200", status: "Pending" }
         ],
         'JV': [
             { id: 1, date: "15-Oct-2023", vchNo: "JV-001", account: "Depreciation", bank: "-", amount: "2500", status: "Reconciled" },
+            { id: 11, date: "31-Mar-2025", vchNo: "JV-2025-10", account: "Audit Fees", bank: "-", amount: "7500", status: "Reconciled" },
+            { id: 12, date: "15-Apr-2025", vchNo: "JV-2025-11", account: "Loan Interest", bank: "-", amount: "3200", status: "Pending" },
+            { id: 6, date: "31-Mar-2026", vchNo: "JV-2026-99", account: "Year End Adjustment", bank: "-", amount: "5000", status: "Unreconciled" },
+            { id: 7, date: "10-Nov-2026", vchNo: "JV-2026-05", account: "Tax Provision", bank: "-", amount: "4500", status: "Pending" },
+            { id: 21, date: "31-Mar-2027", vchNo: "JV-2027-01", account: "Accrued Interest", bank: "-", amount: "1200", status: "Pending" }
         ],
         'Contra': [
             { id: 1, date: "20-Oct-2023", vchNo: "CON-001", account: "Cash to Bank", bank: "SBI Bank", amount: "10000", status: "Reconciled" },
+            { id: 11, date: "12-Jan-2025", vchNo: "CON-2025-01", account: "Vault Transfer", bank: "HDFC Bank", amount: "50000", status: "Reconciled" },
+            { id: 12, date: "20-Feb-2025", vchNo: "CON-2025-02", account: "Cash Withdrawal", bank: "ICICI Bank", amount: "5000", status: "Reconciled" },
+            { id: 6, date: "12-Nov-2025", vchNo: "CON-2025-05", account: "Bank Transfer", bank: "SBI Bank", amount: "20000", status: "Reconciled" },
+            { id: 7, date: "05-Jun-2026", vchNo: "CON-2026-01", account: "Petty Cash Draw", bank: "Cash", amount: "1000", status: "Pending" },
+            { id: 21, date: "15-Oct-2026", vchNo: "CON-2026-03", account: "Atm Withdrawal", bank: "ICICI Bank", amount: "5000", status: "Pending" }
         ]
     };
 
     const dummyTransactions = [
         { id: 1, date: "01-Oct-2023", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "5000", balance: "5000 Cr", narration: "Opening balance" },
-        { id: 2, date: "05-Oct-2023", particulars: "Purchase Invoice", type: "PI", voucherNo: "PI-001", debit: "0", credit: "2000", balance: "7000 Cr", narration: "Purchase of raw materials" },
-        { id: 3, date: "10-Oct-2023", particulars: "Bank Payment", type: "BP", voucherNo: "BP-001", debit: "3000", credit: "0", balance: "4000 Cr", narration: "Payment to vendor via HDFC" },
-        { id: 4, date: "15-Oct-2023", particulars: "Purchase Return", type: "PR", voucherNo: "PR-001", debit: "500", credit: "0", balance: "3500 Cr", narration: "Defective goods returned" },
-        { id: 5, date: "20-Oct-2023", particulars: "Bank Payment", type: "BP", voucherNo: "BP-002", debit: "500", credit: "0", balance: "3000 Cr", narration: "Quarterly maintenance charges" }
+        { id: 5, date: "20-Oct-2023", particulars: "Bank Payment", type: "BP", voucherNo: "BP-002", debit: "500", credit: "0", balance: "3000 Cr", narration: "Quarterly maintenance charges" },
+        
+        // 2024-2025 Data
+        { id: 11, date: "10-Apr-2024", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "8000", balance: "8000 Cr", narration: "Opening balance 2024" },
+        { id: 12, date: "25-Jul-2024", particulars: "Software License", type: "BP", voucherNo: "BP-505", debit: "2500", credit: "0", balance: "5500 Cr", narration: "Annual ERP subscription" },
+        { id: 13, date: "12-Dec-2024", particulars: "Sales Receipt", type: "RV", voucherNo: "RV-606", debit: "0", credit: "15000", balance: "20500 Cr", narration: "Bulk order payment" },
+        
+        // 2025-2026 Data
+        { id: 6, date: "15-Apr-2025", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "3000", balance: "3000 Cr", narration: "Brought forward from previous year" },
+        { id: 10, date: "28-Mar-2026", particulars: "Tax Payment", type: "JV", voucherNo: "JV-404", debit: "1500", credit: "0", balance: "4800 Cr", narration: "TDS adjustment for Q4" },
+
+        // 2026-2027 Data
+        { id: 21, date: "05-May-2026", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "12000", balance: "12000 Cr", narration: "Opening balance 2026" },
+        { id: 22, date: "18-Sep-2026", particulars: "Machine Repair", type: "CP", voucherNo: "CP-707", debit: "1800", credit: "0", balance: "10200 Cr", narration: "Hydraulic pump servicing" },
+        { id: 23, date: "15-Feb-2027", particulars: "Bonus Payout", type: "BP", voucherNo: "BP-808", debit: "5000", credit: "0", balance: "5200 Cr", narration: "Performance bonus batch #1" }
     ];
+
+    // Helper to normalize dates for comparison (DD-MMM-YYYY to YYYY-MM-DD)
+    const normalizeDate = (dateStr) => {
+        if (!dateStr || dateStr === '-') return null;
+        if (dateStr.includes('-') && dateStr.split('-')[0].length === 4) return dateStr;
+        
+        const parts = dateStr.split('-');
+        if (parts.length !== 3) return null;
+        const [day, month, year] = parts;
+        const months = {
+            'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+            'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+        };
+        return `${year}-${months[month]}-${day.padStart(2, '0')}`;
+    };
 
     const currentData = activeMainTab === 'Ledger'
         ? (activeSubTab === 'Sundry Creditors' ? dummyCreditors 
@@ -101,11 +156,63 @@ const Finance = () => {
            : activeSubTab === 'Cash' ? dummyCashLedger : [])
         : dummyBankData[activeSubTab] || [];
 
+    const filteredMainData = useMemo(() => {
+        if (!currentData) return [];
+        
+        const filtered = currentData.filter(item => {
+            // Search match
+            const searchStr = searchQuery.toLowerCase();
+            const matchesSearch = !searchQuery || (
+                (item.account && item.account.toLowerCase().includes(searchStr)) ||
+                (item.vchNo && item.vchNo.toLowerCase().includes(searchStr)) ||
+                (item.bank && item.bank.toLowerCase().includes(searchStr)) ||
+                (item.amount && item.amount.toLowerCase().includes(searchStr)) ||
+                (item.status && item.status.toLowerCase().includes(searchStr))
+            );
+
+            // Date match
+            let matchesDate = true;
+            if ((startDate || endDate) && item.date) {
+                const itemDateStr = normalizeDate(item.date);
+                if (startDate && itemDateStr < startDate) matchesDate = false;
+                if (endDate && itemDateStr > endDate) matchesDate = false;
+            }
+            
+            return matchesSearch && matchesDate;
+        });
+
+        // If it's the Ledger tab and a date filter is applied, simulate balance changes
+        if (activeMainTab === 'Ledger' && (startDate || endDate)) {
+            return filtered.map(item => {
+                const dateHash = (startDate || '').split('').reduce((a, b) => a + b.charCodeAt(0), 0) + 
+                                (endDate || '').split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+                
+                const factor = (dateHash % 50) / 100 + 0.5; // 0.5 to 1.0 factor
+                const simulatedDebit = item.debit === '-' ? '-' : (parseFloat(item.debit) * factor).toFixed(0);
+                const simulatedCredit = item.credit === '-' ? '-' : (parseFloat(item.credit) * (1.5 - factor)).toFixed(0);
+                
+                const op = parseFloat(item.openingBalance || 0);
+                const dr = parseFloat(simulatedDebit === '-' ? 0 : simulatedDebit);
+                const cr = parseFloat(simulatedCredit === '-' ? 0 : simulatedCredit);
+                const closing = op + cr - dr;
+
+                return {
+                    ...item,
+                    debit: simulatedDebit,
+                    credit: simulatedCredit,
+                    closingBalance: closing.toFixed(0)
+                };
+            });
+        }
+
+        return filtered;
+    }, [currentData, searchQuery, startDate, endDate, activeMainTab]);
+
     // Pagination Logic
     const indexOfLastRow = currentPage * rowsPerPage;
     const indexOfFirstRow = indexOfLastRow - rowsPerPage;
-    const currentRows = currentData.slice(indexOfFirstRow, indexOfLastRow);
-    const totalPages = Math.ceil(currentData.length / rowsPerPage);
+    const currentRows = filteredMainData.slice(indexOfFirstRow, indexOfLastRow);
+    const totalPages = Math.ceil(filteredMainData.length / rowsPerPage);
 
     const filteredTransactions = dummyTransactions.filter(tx => {
         let textMatch = true;
@@ -124,15 +231,9 @@ const Finance = () => {
 
         let dateMatch = true;
         if (startDate || endDate) {
-            const txDate = new Date(tx.date);
-            if (startDate) {
-                const start = new Date(startDate);
-                if (txDate < start) dateMatch = false;
-            }
-            if (endDate) {
-                const end = new Date(endDate);
-                if (txDate > end) dateMatch = false;
-            }
+            const txDateStr = normalizeDate(tx.date);
+            if (startDate && txDateStr < startDate) dateMatch = false;
+            if (endDate && txDateStr > endDate) dateMatch = false;
         }
 
         return textMatch && dateMatch;
@@ -157,7 +258,7 @@ const Finance = () => {
                 index + 1,
                 tx.date,
                 tx.particulars,
-                tx.narration || '-',
+                (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
                 tx.debit,
                 tx.credit,
                 tx.balance
@@ -183,7 +284,7 @@ const Finance = () => {
             "Sr.No": index + 1,
             "Date": tx.date,
             "Particular": tx.particulars,
-            "Narration": tx.narration || '-',
+            "Narration": (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
             "DR": tx.debit,
             "CR": tx.credit,
             "Cum Balance": tx.balance
@@ -197,9 +298,13 @@ const Finance = () => {
     return (
         <div className="flex flex-col w-full max-w-[1400px] mx-auto px-2 sm:px-4 md:px-8 py-6 pb-10 font-['Plus_Jakarta_Sans'] transition-all duration-300 relative h-full">
             {/* Title & Subtitle */}
-            <div className="flex flex-col gap-1 mb-6 md:mb-8 justify-start items-start font-outfit">
-                <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">{t('finance', 'Finance')}</h1>
-                <p className="text-[14px] md:text-[16px] text-[#6B7280] font-medium">Manage your financial operations and reporting</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8 font-outfit">
+                <div>
+                    <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">{t('finance', 'Finance')}</h1>
+                    <p className="text-[14px] md:text-[16px] text-[#6B7280] font-medium">Manage your financial operations and reporting</p>
+                </div>
+                <div className="flex items-center gap-3">
+                </div>
             </div>
 
             {/* Main Tabs */}
@@ -253,6 +358,42 @@ const Finance = () => {
                     );
                 })}
             </div>
+            
+            {/* Filter Bar */}
+            <div className="bg-white p-6 rounded-[24px] border border-[#E5E7EB] shadow-sm mb-8">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                    {/* Left Side: Search */}
+                    <div className="relative w-full lg:w-auto">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input 
+                            type="text" 
+                            placeholder={activeMainTab === 'Ledger' ? "Search Account..." : "Search transactions..."}
+                            className="h-[44px] pl-10 pr-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all w-full sm:w-[320px] font-medium"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+
+                    {/* Right Side: Years & Reset */}
+                    <div className="flex flex-wrap items-center gap-4 lg:gap-6">
+                        <div className="flex items-center gap-2 p-1 bg-gray-100/50 rounded-[14px] border border-gray-100">
+                            {fiscalYears.map((year) => (
+                                <button
+                                    key={year}
+                                    onClick={() => handleFiscalYearChange(year)}
+                                    className={`px-4 py-1.5 rounded-[10px] text-[13px] font-bold transition-all duration-300
+                                        ${activeFiscalYear === year 
+                                            ? 'bg-[#073318] text-white shadow-md shadow-[#073318]/20' 
+                                            : 'text-gray-500 hover:text-[#073318] hover:bg-white'}`}
+                                >
+                                    {year}
+                                </button>
+                            ))}
+                        </div>
+
+                    </div>
+                </div>
+            </div>
 
             {/* Content Area */}
             {currentData ? (
@@ -276,7 +417,6 @@ const Finance = () => {
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Account</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Bank/Cash</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Amount</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Status</th>
                                         </>
                                     )}
                                     <th className="px-6 py-4 whitespace-nowrap text-center">Action</th>
@@ -305,11 +445,6 @@ const Finance = () => {
                                                 <td className="px-6 py-4 text-center">{item.account}</td>
                                                 <td className="px-6 py-4 text-center">{item.bank}</td>
                                                 <td className="px-6 py-4 text-center font-bold text-[#073318]">₹ {item.amount}</td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <span className={`px-3 py-1 rounded-full text-[12px] font-bold ${item.status === 'Reconciled' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                        {item.status}
-                                                    </span>
-                                                </td>
                                             </>
                                         )}
                                         <td className="px-6 py-4 text-center relative">
@@ -331,25 +466,20 @@ const Finance = () => {
                                                         onClick={(e) => e.stopPropagation()}>
                                                         <button 
                                                             className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
-                                                            onClick={() => setOpenActionMenuId(null)}
+                                                            onClick={() => { navigate(`/seller/finance/ledger/${item.id}`); setOpenActionMenuId(null); }}
                                                         >
                                                             <Eye size={18} className="text-[#9CA3AF]" />
                                                             View & Edit
                                                         </button>
-                                                        <button 
-                                                            className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
-                                                            onClick={() => setOpenActionMenuId(null)}
-                                                        >
-                                                            <Users size={18} className="text-[#9CA3AF]" />
-                                                            Group
-                                                        </button>
-                                                        <button 
-                                                            className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
-                                                            onClick={() => setOpenActionMenuId(null)}
-                                                        >
-                                                            <BookOpen size={18} className="text-[#9CA3AF]" />
-                                                            Ledger
-                                                        </button>
+                                                        {activeSubTab !== 'Sundry Creditors' && activeSubTab !== 'Sundry Debtors' && (
+                                                            <button 
+                                                                className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+                                                                onClick={() => setOpenActionMenuId(null)}
+                                                            >
+                                                                <Trash2 size={18} className="text-red-400" />
+                                                                Delete
+                                                            </button>
+                                                        )}
 
                                                     </div>
                                                 </>
@@ -364,32 +494,28 @@ const Finance = () => {
                     <div className="flex flex-row items-center justify-between px-4 sm:px-6 py-4 border-t border-[#E5E7EB] bg-white rounded-b-[16px] font-outfit gap-2">
                         <div className="flex items-center gap-3">
                             <span className="text-[13px] text-[#6B7280] font-bold tracking-wider">SHOW</span>
-                            <select 
-                                className="h-[36px] bg-white border border-[#E5E7EB] rounded-[10px] px-3 text-[14px] text-[#4B5563] outline-none focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981]/20 transition-all font-semibold cursor-pointer shadow-sm hover:border-gray-300"
-                                value={rowsPerPage}
-                                onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                            >
-                                <option value={5}>5</option>
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                            </select>
+                            <CustomSelect 
+                                value={rowsPerPage} 
+                                onChange={(val) => { setRowsPerPage(val); setCurrentPage(1); }} 
+                                menuPlacement="top"
+                            />
                         </div>
                         <div className="flex items-center gap-6">
                             <span className="text-[14px] text-[#6B7280] font-medium">
-                                {currentData && currentData.length > 0 ? `${indexOfFirstRow + 1}-${Math.min(indexOfLastRow, currentData.length)} of ${currentData.length}` : '0-0 of 0'}
+                                {filteredMainData && filteredMainData.length > 0 ? `${indexOfFirstRow + 1}-${Math.min(indexOfLastRow, filteredMainData.length)} of ${filteredMainData.length}` : '0-0 of 0'}
                             </span>
                             <div className="flex items-center gap-2">
                                 <button 
                                     className="p-2 rounded-[10px] bg-white border border-[#E5E7EB] text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F9FAFB] hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-[#E5E7EB]"
                                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                    disabled={currentPage === 1 || !currentData || currentData.length === 0}
+                                    disabled={currentPage === 1 || !filteredMainData || filteredMainData.length === 0}
                                 >
                                     <ChevronLeft size={18} strokeWidth={2.5} />
                                 </button>
                                 <button 
                                     className="p-2 rounded-[10px] bg-white border border-[#E5E7EB] text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F9FAFB] hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-[#E5E7EB]"
                                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                    disabled={currentPage === totalPages || !currentData || currentData.length === 0}
+                                    disabled={currentPage === totalPages || !filteredMainData || filteredMainData.length === 0}
                                 >
                                     <ChevronRight size={18} strokeWidth={2.5} />
                                 </button>
@@ -533,7 +659,12 @@ const Finance = () => {
                                                     <td className="px-6 py-4 text-center">{index + 1}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap">{tx.date}</td>
                                                     <td className="px-6 py-4 font-bold">{tx.particulars}</td>
-                                                    <td className="px-6 py-4 text-[#6B7280]">{tx.narration}</td>
+                                                    <td className="px-6 py-4 text-[#6B7280]">
+                                                        {(tx.voucherNo && tx.voucherNo !== '-') ? (
+                                                            <span className="font-bold text-[#111827]">Inv.No-{tx.voucherNo.split('-')[1] || tx.voucherNo} - </span>
+                                                        ) : null}
+                                                        {tx.narration}
+                                                    </td>
                                                     <td className="px-6 py-4 text-right">{tx.debit}</td>
                                                     <td className="px-6 py-4 text-right">{tx.credit}</td>
                                                     <td className="px-6 py-4 text-right font-bold text-[#073318]">{tx.balance}</td>
@@ -578,6 +709,7 @@ const Finance = () => {
                 </div>,
                 document.body
             )}
+
         </div>
     );
 };

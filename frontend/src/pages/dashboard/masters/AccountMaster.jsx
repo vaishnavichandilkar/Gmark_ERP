@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import SuccessToast from "./components/SuccessToast";
 import FilterDropdown from "./components/FilterDropdown";
 import ImportModal from './components/ImportModal';
+import CustomSelect from '../../../components/common/CustomSelect';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -684,22 +685,15 @@ const AccountMaster = () => {
                     <div className="flex items-center justify-between w-full sm:w-auto gap-3 text-[14px] text-[#6B7280] font-medium order-2 sm:order-1 border-t sm:border-0 pt-4 sm:pt-0">
                         <div className="flex items-center gap-2">
                             <span>{t('common:show')}</span>
-                            <div className="relative group">
-                                <select 
-                                    value={rowsPerPage}
-                                    onChange={(e) => {
-                                        setRowsPerPage(Number(e.target.value));
-                                        setCurrentPage(1);
-                                    }}
-                                    className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#073318] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
-                                >
-                                    <option value={5}>5</option>
-                                    <option value={10}>10</option>
-                                    <option value={20}>20</option>
-                                    <option value={50}>50</option>
-                                </select>
-                                <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]" />
-                            </div>
+                            <CustomSelect 
+                                value={rowsPerPage}
+                                onChange={(val) => {
+                                    setRowsPerPage(val);
+                                    setCurrentPage(1);
+                                }}
+                                options={[5, 10, 20, 50]}
+                                menuPlacement="top"
+                            />
                             <span>{t('common:per_page')}</span>
                         </div>
                         <span className="sm:hidden text-gray-400">

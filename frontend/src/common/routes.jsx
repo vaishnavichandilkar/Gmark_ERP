@@ -54,6 +54,7 @@ import Challan from "../pages/dashboard/sales/Sales-invoice/challan/Challan";
 import SystemSettings from "../features/settings/pages/SystemSettings";
 import ReportDashboard from "../features/reports/pages/ReportDashboard";
 import Finance from "../pages/dashboard/finance/Finance";
+import LedgerView from "../pages/dashboard/finance/LedgerView";
 
 import { ROUTES } from "../constants/routes";
 
@@ -389,7 +390,10 @@ export const router = createBrowserRouter([
               },
               {
                 path: "finance",
-                element: <Finance />,
+                children: [
+                  { index: true, element: <Finance /> },
+                  { path: "ledger/:id", element: <LedgerView /> },
+                ]
               },
               {
                 path: "settings",

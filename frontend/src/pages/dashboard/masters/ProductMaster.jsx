@@ -30,6 +30,7 @@ import productService from "../../../services/productService";
 import toast from 'react-hot-toast';
 import ImportModal from './components/ImportModal';
 import ScrollableTable from "../../../components/common/ScrollableTable";
+import CustomSelect from "../../../components/common/CustomSelect";
 
 const ProductMaster = () => {
   const { t } = useTranslation(["modules", "common"]);
@@ -754,25 +755,15 @@ const ProductMaster = () => {
             <div className="flex flex-row items-center justify-between px-4 sm:px-6 py-4 border-t border-[#F3F4F6] bg-white gap-4 w-full">
               <div className="flex items-center gap-2 text-[13px] text-[#6B7280] font-medium">
                 <span className="hidden sm:inline">{t("common:show")}</span>
-                <div className="relative group">
-                  <select
+                <CustomSelect 
                     value={itemsPerPage}
-                    onChange={(e) => {
-                      setItemsPerPage(Number(e.target.value));
+                    onChange={(val) => {
+                      setItemsPerPage(val);
                       setCurrentPage(1);
                     }}
-                    className="appearance-none border border-[#E5E7EB] rounded-[8px] pl-3 pr-8 py-1.5 outline-none focus:border-[#073318] text-[#111827] bg-[#F9FAFB] cursor-pointer font-bold transition-all hover:bg-white"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-[#073318]"
-                  />
-                </div>
+                    options={[5, 10, 20, 50]}
+                    menuPlacement="top"
+                />
                 <span className="hidden sm:inline">{t("common:per_page")}</span>
               </div>
 

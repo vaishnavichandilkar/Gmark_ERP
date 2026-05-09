@@ -24,6 +24,7 @@ import { motion } from 'framer-motion';
 import grnService from "@/services/grnService";
 import ScrollableTable from "@/components/common/ScrollableTable";
 import FilterDropdown from "@/pages/dashboard/masters/components/FilterDropdown";
+import CustomSelect from "@/components/common/CustomSelect";
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
   if (!isOpen) return null;
@@ -380,13 +381,15 @@ const GRN = () => {
                 <div className="px-8 py-5 border-t border-[#F3F4F6] bg-[#F9FAFB] flex items-center justify-between font-bold text-[#6B7280]">
                     <div className="flex items-center gap-2">
                         <span>Show</span>
-                        <select 
+                        <CustomSelect 
                             value={itemsPerPage} 
-                            onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} 
-                            className="border border-[#E5E7EB] rounded-[8px] px-3 py-1.5 outline-none bg-white text-black"
-                        >
-                            {[10, 20, 50].map(v => <option key={v} value={v}>{v}</option>)}
-                        </select>
+                            onChange={(val) => {
+                                setItemsPerPage(val);
+                                setCurrentPage(1);
+                            }} 
+                            options={[10, 20, 50]}
+                            menuPlacement="top"
+                        />
                     </div>
                     <div className="flex items-center gap-4">
                         <span className="text-[14px]">Page {currentPage} of {totalPages || 1}</span>

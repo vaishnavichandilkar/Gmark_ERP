@@ -32,6 +32,7 @@ import { useTranslation } from 'react-i18next';
 
 import salesOrderService from "../../../../services/salesOrderService";
 import ScrollableTable from "../../../../components/common/ScrollableTable";
+import CustomSelect from "../../../../components/common/CustomSelect";
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
   if (!isOpen) return null;
@@ -785,9 +786,15 @@ const SalesOrder = () => {
         <div className="px-8 py-5 border-t border-[#F3F4F6] bg-[#F9FAFB] flex flex-row items-center justify-between uppercase">
           <div className="flex items-center gap-2 text-[14px] font-bold text-[#6B7280]">
             <span>Show</span>
-            <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="border border-[#E5E7EB] rounded-[8px] px-3 py-1.5 outline-none bg-white text-black font-bold">
-              {[5, 10, 20, 50].map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
+            <CustomSelect 
+                value={itemsPerPage}
+                onChange={(val) => {
+                    setItemsPerPage(val);
+                    setCurrentPage(1);
+                }}
+                options={[5, 10, 20, 50]}
+                menuPlacement="top"
+            />
           </div>
           <div className="flex items-center gap-4">
             <span className="text-[#6B7280] text-[14px] font-bold lowercase">{totalItemsCount > 0 ? `${((currentPage - 1) * itemsPerPage) + 1}–${Math.min(currentPage * itemsPerPage, totalItemsCount)} of ${totalItemsCount}` : '0-0 of 0'}</span>

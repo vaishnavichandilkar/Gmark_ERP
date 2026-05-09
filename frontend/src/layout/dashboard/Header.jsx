@@ -6,8 +6,9 @@ import ProfilePopup from '../../components/common/ProfilePopup';
 import LogoutModal from '../../components/common/LogoutModal';
 import StatusPopup from '../../components/common/StatusPopup';
 import EditProfileModal from '../../components/common/EditProfileModal';
-import LanguageSwitcher from '../../components/common/LanguageSwitcher';
-import { getProfileApi } from '../../services/authService';
+import LanguageSwitcher from "../../components/common/LanguageSwitcher";
+import PaymentModal from "../../components/common/PaymentModal";
+import { getProfileApi } from "../../services/authService";
 import { useTranslation } from 'react-i18next';
 
 const Header = ({ sidebarOpen, setSidebarOpen }) => {
@@ -20,6 +21,8 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
     const [activeQuickAction, setActiveQuickAction] = useState(null);
     const [isLogoutOpen, setIsLogoutOpen] = useState(false);
     const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [voucherType, setVoucherType] = useState('Payment');
     const [userData, setUserData] = useState(JSON.parse(localStorage.getItem('user') || 'null'));
 
     React.useEffect(() => {
@@ -231,7 +234,11 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
                                         {quickActions.finance.map((action, idx) => (
                                             <button
                                                 key={action.label}
-                                                onClick={() => { navigate(action.path); setActiveQuickAction(null); }}
+                                                onClick={() => { 
+                                                    setVoucherType(action.label);
+                                                    setIsPaymentModalOpen(true);
+                                                    setActiveQuickAction(null); 
+                                                }}
                                                 className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors ${idx !== quickActions.finance.length - 1 ? 'border-b border-gray-50' : ''}`}
                                             >
                                                 <Plus size={16} className="text-gray-400" />
@@ -298,6 +305,12 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
                 onClose={() => setIsEditProfileOpen(false)}
                 user={userData}
                 onUpdateSuccess={(updatedUser) => setUserData(updatedUser)}
+            />
+
+            <PaymentModal 
+                isOpen={isPaymentModalOpen}
+                onClose={() => setIsPaymentModalOpen(false)}
+                type={voucherType}
             />
         </header>
     );
