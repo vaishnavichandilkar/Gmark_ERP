@@ -161,15 +161,21 @@
   </div>
 
   <script>
-    window.addEventListener("load", () => {
+    const hideLoader = () => {
       const loader = document.getElementById("global-loader");
       if (loader) {
         loader.classList.add("loader-hidden");
         setTimeout(() => {
           loader.remove();
-        }, 200);
+        }, 300);
       }
-    });
+    };
+
+    // Hide on window load
+    window.addEventListener("load", hideLoader);
+
+    // Fallback: Force hide after 2 seconds if window load is slow
+    setTimeout(hideLoader, 2000);
   </script>
 
   <div id="root"></div>

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Search, Download, Filter, Plus, Minus, FileText, FileSpreadsheet, Maximize2, Minimize2, MoreVertical, CheckCircle2, XCircle, RefreshCw, ChevronDown, X, Eye, ChevronsUpDown, Upload } from 'lucide-react';
+import { Search, Download, Filter, Plus, Minus, FileText, FileSpreadsheet, Maximize2, Minimize2, MoreVertical, CheckCircle2, XCircle, RefreshCw, ChevronDown, X, Eye, ChevronsUpDown, Upload, User as UserIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import GroupForm from './components/GroupForm';
 import ImportModal from './components/ImportModal';
@@ -274,6 +274,10 @@ const GroupMaster = () => {
                                         <Plus size={14} strokeWidth={3} />
                                     )}
                                 </div>
+                            ) : group.isAccount ? (
+                                <div className="p-1 rounded bg-blue-50 text-blue-600">
+                                    <UserIcon size={14} strokeWidth={2.5} />
+                                </div>
                             ) : (
                                 <div className="w-1.5 h-1.5 bg-[#4B5563] rounded-full ml-0.5" />
                             )}
@@ -287,7 +291,7 @@ const GroupMaster = () => {
                             >
                                 {translateDynamic(group.group_name, t)}
                                 {group.is_header && group.level === 1 && (
-                                    <span className="ml-2 px-1.5 py-0.5 bg-gray-100 text-[#6B7280] text-[9px] font-bold rounded tracking-wider">
+                                    <span className="ml-2 px-1.5 py-0.5 bg-gray-100 text-[#6B7280] text-[9px] font-bold rounded tracking-wider uppercase">
                                         {t('common:header', 'Header')}
                                     </span>
                                 )}
@@ -307,7 +311,7 @@ const GroupMaster = () => {
 
                         {/* Action Column */}
                         <div className="w-16 md:w-20 flex items-center justify-center px-4 relative">
-                            {(!group.is_header || group.level !== 1) && (
+                            {(!group.is_header || group.level !== 1) && !group.isAccount && (
                                 <>
                                     <button
                                         onClick={(e) => {

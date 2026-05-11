@@ -255,19 +255,19 @@ export class GroupMasterService {
 
                     if (!parentInfo) {
                         // Search Level 2
-                        const p2 = await prisma.subGroup.findFirst({ where: { subgroup_name: underName, userId } });
+                        const p2 = await prisma.subGroup.findFirst({ where: { subgroup_name: underName, OR: [{ userId: null }, { userId }] } });
                         if (p2) parentInfo = { level: 2, id: p2.id };
                     }
 
                     if (!parentInfo) {
                         // Search Level 3
-                        const p3 = await prisma.subSubGroup.findFirst({ where: { name: underName, userId } });
+                        const p3 = await prisma.subSubGroup.findFirst({ where: { name: underName, OR: [{ userId: null }, { userId }] } });
                         if (p3) parentInfo = { level: 3, id: p3.id };
                     }
 
                     if (!parentInfo) {
                         // Search Level 4
-                        const p4 = await prisma.subSubSubGroup.findFirst({ where: { name: underName, userId } });
+                        const p4 = await prisma.subSubSubGroup.findFirst({ where: { name: underName, OR: [{ userId: null }, { userId }] } });
                         if (p4) parentInfo = { level: 4, id: p4.id };
                     }
 

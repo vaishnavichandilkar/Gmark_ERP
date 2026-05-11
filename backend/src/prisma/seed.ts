@@ -207,6 +207,86 @@ async function main() {
     }
     console.log('Account Header Groups seeded.');
 
+    // New Hierarchy: Liabilities and Assets
+    const accountingHierarchy = [
+        {
+            name: "Liabilities",
+            is_header: true,
+            subGroups: [
+                {
+                    name: "Non-Current Liabilities",
+                    subSubGroups: ["Long Term Borrowings", "Other Long Term Liabilities", "Long Term Provisions"]
+                },
+                {
+                    name: "Current Liabilities",
+                    subSubGroups: ["Short Term Borrowings", "Suppliers", "Other Current Liabilities", "Short Term Provisions"]
+                }
+            ]
+        },
+        {
+            name: "Assets",
+            is_header: true,
+            subGroups: [
+                {
+                    name: "Non-Current Assets",
+                    subSubGroups: ["Fixed Assets", "Long Term Loans & Advances"]
+                },
+                {
+                    name: "Current Assets",
+                    subSubGroups: ["Current Investment", "Inventories", "Customers", "Bank & Cash", "Short Term Loans and Advances", "Other Current Assets"]
+                }
+            ]
+        }
+    ];
+
+    console.log('Seeding Hierarchical Accounting Structure...');
+    for (const mainGroup of accountingHierarchy) {
+        let group = await prisma.group.findFirst({
+            where: { group_name: mainGroup.name, is_header: true, userId: null }
+        });
+        if (!group) {
+            group = await prisma.group.create({
+                data: {
+                    group_name: mainGroup.name,
+                    is_header: true,
+                    userId: null,
+                    status: 'ACTIVE'
+                }
+            });
+        }
+
+        for (const sg of mainGroup.subGroups) {
+            let subGroup = await prisma.subGroup.findFirst({
+                where: { subgroup_name: sg.name, group_id: group.id }
+            });
+            if (!subGroup) {
+                subGroup = await prisma.subGroup.create({
+                    data: {
+                        subgroup_name: sg.name,
+                        group_id: group.id,
+                        status: 'ACTIVE'
+                    }
+                });
+            }
+
+            for (const ssg of sg.subSubGroups) {
+                const subSubGroup = await prisma.subSubGroup.findFirst({
+                    where: { name: ssg, sub_group_id: subGroup.id }
+                });
+                if (!subSubGroup) {
+                    await prisma.subSubGroup.create({
+                        data: {
+                            name: ssg,
+                            sub_group_id: subGroup.id,
+                            status: 'ACTIVE'
+                        }
+                    });
+                }
+            }
+        }
+    }
+    console.log('Hierarchical Accounting Structure seeded.');
+
 
     console.log('Seeding completed.');
 }

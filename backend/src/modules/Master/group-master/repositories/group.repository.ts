@@ -16,10 +16,20 @@ export class GroupMasterRepository {
             },
             include: {
                 sub_groups: {
-                    where: { userId },
+                    where: {
+                        OR: [
+                            { userId: null },
+                            { userId }
+                        ]
+                    },
                     include: {
                         sub_sub_groups: {
-                            where: { userId },
+                            where: {
+                                OR: [
+                                    { userId: null },
+                                    { userId }
+                                ]
+                            },
                             include: {
                                 sub_sub_sub_groups: {
                                     where: { userId },
@@ -37,29 +47,68 @@ export class GroupMasterRepository {
             orderBy: [{ id: 'asc' }]
         });
 
-        return this.mapNestedGroups(rootGroups, 1);
+        // Fetch counts and account names for Suppliers and Customers
+        const [supplierAccounts, customerAccounts] = await Promise.all([
+            this.prisma.accountMaster.findMany({
+                where: { groupName: { has: 'SUNDRY_CREDITORS' }, userId },
+                select: { id: true, accountName: true, status: true }
+            }),
+            this.prisma.accountMaster.findMany({
+                where: { groupName: { has: 'SUNDRY_DEBTORS' }, userId },
+                select: { id: true, accountName: true, status: true }
+            })
+        ]);
+
+        const counts = {
+            'Suppliers': supplierAccounts.length,
+            'Customers': customerAccounts.length
+        };
+
+        const accountData = {
+            'Suppliers': supplierAccounts.map(acc => ({
+                id: `acc_${acc.id}`,
+                group_name: acc.accountName,
+                status: acc.status,
+                isAccount: true,
+                children: []
+            })),
+            'Customers': customerAccounts.map(acc => ({
+                id: `acc_${acc.id}`,
+                group_name: acc.accountName,
+                status: acc.status,
+                isAccount: true,
+                children: []
+            }))
+        };
+
+        return this.mapNestedGroups(rootGroups, 1, counts, accountData);
     }
 
-    private mapNestedGroups(items: any[], level: number): any[] {
+    private mapNestedGroups(items: any[], level: number, counts: Record<string, number>, accountData: Record<string, any[]>): any[] {
         return items.map(item => {
             let children = [];
             let name = '';
 
             if (level === 1) {
                 name = item.group_name;
-                children = item.sub_groups ? this.mapNestedGroups(item.sub_groups, 2) : [];
+                children = item.sub_groups ? this.mapNestedGroups(item.sub_groups, 2, counts, accountData) : [];
             } else if (level === 2) {
                 name = item.subgroup_name;
-                children = item.sub_sub_groups ? this.mapNestedGroups(item.sub_sub_groups, 3) : [];
+                children = item.sub_sub_groups ? this.mapNestedGroups(item.sub_sub_groups, 3, counts, accountData) : [];
             } else if (level === 3) {
                 name = item.name;
-                children = item.sub_sub_sub_groups ? this.mapNestedGroups(item.sub_sub_sub_groups, 4) : [];
+                children = item.sub_sub_sub_groups ? this.mapNestedGroups(item.sub_sub_sub_groups, 4, counts, accountData) : [];
             } else if (level === 4) {
                 name = item.name;
-                children = item.sub_sub_sub_sub_groups ? this.mapNestedGroups(item.sub_sub_sub_sub_groups, 5) : [];
+                children = item.sub_sub_sub_sub_groups ? this.mapNestedGroups(item.sub_sub_sub_sub_groups, 5, counts, accountData) : [];
             } else {
                 name = item.name;
                 children = [];
+            }
+
+            // Append accounts as leaf nodes if this group matches
+            if (accountData[name]) {
+                children = [...children, ...accountData[name]];
             }
 
             return {
@@ -69,6 +118,7 @@ export class GroupMasterRepository {
                 group_name: name,
                 level,
                 children,
+                account_count: counts[name] || 0
             };
         });
     }
@@ -80,6 +130,8 @@ export class GroupMasterRepository {
 
         if (isNaN(level) || isNaN(id)) return null;
 
+        const whereCondition = { id, OR: [{ userId: null }, { userId }] };
+
         switch (level) {
             case 1:
                 const g1 = await this.prisma.group.findFirst({
@@ -88,22 +140,22 @@ export class GroupMasterRepository {
                 return g1 ? { level: 1, data: g1 } : null;
             case 2:
                 const g2 = await this.prisma.subGroup.findFirst({
-                    where: { id, userId }
+                    where: whereCondition
                 });
                 return g2 ? { level: 2, data: g2 } : null;
             case 3:
                 const g3 = await this.prisma.subSubGroup.findFirst({
-                    where: { id, userId }
+                    where: whereCondition
                 });
                 return g3 ? { level: 3, data: g3 } : null;
             case 4:
                 const g4 = await this.prisma.subSubSubGroup.findFirst({
-                    where: { id, userId }
+                    where: whereCondition
                 });
                 return g4 ? { level: 4, data: g4 } : null;
             case 5:
                 const g5 = await this.prisma.subSubSubSubGroup.findFirst({
-                    where: { id, userId }
+                    where: whereCondition
                 });
                 return g5 ? { level: 5, data: g5 } : null;
             default:
