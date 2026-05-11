@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle2, ChevronDown, Trash2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
@@ -9,7 +9,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
         bankCash: 'Bank Account',
         entries: [{ id: Date.now(), account: initialData?.account || '', amount: '' }],
         narration: '',
-        paymentMode: 'Online / Transfer'
+        paymentMode: 'Net banking'
     });
 
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -17,7 +17,22 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
     const [isSuccess, setIsSuccess] = useState(false);
 
     const bankCashOptions = ['Bank Account', 'Cash in Hand'];
-    const paymentModeOptions = ['Online / Transfer', 'Cheque', 'UPI / QR', 'Cash'];
+    const paymentModeOptions = ['Debit Card', 'Credit card', 'Net banking', 'Cheque', 'UPI Id', 'Cash'];
+
+    // Reset form whenever modal opens/closes
+    useEffect(() => {
+        if (isOpen) {
+            setFormData({
+                date: new Date().toISOString().split('T')[0],
+                bankCash: 'Bank Account',
+                entries: [{ id: Date.now(), account: initialData?.account || '', amount: '' }],
+                narration: '',
+                paymentMode: 'Net banking'
+            });
+            setIsSuccess(false);
+            setIsSubmitting(false);
+        }
+    }, [isOpen, initialData]);
 
     if (!isOpen) return null;
 
@@ -25,10 +40,29 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
         e.preventDefault();
         setIsSubmitting(true);
         setTimeout(() => {
+            // Dispatch event for components to listen to
+            const event = new CustomEvent('voucherAdded', { 
+                detail: { 
+                    type, 
+                    formData: {
+                        ...formData,
+                        id: Date.now()
+                    } 
+                } 
+            });
+            window.dispatchEvent(event);
+
             setIsSubmitting(false);
             setIsSuccess(true);
             setTimeout(() => {
                 setIsSuccess(false);
+                setFormData({
+                    date: new Date().toISOString().split('T')[0],
+                    bankCash: 'Bank Account',
+                    entries: [{ id: Date.now(), account: '', amount: '' }],
+                    narration: '',
+                    paymentMode: 'Net banking'
+                });
                 onClose();
             }, 2000);
         }, 1500);

@@ -152,7 +152,7 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
         ],
         finance: [
             { label: 'Receipt', path: '/seller/finance?tab=Bank Reconciliation&subTab=Receipts' },
-            { label: 'Payment', path: '/seller/finance?tab=Bank Reconciliation&subTab=Withdrawals' },
+            { label: 'Payment', path: '/seller/finance?tab=Bank Reconciliation&subTab=Payments' },
             { label: 'Contra', path: '/seller/finance?tab=Bank Reconciliation&subTab=Contra' },
             { label: 'Journal', path: '/seller/finance?tab=Bank Reconciliation&subTab=JV' }
         ]

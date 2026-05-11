@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Download, Search, FileText, FileSpreadsheet, RotateCcw } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -9,6 +9,7 @@ import ScrollableTable from "@/components/common/ScrollableTable";
 const LedgerView = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [isEditing, setIsEditing] = useState(false);
     const [accountData, setAccountData] = useState({
         name: `Account #${id}`,
@@ -32,6 +33,26 @@ const LedgerView = () => {
         setStartDate(`${startYear}-04-01`);
         setEndDate(`${endYear}-03-31`);
     };
+
+    React.useEffect(() => {
+        const start = searchParams.get('startDate');
+        const end = searchParams.get('endDate');
+        const name = searchParams.get('name');
+
+        if (start) setStartDate(start);
+        if (end) setEndDate(end);
+        if (name) setAccountData(prev => ({ ...prev, name }));
+        
+        // Find if these dates match a fiscal year
+        if (start && end) {
+            const fiscalYear = fiscalYears.find(fy => {
+                const [sY, eY] = fy.split('-');
+                return start === `${sY}-04-01` && end === `${eY}-03-31`;
+            });
+            if (fiscalYear) setActiveFiscalYear(fiscalYear);
+            else setActiveFiscalYear(null);
+        }
+    }, [searchParams]);
 
     // Dummy data matching Finance.jsx
     const dummyTransactions = [
@@ -99,42 +120,68 @@ const LedgerView = () => {
 
     const handleExportPDF = () => {
         const doc = new jsPDF();
-        doc.text(`Ledger Statement`, 14, 15);
+        
+        doc.setFontSize(16);
+        doc.text(`Ledger Account: ${accountData.name}`, 14, 20);
+        
+        const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "DR", "CR", "Balance"];
+        const tableRows = filteredTransactions.map((tx, idx) => [
+            idx + 1,
+            tx.date,
+            tx.particulars,
+            (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
+            tx.debit !== '0' ? tx.debit : '-',
+            tx.credit !== '0' ? tx.credit : '-',
+            tx.balance
+        ]);
+
+        const footerRows = [
+            ['', '', '', 'Page Total', totalDR.toLocaleString(), totalCR.toLocaleString(), finalBalance],
+            ['', '', '', 'Transactions (Ledger)', totalDR.toLocaleString(), totalCR.toLocaleString(), finalBalance],
+            ['', '', '', 'Balance (Ledger)', '--', '--', finalBalance]
+        ];
+
         autoTable(doc, {
-            head: [['Sr.No', 'Date', 'Particular', 'Narration', 'DR', 'CR', 'Balance']],
-            body: filteredTransactions.map((tx, idx) => [
-                idx + 1,
-                tx.date,
-                tx.particulars,
-                (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
-                tx.debit,
-                tx.credit,
-                tx.balance
-            ]),
-            startY: 25,
+            head: [tableColumn],
+            body: tableRows,
+            foot: footerRows,
+            startY: 30,
+            theme: 'grid',
+            headStyles: { fillColor: [17, 24, 39], textColor: [255, 255, 255] },
+            footStyles: { fillColor: [249, 250, 251], textColor: [17, 24, 39], fontStyle: 'bold' },
+            styles: { fontSize: 8, font: 'helvetica' }
         });
-        doc.save(`ledger_${id}.pdf`);
+
+        doc.save(`${accountData.name}_ledger.pdf`);
     };
 
     const handleExportExcel = () => {
-        const ws = XLSX.utils.json_to_sheet(filteredTransactions.map((tx, idx) => ({
+        const exportData = filteredTransactions.map((tx, idx) => ({
             "Sr.No": idx + 1,
             "Date": tx.date,
-            "Particulars": tx.particulars,
+            "Particular": tx.particulars,
             "Narration": (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
             "Debit (₹)": tx.debit,
             "Credit (₹)": tx.credit,
             "Balance": tx.balance
-        })));
+        }));
+
+        // Add summary rows to Excel
+        exportData.push({}); // Empty row for spacing
+        exportData.push({ "Narration": "Page Total", "Debit (₹)": totalDR, "Credit (₹)": totalCR, "Balance": finalBalance });
+        exportData.push({ "Narration": "Transactions (Ledger)", "Debit (₹)": totalDR, "Credit (₹)": totalCR, "Balance": finalBalance });
+        exportData.push({ "Narration": "Balance (Ledger)", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": finalBalance });
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Ledger");
-        XLSX.utils.writeFile(wb, `ledger_${id}.xlsx`);
+        XLSX.utils.writeFile(wb, `${accountData.name}_ledger.xlsx`);
     };
 
     return (
         <div className="flex flex-col w-full min-h-screen bg-[#F9FAFB] font-outfit">
             {/* Header */}
-            <div className="flex items-center justify-between px-8 py-6 border border-[#E5E7EB] bg-white sticky top-4 mx-6 z-10 rounded-[24px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] mb-4">
+            <div className="flex items-center justify-between px-8 py-6 border-b border-[#E5E7EB] bg-white rounded-b-[24px] shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-4">
                 <div className="flex items-center gap-4">
                     <button 
                         onClick={() => navigate(-1)}
@@ -240,15 +287,15 @@ const LedgerView = () => {
                         <>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
                                 <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Total Debit</p>
-                                <h3 className="text-2xl font-extrabold text-blue-600">₹ {totalDR.toLocaleString()}</h3>
+                                <h3 className="text-2xl font-extrabold text-[#111827]">₹ {totalDR.toLocaleString()}</h3>
                             </div>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
                                 <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Total Credit</p>
-                                <h3 className="text-2xl font-extrabold text-red-600">₹ {totalCR.toLocaleString()}</h3>
+                                <h3 className="text-2xl font-extrabold text-[#111827]">₹ {totalCR.toLocaleString()}</h3>
                             </div>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
                                 <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Closing Balance</p>
-                                <h3 className="text-2xl font-extrabold text-[#073318]">₹ {finalBalance}</h3>
+                                <h3 className="text-2xl font-extrabold text-[#111827]">₹ {finalBalance}</h3>
                             </div>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
                                 <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Group</p>
@@ -262,49 +309,42 @@ const LedgerView = () => {
                 <div className="bg-white p-6 rounded-[24px] border border-[#E5E7EB] shadow-sm mb-8">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                         <div className="flex flex-wrap items-center gap-6">
-                            <div className="relative">
+                            <div className="relative w-full sm:w-auto">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input 
                                     type="text" 
                                     placeholder="Search transactions..."
-                                    className="h-[44px] pl-10 pr-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all w-[300px]"
+                                    className="h-[46px] pl-10 pr-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all w-full sm:w-[320px] font-medium"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                 />
                             </div>
 
-                            {/* Fiscal Year Selector */}
-                            <div className="flex items-center gap-2 p-1 bg-gray-100/50 rounded-[14px] border border-gray-100">
-                                {fiscalYears.map((year) => (
-                                    <button
-                                        key={year}
-                                        onClick={() => handleFiscalYearChange(year)}
-                                        className={`px-4 py-1.5 rounded-[10px] text-[13px] font-bold transition-all duration-300
-                                            ${activeFiscalYear === year 
-                                                ? 'bg-[#073318] text-white shadow-md shadow-[#073318]/20' 
-                                                : 'text-gray-500 hover:text-[#073318] hover:bg-white'}`}
-                                    >
-                                        {year}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                                <input 
-                                    type="date" 
-                                    className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                />
-                                <span className="text-gray-400 font-bold">to</span>
-                                <input 
-                                    type="date" 
-                                    className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                />
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">From</span>
+                                    <input 
+                                        type="date" 
+                                        className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] transition-all cursor-pointer"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">To</span>
+                                    <input 
+                                        type="date" 
+                                        className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] transition-all cursor-pointer"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                    />
+                                </div>
                                 {(startDate || endDate) && (
-                                    <button onClick={() => {setStartDate(''); setEndDate('');}} className="p-2 text-gray-400 hover:text-red-500">
+                                    <button 
+                                        onClick={() => { setStartDate(''); setEndDate(''); setActiveFiscalYear(null); }}
+                                        className="p-2.5 text-[#9CA3AF] hover:bg-gray-100 rounded-lg transition-all"
+                                        title="Reset Dates"
+                                    >
                                         <RotateCcw size={18} />
                                     </button>
                                 )}
@@ -313,21 +353,30 @@ const LedgerView = () => {
 
                         <div className="relative">
                             <button 
-                                onClick={() => setShowExportMenu(!showExportMenu)}
-                                className="h-[44px] px-6 bg-white border border-[#E5E7EB] hover:bg-gray-50 rounded-[12px] font-bold text-gray-700 flex items-center gap-2 transition-all shadow-sm"
+                                className="h-[44px] px-6 bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] rounded-[12px] font-bold text-[15px] transition-all flex items-center gap-2 shadow-sm"
+                                onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}
                             >
                                 <Download size={18} />
-                                Export Ledger
+                                Export
                             </button>
+                            
                             {showExportMenu && (
                                 <>
                                     <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
-                                    <div className="absolute right-0 top-13 w-48 bg-white border border-[#E5E7EB] rounded-xl shadow-xl z-50 py-2">
-                                        <button onClick={handleExportPDF} className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 font-medium text-gray-700">
-                                            <FileText size={18} className="text-red-500" /> PDF Document
+                                    <div className="absolute right-0 mt-2 w-48 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-50 flex flex-col py-2 font-outfit">
+                                        <button 
+                                            className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
+                                            onClick={handleExportPDF}
+                                        >
+                                            <FileText size={18} className="text-red-500" />
+                                            Export as PDF
                                         </button>
-                                        <button onClick={handleExportExcel} className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 font-medium text-gray-700">
-                                            <FileSpreadsheet size={18} className="text-green-500" /> Excel Sheet
+                                        <button 
+                                            className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
+                                            onClick={handleExportExcel}
+                                        >
+                                            <FileSpreadsheet size={18} className="text-emerald-500" />
+                                            Export as Excel
                                         </button>
                                     </div>
                                 </>
@@ -363,12 +412,35 @@ const LedgerView = () => {
                                             )}
                                             {tx.narration}
                                         </td>
-                                        <td className="px-6 py-5 text-right font-bold text-blue-600">{tx.debit !== '0' ? `₹ ${tx.debit}` : '-'}</td>
-                                        <td className="px-6 py-5 text-right font-bold text-red-600">{tx.credit !== '0' ? `₹ ${tx.credit}` : '-'}</td>
-                                        <td className="px-6 py-5 text-right font-extrabold text-[#073318]">{tx.balance}</td>
+                                        <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.debit !== '0' ? `₹ ${tx.debit}` : '-'}</td>
+                                        <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.credit !== '0' ? `₹ ${tx.credit}` : '-'}</td>
+                                        <td className="px-6 py-5 text-right font-extrabold text-[#111827]">{tx.balance}</td>
                                     </tr>
                                 ))}
                             </tbody>
+                            <tfoot className="bg-white border-t-2 border-[#E5E7EB] font-outfit">
+                                {/* Page Total Row */}
+                                <tr className="border-b border-gray-100">
+                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Page Total</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {totalDR.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {totalCR.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">{finalBalance}</td>
+                                </tr>
+                                {/* Transactions (Ledger) Row */}
+                                <tr className="border-b border-gray-100">
+                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Transactions (Ledger)</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {totalDR.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {totalCR.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">{finalBalance}</td>
+                                </tr>
+                                {/* Balance (Ledger) Row */}
+                                <tr>
+                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Balance (Ledger)</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">{finalBalance}</td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </ScrollableTable>
                 </div>

@@ -9,6 +9,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from "xlsx";
 import ScrollableTable from "@/components/common/ScrollableTable";
+import toast from 'react-hot-toast';
 
 const Finance = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -47,9 +48,55 @@ const Finance = () => {
         }
     }, [searchParams]);
 
+    useEffect(() => {
+        const handleVoucherAdded = (e) => {
+            const { type, formData } = e.detail;
+            
+            // Map type to subTab
+            let subTab = '';
+            if (type === 'Receipt') subTab = 'Receipts';
+            else if (type === 'Payment') subTab = 'Payments';
+            else if (type === 'JV') subTab = 'JV';
+            else if (type === 'Contra') subTab = 'Contra';
+
+            if (subTab) {
+                // Map months for display format
+                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                const [y, m, d] = formData.date.split('-');
+                const displayDate = `${d}-${monthNames[parseInt(m)-1]}-${y}`;
+
+                // Prepare new entries (can be multiple rows in voucher)
+                const newEntries = formData.entries.map((entry, index) => ({
+                    id: `${formData.id}-${index}`,
+                    date: displayDate,
+                    vchNo: `${type.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+                    account: entry.account || 'Unknown Account',
+                    bank: formData.bankCash,
+                    narration: formData.narration,
+                    amount: entry.amount || '0',
+                    status: 'Pending'
+                }));
+
+                setBankData(prev => ({
+                    ...prev,
+                    [subTab]: [...newEntries, ...prev[subTab]]
+                }));
+
+                toast.success(`${type} Voucher added to ${subTab}`);
+                
+                // Switch to the relevant tab to show the update
+                setActiveMainTab('Bank Reconciliation');
+                setActiveSubTab(subTab);
+            }
+        };
+
+        window.addEventListener('voucherAdded', handleVoucherAdded);
+        return () => window.removeEventListener('voucherAdded', handleVoucherAdded);
+    }, []);
+
     const mainTabs = ['Ledger', 'Bank Reconciliation'];
     const getSubTabs = (mainTab) => {
-        if (mainTab === 'Bank Reconciliation') return ['Receipts', 'Withdrawals', 'JV', 'Contra'];
+        if (mainTab === 'Bank Reconciliation') return ['Receipts', 'Payments', 'JV', 'Contra'];
         return ['Sundry Creditors', 'Sundry Debtors', 'Bank', 'Cash'];
     };
     const subTabs = getSubTabs(activeMainTab);
@@ -80,40 +127,61 @@ const Finance = () => {
         { id: 2, account: "Main Cash Vault", openingBalance: "50000", debit: "0", credit: "5000", closingBalance: "45000" },
     ];
 
-    const dummyBankData = {
+    const initialBankData = {
         'Receipts': [
-            { id: 1, date: "01-Oct-2023", vchNo: "REC-001", account: "Retail Stores Inc", bank: "HDFC Bank", amount: "5000", status: "Reconciled" },
-            { id: 11, date: "15-May-2024", vchNo: "REC-2024-01", account: "Legacy Systems", bank: "SBI Bank", amount: "18000", status: "Reconciled" },
-            { id: 12, date: "22-Sep-2024", vchNo: "REC-2024-02", account: "Quantum Soft", bank: "HDFC Bank", amount: "4500", status: "Pending" },
-            { id: 6, date: "15-May-2025", vchNo: "REC-2025-01", account: "Future Tech Ltd", bank: "HDFC Bank", amount: "25000", status: "Reconciled" },
-            { id: 7, date: "10-Dec-2025", vchNo: "REC-2025-02", account: "New Age Retail", bank: "SBI Bank", amount: "8000", status: "Unreconciled" },
-            { id: 21, date: "10-Jul-2026", vchNo: "REC-2026-05", account: "Zenith Corp", bank: "ICICI Bank", amount: "32000", status: "Pending" }
+            // 2024-2025
+            { id: 11, date: "15-May-2024", vchNo: "REC-24-001", account: "Legacy Systems", bank: "SBI Bank", narration: "Service charges Q1", amount: "18000", status: "Reconciled" },
+            { id: 12, date: "22-Sep-2024", vchNo: "REC-24-002", account: "Quantum Soft", bank: "HDFC Bank", narration: "Consulting fee Sept", amount: "4500", status: "Pending" },
+            { id: 13, date: "10-Jan-2025", vchNo: "REC-24-003", account: "Alpha Tech", bank: "ICICI Bank", narration: "Annual maintenance", amount: "12500", status: "Reconciled" },
+            // 2025-2026
+            { id: 6, date: "15-May-2025", vchNo: "REC-25-001", account: "Future Tech Ltd", bank: "HDFC Bank", narration: "Project Phase 1", amount: "25000", status: "Reconciled" },
+            { id: 7, date: "10-Dec-2025", vchNo: "REC-25-002", account: "New Age Retail", bank: "SBI Bank", narration: "Advance for inventory", amount: "8000", status: "Unreconciled" },
+            { id: 8, date: "05-Feb-2026", vchNo: "REC-25-003", account: "Global Trade", bank: "HDFC Bank", narration: "Export settlement", amount: "45000", status: "Reconciled" },
+            // 2026-2027
+            { id: 21, date: "10-Jul-2026", vchNo: "REC-26-001", account: "Zenith Corp", bank: "ICICI Bank", narration: "Maintenance fee July", amount: "32000", status: "Pending" },
+            { id: 22, date: "15-Nov-2026", vchNo: "REC-26-002", account: "Starlight Ind", bank: "SBI Bank", narration: "Material supply", amount: "15600", status: "Pending" },
+            { id: 23, date: "20-Mar-2027", vchNo: "REC-26-003", account: "Apex Solutions", bank: "HDFC Bank", narration: "Year end settlement", amount: "22000", status: "Pending" }
         ],
-        'Withdrawals': [
-            { id: 1, date: "02-Oct-2023", vchNo: "WTH-001", account: "Salary Payment", bank: "SBI Bank", amount: "45000", status: "Reconciled" },
-            { id: 11, date: "20-Nov-2024", vchNo: "WTH-2024-05", account: "Office Supplies", bank: "HDFC Bank", amount: "3500", status: "Reconciled" },
-            { id: 12, date: "05-Jan-2025", vchNo: "WTH-2025-02", account: "Electricity Bill", bank: "ICICI Bank", amount: "1200", status: "Reconciled" },
-            { id: 6, date: "20-Jun-2025", vchNo: "WTH-2025-01", account: "Warehouse Rent", bank: "SBI Bank", amount: "15000", status: "Reconciled" },
-            { id: 7, date: "15-Sep-2025", vchNo: "WTH-2025-09", account: "Petty Cash Refill", bank: "Cash", amount: "2000", status: "Pending" },
-            { id: 21, date: "05-Aug-2026", vchNo: "WTH-2026-09", account: "Fuel Expenses", bank: "SBI Bank", amount: "1200", status: "Pending" }
+        'Payments': [
+            // 2024-2025
+            { id: 11, date: "20-Nov-2024", vchNo: "PAY-24-001", account: "Office Supplies", bank: "HDFC Bank", narration: "Stationery and printing", amount: "3500", status: "Reconciled" },
+            { id: 12, date: "05-Jan-2025", vchNo: "PAY-24-002", account: "Electricity Bill", bank: "ICICI Bank", narration: "Office utility bill Jan", amount: "1200", status: "Reconciled" },
+            { id: 13, date: "15-Feb-2025", vchNo: "PAY-24-003", account: "Broadband Serv", bank: "SBI Bank", narration: "Internet charges", amount: "2500", status: "Reconciled" },
+            // 2025-2026
+            { id: 6, date: "20-Jun-2025", vchNo: "PAY-25-001", account: "Warehouse Rent", bank: "SBI Bank", narration: "Quarterly rent June", amount: "15000", status: "Reconciled" },
+            { id: 7, date: "15-Sep-2025", vchNo: "PAY-25-002", account: "Petty Cash Refill", bank: "Cash", narration: "Cash box replenishment", amount: "2000", status: "Pending" },
+            { id: 8, date: "25-Dec-2025", vchNo: "PAY-25-003", account: "Security Agency", bank: "HDFC Bank", narration: "Annual guard services", amount: "12000", status: "Reconciled" },
+            // 2026-2027
+            { id: 21, date: "05-Aug-2026", vchNo: "PAY-26-001", account: "Fuel Expenses", bank: "SBI Bank", narration: "Vehicle fuel Aug", amount: "1200", status: "Pending" },
+            { id: 22, date: "12-Oct-2026", vchNo: "PAY-26-002", account: "Staff Bonus", bank: "HDFC Bank", narration: "Diwali bonus batch 1", amount: "55000", status: "Pending" },
+            { id: 23, date: "28-Feb-2027", vchNo: "PAY-26-003", account: "Server Hosting", bank: "Online", narration: "Cloud infrastructure fee", amount: "8900", status: "Pending" }
         ],
         'JV': [
-            { id: 1, date: "15-Oct-2023", vchNo: "JV-001", account: "Depreciation", bank: "-", amount: "2500", status: "Reconciled" },
-            { id: 11, date: "31-Mar-2025", vchNo: "JV-2025-10", account: "Audit Fees", bank: "-", amount: "7500", status: "Reconciled" },
-            { id: 12, date: "15-Apr-2025", vchNo: "JV-2025-11", account: "Loan Interest", bank: "-", amount: "3200", status: "Pending" },
-            { id: 6, date: "31-Mar-2026", vchNo: "JV-2026-99", account: "Year End Adjustment", bank: "-", amount: "5000", status: "Unreconciled" },
-            { id: 7, date: "10-Nov-2026", vchNo: "JV-2026-05", account: "Tax Provision", bank: "-", amount: "4500", status: "Pending" },
-            { id: 21, date: "31-Mar-2027", vchNo: "JV-2027-01", account: "Accrued Interest", bank: "-", amount: "1200", status: "Pending" }
+            // 2024-2025
+            { id: 11, date: "31-Mar-2025", vchNo: "JV-24-001", account: "Audit Fees", bank: "-", narration: "Annual audit provision", amount: "7500", status: "Reconciled" },
+            // 2025-2026
+            { id: 6, date: "31-Mar-2026", vchNo: "JV-25-001", account: "Depreciation", bank: "-", narration: "Year end assets dep", amount: "5000", status: "Unreconciled" },
+            // 2026-2027
+            { id: 21, date: "31-Mar-2027", vchNo: "JV-26-001", account: "Tax Provision", bank: "-", narration: "Income tax adjustment", amount: "12000", status: "Pending" }
         ],
         'Contra': [
-            { id: 1, date: "20-Oct-2023", vchNo: "CON-001", account: "Cash to Bank", bank: "SBI Bank", amount: "10000", status: "Reconciled" },
-            { id: 11, date: "12-Jan-2025", vchNo: "CON-2025-01", account: "Vault Transfer", bank: "HDFC Bank", amount: "50000", status: "Reconciled" },
-            { id: 12, date: "20-Feb-2025", vchNo: "CON-2025-02", account: "Cash Withdrawal", bank: "ICICI Bank", amount: "5000", status: "Reconciled" },
-            { id: 6, date: "12-Nov-2025", vchNo: "CON-2025-05", account: "Bank Transfer", bank: "SBI Bank", amount: "20000", status: "Reconciled" },
-            { id: 7, date: "05-Jun-2026", vchNo: "CON-2026-01", account: "Petty Cash Draw", bank: "Cash", amount: "1000", status: "Pending" },
-            { id: 21, date: "15-Oct-2026", vchNo: "CON-2026-03", account: "Atm Withdrawal", bank: "ICICI Bank", amount: "5000", status: "Pending" }
+            // 2024-2025
+            { id: 11, date: "12-Jan-2025", vchNo: "CON-24-001", account: "Vault Transfer", bank: "HDFC Bank", narration: "Cash deposit to bank", amount: "50000", status: "Reconciled" },
+            // 2025-2026
+            { id: 6, date: "12-Nov-2025", vchNo: "CON-25-001", account: "Bank Transfer", bank: "SBI Bank", narration: "Internal bank move", amount: "20000", status: "Reconciled" },
+            // 2026-2027
+            { id: 21, date: "15-Oct-2026", vchNo: "CON-26-001", account: "Atm Withdrawal", bank: "ICICI Bank", narration: "Cash for petty expenses", amount: "5000", status: "Pending" }
         ]
     };
+
+    const [bankData, setBankData] = useState(() => {
+        const savedData = localStorage.getItem('bankData');
+        return savedData ? JSON.parse(savedData) : initialBankData;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('bankData', JSON.stringify(bankData));
+    }, [bankData]);
 
     const dummyTransactions = [
         { id: 1, date: "01-Oct-2023", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "5000", balance: "5000 Cr", narration: "Opening balance" },
@@ -154,7 +222,7 @@ const Finance = () => {
            : activeSubTab === 'Sundry Debtors' ? dummyDebtors 
            : activeSubTab === 'Bank' ? dummyBankLedger
            : activeSubTab === 'Cash' ? dummyCashLedger : [])
-        : dummyBankData[activeSubTab] || [];
+        : bankData[activeSubTab] || [];
 
     const filteredMainData = useMemo(() => {
         if (!currentData) return [];
@@ -243,6 +311,51 @@ const Finance = () => {
     const totalCR = filteredTransactions.reduce((sum, tx) => sum + parseFloat(tx.credit || 0), 0);
     const finalBalance = filteredTransactions.length > 0 ? filteredTransactions[filteredTransactions.length - 1].balance : '0';
 
+    const handleSearch = () => {
+        if (!searchQuery) {
+            toast.error("Please enter an account name to search");
+            return;
+        }
+
+        // Try to find an exact match first
+        const exactMatch = filteredMainData.find(item => 
+            item.account.toLowerCase() === searchQuery.toLowerCase()
+        );
+
+        // If no exact match, but only one result, use that
+        const match = exactMatch || (filteredMainData.length === 1 ? filteredMainData[0] : null);
+
+        if (match) {
+            if (startDate && endDate) {
+                // Navigate to full ledger view with dates
+                navigate(`/seller/finance/ledger/${match.id}?startDate=${startDate}&endDate=${endDate}&name=${match.account}`);
+            } else {
+                // Just open the modal if no dates set
+                setSelectedAccount(match);
+            }
+        } else {
+            if (filteredMainData.length === 0) {
+                toast.error("No account found matching your search");
+            } else {
+                toast.error("Multiple matches found. Please select an account from the table.");
+            }
+        }
+    };
+
+    React.useEffect(() => {
+        if (activeMainTab === 'Ledger' && searchQuery && startDate && endDate) {
+            const exactMatch = filteredMainData.find(item => 
+                item.account.toLowerCase() === searchQuery.toLowerCase()
+            );
+            const match = exactMatch || (filteredMainData.length === 1 ? filteredMainData[0] : null);
+
+            if (match) {
+                navigate(`/seller/finance/ledger/${match.id}?startDate=${startDate}&endDate=${endDate}&name=${match.account}`);
+            }
+        }
+    }, [activeMainTab, searchQuery, startDate, endDate, filteredMainData, navigate]);
+
+
 
     const handleExportPDF = () => {
         const doc = new jsPDF();
@@ -251,28 +364,31 @@ const Finance = () => {
         doc.text(`Ledger Account: ${selectedAccount?.account || 'Account'}`, 14, 20);
         
         const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "DR", "CR", "Cum Balance"];
-        const tableRows = [];
+        const tableRows = filteredTransactions.map((tx, index) => [
+            index + 1,
+            tx.date,
+            tx.particulars,
+            (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
+            tx.debit !== '0' ? tx.debit : '-',
+            tx.credit !== '0' ? tx.credit : '-',
+            tx.balance
+        ]);
 
-        filteredTransactions.forEach((tx, index) => {
-            const txData = [
-                index + 1,
-                tx.date,
-                tx.particulars,
-                (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
-                tx.debit,
-                tx.credit,
-                tx.balance
-            ];
-            tableRows.push(txData);
-        });
+        const footerRows = [
+            ['', '', '', 'Page Total', totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), finalBalance],
+            ['', '', '', 'Transactions (Ledger)', totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), finalBalance],
+            ['', '', '', 'Balance (Ledger)', '--', '--', finalBalance]
+        ];
 
         autoTable(doc, {
             head: [tableColumn],
             body: tableRows,
+            foot: footerRows,
             startY: 30,
             theme: 'grid',
-            headStyles: { fillColor: [7, 51, 24] },
-            styles: { fontSize: 9 }
+            headStyles: { fillColor: [17, 24, 39], textColor: [255, 255, 255] },
+            footStyles: { fillColor: [249, 250, 251], textColor: [17, 24, 39], fontStyle: 'bold' },
+            styles: { fontSize: 8, font: 'helvetica' }
         });
 
         doc.save(`${selectedAccount?.account || 'Account'}_ledger.pdf`);
@@ -280,7 +396,7 @@ const Finance = () => {
     };
 
     const handleExportExcel = () => {
-        const worksheet = XLSX.utils.json_to_sheet(filteredTransactions.map((tx, index) => ({
+        const exportData = filteredTransactions.map((tx, index) => ({
             "Sr.No": index + 1,
             "Date": tx.date,
             "Particular": tx.particulars,
@@ -288,7 +404,15 @@ const Finance = () => {
             "DR": tx.debit,
             "CR": tx.credit,
             "Cum Balance": tx.balance
-        })));
+        }));
+
+        // Add summary rows to Excel
+        exportData.push({}); // Empty row for spacing
+        exportData.push({ "Narration": "Page Total", "DR": totalDR, "CR": totalCR, "Cum Balance": finalBalance });
+        exportData.push({ "Narration": "Transactions (Ledger)", "DR": totalDR, "CR": totalCR, "Cum Balance": finalBalance });
+        exportData.push({ "Narration": "Balance (Ledger)", "DR": "--", "CR": "--", "Cum Balance": finalBalance });
+
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Ledger");
         XLSX.writeFile(workbook, `${selectedAccount?.account || 'Account'}_ledger.xlsx`);
@@ -321,7 +445,7 @@ const Finance = () => {
                                 }}
                                 className={`relative text-[14px] md:text-[15px] font-bold transition-colors duration-300 ease-in-out whitespace-nowrap px-6 py-2.5 rounded-[12px]
                                     ${isActive
-                                        ? 'text-[#073318]'
+                                        ? 'text-[#111827]'
                                         : 'text-[#6B7280] hover:text-[#111827] hover:bg-gray-50'
                                     }`}
                             >
@@ -350,13 +474,35 @@ const Finance = () => {
                                 setActiveSubTab(tab);
                                 e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
                             }}
-                            className={`relative pb-4 text-[16px] md:text-[18px] font-bold transition-colors whitespace-nowrap shrink-0 ${isActive ? 'text-[#073318]' : 'text-[#6B7280]'}`}
+                            className={`relative pb-4 text-[16px] md:text-[18px] font-bold transition-colors whitespace-nowrap shrink-0 ${isActive ? 'text-[#111827]' : 'text-[#6B7280]'}`}
                         >
                             {tab}
                             {isActive && <motion.div layoutId="underlineSubTabFinance" className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#073318]" />}
                         </button>
                     );
                 })}
+            </div>
+
+            {/* Fiscal Year Switcher */}
+            <div className="flex justify-start mb-8">
+                <div className="inline-flex bg-white p-1 rounded-[16px] border border-[#E5E7EB] shadow-sm">
+                    {fiscalYears.map((year) => {
+                        const isActive = activeFiscalYear === year;
+                        return (
+                            <button
+                                key={year}
+                                onClick={() => handleFiscalYearChange(year)}
+                                className={`px-6 py-2 rounded-[12px] text-[14px] font-bold transition-all duration-300 whitespace-nowrap
+                                    ${isActive 
+                                        ? 'bg-[#073318] text-white shadow-lg' 
+                                        : 'text-[#6B7280] hover:text-[#111827]'
+                                    }`}
+                            >
+                                {year}
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
             
             {/* Filter Bar */}
@@ -368,29 +514,44 @@ const Finance = () => {
                         <input 
                             type="text" 
                             placeholder={activeMainTab === 'Ledger' ? "Search Account..." : "Search transactions..."}
-                            className="h-[44px] pl-10 pr-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all w-full sm:w-[320px] font-medium"
+                            className="h-[46px] pl-10 pr-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all w-full sm:w-[320px] font-medium"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                         />
                     </div>
 
-                    {/* Right Side: Years & Reset */}
-                    <div className="flex flex-wrap items-center gap-4 lg:gap-6">
-                        <div className="flex items-center gap-2 p-1 bg-gray-100/50 rounded-[14px] border border-gray-100">
-                            {fiscalYears.map((year) => (
-                                <button
-                                    key={year}
-                                    onClick={() => handleFiscalYearChange(year)}
-                                    className={`px-4 py-1.5 rounded-[10px] text-[13px] font-bold transition-all duration-300
-                                        ${activeFiscalYear === year 
-                                            ? 'bg-[#073318] text-white shadow-md shadow-[#073318]/20' 
-                                            : 'text-gray-500 hover:text-[#073318] hover:bg-white'}`}
+                    {/* Right Side: Custom Date Range */}
+                    <div className="flex flex-wrap items-center gap-6">
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">From</span>
+                                <input 
+                                    type="date" 
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all cursor-pointer"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">To</span>
+                                <input 
+                                    type="date" 
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all cursor-pointer"
+                                />
+                            </div>
+                            {(startDate || endDate) && (
+                                <button 
+                                    onClick={() => { setStartDate(''); setEndDate(''); setActiveFiscalYear(null); }}
+                                    className="p-2.5 text-[#9CA3AF] hover:bg-gray-100 rounded-lg transition-all"
+                                    title="Reset Dates"
                                 >
-                                    {year}
+                                    <RotateCcw size={18} />
                                 </button>
-                            ))}
+                            )}
                         </div>
-
                     </div>
                 </div>
             </div>
@@ -416,6 +577,7 @@ const Finance = () => {
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Vch No.</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Account</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Bank/Cash</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Narration</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Amount</th>
                                         </>
                                     )}
@@ -423,12 +585,12 @@ const Finance = () => {
                                 </tr>
                             </thead>
                             <tbody className="text-[14px] text-[#111827]">
-                                {currentRows.map((item) => (
+                                {currentRows.map((item, index) => (
                                     <tr key={item.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
                                         {activeMainTab === 'Ledger' ? (
                                             <>
                                                 <td 
-                                                    className="px-6 py-4 text-center font-bold text-[#073318] hover:underline cursor-pointer"
+                                                    className="px-6 py-4 text-center font-bold text-[#111827] hover:underline cursor-pointer"
                                                     onClick={() => setSelectedAccount(item)}
                                                 >
                                                     {item.account}
@@ -436,7 +598,7 @@ const Finance = () => {
                                                 <td className="px-6 py-4 text-center">{item.openingBalance}</td>
                                                 <td className="px-6 py-4 text-center">{item.debit}</td>
                                                 <td className="px-6 py-4 text-center">{item.credit}</td>
-                                                <td className="px-6 py-4 text-center text-[#073318] font-bold">{item.closingBalance}</td>
+                                                <td className="px-6 py-4 text-center text-[#111827] font-bold">{item.closingBalance}</td>
                                             </>
                                         ) : (
                                             <>
@@ -444,7 +606,8 @@ const Finance = () => {
                                                 <td className="px-6 py-4 text-center font-bold">{item.vchNo}</td>
                                                 <td className="px-6 py-4 text-center">{item.account}</td>
                                                 <td className="px-6 py-4 text-center">{item.bank}</td>
-                                                <td className="px-6 py-4 text-center font-bold text-[#073318]">₹ {item.amount}</td>
+                                                <td className="px-6 py-4 text-center max-w-[150px] truncate" title={item.narration}>{item.narration || '-'}</td>
+                                                <td className="px-6 py-4 text-center font-bold text-[#111827]">₹ {item.amount}</td>
                                             </>
                                         )}
                                         <td className="px-6 py-4 text-center relative">
@@ -461,17 +624,24 @@ const Finance = () => {
                                             {/* Dropdown Menu */}
                                             {openActionMenuId === item.id && (
                                                 <>
-                                                    <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setOpenActionMenuId(null); }} />
-                                                    <div className="absolute right-4 md:right-8 top-12 w-48 sm:w-56 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-50 flex flex-col py-2 font-outfit"
-                                                        onClick={(e) => e.stopPropagation()}>
+                                                    <div className="fixed inset-0 z-[100]" onClick={() => setOpenActionMenuId(null)} />
+                                                    <div className={`absolute right-0 ${index >= currentRows.length - 2 && currentRows.length > 2 ? 'bottom-full mb-2' : 'top-12'} w-48 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.15)] z-[101] flex flex-col py-2 font-outfit animate-in fade-in zoom-in-95 duration-200`}>
                                                         <button 
                                                             className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
-                                                            onClick={() => { navigate(`/seller/finance/ledger/${item.id}`); setOpenActionMenuId(null); }}
+                                                            onClick={() => {
+                                                                if (activeMainTab === 'Ledger') {
+                                                                    const qs = `?name=${encodeURIComponent(item.account)}${startDate ? `&startDate=${startDate}` : ''}${endDate ? `&endDate=${endDate}` : ''}`;
+                                                                    navigate(`/seller/finance/ledger/${item.id}${qs}`);
+                                                                } else {
+                                                                    setSelectedAccount(item);
+                                                                }
+                                                                setOpenActionMenuId(null);
+                                                            }}
                                                         >
                                                             <Eye size={18} className="text-[#9CA3AF]" />
                                                             View & Edit
                                                         </button>
-                                                        {activeSubTab !== 'Sundry Creditors' && activeSubTab !== 'Sundry Debtors' && (
+                                                        {activeSubTab !== 'Sundry Creditors' && activeSubTab !== 'Sundry Debtors' && activeSubTab !== 'Bank' && activeSubTab !== 'Cash' && (
                                                             <button 
                                                                 className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-red-600 hover:bg-red-50 transition-colors"
                                                                 onClick={() => setOpenActionMenuId(null)}
@@ -539,177 +709,205 @@ const Finance = () => {
                     <div className="relative bg-white rounded-[16px] sm:rounded-[24px] shadow-2xl w-full sm:w-[95vw] lg:w-[90vw] max-w-none overflow-hidden animate-in zoom-in-95 duration-200 font-outfit flex flex-col h-[95vh] sm:h-auto sm:max-h-[85vh]">
                         <div className="flex items-start sm:items-center justify-between px-5 sm:px-8 py-5 sm:py-6 border-b border-[#F3F4F6] bg-white">
                             <div>
-                                <h3 className="text-[20px] font-bold text-[#111827] tracking-tight">Ledger Account: {selectedAccount.account}</h3>
-                                <p className="text-[14px] text-[#6B7280] font-medium mt-1">Transaction history and details</p>
+                                <h3 className="text-[20px] font-bold text-[#111827] tracking-tight">
+                                    {activeMainTab === 'Ledger' ? `Ledger Account: ${selectedAccount.account}` : `${activeSubTab} Details: ${selectedAccount.vchNo}`}
+                                </h3>
+                                <p className="text-[14px] text-[#6B7280] font-medium mt-1">
+                                    {activeMainTab === 'Ledger' ? 'Transaction history and details' : 'Complete transaction summary and status'}
+                                </p>
                             </div>
                             <button onClick={() => { setSelectedAccount(null); setSearchQuery(''); setStartDate(''); setEndDate(''); setShowExportMenu(false); }} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
                                 <X size={24} />
                             </button>
                         </div>
                         <div className="p-4 sm:p-8 overflow-y-auto bg-[#F9FAFB] flex-1">
-                            {/* Filter Section */}
-                            <div className="flex flex-col gap-4 sm:gap-6 mb-6 sm:mb-8">
-                                <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-4 sm:gap-6">
-                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
-                                        <span className="text-[14px] font-bold text-[#4B5563]">Name:</span>
-                                        <input 
-                                            type="text" 
-                                            disabled 
-                                            value={selectedAccount.account} 
-                                            className="h-[42px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-[#6B7280] w-full sm:w-[240px] outline-none cursor-not-allowed" 
-                                        />
-                                    </div>
-                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
-                                        <span className="text-[14px] font-bold text-[#4B5563]">Start Date:</span>
-                                        <input 
-                                            type="date" 
-                                            value={startDate}
-                                            onChange={(e) => setStartDate(e.target.value)}
-                                            className="h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-[#4B5563] w-full sm:w-[180px] outline-none focus:border-[#9CA3AF] focus:ring-2 focus:ring-[#9CA3AF]/20 transition-all" 
-                                        />
-                                    </div>
-                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
-                                        <span className="text-[14px] font-bold text-[#4B5563]">End Date:</span>
-                                        <input 
-                                            type="date" 
-                                            value={endDate}
-                                            onChange={(e) => setEndDate(e.target.value)}
-                                            className="h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-[#4B5563] w-full sm:w-[180px] outline-none focus:border-[#9CA3AF] focus:ring-2 focus:ring-[#9CA3AF]/20 transition-all" 
-                                        />
-                                    </div>
-                                    {(startDate || endDate) && (
-                                        <div className="w-full sm:w-auto flex justify-end sm:block">
-                                            <button 
-                                                onClick={() => { setStartDate(''); setEndDate(''); }}
-                                                className="h-[42px] px-4 text-[13px] font-bold text-[#6B7280] hover:text-[#111827] hover:bg-[#F3F4F6] rounded-[10px] transition-colors flex items-center justify-center gap-2 w-full sm:w-auto"
-                                                title="Reset Dates"
-                                            >
-                                                <RotateCcw size={16} />
-                                                Reset
-                                            </button>
+                            {activeMainTab === 'Bank Reconciliation' ? (
+                                <div className="max-w-4xl mx-auto">
+                                    <div className="bg-white rounded-[24px] border border-[#E5E7EB] shadow-sm overflow-hidden mb-8">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-[#E5E7EB]">
+                                            {[
+                                                { label: 'Date', value: selectedAccount.date },
+                                                { label: 'Voucher Number', value: selectedAccount.vchNo },
+                                                { label: 'Account Name', value: selectedAccount.account },
+                                                { label: 'Bank / Cash', value: selectedAccount.bank },
+                                                { label: 'Amount', value: `₹ ${selectedAccount.amount}`, isBold: true, isFullWidth: true },
+                                            ].map((detail, idx) => (
+                                                <div key={idx} className={`bg-white p-6 flex flex-col gap-2 ${detail.isFullWidth ? 'md:col-span-2' : ''}`}>
+                                                    <span className="text-[13px] font-bold text-[#6B7280] uppercase tracking-wider">{detail.label}</span>
+                                                    <span className={`text-[18px] text-[#111827] ${detail.isBold ? 'font-extrabold' : 'font-semibold'}`}>{detail.value}</span>
+                                                </div>
+                                            ))}
                                         </div>
-                                    )}
+                                    </div>
+                                    <div className="bg-[#F8FAFC] p-6 rounded-[20px] border border-[#E2E8F0]">
+                                        <p className="text-[14px] font-medium text-[#64748B] italic">Note: These details are for internal reconciliation purposes. To view the full ledger for this account, please use the Ledger tab.</p>
+                                    </div>
                                 </div>
-                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-                                    <div className="relative w-full sm:w-auto">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <Search size={18} className="text-[#9CA3AF]" />
-                                        </div>
-                                        <input 
-                                            type="text" 
-                                            placeholder="Search By Anything..." 
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            className="h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-4 text-[14px] text-[#4B5563] w-full sm:w-[300px] outline-none focus:border-[#9CA3AF] focus:ring-2 focus:ring-[#9CA3AF]/20 transition-all placeholder:text-[#9CA3AF] placeholder:font-normal" 
-                                        />
-                                    </div>
-                                    <div className="relative w-full sm:w-auto">
-                                        <button 
-                                            className="h-[42px] px-5 w-full sm:w-auto justify-center bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] rounded-[10px] font-medium text-[15px] transition-colors flex items-center gap-2 shadow-sm"
-                                            onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}
-                                        >
-                                            <Download size={18} className="text-[#6B7280]" />
-                                            Export
-                                        </button>
-                                        
-                                        {/* Export Dropdown */}
-                                        {showExportMenu && (
-                                            <>
-                                                <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setShowExportMenu(false); }} />
-                                                <div className="absolute right-0 top-12 w-48 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-50 flex flex-col py-2 font-outfit"
-                                                    onClick={(e) => e.stopPropagation()}>
+                            ) : (
+                                <>
+                                    <div className="flex flex-col gap-4 sm:gap-6 mb-6 sm:mb-8">
+                                        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-4 sm:gap-6">
+                                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
+                                                <span className="text-[14px] font-bold text-[#4B5563]">Name:</span>
+                                                <input 
+                                                    type="text" 
+                                                    disabled 
+                                                    value={selectedAccount.account} 
+                                                    className="h-[42px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-[#6B7280] w-full sm:w-[240px] outline-none cursor-not-allowed" 
+                                                />
+                                            </div>
+                                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
+                                                <span className="text-[14px] font-bold text-[#4B5563]">Start Date:</span>
+                                                <input 
+                                                    type="date" 
+                                                    value={startDate}
+                                                    onChange={(e) => setStartDate(e.target.value)}
+                                                    className="h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-[#4B5563] w-full sm:w-[180px] outline-none focus:border-[#9CA3AF] focus:ring-2 focus:ring-[#9CA3AF]/20 transition-all" 
+                                                />
+                                            </div>
+                                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
+                                                <span className="text-[14px] font-bold text-[#4B5563]">End Date:</span>
+                                                <input 
+                                                    type="date" 
+                                                    value={endDate}
+                                                    onChange={(e) => setEndDate(e.target.value)}
+                                                    className="h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-[#4B5563] w-full sm:w-[180px] outline-none focus:border-[#9CA3AF] focus:ring-2 focus:ring-[#9CA3AF]/20 transition-all" 
+                                                />
+                                            </div>
+                                            {(startDate || endDate) && (
+                                                <div className="w-full sm:w-auto flex justify-end sm:block">
                                                     <button 
-                                                        className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
-                                                        onClick={handleExportPDF}
+                                                        onClick={() => { setStartDate(''); setEndDate(''); }}
+                                                        className="h-[42px] px-4 text-[13px] font-bold text-[#6B7280] hover:text-[#111827] hover:bg-[#F3F4F6] rounded-[10px] transition-colors flex items-center justify-center gap-2 w-full sm:w-auto"
+                                                        title="Reset Dates"
                                                     >
-                                                        <FileText size={18} className="text-red-500" />
-                                                        Export as PDF
-                                                    </button>
-                                                    <button 
-                                                        className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
-                                                        onClick={handleExportExcel}
-                                                    >
-                                                        <FileSpreadsheet size={18} className="text-emerald-500" />
-                                                        Export as Excel
+                                                        <RotateCcw size={16} />
+                                                        Reset
                                                     </button>
                                                 </div>
-                                            </>
-                                        )}
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+                                            <div className="relative w-full sm:w-auto">
+                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                    <Search size={18} className="text-[#9CA3AF]" />
+                                                </div>
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Search By Anything..." 
+                                                    value={searchQuery}
+                                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                                    className="h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-4 text-[14px] text-[#4B5563] w-full sm:w-[300px] outline-none focus:border-[#9CA3AF] focus:ring-2 focus:ring-[#9CA3AF]/20 transition-all placeholder:text-[#9CA3AF] placeholder:font-normal" 
+                                                />
+                                            </div>
+                                            <div className="relative w-full sm:w-auto">
+                                                <button 
+                                                    className="h-[42px] px-5 w-full sm:w-auto justify-center bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] rounded-[10px] font-medium text-[15px] transition-colors flex items-center gap-2 shadow-sm"
+                                                    onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}
+                                                >
+                                                    <Download size={18} className="text-[#6B7280]" />
+                                                    Export
+                                                </button>
+                                                
+                                                {/* Export Dropdown */}
+                                                {showExportMenu && (
+                                                    <>
+                                                        <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setShowExportMenu(false); }} />
+                                                        <div className="absolute right-0 top-12 w-48 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-50 flex flex-col py-2 font-outfit"
+                                                            onClick={(e) => e.stopPropagation()}>
+                                                            <button 
+                                                                className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
+                                                                onClick={handleExportPDF}
+                                                            >
+                                                                <FileText size={18} className="text-red-500" />
+                                                                Export as PDF
+                                                            </button>
+                                                            <button 
+                                                                className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
+                                                                onClick={handleExportExcel}
+                                                            >
+                                                                <FileSpreadsheet size={18} className="text-emerald-500" />
+                                                                Export as Excel
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
 
-                            <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-sm overflow-hidden w-full">
-                                <table className="w-full min-w-[800px] border-collapse text-left">
-                                    <thead>
-                                        <tr className="bg-[#E5E7EB] text-[#4B5563] font-bold text-[14px]">
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Sr.No</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">Date</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">Particular</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">Narration</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">DR</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">CR</th>
-                                            <th className="px-6 py-4 whitespace-nowrap text-right">Cum Balance</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="text-[14px] text-[#111827]">
-                                        {filteredTransactions.length > 0 ? (
-                                            filteredTransactions.map((tx, index) => (
-                                                <tr key={tx.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
-                                                    <td className="px-6 py-4 text-center">{index + 1}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">{tx.date}</td>
-                                                    <td className="px-6 py-4 font-bold">{tx.particulars}</td>
-                                                    <td className="px-6 py-4 text-[#6B7280]">
-                                                        {(tx.voucherNo && tx.voucherNo !== '-') ? (
-                                                            <span className="font-bold text-[#111827]">Inv.No-{tx.voucherNo.split('-')[1] || tx.voucherNo} - </span>
-                                                        ) : null}
-                                                        {tx.narration}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">{tx.debit}</td>
-                                                    <td className="px-6 py-4 text-right">{tx.credit}</td>
-                                                    <td className="px-6 py-4 text-right font-bold text-[#073318]">{tx.balance}</td>
+                                    <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-sm overflow-hidden w-full">
+                                        <table className="w-full min-w-[800px] border-collapse text-left">
+                                            <thead>
+                                                <tr className="bg-[#E5E7EB] text-[#4B5563] font-bold text-[14px]">
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Sr.No</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">Date</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">Particular</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">Narration</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">DR</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">CR</th>
+                                                    <th className="px-6 py-4 whitespace-nowrap text-right">Cum Balance</th>
                                                 </tr>
-                                            ))
-                                        ) : (
-                                            <tr>
-                                                <td colSpan="7" className="px-6 py-8 text-center text-[#6B7280]">
-                                                    No transactions found matching "{searchQuery}"
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                    <tfoot className="bg-[#F8FAFC] text-[13px] font-bold text-[#334155] border-t-2 border-[#CBD5E1]">
-                                        {/* Page Total Row */}
-                                        <tr className="border-b border-[#E2E8F0]">
-                                            <td colSpan="4" className="px-4 py-2.5 text-right bg-[#F1F5F9]/50">Page Total</td>
-                                            <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-blue-600">₹ {totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                            <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-red-600">₹ {totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                            <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {finalBalance}</td>
-                                        </tr>
+                                            </thead>
+                                            <tbody className="text-[14px] text-[#111827]">
+                                                {filteredTransactions.length > 0 ? (
+                                                    filteredTransactions.map((tx, index) => (
+                                                        <tr key={tx.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
+                                                            <td className="px-6 py-4 text-center">{index + 1}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap">{tx.date}</td>
+                                                            <td className="px-6 py-4 font-bold">{tx.particulars}</td>
+                                                            <td className="px-6 py-4 text-[#6B7280]">
+                                                                {(tx.voucherNo && tx.voucherNo !== '-') ? (
+                                                                    <span className="font-bold text-[#111827]">Inv.No-{tx.voucherNo.split('-')[1] || tx.voucherNo} - </span>
+                                                                ) : null}
+                                                                {tx.narration}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right">{tx.debit}</td>
+                                                            <td className="px-6 py-4 text-right">{tx.credit}</td>
+                                                            <td className="px-6 py-4 text-right font-bold text-[#111827]">{tx.balance}</td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan="7" className="px-6 py-8 text-center text-[#6B7280]">
+                                                            No transactions found matching "{searchQuery}"
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                            <tfoot className="bg-[#F8FAFC] text-[13px] font-bold text-[#334155] border-t-2 border-[#CBD5E1]">
+                                                {/* Page Total Row */}
+                                                <tr className="border-b border-[#E2E8F0]">
+                                                    <td colSpan="4" className="px-4 py-2.5 text-right bg-[#F1F5F9]/50">Page Total</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#111827]">₹ {totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#111827]">₹ {totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {finalBalance}</td>
+                                                </tr>
 
-                                        {/* Transactions (Ledger) Row */}
-                                        <tr className="border-b border-[#E2E8F0]">
-                                            <td colSpan="4" className="px-4 py-2.5 text-right bg-[#F1F5F9]/50">Transactions (Ledger)</td>
-                                            <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                            <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                            <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {finalBalance}</td>
-                                        </tr>
-                                        {/* Balance (Ledger) Row */}
-                                        <tr className="bg-[#F1F5F9]">
-                                            <td colSpan="4" className="px-4 py-2.5 text-right font-extrabold text-[#0F172A]">Balance (Ledger)</td>
-                                            <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
-                                            <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
-                                            <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] font-extrabold text-[#073318]">₹ {finalBalance}</td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
+                                                {/* Transactions (Ledger) Row */}
+                                                <tr className="border-b border-[#E2E8F0]">
+                                                    <td colSpan="4" className="px-4 py-2.5 text-right bg-[#F1F5F9]/50">Transactions (Ledger)</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {finalBalance}</td>
+                                                </tr>
+                                                {/* Balance (Ledger) Row */}
+                                                <tr className="bg-[#F1F5F9]">
+                                                    <td colSpan="4" className="px-4 py-2.5 text-right font-extrabold text-[#0F172A]">Balance (Ledger)</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] font-extrabold text-[#111827]">₹ {finalBalance}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>,
                 document.body
             )}
-
         </div>
     );
 };
