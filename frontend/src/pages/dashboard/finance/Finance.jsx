@@ -11,6 +11,9 @@ import * as XLSX from "xlsx";
 import ScrollableTable from "@/components/common/ScrollableTable";
 import toast from 'react-hot-toast';
 
+import ledgerService from '../../../services/ledgerService';
+import voucherService from '../../../services/voucherService';
+
 const Finance = () => {
     const { t } = useTranslation(['modules', 'common']);
     const [searchParams] = useSearchParams();
@@ -25,7 +28,26 @@ const Finance = () => {
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [rowsPerPage, setRowsPerPage] = useState(5);
     const [currentPage, setCurrentPage] = useState(1);
-    const [activeFiscalYear, setActiveFiscalYear] = useState('2024-2025');
+    const getCurrentFiscalYear = () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth(); // 0-indexed
+        if (month < 3) { // Before April
+            return `${year - 1}-${year}`;
+        }
+        return `${year}-${year + 1}`;
+    };
+
+    const [activeFiscalYear, setActiveFiscalYear] = useState(getCurrentFiscalYear());
+
+    // Effect to initialize dates when component mounts or fiscal year changes
+    useEffect(() => {
+        const [startYear, endYear] = activeFiscalYear.split('-');
+        setStartDate(`${startYear}-04-01`);
+        setEndDate(`${endYear}-03-31`);
+    }, [activeFiscalYear]);
+    const [summaryData, setSummaryData] = useState([]);
+    const [loading, setLoading] = useState(false);
 
     const fiscalYears = ['2024-2025', '2025-2026', '2026-2027'];
 
@@ -35,6 +57,36 @@ const Finance = () => {
         setStartDate(`${startYear}-04-01`);
         setEndDate(`${endYear}-03-31`);
     };
+
+    useEffect(() => {
+        const fetchSummary = async () => {
+            if (activeMainTab !== 'Ledger') return;
+            setLoading(true);
+            try {
+                let response;
+                const params = { search: searchQuery, startDate, endDate };
+                
+                if (activeSubTab === 'Sundry Creditors') {
+                    response = await ledgerService.getCreditors(params);
+                } else if (activeSubTab === 'Sundry Debtors') {
+                    response = await ledgerService.getDebtors(params);
+                } else {
+                    // Bank or Cash
+                    const group = activeSubTab === 'Bank' ? 'BANK' : 'CASH';
+                    response = await ledgerService.getBankCash({ ...params, group });
+                }
+                
+                setSummaryData(response.data || []);
+            } catch (error) {
+                console.error('Error fetching ledger summary:', error);
+                toast.error('Failed to load ledger data');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchSummary();
+    }, [activeMainTab, activeSubTab, searchQuery, startDate, endDate]);
 
     useEffect(() => {
         const tabParam = searchParams.get('tab');
@@ -50,44 +102,14 @@ const Finance = () => {
 
     useEffect(() => {
         const handleVoucherAdded = (e) => {
-            const { type, formData } = e.detail;
-            
-            // Map type to subTab
-            let subTab = '';
-            if (type === 'Receipt') subTab = 'Receipts';
-            else if (type === 'Payment') subTab = 'Payments';
-            else if (type === 'JV') subTab = 'JV';
-            else if (type === 'Contra') subTab = 'Contra';
-
-            if (subTab) {
-                // Map months for display format
-                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                const [y, m, d] = formData.date.split('-');
-                const displayDate = `${d}-${monthNames[parseInt(m)-1]}-${y}`;
-
-                // Prepare new entries (can be multiple rows in voucher)
-                const newEntries = formData.entries.map((entry, index) => ({
-                    id: `${formData.id}-${index}`,
-                    date: displayDate,
-                    vchNo: `${type.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-                    account: entry.account || 'Unknown Account',
-                    bank: formData.bankCash,
-                    narration: formData.narration,
-                    amount: entry.amount || '0',
-                    status: 'Pending'
-                }));
-
-                setBankData(prev => ({
-                    ...prev,
-                    [subTab]: [...newEntries, ...prev[subTab]]
-                }));
-
-                toast.success(`${type} Voucher added to ${subTab}`);
-                
-                // Switch to the relevant tab to show the update
-                setActiveMainTab('Bank Reconciliation');
-                setActiveSubTab(subTab);
-            }
+            // Trigger refresh by updating state or just relying on the useEffect dependencies
+            setLoading(true);
+            setTimeout(() => {
+                const subTabParam = searchParams.get('subTab');
+                setActiveSubTab(subTabParam || activeSubTab);
+                // The useEffect will trigger because activeSubTab or loading state changed
+                setLoading(false);
+            }, 100);
         };
 
         window.addEventListener('voucherAdded', handleVoucherAdded);
@@ -101,106 +123,80 @@ const Finance = () => {
     };
     const subTabs = getSubTabs(activeMainTab);
 
-    const dummyCreditors = [
-        { id: 1, account: "TechCorp Industries", openingBalance: "5000", debit: "2000", credit: "-", closingBalance: "3000" },
-        { id: 2, account: "Global Logistics", openingBalance: "1500", debit: "-", credit: "1000", closingBalance: "2500" },
-        { id: 3, account: "Prime Suppliers", openingBalance: "10000", debit: "5000", credit: "2000", closingBalance: "7000" },
-        { id: 4, account: "Alpha Electronics", openingBalance: "-", debit: "-", credit: "4500", closingBalance: "4500" },
-        { id: 5, account: "Nexus Services", openingBalance: "3200", debit: "3200", credit: "-", closingBalance: "-" }
-    ];
 
-    const dummyDebtors = [
-        { id: 1, account: "Retail Stores Inc", openingBalance: "1200", debit: "800", credit: "-", closingBalance: "2000" },
-        { id: 2, account: "Mega Market", openingBalance: "4500", debit: "-", credit: "1500", closingBalance: "3000" },
-        { id: 3, account: "City Wholesale", openingBalance: "8000", debit: "2000", credit: "-", closingBalance: "10000" },
-        { id: 4, account: "Local Shop", openingBalance: "-", debit: "500", credit: "-", closingBalance: "500" },
-        { id: 5, account: "Express Mart", openingBalance: "2500", debit: "-", credit: "2500", closingBalance: "-" }
-    ];
-
-    const dummyBankLedger = [
-        { id: 1, account: "HDFC Current Account", openingBalance: "150000", debit: "25000", credit: "10000", closingBalance: "165000" },
-        { id: 2, account: "SBI Savings Account", openingBalance: "75000", debit: "5000", credit: "20000", closingBalance: "60000" },
-    ];
-
-    const dummyCashLedger = [
-        { id: 1, account: "Petty Cash", openingBalance: "5000", debit: "1000", credit: "2000", closingBalance: "4000" },
-        { id: 2, account: "Main Cash Vault", openingBalance: "50000", debit: "0", credit: "5000", closingBalance: "45000" },
-    ];
-
-    const initialBankData = {
-        'Receipts': [
-            // 2024-2025
-            { id: 11, date: "15-May-2024", vchNo: "REC-24-001", account: "Legacy Systems", bank: "SBI Bank", narration: "Service charges Q1", amount: "18000", status: "Reconciled" },
-            { id: 12, date: "22-Sep-2024", vchNo: "REC-24-002", account: "Quantum Soft", bank: "HDFC Bank", narration: "Consulting fee Sept", amount: "4500", status: "Pending" },
-            { id: 13, date: "10-Jan-2025", vchNo: "REC-24-003", account: "Alpha Tech", bank: "ICICI Bank", narration: "Annual maintenance", amount: "12500", status: "Reconciled" },
-            // 2025-2026
-            { id: 6, date: "15-May-2025", vchNo: "REC-25-001", account: "Future Tech Ltd", bank: "HDFC Bank", narration: "Project Phase 1", amount: "25000", status: "Reconciled" },
-            { id: 7, date: "10-Dec-2025", vchNo: "REC-25-002", account: "New Age Retail", bank: "SBI Bank", narration: "Advance for inventory", amount: "8000", status: "Unreconciled" },
-            { id: 8, date: "05-Feb-2026", vchNo: "REC-25-003", account: "Global Trade", bank: "HDFC Bank", narration: "Export settlement", amount: "45000", status: "Reconciled" },
-            // 2026-2027
-            { id: 21, date: "10-Jul-2026", vchNo: "REC-26-001", account: "Zenith Corp", bank: "ICICI Bank", narration: "Maintenance fee July", amount: "32000", status: "Pending" },
-            { id: 22, date: "15-Nov-2026", vchNo: "REC-26-002", account: "Starlight Ind", bank: "SBI Bank", narration: "Material supply", amount: "15600", status: "Pending" },
-            { id: 23, date: "20-Mar-2027", vchNo: "REC-26-003", account: "Apex Solutions", bank: "HDFC Bank", narration: "Year end settlement", amount: "22000", status: "Pending" }
-        ],
-        'Payments': [
-            // 2024-2025
-            { id: 11, date: "20-Nov-2024", vchNo: "PAY-24-001", account: "Office Supplies", bank: "HDFC Bank", narration: "Stationery and printing", amount: "3500", status: "Reconciled" },
-            { id: 12, date: "05-Jan-2025", vchNo: "PAY-24-002", account: "Electricity Bill", bank: "ICICI Bank", narration: "Office utility bill Jan", amount: "1200", status: "Reconciled" },
-            { id: 13, date: "15-Feb-2025", vchNo: "PAY-24-003", account: "Broadband Serv", bank: "SBI Bank", narration: "Internet charges", amount: "2500", status: "Reconciled" },
-            // 2025-2026
-            { id: 6, date: "20-Jun-2025", vchNo: "PAY-25-001", account: "Warehouse Rent", bank: "SBI Bank", narration: "Quarterly rent June", amount: "15000", status: "Reconciled" },
-            { id: 7, date: "15-Sep-2025", vchNo: "PAY-25-002", account: "Petty Cash Refill", bank: "Cash", narration: "Cash box replenishment", amount: "2000", status: "Pending" },
-            { id: 8, date: "25-Dec-2025", vchNo: "PAY-25-003", account: "Security Agency", bank: "HDFC Bank", narration: "Annual guard services", amount: "12000", status: "Reconciled" },
-            // 2026-2027
-            { id: 21, date: "05-Aug-2026", vchNo: "PAY-26-001", account: "Fuel Expenses", bank: "SBI Bank", narration: "Vehicle fuel Aug", amount: "1200", status: "Pending" },
-            { id: 22, date: "12-Oct-2026", vchNo: "PAY-26-002", account: "Staff Bonus", bank: "HDFC Bank", narration: "Diwali bonus batch 1", amount: "55000", status: "Pending" },
-            { id: 23, date: "28-Feb-2027", vchNo: "PAY-26-003", account: "Server Hosting", bank: "Online", narration: "Cloud infrastructure fee", amount: "8900", status: "Pending" }
-        ],
-        'JV': [
-            // 2024-2025
-            { id: 11, date: "31-Mar-2025", vchNo: "JV-24-001", account: "Audit Fees", bank: "-", narration: "Annual audit provision", amount: "7500", status: "Reconciled" },
-            // 2025-2026
-            { id: 6, date: "31-Mar-2026", vchNo: "JV-25-001", account: "Depreciation", bank: "-", narration: "Year end assets dep", amount: "5000", status: "Unreconciled" },
-            // 2026-2027
-            { id: 21, date: "31-Mar-2027", vchNo: "JV-26-001", account: "Tax Provision", bank: "-", narration: "Income tax adjustment", amount: "12000", status: "Pending" }
-        ],
-        'Contra': [
-            // 2024-2025
-            { id: 11, date: "12-Jan-2025", vchNo: "CON-24-001", account: "Vault Transfer", bank: "HDFC Bank", narration: "Cash deposit to bank", amount: "50000", status: "Reconciled" },
-            // 2025-2026
-            { id: 6, date: "12-Nov-2025", vchNo: "CON-25-001", account: "Bank Transfer", bank: "SBI Bank", narration: "Internal bank move", amount: "20000", status: "Reconciled" },
-            // 2026-2027
-            { id: 21, date: "15-Oct-2026", vchNo: "CON-26-001", account: "Atm Withdrawal", bank: "ICICI Bank", narration: "Cash for petty expenses", amount: "5000", status: "Pending" }
-        ]
-    };
-
-    const [bankData, setBankData] = useState(() => {
-        const savedData = localStorage.getItem('bankData');
-        return savedData ? JSON.parse(savedData) : initialBankData;
-    });
+    const [bankData, setBankData] = useState([]);
 
     useEffect(() => {
-        localStorage.setItem('bankData', JSON.stringify(bankData));
-    }, [bankData]);
+        const fetchVouchers = async () => {
+            if (activeMainTab !== 'Bank Reconciliation') return;
+            setLoading(true);
+            try {
+                let response;
+                if (activeSubTab === 'Receipts') {
+                    response = await voucherService.getReceiptVouchers();
+                } else if (activeSubTab === 'Payments') {
+                    response = await voucherService.getPaymentVouchers();
+                } else {
+                    setBankData([]);
+                    return;
+                }
+                
+                // Map backend data to table format
+                const mappedData = response.map(v => ({
+                    id: v.id,
+                    date: new Date(v.voucherDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
+                    vchNo: v.voucherNumber,
+                    account: v.items?.map(i => i.account?.accountName).join(', ') || 'Unknown',
+                    bank: v.bankCashLedger?.accountName || '-',
+                    narration: v.narration,
+                    amount: v.totalAmount,
+                    status: 'Pending'
+                }));
+                
+                setBankData(mappedData);
+            } catch (error) {
+                console.error('Error fetching vouchers:', error);
+                toast.error('Failed to load vouchers');
+            } finally {
+                setLoading(false);
+            }
+        };
 
-    const dummyTransactions = [
-        { id: 1, date: "01-Oct-2023", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "5000", balance: "5000 Cr", narration: "Opening balance" },
-        { id: 5, date: "20-Oct-2023", particulars: "Bank Payment", type: "BP", voucherNo: "BP-002", debit: "500", credit: "0", balance: "3000 Cr", narration: "Quarterly maintenance charges" },
-        
-        // 2024-2025 Data
-        { id: 11, date: "10-Apr-2024", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "8000", balance: "8000 Cr", narration: "Opening balance 2024" },
-        { id: 12, date: "25-Jul-2024", particulars: "Software License", type: "BP", voucherNo: "BP-505", debit: "2500", credit: "0", balance: "5500 Cr", narration: "Annual ERP subscription" },
-        { id: 13, date: "12-Dec-2024", particulars: "Sales Receipt", type: "RV", voucherNo: "RV-606", debit: "0", credit: "15000", balance: "20500 Cr", narration: "Bulk order payment" },
-        
-        // 2025-2026 Data
-        { id: 6, date: "15-Apr-2025", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "3000", balance: "3000 Cr", narration: "Brought forward from previous year" },
-        { id: 10, date: "28-Mar-2026", particulars: "Tax Payment", type: "JV", voucherNo: "JV-404", debit: "1500", credit: "0", balance: "4800 Cr", narration: "TDS adjustment for Q4" },
+        fetchVouchers();
+    }, [activeMainTab, activeSubTab, searchQuery, startDate, endDate]);
 
-        // 2026-2027 Data
-        { id: 21, date: "05-May-2026", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "12000", balance: "12000 Cr", narration: "Opening balance 2026" },
-        { id: 22, date: "18-Sep-2026", particulars: "Machine Repair", type: "CP", voucherNo: "CP-707", debit: "1800", credit: "0", balance: "10200 Cr", narration: "Hydraulic pump servicing" },
-        { id: 23, date: "15-Feb-2027", particulars: "Bonus Payout", type: "BP", voucherNo: "BP-808", debit: "5000", credit: "0", balance: "5200 Cr", narration: "Performance bonus batch #1" }
-    ];
+    const [detailedLedger, setDetailedLedger] = useState(null);
+    const [detailedLoading, setDetailedLoading] = useState(false);
+    const [detailedCurrentPage, setDetailedCurrentPage] = useState(1);
+    const [detailedTotalPages, setDetailedTotalPages] = useState(1);
+    const [detailedTotalTotal, setDetailedTotalTotal] = useState(0);
+
+    useEffect(() => {
+        const fetchDetailed = async () => {
+            if (!selectedAccount || activeMainTab !== 'Ledger') return;
+            setDetailedLoading(true);
+            try {
+                const params = { 
+                    startDate, 
+                    endDate, 
+                    type: activeMainTab === 'Ledger' ? activeSubTab : undefined,
+                    page: detailedCurrentPage,
+                    limit: 14
+                };
+                const response = await ledgerService.getDetailedLedger(selectedAccount.id, params);
+                setDetailedLedger(response.data);
+                setDetailedTotalPages(response.data.totalPages || 1);
+                setDetailedTotalTotal(response.data.total || 0);
+            } catch (error) {
+                console.error('Error fetching detailed ledger:', error);
+                toast.error('Failed to load detailed ledger');
+            } finally {
+                setDetailedLoading(false);
+            }
+        };
+
+        fetchDetailed();
+    }, [selectedAccount, startDate, endDate, activeMainTab, detailedCurrentPage]);
 
     // Helper to normalize dates for comparison (DD-MMM-YYYY to YYYY-MM-DD)
     const normalizeDate = (dateStr) => {
@@ -218,11 +214,8 @@ const Finance = () => {
     };
 
     const currentData = activeMainTab === 'Ledger'
-        ? (activeSubTab === 'Sundry Creditors' ? dummyCreditors 
-           : activeSubTab === 'Sundry Debtors' ? dummyDebtors 
-           : activeSubTab === 'Bank' ? dummyBankLedger
-           : activeSubTab === 'Cash' ? dummyCashLedger : [])
-        : bankData[activeSubTab] || [];
+        ? summaryData
+        : bankData;
 
     const filteredMainData = useMemo(() => {
         if (!currentData) return [];
@@ -246,32 +239,18 @@ const Finance = () => {
                 if (endDate && itemDateStr > endDate) matchesDate = false;
             }
             
+            // Filter empty bank/cash accounts
+            if (activeMainTab === 'Ledger' && (activeSubTab === 'Bank' || activeSubTab === 'Cash')) {
+                const debit = Number(item.debit) || 0;
+                const credit = Number(item.credit) || 0;
+                const opening = Number(item.openingBalance) || 0;
+                if (debit === 0 && credit === 0 && opening === 0) {
+                    return false;
+                }
+            }
+
             return matchesSearch && matchesDate;
         });
-
-        // If it's the Ledger tab and a date filter is applied, simulate balance changes
-        if (activeMainTab === 'Ledger' && (startDate || endDate)) {
-            return filtered.map(item => {
-                const dateHash = (startDate || '').split('').reduce((a, b) => a + b.charCodeAt(0), 0) + 
-                                (endDate || '').split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-                
-                const factor = (dateHash % 50) / 100 + 0.5; // 0.5 to 1.0 factor
-                const simulatedDebit = item.debit === '-' ? '-' : (parseFloat(item.debit) * factor).toFixed(0);
-                const simulatedCredit = item.credit === '-' ? '-' : (parseFloat(item.credit) * (1.5 - factor)).toFixed(0);
-                
-                const op = parseFloat(item.openingBalance || 0);
-                const dr = parseFloat(simulatedDebit === '-' ? 0 : simulatedDebit);
-                const cr = parseFloat(simulatedCredit === '-' ? 0 : simulatedCredit);
-                const closing = op + cr - dr;
-
-                return {
-                    ...item,
-                    debit: simulatedDebit,
-                    credit: simulatedCredit,
-                    closingBalance: closing.toFixed(0)
-                };
-            });
-        }
 
         return filtered;
     }, [currentData, searchQuery, startDate, endDate, activeMainTab]);
@@ -282,34 +261,79 @@ const Finance = () => {
     const currentRows = filteredMainData.slice(indexOfFirstRow, indexOfLastRow);
     const totalPages = Math.ceil(filteredMainData.length / rowsPerPage);
 
-    const filteredTransactions = dummyTransactions.filter(tx => {
-        let textMatch = true;
-        if (searchQuery) {
+    const filteredTransactions = useMemo(() => {
+        if (!detailedLedger || !detailedLedger.items) return [];
+        
+        return detailedLedger.items.filter(tx => {
+            if (!searchQuery) return true;
             const query = searchQuery.toLowerCase();
-            textMatch = (
-                tx.date.toLowerCase().includes(query) ||
+            return (
+                new Date(tx.date).toLocaleDateString().toLowerCase().includes(query) ||
                 tx.particulars.toLowerCase().includes(query) ||
-                tx.type.toLowerCase().includes(query) ||
-                tx.voucherNo.toLowerCase().includes(query) ||
-                tx.debit.toLowerCase().includes(query) ||
-                tx.credit.toLowerCase().includes(query) ||
-                tx.balance.toLowerCase().includes(query)
+                (tx.narration || '').toLowerCase().includes(query) ||
+                tx.debit.toString().includes(query) ||
+                tx.credit.toString().includes(query) ||
+                tx.balance.toString().includes(query)
             );
+        });
+    }, [detailedLedger, searchQuery]);
+
+    const pageTotalDR = useMemo(() => 
+        filteredTransactions
+            .filter(tx => !tx.particulars.toLowerCase().includes('previous'))
+            .reduce((sum, tx) => sum + parseFloat(tx.debit || 0), 0), 
+        [filteredTransactions]
+    );
+
+    const pageTotalCR = useMemo(() => 
+        filteredTransactions
+            .filter(tx => !tx.particulars.toLowerCase().includes('previous'))
+            .reduce((sum, tx) => sum + parseFloat(tx.credit || 0), 0), 
+        [filteredTransactions]
+    );
+
+    const runningTotalDR = useMemo(() => 
+        filteredTransactions.reduce((sum, tx) => sum + parseFloat(tx.debit || 0), 0), 
+        [filteredTransactions]
+    );
+
+    const runningTotalCR = useMemo(() => 
+        filteredTransactions.reduce((sum, tx) => sum + parseFloat(tx.credit || 0), 0), 
+        [filteredTransactions]
+    );
+
+    const currentClosingBalance = useMemo(() => {
+        if (filteredTransactions.length === 0) return 0;
+        return filteredTransactions[filteredTransactions.length - 1].balance;
+    }, [filteredTransactions]);
+
+    
+    const overallTotalDR = detailedLedger?.periodDebit || 0;
+    const overallTotalCR = detailedLedger?.periodCredit || 0;
+    const initialOpeningBalance = detailedLedger?.openingBalance || 0;
+
+    // Cumulative totals including initial opening balance
+    const cumTotalDR = useMemo(() => {
+        if (activeSubTab === 'Sundry Creditors') {
+            return initialOpeningBalance < 0 ? Math.abs(initialOpeningBalance) + overallTotalDR : overallTotalDR;
         }
+        return initialOpeningBalance > 0 ? initialOpeningBalance + overallTotalDR : overallTotalDR;
+    }, [initialOpeningBalance, overallTotalDR, activeSubTab]);
 
-        let dateMatch = true;
-        if (startDate || endDate) {
-            const txDateStr = normalizeDate(tx.date);
-            if (startDate && txDateStr < startDate) dateMatch = false;
-            if (endDate && txDateStr > endDate) dateMatch = false;
+    const cumTotalCR = useMemo(() => {
+        if (activeSubTab === 'Sundry Creditors') {
+            return initialOpeningBalance > 0 ? initialOpeningBalance + overallTotalCR : overallTotalCR;
         }
-
-        return textMatch && dateMatch;
-    });
-
-    const totalDR = filteredTransactions.reduce((sum, tx) => sum + parseFloat(tx.debit || 0), 0);
-    const totalCR = filteredTransactions.reduce((sum, tx) => sum + parseFloat(tx.credit || 0), 0);
-    const finalBalance = filteredTransactions.length > 0 ? filteredTransactions[filteredTransactions.length - 1].balance : '0';
+        return initialOpeningBalance < 0 ? Math.abs(initialOpeningBalance) + overallTotalCR : overallTotalCR;
+    }, [initialOpeningBalance, overallTotalCR, activeSubTab]);
+    
+    // Final closing balance for the ledger
+    const finalLedgerBalance = useMemo(() => {
+        if (activeSubTab === 'Sundry Creditors') {
+            return initialOpeningBalance + overallTotalCR - overallTotalDR;
+        }
+        return initialOpeningBalance + overallTotalDR - overallTotalCR;
+    }, [initialOpeningBalance, overallTotalDR, overallTotalCR, activeSubTab]);
 
     const handleSearch = () => {
         if (!searchQuery) {
@@ -361,23 +385,23 @@ const Finance = () => {
         const doc = new jsPDF();
         
         doc.setFontSize(16);
-        doc.text(`Ledger Account: ${selectedAccount?.account || 'Account'}`, 14, 20);
+        doc.text(`Ledger Account: ${selectedAccount?.accountName || 'Account'}`, 14, 20);
         
         const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "DR", "CR", "Cum Balance"];
         const tableRows = filteredTransactions.map((tx, index) => [
             index + 1,
-            tx.date,
+            new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
             tx.particulars,
-            (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
-            tx.debit !== '0' ? tx.debit : '-',
-            tx.credit !== '0' ? tx.credit : '-',
-            tx.balance
+            tx.narration || '-',
+            tx.debit > 0 ? tx.debit.toLocaleString('en-IN') : '-',
+            tx.credit > 0 ? tx.credit.toLocaleString('en-IN') : '-',
+            `${Math.abs(tx.balance).toLocaleString('en-IN')} ${activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
         ]);
 
         const footerRows = [
-            ['', '', '', 'Page Total', totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), finalBalance],
-            ['', '', '', 'Transactions (Ledger)', totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), finalBalance],
-            ['', '', '', 'Balance (Ledger)', '--', '--', finalBalance]
+            ['', '', '', 'Page Total', totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), `${Math.abs(finalBalance).toLocaleString('en-IN')} ${activeSubTab === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}`],
+            ['', '', '', 'Transactions (Ledger)', totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), `${Math.abs(finalBalance).toLocaleString('en-IN')} ${activeSubTab === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}`],
+            ['', '', '', 'Closing Balance', '--', '--', `${Math.abs(finalBalance).toLocaleString('en-IN')} ${activeSubTab === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}`]
         ];
 
         autoTable(doc, {
@@ -391,31 +415,31 @@ const Finance = () => {
             styles: { fontSize: 8, font: 'helvetica' }
         });
 
-        doc.save(`${selectedAccount?.account || 'Account'}_ledger.pdf`);
+        doc.save(`${selectedAccount?.accountName || 'Account'}_ledger.pdf`);
         setShowExportMenu(false);
     };
 
     const handleExportExcel = () => {
         const exportData = filteredTransactions.map((tx, index) => ({
             "Sr.No": index + 1,
-            "Date": tx.date,
+            "Date": new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
             "Particular": tx.particulars,
-            "Narration": (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
-            "DR": tx.debit,
-            "CR": tx.credit,
-            "Cum Balance": tx.balance
+            "Narration": tx.narration || '-',
+            "Debit (₹)": tx.debit,
+            "Credit (₹)": tx.credit,
+            "Balance": `${Math.abs(tx.balance).toLocaleString('en-IN')} ${activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
         }));
 
         // Add summary rows to Excel
-        exportData.push({}); // Empty row for spacing
-        exportData.push({ "Narration": "Page Total", "DR": totalDR, "CR": totalCR, "Cum Balance": finalBalance });
-        exportData.push({ "Narration": "Transactions (Ledger)", "DR": totalDR, "CR": totalCR, "Cum Balance": finalBalance });
-        exportData.push({ "Narration": "Balance (Ledger)", "DR": "--", "CR": "--", "Cum Balance": finalBalance });
+        exportData.push({}); 
+        exportData.push({ "Narration": "Page Total", "Debit (₹)": totalDR, "Credit (₹)": totalCR, "Balance": `${Math.abs(finalBalance).toLocaleString('en-IN')} ${activeSubTab === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}` });
+        exportData.push({ "Narration": "Transactions (Ledger)", "Debit (₹)": totalDR, "Credit (₹)": totalCR, "Balance": `${Math.abs(finalBalance).toLocaleString('en-IN')} ${activeSubTab === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}` });
+        exportData.push({ "Narration": "Closing Balance", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalBalance).toLocaleString('en-IN')} ${activeSubTab === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}` });
 
-        const worksheet = XLSX.utils.json_to_sheet(exportData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Ledger");
-        XLSX.writeFile(workbook, `${selectedAccount?.account || 'Account'}_ledger.xlsx`);
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Ledger");
+        XLSX.utils.writeFile(wb, `${selectedAccount?.accountName || 'Account'}_ledger.xlsx`);
         setShowExportMenu(false);
     };
 
@@ -593,12 +617,12 @@ const Finance = () => {
                                                     className="px-6 py-4 text-center font-bold text-[#111827] hover:underline cursor-pointer"
                                                     onClick={() => setSelectedAccount(item)}
                                                 >
-                                                    {item.account}
+                                                    {item.accountName}
                                                 </td>
-                                                <td className="px-6 py-4 text-center">{item.openingBalance}</td>
+                                                <td className="px-6 py-4 text-center">{item.openingBalance != null ? String(item.openingBalance).replace('-', '') : ''}</td>
                                                 <td className="px-6 py-4 text-center">{item.debit}</td>
                                                 <td className="px-6 py-4 text-center">{item.credit}</td>
-                                                <td className="px-6 py-4 text-center text-[#111827] font-bold">{item.closingBalance}</td>
+                                                <td className="px-6 py-4 text-center text-[#111827] font-bold">{item.closingBalance != null ? String(item.closingBalance).replace('-', '') : ''}</td>
                                             </>
                                         ) : (
                                             <>
@@ -630,7 +654,8 @@ const Finance = () => {
                                                             className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
                                                             onClick={() => {
                                                                 if (activeMainTab === 'Ledger') {
-                                                                    const qs = `?name=${encodeURIComponent(item.account)}${startDate ? `&startDate=${startDate}` : ''}${endDate ? `&endDate=${endDate}` : ''}`;
+                                                                    const name = item.accountName || item.account || '';
+                                                                    const qs = `?name=${encodeURIComponent(name)}${startDate ? `&startDate=${startDate}` : ''}${endDate ? `&endDate=${endDate}` : ''}&type=${encodeURIComponent(activeSubTab)}`;
                                                                     navigate(`/seller/finance/ledger/${item.id}${qs}`);
                                                                 } else {
                                                                     setSelectedAccount(item);
@@ -710,13 +735,13 @@ const Finance = () => {
                         <div className="flex items-start sm:items-center justify-between px-5 sm:px-8 py-5 sm:py-6 border-b border-[#F3F4F6] bg-white">
                             <div>
                                 <h3 className="text-[20px] font-bold text-[#111827] tracking-tight">
-                                    {activeMainTab === 'Ledger' ? `Ledger Account: ${selectedAccount.account}` : `${activeSubTab} Details: ${selectedAccount.vchNo}`}
+                                    {activeMainTab === 'Ledger' ? `Ledger Account: ${selectedAccount.accountName || selectedAccount.account}` : `${activeSubTab} Details: ${selectedAccount.vchNo}`}
                                 </h3>
                                 <p className="text-[14px] text-[#6B7280] font-medium mt-1">
                                     {activeMainTab === 'Ledger' ? 'Transaction history and details' : 'Complete transaction summary and status'}
                                 </p>
                             </div>
-                            <button onClick={() => { setSelectedAccount(null); setSearchQuery(''); setStartDate(''); setEndDate(''); setShowExportMenu(false); }} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
+                            <button onClick={() => { setSelectedAccount(null); setSearchQuery(''); setStartDate(''); setEndDate(''); setShowExportMenu(false); setDetailedCurrentPage(1); }} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
                                 <X size={24} />
                             </button>
                         </div>
@@ -752,7 +777,7 @@ const Finance = () => {
                                                 <input 
                                                     type="text" 
                                                     disabled 
-                                                    value={selectedAccount.account} 
+                                                    value={selectedAccount.accountName || selectedAccount.account || ''} 
                                                     className="h-[42px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-[#6B7280] w-full sm:w-[240px] outline-none cursor-not-allowed" 
                                                 />
                                             </div>
@@ -850,23 +875,37 @@ const Finance = () => {
                                                 </tr>
                                             </thead>
                                             <tbody className="text-[14px] text-[#111827]">
-                                                {filteredTransactions.length > 0 ? (
-                                                    filteredTransactions.map((tx, index) => (
-                                                        <tr key={tx.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
-                                                            <td className="px-6 py-4 text-center">{index + 1}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap">{tx.date}</td>
-                                                            <td className="px-6 py-4 font-bold">{tx.particulars}</td>
-                                                            <td className="px-6 py-4 text-[#6B7280]">
-                                                                {(tx.voucherNo && tx.voucherNo !== '-') ? (
-                                                                    <span className="font-bold text-[#111827]">Inv.No-{tx.voucherNo.split('-')[1] || tx.voucherNo} - </span>
-                                                                ) : null}
-                                                                {tx.narration}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-right">{tx.debit}</td>
-                                                            <td className="px-6 py-4 text-right">{tx.credit}</td>
-                                                            <td className="px-6 py-4 text-right font-bold text-[#111827]">{tx.balance}</td>
-                                                        </tr>
-                                                    ))
+                                                {detailedLoading ? (
+                                                    <tr>
+                                                        <td colSpan="7" className="px-6 py-12 text-center">
+                                                            <div className="flex flex-col items-center gap-3">
+                                                                <div className="w-8 h-8 border-4 border-[#073318]/20 border-t-[#073318] rounded-full animate-spin"></div>
+                                                                <p className="font-medium text-[#6B7280]">Loading transaction history...</p>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ) : filteredTransactions.length > 0 ? (
+                                                    filteredTransactions.map((tx, index) => {
+                                                        return (
+                                                            <tr key={tx.id || index} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
+                                                                <td className="px-6 py-4 text-center">
+                                                                    {(tx.isBalanceRow || tx.particulars.toLowerCase().includes('balance')) ? '-' : ((detailedCurrentPage - 1) * 14 + index)}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                                    {new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}
+                                                                </td>
+                                                                <td className="px-6 py-4 font-bold">{tx.particulars}</td>
+                                                                <td className="px-6 py-4 text-[#6B7280]">
+                                                                    {tx.narration || '-'}
+                                                                </td>
+                                                                <td className="px-6 py-4 text-right font-medium">{tx.debit > 0 ? tx.debit.toLocaleString('en-IN') : '-'}</td>
+                                                                <td className="px-6 py-4 text-right font-medium">{tx.credit > 0 ? tx.credit.toLocaleString('en-IN') : '-'}</td>
+                                                                <td className="px-6 py-4 text-right font-bold text-[#111827]">
+                                                                    ₹ {Math.abs(tx.balance).toLocaleString('en-IN')} {activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })
                                                 ) : (
                                                     <tr>
                                                         <td colSpan="7" className="px-6 py-8 text-center text-[#6B7280]">
@@ -879,27 +918,71 @@ const Finance = () => {
                                                 {/* Page Total Row */}
                                                 <tr className="border-b border-[#E2E8F0]">
                                                     <td colSpan="4" className="px-4 py-2.5 text-right bg-[#F1F5F9]/50">Page Total</td>
-                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#111827]">₹ {totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#111827]">₹ {totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {finalBalance}</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#111827]">₹ {pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#111827]">₹ {pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {Math.abs(pageTotalCR - pageTotalDR).toLocaleString('en-IN', { minimumFractionDigits: 2 })} {pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}</td>
                                                 </tr>
 
                                                 {/* Transactions (Ledger) Row */}
                                                 <tr className="border-b border-[#E2E8F0]">
                                                     <td colSpan="4" className="px-4 py-2.5 text-right bg-[#F1F5F9]/50">Transactions (Ledger)</td>
-                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {finalBalance}</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {runningTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {runningTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {Math.abs(runningTotalCR - runningTotalDR).toLocaleString('en-IN', { minimumFractionDigits: 2 })} {runningTotalCR >= runningTotalDR ? 'Cr' : 'Dr'}</td>
                                                 </tr>
                                                 {/* Balance (Ledger) Row */}
                                                 <tr className="bg-[#F1F5F9]">
-                                                    <td colSpan="4" className="px-4 py-2.5 text-right font-extrabold text-[#0F172A]">Balance (Ledger)</td>
+                                                    <td colSpan="4" className="px-4 py-2.5 text-right font-extrabold text-[#0F172A]">Closing Balance</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
-                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] font-extrabold text-[#111827]">₹ {finalBalance}</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] font-extrabold text-[#111827]">₹ {Math.abs(currentClosingBalance).toLocaleString('en-IN')} {activeSubTab === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}</td>
                                                 </tr>
                                             </tfoot>
                                         </table>
+                                    </div>
+
+                                    {/* Modal Pagination Controls */}
+                                    <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-4 border-t border-gray-100 bg-white/50 rounded-b-[16px]">
+                                        <div className="flex flex-col items-center sm:items-start">
+                                            <p className="text-[14px] text-[#111827] font-bold">
+                                                Page {detailedCurrentPage} of {detailedTotalPages}
+                                            </p>
+                                            <p className="text-[12px] text-[#6B7280] font-medium">
+                                                {detailedTotalTotal} total transactions
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => setDetailedCurrentPage(prev => Math.max(1, prev - 1))}
+                                                disabled={detailedCurrentPage === 1 || detailedLoading}
+                                                className={`flex items-center gap-1 h-[36px] px-4 rounded-[8px] border border-[#E5E7EB] text-[13px] font-bold transition-all shadow-sm ${detailedCurrentPage === 1 ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 active:scale-95'}`}
+                                            >
+                                                <ChevronLeft size={16} />
+                                                Prev
+                                            </button>
+
+                                            <div className="flex items-center gap-1">
+                                                {[...Array(detailedTotalPages)].map((_, i) => (
+                                                    <button
+                                                        key={i + 1}
+                                                        onClick={() => setDetailedCurrentPage(i + 1)}
+                                                        className={`w-[32px] h-[32px] rounded-[6px] text-[12px] font-bold transition-all ${detailedCurrentPage === i + 1 ? 'bg-[#073318] text-white' : 'text-[#4B5563] hover:bg-gray-100'}`}
+                                                    >
+                                                        {i + 1}
+                                                    </button>
+                                                )).slice(Math.max(0, detailedCurrentPage - 3), Math.min(detailedTotalPages, detailedCurrentPage + 2))}
+                                            </div>
+
+                                            <button 
+                                                onClick={() => setDetailedCurrentPage(prev => Math.min(detailedTotalPages, prev + 1))}
+                                                disabled={detailedCurrentPage === detailedTotalPages || detailedLoading}
+                                                className={`flex items-center gap-1 h-[36px] px-4 rounded-[8px] border border-[#E5E7EB] text-[13px] font-bold transition-all shadow-sm ${detailedCurrentPage === detailedTotalPages ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 active:scale-95'}`}
+                                            >
+                                                Next
+                                                <ChevronRight size={16} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </>
                             )}

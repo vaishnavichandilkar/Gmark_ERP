@@ -92,7 +92,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
     const isFilterApplied = appliedFilters.status !== "All";
 
     // Pagination State
-    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [itemsPerPage, setItemsPerPage] = useState(15);
     const [currentPage, setCurrentPage] = useState(1);
 
     const statusTabs = ["All", "Generated", "Deleted"];

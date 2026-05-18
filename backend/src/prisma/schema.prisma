@@ -47,6 +47,9 @@ model User {
   subSubSubGroups      SubSubSubGroup[]
   subSubSubSubGroups   SubSubSubSubGroup[]
   units                UnitMaster[]
+  transactions         Transaction[]
+  receiptVouchers      ReceiptVoucher[]
+  paymentVouchers      PaymentVoucher[]
 
   @@map("User")
 }
@@ -243,11 +246,17 @@ model AccountMaster {
   regType                RegType?
   msmeCertificateUrl     String?
   otherDocuments         Json?
+  accountType            AccountType?
   userId                 Int
   status                 MasterStatus  @default(ACTIVE)
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
   user                   User          @relation(fields: [userId], references: [id])
+  transactions           Transaction[]
+  bankCashReceipts       ReceiptVoucher[]     @relation("BankCashReceipt")
+  accountReceipts        ReceiptVoucherItem[] @relation("AccountReceipt")
+  bankCashPayments       PaymentVoucher[]     @relation("BankCashPayment")
+  accountPayments        PaymentVoucherItem[] @relation("AccountPayment")
 
   @@unique([accountName, userId])
   @@unique([customerCode, userId])
@@ -989,5 +998,107 @@ model TaxDetail {
   hsn           Hsn      @relation(fields: [hsnId], references: [id], onDelete: Cascade)
 
   @@map("tax_details")
+}
+
+model Transaction {
+  id              Int             @id @default(autoincrement())
+  accountId       Int
+  bookingDate     DateTime
+  invoiceNumber   String?
+  transactionType TransactionType
+  amount          Decimal
+  entryType       BalanceType
+  userId          Int
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  account         AccountMaster   @relation(fields: [accountId], references: [id])
+  user            User            @relation(fields: [userId], references: [id])
+
+  @@map("transactions")
+}
+
+enum AccountType {
+  Creditor
+  Debtor
+  Bank
+  Cash
+  CUSTOMER
+  SUPPLIER
+  BANK
+  CASH
+}
+
+enum PaymentMode {
+  CASH
+  CHEQUE
+  UPI
+  NET_BANKING
+  CREDIT_CARD
+  DEBIT_CARD
+}
+
+model ReceiptVoucher {
+  id               Int                  @id @default(autoincrement())
+  voucherNumber    String               @unique
+  voucherDate      DateTime
+  bankCashLedgerId Int
+  paymentMode      PaymentMode
+  narration        String?
+  totalAmount      Decimal
+  createdBy        Int
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  user             User                 @relation(fields: [createdBy], references: [id])
+  bankCashLedger   AccountMaster        @relation("BankCashReceipt", fields: [bankCashLedgerId], references: [id])
+  items            ReceiptVoucherItem[]
+
+  @@map("receipt_vouchers")
+}
+
+model ReceiptVoucherItem {
+  id             Int            @id @default(autoincrement())
+  voucherId      Int
+  accountId      Int
+  amount         Decimal
+  receiptVoucher ReceiptVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  account        AccountMaster  @relation("AccountReceipt", fields: [accountId], references: [id])
+
+  @@map("receipt_voucher_items")
+}
+
+model PaymentVoucher {
+  id               Int                  @id @default(autoincrement())
+  voucherNumber    String               @unique
+  voucherDate      DateTime
+  bankCashLedgerId Int
+  paymentMode      PaymentMode
+  narration        String?
+  totalAmount      Decimal
+  createdBy        Int
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  user             User                 @relation(fields: [createdBy], references: [id])
+  bankCashLedger   AccountMaster        @relation("BankCashPayment", fields: [bankCashLedgerId], references: [id])
+  items            PaymentVoucherItem[]
+
+  @@map("payment_vouchers")
+}
+
+model PaymentVoucherItem {
+  id             Int            @id @default(autoincrement())
+  voucherId      Int
+  accountId      Int
+  amount         Decimal
+  paymentVoucher PaymentVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  account        AccountMaster  @relation("AccountPayment", fields: [accountId], references: [id])
+
+  @@map("payment_voucher_items")
+}
+
+enum TransactionType {
+  Purchase
+  Sales
+  Payment
+  Receipt
 }
 

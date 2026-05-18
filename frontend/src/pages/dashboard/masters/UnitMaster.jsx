@@ -34,7 +34,7 @@ const UnitMaster = () => {
     const [tableData, setTableData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [totalItems, setTotalItems] = useState(0);
-    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [itemsPerPage, setItemsPerPage] = useState(15);
     const [currentPage, setCurrentPage] = useState(1);
     const [gstUomOptions, setGstUomOptions] = useState([]);
     const [showSuccessToast, setShowSuccessToast] = useState({ show: false, message: '', type: 'success' });

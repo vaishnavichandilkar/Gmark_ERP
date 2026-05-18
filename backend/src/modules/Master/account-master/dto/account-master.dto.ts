@@ -21,6 +21,8 @@ import { ContactPrefix, MasterStatus, BalanceType, RegUnder, RegType, CustomerTy
 export enum GroupNameEnum {
   SUNDRY_CREDITORS = 'SUNDRY_CREDITORS',
   SUNDRY_DEBTORS = 'SUNDRY_DEBTORS',
+  BANK = 'BANK',
+  CASH = 'CASH',
 }
 
 

@@ -107,7 +107,7 @@ const SalesOrder = () => {
   const isFilterApplied = appliedFilters.status !== "ALL";
 
   // Pagination State
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [itemsPerPage, setItemsPerPage] = useState(15);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Refs

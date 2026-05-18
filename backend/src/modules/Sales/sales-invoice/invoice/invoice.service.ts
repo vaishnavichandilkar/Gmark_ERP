@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
 import { CreateSalesInvoiceDto, UpdateSalesInvoiceDto, SalesInvoiceStatus } from './dto/invoice.dto';
+import { TransactionType, BalanceType } from '@prisma/client';
 import { SalesOrderService } from '../../sales-order/sales-order.service';
+import { TransactionService } from '../../../Finance/transaction.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { isValidGst, determineSalesGst } from '../../../../common/utils/gst.helper';
@@ -10,7 +12,8 @@ import { isValidGst, determineSalesGst } from '../../../../common/utils/gst.help
 export class SalesInvoiceService {
   constructor(
     private prisma: PrismaService,
-    private soService: SalesOrderService
+    private soService: SalesOrderService,
+    private transactionService: TransactionService
   ) { }
 
   async getCustomers(userId: number) {
@@ -345,6 +348,17 @@ export class SalesInvoiceService {
           include: { items: true, expenses: true }
         });
 
+        // INTEGRATION: Record the transaction in the ledger
+        await this.transactionService.recordTransaction({
+          accountId: customer.id,
+          userId,
+          bookingDate: inv.bookingDate,
+          invoiceNumber: inv.customerInvoiceNumber || inv.invoiceNumber,
+          transactionType: TransactionType.Sales,
+          amount: inv.grandTotal,
+          entryType: BalanceType.Dr, // Sales increases Debtor balance (Debit)
+        }, tx);
+
         await this.updateCompletionStatusesAfterInvoice(inv.id, tx);
         return inv;
       });
@@ -550,6 +564,18 @@ export class SalesInvoiceService {
         include: { items: true, expenses: true }
       });
 
+      // Synchronize with Ledger
+      await this.transactionService.updateTransaction({
+        userId,
+        accountId: inv.customerId,
+        invoiceNumber: existing.customerInvoiceNumber || existing.invoiceNumber,
+        transactionType: TransactionType.Sales,
+      }, {
+        amount: inv.grandTotal,
+        bookingDate: inv.bookingDate,
+        invoiceNumber: inv.customerInvoiceNumber || inv.invoiceNumber,
+      }, tx);
+
       await this.updateCompletionStatusesAfterInvoice(inv.id, tx);
       return inv;
     });
@@ -561,6 +587,15 @@ export class SalesInvoiceService {
         where: { id, userId },
         data: { status: 'DELETED' }
       });
+
+      // Synchronize with Ledger: Remove transaction on deletion
+      await this.transactionService.deleteTransaction({
+        userId,
+        accountId: invoice.customerId,
+        invoiceNumber: invoice.customerInvoiceNumber || invoice.invoiceNumber,
+        transactionType: TransactionType.Sales,
+      }, tx);
+
       await this.updateCompletionStatusesAfterInvoice(id, tx);
       return invoice;
     });

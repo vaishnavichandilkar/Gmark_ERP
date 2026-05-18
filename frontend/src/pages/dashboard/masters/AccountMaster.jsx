@@ -612,6 +612,8 @@ const AccountMaster = () => {
                                         <div className="flex gap-1.5 flex-wrap">
                                             {row.groupName?.includes('SUNDRY_DEBTORS') && <span className="px-2 py-0.5 bg-[#073318]/10 text-[#073318] rounded text-[11px] font-bold tracking-wider">{t('modules:customer')}</span>}
                                             {row.groupName?.includes('SUNDRY_CREDITORS') && <span className="px-2 py-0.5 bg-[#4B5563]/10 text-[#4B5563] rounded text-[11px] font-bold tracking-wider">{t('modules:sundry_creditors')}</span>}
+                                            {(row.groupName?.includes('BANK') || row.groupName?.includes('Bank & Cash')) && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[11px] font-bold tracking-wider">{t('modules:bank', 'Bank')}</span>}
+                                            {row.groupName?.includes('CASH') && <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-[11px] font-bold tracking-wider">{t('modules:cash', 'Cash')}</span>}
                                         </div>
                                     </td>
                                     <td className="text-[#4B5563] font-medium border-r border-[#F3F4F6] capitalize">

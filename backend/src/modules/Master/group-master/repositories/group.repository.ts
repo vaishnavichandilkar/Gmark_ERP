@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
 import { MasterStatus } from '@prisma/client';
+import { syncBankCashAccounts } from '../../../../utils/sync-bank-cash';
 
 @Injectable()
 export class GroupMasterRepository {
     constructor(private readonly prisma: PrismaService) { }
 
     async findAllGroups(userId: number) {
+        // Run bidirectional synchronization before loading the tree
+        await syncBankCashAccounts(this.prisma, userId);
+
         const rootGroups = await this.prisma.group.findMany({
             where: {
                 OR: [
@@ -47,39 +51,38 @@ export class GroupMasterRepository {
             orderBy: [{ id: 'asc' }]
         });
 
-        // Fetch counts and account names for Suppliers and Customers
-        const [supplierAccounts, customerAccounts] = await Promise.all([
-            this.prisma.accountMaster.findMany({
-                where: { groupName: { has: 'SUNDRY_CREDITORS' }, userId },
-                select: { id: true, accountName: true, status: true }
-            }),
-            this.prisma.accountMaster.findMany({
-                where: { groupName: { has: 'SUNDRY_DEBTORS' }, userId },
-                select: { id: true, accountName: true, status: true }
-            })
-        ]);
+        // Fetch all accounts for this user, excluding those under "Bank & Cash" to keep them strictly as Groups in the tree
+        const allAccounts = await this.prisma.accountMaster.findMany({
+            where: {
+                userId,
+                NOT: {
+                    groupName: {
+                        hasSome: ['Bank & Cash', 'BANK & CASH', 'bank & cash', 'BANK', 'CASH', 'Bank', 'Cash']
+                    }
+                }
+            },
+            select: { id: true, accountName: true, status: true, groupName: true }
+        });
 
-        const counts = {
-            'Suppliers': supplierAccounts.length,
-            'Customers': customerAccounts.length
-        };
+        const accountData: Record<string, any[]> = {};
+        const counts: Record<string, number> = {};
 
-        const accountData = {
-            'Suppliers': supplierAccounts.map(acc => ({
-                id: `acc_${acc.id}`,
-                group_name: acc.accountName,
-                status: acc.status,
-                isAccount: true,
-                children: []
-            })),
-            'Customers': customerAccounts.map(acc => ({
-                id: `acc_${acc.id}`,
-                group_name: acc.accountName,
-                status: acc.status,
-                isAccount: true,
-                children: []
-            }))
-        };
+        allAccounts.forEach(acc => {
+            acc.groupName.forEach(g => {
+                if (!accountData[g]) {
+                    accountData[g] = [];
+                    counts[g] = 0;
+                }
+                accountData[g].push({
+                    id: `acc_${acc.id}`,
+                    group_name: acc.accountName,
+                    status: acc.status,
+                    isAccount: true,
+                    children: []
+                });
+                counts[g]++;
+            });
+        });
 
         return this.mapNestedGroups(rootGroups, 1, counts, accountData);
     }
@@ -108,6 +111,7 @@ export class GroupMasterRepository {
 
             // Append accounts as leaf nodes if this group matches
             if (accountData[name]) {
+                // Prevent duplicate accounts if they belong to multiple groups (they will appear in both branches which is fine)
                 children = [...children, ...accountData[name]];
             }
 

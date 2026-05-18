@@ -90,7 +90,7 @@ const ProductMaster = () => {
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [itemsPerPage, setItemsPerPage] = useState(15);
 
   // Handle click outside for export and action dropdowns
   useEffect(() => {

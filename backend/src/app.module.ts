@@ -17,6 +17,8 @@ import { ProfileModule } from './modules/profile/profile.module';
 import { PurchaseModule } from './modules/Purchase/purchase.module';
 import { SalesModule } from './modules/Sales/sales.module';
 import { ReportsModule } from './modules/Reports/reports.module';
+import { FinanceModule } from './modules/Finance/finance.module';
+import { LedgerModule } from './modules/Ledger/ledger.module';
 import { AppController } from './app.controller';
 @Module({
     imports: [
@@ -36,6 +38,8 @@ import { AppController } from './app.controller';
         PurchaseModule,
         SalesModule,
         ReportsModule,
+        FinanceModule,
+        LedgerModule,
     ],
     controllers: [AppController],
     providers: [],

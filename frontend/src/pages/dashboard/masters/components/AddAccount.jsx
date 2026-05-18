@@ -15,6 +15,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import accountService from "../../../../services/accountService";
+import masterService from "../../../../services/masterService";
 import toast from "react-hot-toast";
 
 const CustomSelect = ({
@@ -293,15 +294,19 @@ const AddAccount = ({
   onBack,
   onAddAccount,
   initialData,
-  onUpdateAccount,
+onUpdateAccount,
   onShowToast,
 }) => {
   const { t } = useTranslation(["modules", "common"]);
   const isEditMode = !!initialData;
+  const [groups, setGroups] = useState([]);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [selectedParentGroup, setSelectedParentGroup] = useState(null);
+
   const [formData, setFormData] = useState(
     initialData
       ? {
-          accountName: initialData.accountName || "",
+          ...initialData,
           isCustomer:
             initialData.isCustomer ||
             initialData.groupName?.some((g) =>
@@ -420,6 +425,23 @@ const AddAccount = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, isEditMode]);
+  
+  // Fetch Groups for dropdown
+  useEffect(() => {
+    const fetchGroups = async () => {
+      setIsLoadingGroups(true);
+      try {
+        const res = await masterService.getGroupDropdown();
+        setGroups(res || []);
+      } catch (err) {
+        console.error("Failed to fetch groups", err);
+      } finally {
+        setIsLoadingGroups(false);
+      }
+    };
+
+    fetchGroups();
+  }, [initialData]);
 
   const [msmeEnabled, setMsmeEnabled] = useState(
     Boolean(initialData?.msmeStatus || initialData?.msmeId),
@@ -713,10 +735,10 @@ const AddAccount = ({
 
     const fData = new FormData();
     fData.append("accountName", formData.accountName);
-    let groups = [];
-    if (formData.isVendor) groups.push("SUNDRY_CREDITORS");
-    if (formData.isCustomer) groups.push("SUNDRY_DEBTORS");
-    fData.append("groupName", JSON.stringify(groups));
+    let groupsList = [];
+    if (formData.isVendor) groupsList.push("SUNDRY_CREDITORS");
+    if (formData.isCustomer) groupsList.push("SUNDRY_DEBTORS");
+    fData.append("groupName", JSON.stringify([...new Set(groupsList)]));
 
     fData.append("gstNo", formData.gstNo || "");
     fData.append("panNo", formData.panNo || "");

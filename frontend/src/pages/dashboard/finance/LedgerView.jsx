@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Download, Search, FileText, FileSpreadsheet, RotateCcw } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from "xlsx";
+import * as XLSX from 'xlsx';
 import ScrollableTable from "@/components/common/ScrollableTable";
+import ledgerService from '../../../services/ledgerService';
+import toast from 'react-hot-toast';
 
 const LedgerView = () => {
     const { id } = useParams();
@@ -16,14 +18,22 @@ const LedgerView = () => {
         group: 'Sundry Creditors',
         openingBalance: '5000',
         contact: '+91 98765 43210',
-        email: 'contact@account.com'
+        email: 'contact@account.com',
+        accountType: 'Debtor'
     });
 
     const [searchQuery, setSearchQuery] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [type, setType] = useState('');
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [activeFiscalYear, setActiveFiscalYear] = useState('2024-2025');
+    const [transactions, setTransactions] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalTransactions, setTotalTransactions] = useState(0);
+    const [periodTotals, setPeriodTotals] = useState({ debit: 0, credit: 0 });
 
     const fiscalYears = ['2024-2025', '2025-2026', '2026-2027'];
 
@@ -34,14 +44,50 @@ const LedgerView = () => {
         setEndDate(`${endYear}-03-31`);
     };
 
+    useEffect(() => {
+        const fetchLedger = async () => {
+            if (!id) return;
+            setLoading(true);
+            try {
+                const params = { startDate, endDate, type, page: currentPage, limit: 14 };
+                const response = await ledgerService.getDetailedLedger(id, params);
+                setTransactions(response.data.items || []);
+                setTotalPages(response.data.totalPages || 1);
+                setTotalTransactions(response.data.total || 0);
+                setPeriodTotals({
+                    debit: response.data.periodDebit || 0,
+                    credit: response.data.periodCredit || 0
+                });
+                setAccountData(prev => ({
+                    ...prev,
+                    name: response.data.accountName || prev.name,
+                    openingBalance: response.data.openingBalance,
+                    // Account type would ideally be returned in meta or summary
+                }));
+            } catch (error) {
+                console.error('Error fetching ledger:', error);
+                toast.error('Failed to load ledger data');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchLedger();
+    }, [id, startDate, endDate, type, currentPage]);
+
     React.useEffect(() => {
         const start = searchParams.get('startDate');
         const end = searchParams.get('endDate');
         const name = searchParams.get('name');
+        const ledgerType = searchParams.get('type');
 
         if (start) setStartDate(start);
         if (end) setEndDate(end);
-        if (name) setAccountData(prev => ({ ...prev, name }));
+        if (name && name !== 'undefined') setAccountData(prev => ({ ...prev, name }));
+        if (ledgerType) {
+            setType(ledgerType);
+            setAccountData(prev => ({ ...prev, group: ledgerType }));
+        }
         
         // Find if these dates match a fiscal year
         if (start && end) {
@@ -54,26 +100,6 @@ const LedgerView = () => {
         }
     }, [searchParams]);
 
-    // Dummy data matching Finance.jsx
-    const dummyTransactions = [
-        { id: 1, date: "01-Oct-2023", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "5000", balance: "5000 Cr", narration: "Opening balance" },
-        { id: 5, date: "20-Oct-2023", particulars: "Bank Payment", type: "BP", voucherNo: "BP-002", debit: "500", credit: "0", balance: "3000 Cr", narration: "Quarterly maintenance charges" },
-        
-        // 2024-2025 Data
-        { id: 11, date: "10-Apr-2024", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "8000", balance: "8000 Cr", narration: "Opening balance 2024" },
-        { id: 12, date: "25-Jul-2024", particulars: "Software License", type: "BP", voucherNo: "BP-505", debit: "2500", credit: "0", balance: "5500 Cr", narration: "Annual ERP subscription" },
-        { id: 13, date: "12-Dec-2024", particulars: "Sales Receipt", type: "RV", voucherNo: "RV-606", debit: "0", credit: "15000", balance: "20500 Cr", narration: "Bulk order payment" },
-        
-        // 2025-2026 Data
-        { id: 6, date: "15-Apr-2025", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "3000", balance: "3000 Cr", narration: "Brought forward from previous year" },
-        { id: 10, date: "28-Mar-2026", particulars: "Tax Payment", type: "JV", voucherNo: "JV-404", debit: "1500", credit: "0", balance: "4800 Cr", narration: "TDS adjustment for Q4" },
-
-        // 2026-2027 Data
-        { id: 21, date: "05-May-2026", particulars: "Opening Balance", type: "-", voucherNo: "-", debit: "0", credit: "12000", balance: "12000 Cr", narration: "Opening balance 2026" },
-        { id: 22, date: "18-Sep-2026", particulars: "Machine Repair", type: "CP", voucherNo: "CP-707", debit: "1800", credit: "0", balance: "10200 Cr", narration: "Hydraulic pump servicing" },
-        { id: 23, date: "15-Feb-2027", particulars: "Bonus Payout", type: "BP", voucherNo: "BP-808", debit: "5000", credit: "0", balance: "5200 Cr", narration: "Performance bonus batch #1" }
-    ];
-
     const handleAccountChange = (e) => {
         const { name, value } = e.target;
         setAccountData(prev => ({ ...prev, [name]: value }));
@@ -81,101 +107,149 @@ const LedgerView = () => {
 
     const handleSave = () => {
         setIsEditing(false);
-        // Here you would typically call an API to save the changes
     };
 
-    // Helper to normalize dates for comparison (DD-MMM-YYYY to YYYY-MM-DD)
-    const normalizeDate = (dateStr) => {
-        if (!dateStr || dateStr === '-') return null;
-        if (dateStr.includes('-') && dateStr.split('-')[0].length === 4) return dateStr;
-        
-        const parts = dateStr.split('-');
-        if (parts.length !== 3) return null;
-        const [day, month, year] = parts;
-        const months = {
-            'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
-            'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
-        };
-        return `${year}-${months[month]}-${day.padStart(2, '0')}`;
-    };
+    const filteredTransactions = useMemo(() => {
+        return transactions.filter(tx => {
+            const matchesSearch = tx.particulars.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                (tx.narration || '').toLowerCase().includes(searchQuery.toLowerCase());
+            return matchesSearch;
+        });
+    }, [transactions, searchQuery]);
 
-    const filteredTransactions = dummyTransactions.filter(tx => {
-        const matchesSearch = tx.particulars.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            tx.narration.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            tx.voucherNo.toLowerCase().includes(searchQuery.toLowerCase());
-        
-        let matchesDate = true;
-        if (startDate || endDate) {
-            const txDateStr = normalizeDate(tx.date);
-            if (startDate && txDateStr < startDate) matchesDate = false;
-            if (endDate && txDateStr > endDate) matchesDate = false;
-        }
-        
-        return matchesSearch && matchesDate;
-    });
+    const pageTotalDR = useMemo(() => 
+        filteredTransactions
+            .filter(tx => !tx.particulars.toLowerCase().includes('previous'))
+            .reduce((sum, tx) => sum + parseFloat(tx.debit || 0), 0), 
+        [filteredTransactions]
+    );
 
-    const totalDR = filteredTransactions.reduce((acc, tx) => acc + Number(tx.debit || 0), 0);
-    const totalCR = filteredTransactions.reduce((acc, tx) => acc + Number(tx.credit || 0), 0);
-    const finalBalance = filteredTransactions.length > 0 ? filteredTransactions[filteredTransactions.length - 1].balance : '0.00';
+    const pageTotalCR = useMemo(() => 
+        filteredTransactions
+            .filter(tx => !tx.particulars.toLowerCase().includes('previous'))
+            .reduce((sum, tx) => sum + parseFloat(tx.credit || 0), 0), 
+        [filteredTransactions]
+    );
+
+    const runningTotalDR = useMemo(() => 
+        filteredTransactions.reduce((sum, tx) => sum + parseFloat(tx.debit || 0), 0), 
+        [filteredTransactions]
+    );
+
+    const runningTotalCR = useMemo(() => 
+        filteredTransactions.reduce((sum, tx) => sum + parseFloat(tx.credit || 0), 0), 
+        [filteredTransactions]
+    );
+
+    const currentClosingBalance = useMemo(() => {
+        if (filteredTransactions.length === 0) return 0;
+        return filteredTransactions[filteredTransactions.length - 1].balance;
+    }, [filteredTransactions]);
+
+
+    const pageNetBalance = useMemo(() => pageTotalCR - pageTotalDR, [pageTotalCR, pageTotalDR]);
+
+    const finalBalance = useMemo(() => filteredTransactions.length > 0 ? filteredTransactions[filteredTransactions.length - 1].balance : 0, [filteredTransactions]);
 
     const handleExportPDF = () => {
-        const doc = new jsPDF();
-        
-        doc.setFontSize(16);
-        doc.text(`Ledger Account: ${accountData.name}`, 14, 20);
-        
-        const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "DR", "CR", "Balance"];
-        const tableRows = filteredTransactions.map((tx, idx) => [
-            idx + 1,
-            tx.date,
-            tx.particulars,
-            (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
-            tx.debit !== '0' ? tx.debit : '-',
-            tx.credit !== '0' ? tx.credit : '-',
-            tx.balance
-        ]);
+        try {
+            if (!filteredTransactions || filteredTransactions.length === 0) {
+                toast.error('No data available to export');
+                return;
+            }
 
-        const footerRows = [
-            ['', '', '', 'Page Total', totalDR.toLocaleString(), totalCR.toLocaleString(), finalBalance],
-            ['', '', '', 'Transactions (Ledger)', totalDR.toLocaleString(), totalCR.toLocaleString(), finalBalance],
-            ['', '', '', 'Balance (Ledger)', '--', '--', finalBalance]
-        ];
+            const doc = new jsPDF();
+            
+            doc.setFontSize(16);
+            doc.text(`Ledger Account: ${accountData.name}`, 14, 20);
+            
+            const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "DR", "CR", "Balance"];
+            const tableRows = filteredTransactions.map((tx, idx) => [
+                idx + 1,
+                tx.date,
+                tx.particulars,
+                (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
+                tx.debit !== '0' ? tx.debit : '-',
+                tx.credit !== '0' ? tx.credit : '-',
+                tx.balance
+            ]);
 
-        autoTable(doc, {
-            head: [tableColumn],
-            body: tableRows,
-            foot: footerRows,
-            startY: 30,
-            theme: 'grid',
-            headStyles: { fillColor: [17, 24, 39], textColor: [255, 255, 255] },
-            footStyles: { fillColor: [249, 250, 251], textColor: [17, 24, 39], fontStyle: 'bold' },
-            styles: { fontSize: 8, font: 'helvetica' }
-        });
+            const footerRows = [
+                ['', '', '', 'Page Total', pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}`],
+                ['', '', '', 'Transactions (Ledger)', periodTotals.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 }), periodTotals.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 }), `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}`],
+                ['', '', '', 'Closing Balance', '--', '--', `${Math.abs(finalBalance).toLocaleString('en-IN')} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}`]
+            ];
 
-        doc.save(`${accountData.name}_ledger.pdf`);
+            autoTable(doc, {
+                head: [tableColumn],
+                body: tableRows,
+                foot: footerRows,
+                startY: 30,
+                theme: 'grid',
+                headStyles: { fillColor: [17, 24, 39], textColor: [255, 255, 255] },
+                footStyles: { fillColor: [249, 250, 251], textColor: [17, 24, 39], fontStyle: 'bold' },
+                styles: { fontSize: 8, font: 'helvetica' }
+            });
+
+            const fileName = `${accountData.name}_ledger`.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            doc.save(`${fileName}.pdf`);
+            toast.success('PDF exported successfully');
+            setShowExportMenu(false);
+        } catch (error) {
+            console.error('PDF export error:', error);
+            toast.error('Failed to export PDF file');
+        }
     };
 
     const handleExportExcel = () => {
-        const exportData = filteredTransactions.map((tx, idx) => ({
-            "Sr.No": idx + 1,
-            "Date": tx.date,
-            "Particular": tx.particulars,
-            "Narration": (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
-            "Debit (₹)": tx.debit,
-            "Credit (₹)": tx.credit,
-            "Balance": tx.balance
-        }));
+        try {
+            if (!filteredTransactions || filteredTransactions.length === 0) {
+                toast.error('No data available to export');
+                return;
+            }
 
-        // Add summary rows to Excel
-        exportData.push({}); // Empty row for spacing
-        exportData.push({ "Narration": "Page Total", "Debit (₹)": totalDR, "Credit (₹)": totalCR, "Balance": finalBalance });
-        exportData.push({ "Narration": "Transactions (Ledger)", "Debit (₹)": totalDR, "Credit (₹)": totalCR, "Balance": finalBalance });
-        exportData.push({ "Narration": "Balance (Ledger)", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": finalBalance });
+            const exportData = filteredTransactions.map((tx, idx) => ({
+                "Sr.No": idx + 1,
+                "Date": tx.date,
+                "Particular": tx.particulars,
+                "Narration": (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
+                "Debit (₹)": tx.debit,
+                "Credit (₹)": tx.credit,
+                "Balance": tx.balance
+            }));
 
-        const ws = XLSX.utils.json_to_sheet(exportData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Ledger");
-        XLSX.utils.writeFile(wb, `${accountData.name}_ledger.xlsx`);
+            // Add summary rows to Excel
+            exportData.push({}); // Empty row for spacing
+            exportData.push({ "Narration": "Page Total", "Debit (₹)": pageTotalDR, "Credit (₹)": pageTotalCR, "Balance": `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}` });
+            exportData.push({ "Narration": "Transactions (Ledger)", "Debit (₹)": periodTotals.debit, "Credit (₹)": periodTotals.credit, "Balance": `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}` });
+            exportData.push({ "Narration": "Closing Balance", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalBalance).toLocaleString('en-IN')} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}` });
+
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            
+            // Set column widths
+            const wscols = [
+                {wch: 8},  // Sr.No
+                {wch: 15}, // Date
+                {wch: 30}, // Particular
+                {wch: 40}, // Narration
+                {wch: 15}, // Debit
+                {wch: 15}, // Credit
+                {wch: 15}  // Balance
+            ];
+            ws['!cols'] = wscols;
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Ledger");
+            
+            const fileName = `${accountData.name}_ledger`.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            XLSX.utils.writeFile(wb, `${fileName}.xlsx`);
+            
+            toast.success('Excel exported successfully');
+            setShowExportMenu(false);
+        } catch (error) {
+            console.error('Excel export error:', error);
+            toast.error('Failed to export Excel file');
+        }
     };
 
     return (
@@ -200,7 +274,7 @@ const LedgerView = () => {
                                 autoFocus
                             />
                         ) : (
-                            <h1 className="text-[24px] font-bold text-[#111827] tracking-tight">Ledger Account: {accountData.name}</h1>
+                            <h1 className="text-[24px] font-bold text-[#111827] tracking-tight">LEDGER (UPDATED): {accountData.name}</h1>
                         )}
                         <p className="text-[14px] text-[#6B7280] font-medium">Detailed transaction history and financial status</p>
                     </div>
@@ -295,7 +369,7 @@ const LedgerView = () => {
                             </div>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
                                 <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Closing Balance</p>
-                                <h3 className="text-2xl font-extrabold text-[#111827]">₹ {finalBalance}</h3>
+                                <h3 className="text-2xl font-extrabold text-[#111827]">₹ {Math.abs(Number(finalBalance)).toLocaleString('en-IN')} {type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}</h3>
                             </div>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
                                 <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Group</p>
@@ -401,48 +475,121 @@ const LedgerView = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredTransactions.map((tx, idx) => (
-                                    <tr key={tx.id} className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors">
-                                        <td className="px-6 py-5 text-center text-gray-500 font-medium">{idx + 1}</td>
-                                        <td className="px-6 py-5 font-medium text-gray-700">{tx.date}</td>
-                                        <td className="px-6 py-5 font-bold text-gray-900">{tx.particulars}</td>
-                                        <td className="px-6 py-5 text-gray-500 max-w-[300px]">
-                                            {tx.voucherNo && tx.voucherNo !== '-' && (
-                                                <span className="font-bold text-[#111827]">Inv.No-{tx.voucherNo.split('-')[1] || tx.voucherNo} - </span>
-                                            )}
-                                            {tx.narration}
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan="7" className="px-6 py-20 text-center">
+                                            <div className="flex flex-col items-center gap-4">
+                                                <div className="w-10 h-10 border-4 border-[#073318]/20 border-t-[#073318] rounded-full animate-spin"></div>
+                                                <p className="text-[16px] font-bold text-[#6B7280]">Fetching ledger records...</p>
+                                            </div>
                                         </td>
-                                        <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.debit !== '0' ? `₹ ${tx.debit}` : '-'}</td>
-                                        <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.credit !== '0' ? `₹ ${tx.credit}` : '-'}</td>
-                                        <td className="px-6 py-5 text-right font-extrabold text-[#111827]">{tx.balance}</td>
                                     </tr>
-                                ))}
+                                ) : filteredTransactions.length > 0 ? (
+                                    filteredTransactions.map((tx, idx) => (
+                                        <tr key={tx.id || idx} className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors">
+                                            <td className="px-6 py-5 text-center text-gray-500 font-medium">
+                                                {(tx.isBalanceRow || tx.particulars.toLowerCase().includes('balance')) ? '-' : ((currentPage - 1) * 14 + idx)}
+                                            </td>
+                                            <td className="px-6 py-5 font-medium text-gray-700">
+                                                {new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}
+                                            </td>
+                                            <td className="px-6 py-5 font-bold text-gray-900">{tx.particulars}</td>
+                                            <td className="px-6 py-5 text-gray-500 max-w-[300px]">
+                                                {tx.narration || '-'}
+                                            </td>
+                                            <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.debit > 0 ? `₹ ${tx.debit.toLocaleString('en-IN')}` : '-'}</td>
+                                            <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.credit > 0 ? `₹ ${tx.credit.toLocaleString('en-IN')}` : '-'}</td>
+                                            <td className="px-6 py-5 text-right font-extrabold text-[#111827]">
+                                                ₹ {Math.abs(tx.balance).toLocaleString('en-IN')} {type === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="7" className="px-6 py-12 text-center text-[#6B7280] font-medium">
+                                            No transactions found for the selected criteria.
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                             <tfoot className="bg-white border-t-2 border-[#E5E7EB] font-outfit">
                                 {/* Page Total Row */}
                                 <tr className="border-b border-gray-100">
-                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Page Total</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {totalDR.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {totalCR.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">{finalBalance}</td>
+                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">PAGE TOTAL (NEW)</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">₹ {Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} {pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}</td>
                                 </tr>
                                 {/* Transactions (Ledger) Row */}
                                 <tr className="border-b border-gray-100">
                                     <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Transactions (Ledger)</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {totalDR.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {totalCR.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">{finalBalance}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {runningTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {runningTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">₹ {Math.abs(runningTotalCR - runningTotalDR).toLocaleString('en-IN', { minimumFractionDigits: 2 })} {runningTotalCR >= runningTotalDR ? 'Cr' : 'Dr'}</td>
                                 </tr>
                                 {/* Balance (Ledger) Row */}
                                 <tr>
-                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Balance (Ledger)</td>
+                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Closing Balance</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">{finalBalance}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">₹ {Math.abs(currentClosingBalance).toLocaleString('en-IN')} {type === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}</td>
                                 </tr>
                             </tfoot>
                         </table>
                     </ScrollableTable>
+                </div>
+
+                {/* Pagination Controls - Moved outside for better visibility */}
+                <div className="mt-6 px-8 py-5 bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex flex-col items-center sm:items-start">
+                        <p className="text-[15px] text-[#111827] font-bold">
+                            Page {currentPage} of {totalPages}
+                        </p>
+                        <p className="text-[13px] text-[#6B7280] font-medium">
+                            Showing {transactions.length} records of {totalTransactions} total transactions
+                        </p>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={() => {
+                                setCurrentPage(prev => Math.max(1, prev - 1));
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            disabled={currentPage === 1 || loading}
+                            className={`flex items-center gap-2 h-[44px] px-6 rounded-[12px] border border-[#E5E7EB] text-[14px] font-bold transition-all shadow-sm ${currentPage === 1 ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 hover:border-gray-300 active:scale-95'}`}
+                        >
+                            <ChevronLeft size={18} />
+                            Previous
+                        </button>
+
+                        <div className="hidden md:flex items-center gap-2 mx-2">
+                            {[...Array(totalPages)].map((_, i) => (
+                                <button
+                                    key={i + 1}
+                                    onClick={() => {
+                                        setCurrentPage(i + 1);
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }}
+                                    className={`w-[40px] h-[40px] rounded-[10px] text-[14px] font-bold transition-all ${currentPage === i + 1 ? 'bg-[#073318] text-white shadow-lg shadow-[#073318]/20' : 'text-[#4B5563] hover:bg-gray-100 hover:text-[#111827]'}`}
+                                >
+                                    {i + 1}
+                                </button>
+                            )).slice(Math.max(0, currentPage - 3), Math.min(totalPages, currentPage + 2))}
+                        </div>
+
+                        <button 
+                            onClick={() => {
+                                setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            disabled={currentPage === totalPages || loading}
+                            className={`flex items-center gap-2 h-[44px] px-6 rounded-[12px] border border-[#E5E7EB] text-[14px] font-bold transition-all shadow-sm ${currentPage === totalPages ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 hover:border-gray-300 active:scale-95'}`}
+                        >
+                            Next
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="rotate-180"><path d="m15 18-6-6 6-6"/></svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

@@ -71,7 +71,7 @@ const CategoryMaster = () => {
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [itemsPerPage, setItemsPerPage] = useState(15);
 
   // Filter states
   const defaultFilters = { status: "" };

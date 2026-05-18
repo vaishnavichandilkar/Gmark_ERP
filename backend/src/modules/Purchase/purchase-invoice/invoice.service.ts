@@ -1,17 +1,19 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CreatePurchaseInvoiceDto, UpdatePurchaseInvoiceDto, ItemDto } from './invoice/dto/invoice.dto';
-import { Prisma, PIStatus } from '@prisma/client';
+import { Prisma, PIStatus, TransactionType, BalanceType } from '@prisma/client';
 import { PurchaseOrderService } from '../purchase-order/purchase-order.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { isValidGst, determinePurchaseGst } from '../../../common/utils/gst.helper';
+import { TransactionService } from '../../Finance/transaction.service';
 
 @Injectable()
 export class PurchaseInvoiceService {
   constructor(
     private prisma: PrismaService,
-    private poService: PurchaseOrderService
+    private poService: PurchaseOrderService,
+    private transactionService: TransactionService
   ) { }
 
   private async updateCompletionStatusesAfterInvoice(invoiceId: number, tx: any) {
@@ -546,6 +548,17 @@ export class PurchaseInvoiceService {
         include: { items: true, expenses: true }
       });
 
+      // INTEGRATION: Record the transaction in the ledger
+      await this.transactionService.recordTransaction({
+        accountId: supplier.id,
+        userId,
+        bookingDate: new Date(inv.bookingDate),
+        invoiceNumber: inv.supplierInvoiceNumber || inv.invoiceNumber,
+        transactionType: TransactionType.Purchase,
+        amount: inv.grandTotal,
+        entryType: BalanceType.Cr, // Purchase increases Creditor balance (Credit)
+      }, tx);
+
       await this.updateCompletionStatusesAfterInvoice(inv.id, tx);
       return inv;
     });
@@ -805,6 +818,18 @@ export class PurchaseInvoiceService {
         });
 
         await this.updateCompletionStatusesAfterInvoice(id, tx);
+        
+        // Synchronize with Ledger
+        await this.transactionService.updateTransaction({
+            userId: existing.userId,
+            accountId: existing.supplierId,
+            invoiceNumber: existing.supplierInvoiceNumber || existing.invoiceNumber,
+            transactionType: TransactionType.Purchase,
+        }, {
+            amount: updated.grandTotal,
+            bookingDate: updated.bookingDate,
+            invoiceNumber: updated.supplierInvoiceNumber || updated.invoiceNumber,
+        }, tx);
         
         // If the poId was changed (though not explicitly handled in updateDto yet), 
         // we might need to update the old PO too. 
@@ -1190,6 +1215,14 @@ export class PurchaseInvoiceService {
         where: { id },
         data: { status: 'DELETED' }
       });
+
+      // Synchronize with Ledger: Remove transaction on deletion
+      await this.transactionService.deleteTransaction({
+          userId: updated.userId,
+          accountId: updated.supplierId,
+          invoiceNumber: updated.supplierInvoiceNumber || updated.invoiceNumber,
+          transactionType: TransactionType.Purchase,
+      }, tx);
 
       // Update completion statuses of linked POs and GRNs
       await this.updateCompletionStatusesAfterInvoice(id, tx);

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CreateAccountMasterDto, GroupNameEnum, UpdateAccountMasterDto, UpdateAccountStatusDto } from './dto/account-master.dto';
-import { Prisma, MasterStatus, ContactPrefix } from '@prisma/client';
+import { Prisma, MasterStatus, ContactPrefix, AccountType } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import * as fs from 'fs';
@@ -246,7 +246,16 @@ export class AccountMasterService {
         msmeCertificateUrl: createDto.msmeEnabled ? createDto.msmeCertificateUrl : null,
 
         otherDocuments: createDto.otherDocuments ? createDto.otherDocuments : undefined,
-        status: createDto.status || MasterStatus.ACTIVE
+        status: createDto.status || MasterStatus.ACTIVE,
+        accountType: createDto.groupName.includes(GroupNameEnum.SUNDRY_CREDITORS) 
+          ? 'Creditor' 
+          : createDto.groupName.includes(GroupNameEnum.SUNDRY_DEBTORS) 
+            ? 'Debtor' 
+            : createDto.groupName.includes(GroupNameEnum.BANK) 
+              ? 'Bank' 
+              : createDto.groupName.includes(GroupNameEnum.CASH) 
+                ? 'Cash' 
+                : null
       },
     });
 
@@ -365,6 +374,17 @@ export class AccountMasterService {
       }
     }
 
+    if (!filter.groupName) {
+      // Strictly exclude Bank and Cash accounts from the general Account Master view
+      where.OR = [
+        { accountType: { notIn: [AccountType.Bank, AccountType.Cash] } },
+        { accountType: null }
+      ];
+      where.NOT = {
+        groupName: { hasSome: ['BANK', 'CASH', 'Bank & Cash'] }
+      };
+    }
+
     if (filter.isExport) {
        const data = await this.prisma.accountMaster.findMany({
          where,
@@ -470,6 +490,9 @@ export class AccountMasterService {
        data.msmeId = null;
        data.regUnder = null;
        data.regType = null;
+       if (Array.isArray(data.groupName) && data.groupName.some(g => ['BANK', 'Bank & Cash'].includes(g))) {
+         data.accountType = AccountType.Bank;
+       }
        data.msmeCertificateUrl = null;
     }
 

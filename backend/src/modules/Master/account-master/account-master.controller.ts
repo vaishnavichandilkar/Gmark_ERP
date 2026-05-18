@@ -309,6 +309,38 @@ export class AccountMasterController {
     return { customerCode };
   }
 
+  @Get('customers')
+  @ApiOperation({ summary: 'Get all active customer accounts' })
+  async findCustomers(@Req() req: any) {
+    const result = await this.accountMasterService.findAll({ 
+      groupName: 'SUNDRY_DEBTORS',
+      status: MasterStatus.ACTIVE,
+      userId: req.user.id,
+      limit: 1000 
+    });
+    return result.data.map(acc => ({
+      id: acc.id,
+      accountName: acc.accountName,
+      accountType: 'CUSTOMER'
+    }));
+  }
+
+  @Get('suppliers')
+  @ApiOperation({ summary: 'Get all active supplier accounts' })
+  async findSuppliers(@Req() req: any) {
+    const result = await this.accountMasterService.findAll({ 
+      groupName: 'SUNDRY_CREDITORS',
+      status: MasterStatus.ACTIVE,
+      userId: req.user.id,
+      limit: 1000 
+    });
+    return result.data.map(acc => ({
+      id: acc.id,
+      accountName: acc.accountName,
+      accountType: 'SUPPLIER'
+    }));
+  }
+
   @Get('generate-supplier-code')
   @ApiOperation({ summary: 'Generate next available supplier code' })
   async generateSupplierCode(@Req() req: any) {

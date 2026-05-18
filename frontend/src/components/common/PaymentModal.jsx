@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle2, ChevronDown, Trash2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import voucherService from '../../services/voucherService';
+import AccountSearchDropdown from './AccountSearchDropdown';
+import toast from 'react-hot-toast';
 
 const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null }) => {
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split('T')[0],
-        bankCash: 'Bank Account',
-        entries: [{ id: Date.now(), account: initialData?.account || '', amount: '' }],
+        bankCashLedgerId: '',
+        entries: [{ id: Date.now(), accountId: '', accountName: '', amount: '' }],
         narration: '',
         paymentMode: 'Net banking'
     });
@@ -15,57 +18,112 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [bankCashOptions, setBankCashOptions] = useState([]);
+    const [ledgerAccountOptions, setLedgerAccountOptions] = useState([]);
 
-    const bankCashOptions = ['Bank Account', 'Cash in Hand'];
-    const paymentModeOptions = ['Debit Card', 'Credit card', 'Net banking', 'Cheque', 'UPI Id', 'Cash'];
+    const paymentModeOptions = [
+        { label: 'Debit Card', value: 'DEBIT_CARD' },
+        { label: 'Credit Card', value: 'CREDIT_CARD' },
+        { label: 'Net Banking', value: 'NET_BANKING' },
+        { label: 'Cheque', value: 'CHEQUE' },
+        { label: 'UPI', value: 'UPI' },
+        { label: 'Cash', value: 'CASH' }
+    ];
 
-    // Reset form whenever modal opens/closes
     useEffect(() => {
+        const fetchData = async () => {
+            try {
+                // Fetch Bank/Cash accounts
+                const bankCashRes = await voucherService.getBankCashAccounts();
+                setBankCashOptions(bankCashRes || []);
+                
+                // Fetch Customer or Supplier accounts based on voucher type
+                let ledgerRes;
+                if (type === 'Receipt') {
+                    ledgerRes = await voucherService.getCustomers();
+                } else {
+                    ledgerRes = await voucherService.getSuppliers();
+                }
+                setLedgerAccountOptions(ledgerRes || []);
+
+                if (bankCashRes?.length > 0 && !formData.bankCashLedgerId) {
+                    setFormData(prev => ({ ...prev, bankCashLedgerId: bankCashRes[0].id }));
+                }
+            } catch (err) {
+                console.error('Failed to fetch voucher data', err);
+                toast.error('Failed to load accounts');
+            }
+        };
+
         if (isOpen) {
             setFormData({
                 date: new Date().toISOString().split('T')[0],
-                bankCash: 'Bank Account',
-                entries: [{ id: Date.now(), account: initialData?.account || '', amount: '' }],
+                bankCashLedgerId: '',
+                entries: [{ id: Date.now(), accountId: initialData?.accountId || '', accountName: initialData?.account || '', amount: '' }],
                 narration: '',
-                paymentMode: 'Net banking'
+                paymentMode: 'NET_BANKING'
             });
             setIsSuccess(false);
             setIsSubmitting(false);
+            fetchData();
         }
-    }, [isOpen, initialData]);
+    }, [isOpen, initialData, type]);
 
     if (!isOpen) return null;
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        // Validation
+        if (!formData.bankCashLedgerId) {
+            toast.error('Please select a Bank/Cash account');
+            return;
+        }
+
+        const validEntries = formData.entries.filter(e => e.accountId && e.amount);
+        if (validEntries.length === 0) {
+            toast.error('Please add at least one valid entry');
+            return;
+        }
+
         setIsSubmitting(true);
-        setTimeout(() => {
-            // Dispatch event for components to listen to
+        try {
+            const payload = {
+                voucherDate: formData.date,
+                bankCashLedgerId: Number(formData.bankCashLedgerId),
+                paymentMode: formData.paymentMode,
+                narration: formData.narration,
+                items: validEntries.map(e => ({
+                    accountId: Number(e.accountId),
+                    amount: Number(e.amount)
+                }))
+            };
+
+            if (type === 'Receipt') {
+                await voucherService.createReceiptVoucher(payload);
+            } else {
+                await voucherService.createPaymentVoucher(payload);
+            }
+
+            // Dispatch event for UI updates
             const event = new CustomEvent('voucherAdded', { 
-                detail: { 
-                    type, 
-                    formData: {
-                        ...formData,
-                        id: Date.now()
-                    } 
-                } 
+                detail: { type, formData } 
             });
             window.dispatchEvent(event);
 
-            setIsSubmitting(false);
             setIsSuccess(true);
+            toast.success(`${type} Voucher saved successfully`);
+            
             setTimeout(() => {
-                setIsSuccess(false);
-                setFormData({
-                    date: new Date().toISOString().split('T')[0],
-                    bankCash: 'Bank Account',
-                    entries: [{ id: Date.now(), account: '', amount: '' }],
-                    narration: '',
-                    paymentMode: 'Net banking'
-                });
                 onClose();
             }, 2000);
-        }, 1500);
+        } catch (error) {
+            console.error('Error saving voucher:', error);
+            const msg = error.response?.data?.message;
+            toast.error(Array.isArray(msg) ? msg[0] : (msg || `Failed to save ${type} voucher`));
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleChange = (e) => {
@@ -73,11 +131,11 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleEntryChange = (id, field, value) => {
+    const handleEntryChange = (id, field, value, extra = {}) => {
         setFormData(prev => ({
             ...prev,
             entries: prev.entries.map(entry => 
-                entry.id === id ? { ...entry, [field]: value } : entry
+                entry.id === id ? { ...entry, [field]: value, ...extra } : entry
             )
         }));
     };
@@ -85,7 +143,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
     const handleAddRow = () => {
         setFormData(prev => ({
             ...prev,
-            entries: [...prev.entries, { id: Date.now(), account: '', amount: '' }]
+            entries: [...prev.entries, { id: Date.now(), accountId: '', accountName: '', amount: '' }]
         }));
     };
 
@@ -137,7 +195,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                     {isSuccess ? (
                         <div className="py-16 flex flex-col items-center justify-center text-center">
                             <CheckCircle2 className="w-12 h-12 text-green-500 mb-4" />
-                            <h3 className="text-[20px] font-bold text-gray-900">Voucher Saved Successfully</h3>
+                            <h3 className="text-[20px] font-bold text-gray-900">{type} Voucher Saved Successfully</h3>
                         </div>
                     ) : (
                     <div className="space-y-6">
@@ -164,8 +222,8 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                         onClick={() => setActiveDropdown(activeDropdown === 'bankCash' ? null : 'bankCash')}
                                         className="w-full h-11 px-4 bg-white border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[15px] flex items-center justify-between transition-all"
                                     >
-                                        <span className={formData.bankCash ? 'text-gray-800' : 'text-gray-400'}>
-                                            {formData.bankCash || 'Select Account'}
+                                        <span className={formData.bankCashLedgerId ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+                                            {bankCashOptions.find(o => o.id === formData.bankCashLedgerId)?.ledgerName || 'Select Account'}
                                         </span>
                                         <ChevronDown size={18} className={`text-[#6B7280] transition-transform duration-200 ${activeDropdown === 'bankCash' ? 'rotate-180' : ''}`} />
                                     </button>
@@ -178,16 +236,16 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                                    className="absolute top-12 left-0 right-0 bg-white border border-[#E5E7EB] rounded-xl shadow-xl z-50 py-2 overflow-hidden"
+                                                    className="absolute top-12 left-0 right-0 bg-white border border-[#E5E7EB] rounded-xl shadow-xl z-50 py-2 overflow-hidden max-h-[250px] overflow-y-auto"
                                                 >
                                                     {bankCashOptions.map((opt) => (
                                                         <button
-                                                            key={opt}
+                                                            key={opt.id}
                                                             type="button"
-                                                            onClick={() => handleSelectChange('bankCash', opt)}
-                                                            className={`w-full px-4 py-2.5 text-left text-[14px] font-medium transition-colors hover:bg-gray-50 ${formData.bankCash === opt ? 'text-[#073318] bg-[#073318]/5' : 'text-gray-700'}`}
+                                                            onClick={() => handleSelectChange('bankCashLedgerId', opt.id)}
+                                                            className={`w-full px-4 py-2.5 text-left text-[14px] font-medium transition-colors hover:bg-gray-50 ${formData.bankCashLedgerId === opt.id ? 'text-[#073318] bg-[#073318]/5' : 'text-gray-700'}`}
                                                         >
-                                                            {opt}
+                                                            {opt.ledgerName}
                                                         </button>
                                                     ))}
                                                 </motion.div>
@@ -211,7 +269,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                 </button>
                             </div>
                             
-                            <div className="border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm">
+                            <div className="border border-[#E5E7EB] rounded-xl overflow-visible shadow-sm">
                                 <table className="w-full border-collapse">
                                     <thead>
                                         <tr className="bg-[#F3F4F6] border-b border-[#E5E7EB]">
@@ -224,13 +282,11 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                         {formData.entries.map((entry, index) => (
                                             <tr key={entry.id} className="border-b border-[#F3F4F6] last:border-0 group">
                                                 <td className="px-4 py-3">
-                                                    <input 
-                                                        type="text"
-                                                        placeholder="Search account..."
-                                                        value={entry.account}
-                                                        onChange={(e) => handleEntryChange(entry.id, 'account', e.target.value)}
-                                                        className="w-full h-10 px-3 bg-[#F9FAFB] border border-transparent rounded-lg focus:bg-white focus:border-[#073318] outline-none text-[14px] transition-all"
-                                                        required
+                                                    <AccountSearchDropdown 
+                                                        value={entry.accountId}
+                                                        options={ledgerAccountOptions}
+                                                        onChange={(id, name) => handleEntryChange(entry.id, 'accountId', id, { accountName: name })}
+                                                        placeholder={`Search ${type === 'Receipt' ? 'Customer' : 'Supplier'}...`}
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3">
@@ -282,8 +338,8 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                         onClick={() => setActiveDropdown(activeDropdown === 'paymentMode' ? null : 'paymentMode')}
                                         className="w-full h-11 px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[15px] flex items-center justify-between transition-all"
                                     >
-                                        <span className={formData.paymentMode ? 'text-gray-800' : 'text-gray-400'}>
-                                            {formData.paymentMode || 'Select Mode'}
+                                        <span className={formData.paymentMode ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+                                            {paymentModeOptions.find(o => o.value === formData.paymentMode)?.label || 'Select Mode'}
                                         </span>
                                         <ChevronDown size={18} className={`text-[#6B7280] transition-transform duration-200 ${activeDropdown === 'paymentMode' ? 'rotate-180' : ''}`} />
                                     </button>
@@ -300,12 +356,12 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                                 >
                                                     {paymentModeOptions.map((opt) => (
                                                         <button
-                                                            key={opt}
+                                                            key={opt.value}
                                                             type="button"
-                                                            onClick={() => handleSelectChange('paymentMode', opt)}
-                                                            className={`w-full px-4 py-2.5 text-left text-[14px] font-medium transition-colors hover:bg-gray-50 ${formData.paymentMode === opt ? 'text-[#073318] bg-[#073318]/5' : 'text-gray-700'}`}
+                                                            onClick={() => handleSelectChange('paymentMode', opt.value)}
+                                                            className={`w-full px-4 py-2.5 text-left text-[14px] font-medium transition-colors hover:bg-gray-50 ${formData.paymentMode === opt.value ? 'text-[#073318] bg-[#073318]/5' : 'text-gray-700'}`}
                                                         >
-                                                            {opt}
+                                                            {opt.label}
                                                         </button>
                                                     ))}
                                                 </motion.div>
