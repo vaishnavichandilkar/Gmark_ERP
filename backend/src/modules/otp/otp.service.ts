@@ -26,6 +26,19 @@ export class OtpService {
     }
 
     async verifyOtp(phone: string, otp: string): Promise<boolean> {
+        const enableDevOtp = this.configService.get<string>('ENABLE_DEV_OTP') || process.env.ENABLE_DEV_OTP;
+        const devOtp = this.configService.get<string>('DEV_OTP') || process.env.DEV_OTP;
+
+        if (enableDevOtp === 'true' && otp === devOtp) {
+            const record = await this.prisma.otp.findUnique({
+                where: { phone },
+            });
+            if (record) {
+                await this.prisma.otp.delete({ where: { phone } });
+            }
+            return true;
+        }
+
         const record = await this.prisma.otp.findUnique({
             where: { phone },
         });
