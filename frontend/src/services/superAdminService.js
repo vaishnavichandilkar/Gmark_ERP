@@ -6,7 +6,8 @@ const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
     return {
         headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${token}`,
+            'ngrok-skip-browser-warning': 'true'
         }
     };
 };
