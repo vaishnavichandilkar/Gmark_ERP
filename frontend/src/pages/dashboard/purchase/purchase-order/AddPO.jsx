@@ -135,7 +135,7 @@ const AddPO = () => {
                                     supplier_id: newSupplier.id,
                                     supplier_name: newSupplier.accountName,
                                     address: newSupplier.addressLine1 || '',
-                                    credit_days: newSupplier.supplierCreditDays || '',
+                                    credit_days: newSupplier.supplierCreditDays !== undefined && newSupplier.supplierCreditDays !== null ? newSupplier.supplierCreditDays : '',
                                     gst_number: newSupplier.gstNo || '',
                                     pan_number: newSupplier.panNo || ''
                                 };
@@ -255,7 +255,7 @@ const AddPO = () => {
                                 before_tax: (item.quantity * item.rate - item.discountAmount).toFixed(2),
                                 tax_amount: item.taxAmount.toFixed(2),
                                 total_amount: item.totalAmount.toFixed(2),
-                                description: item.printDescription || ''
+                                description: item.printDescription || item.description || ''
                             })));
                         }
                     }
@@ -403,6 +403,7 @@ const AddPO = () => {
     };
 
     const handleQuickAddProduct = (product, targetIndex = null) => {
+        const printDesc = product.print_description || product.product_name || product.description || product.printDescription || '';
         const newItem = {
             id: Date.now(),
             product_id: product.id,
@@ -418,7 +419,8 @@ const AddPO = () => {
             before_tax: (product.purchaseRate || 0).toFixed(2),
             tax_amount: isGstApplicable ? ((product.purchaseRate || 0) * (product.tax_rate || 0) / 100).toFixed(2) : "0.00",
             total_amount: isGstApplicable ? ((product.purchaseRate || 0) * (1 + (product.tax_rate || 0) / 100)).toFixed(2) : (product.purchaseRate || 0).toFixed(2),
-            description: product.description || product.printDescription || ''
+            description: printDesc,
+            original_description: printDesc
         };
 
         let updatedItems = [...items];
@@ -502,6 +504,16 @@ const AddPO = () => {
 
         // Update with decimal limit for discounts
         let finalValue = value;
+        if (field === 'description') {
+            const originalPrefix = item.original_description || '';
+            if (originalPrefix && !value.startsWith(originalPrefix)) {
+                if (value.length < originalPrefix.length) {
+                    finalValue = originalPrefix;
+                } else {
+                    finalValue = originalPrefix + value.substring(originalPrefix.length);
+                }
+            }
+        }
         if (['discount_amount', 'discount_percent'].includes(field)) {
             if (value.includes('.') && value.split('.')[1].length > 2) {
                 const [int, dec] = value.split('.');
@@ -883,7 +895,7 @@ const AddPO = () => {
                                 type="number"
                                 min="0"
                                 placeholder="Auto-filled from supplier"
-                                value={formData.credit_days}
+                                value={formData.credit_days !== undefined && formData.credit_days !== null && formData.credit_days !== '' ? formData.credit_days : ''}
                                 onChange={(e) => setFormData({ ...formData, credit_days: e.target.value })}
                                 className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none transition-all ${errors.credit_days ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
                             />

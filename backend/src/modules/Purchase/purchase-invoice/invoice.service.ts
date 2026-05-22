@@ -873,7 +873,6 @@ export class PurchaseInvoiceService {
       'Address*', 'Credit Days*', 'CH No', 'PO No', 'Product Code*', 'Quantity*', 'Rate*', 'UOM*'
     ];
     worksheet.addRow(headers);
-    worksheet.addRow(['SilverPeak Traders', 'INV-555', '2026-03-01', '2026-03-02', '24 Market Street', 30, 'CH-001', 'PO00001', 'P01', 10, 100, 'Ton']);
 
     const headerRow = worksheet.getRow(1);
     headerRow.font = { bold: true };

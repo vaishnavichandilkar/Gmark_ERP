@@ -22,13 +22,13 @@ const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1,
             {label1}
         </div>
         <div className="sm:w-1/4 py-3.5 px-6 text-[13px] text-[#111827] border-r border-b sm:border-b-0 border-[#E5E7EB] bg-white flex items-center">
-            {isEditMode && renderEdit1 ? renderEdit1() : (value1 || '-')}
+            {isEditMode && renderEdit1 ? renderEdit1() : (value1 !== null && value1 !== undefined && value1 !== '' ? value1 : '-')}
         </div>
         <div className="sm:w-1/4 py-3.5 px-6 text-[13px] text-[#6B7280] border-r border-b sm:border-b-0 border-[#E5E7EB] bg-gray-50/10 font-semibold flex items-center">
             {label2}
         </div>
         <div className="sm:w-1/4 py-3.5 px-6 text-[13px] text-[#111827] bg-white flex items-center">
-            {isEditMode && renderEdit2 ? renderEdit2() : (value2 || '-')}
+            {isEditMode && renderEdit2 ? renderEdit2() : (value2 !== null && value2 !== undefined && value2 !== '' ? value2 : '-')}
         </div>
     </div>
 );
@@ -50,7 +50,9 @@ const ViewSO = () => {
         gst_number: '',
         pan_number: '',
         status: '',
-        customer_type: ''
+        customer_type: '',
+        customer_po_number: '',
+        po_date: ''
     });
     const [items, setItems] = useState([]);
 
@@ -71,7 +73,10 @@ const ViewSO = () => {
                     gst_number: so.gstNumber,
                     pan_number: so.panNumber,
                     status: so.status,
-                    customer_type: so.customerType
+                    customer_type: so.customerType,
+                    customer_po_number: so.customerPoNumber,
+                    po_date: so.poDate,
+                    po_expiry_date: so.poExpiryDate
                 });
                 setItems(so.items || []);
             } catch (error) {
@@ -157,6 +162,8 @@ const ViewSO = () => {
                             <InfoTableRow label1="Address:" value1={formData.address} label2="SO Creation Date:" value2={formatDate(formData.creation_date)} />
                             <InfoTableRow label1="Expiry Date:" value1={formatDate(formData.expiry_date)} label2="GST Number:" value2={formData.gst_number} />
                             <InfoTableRow label1="PAN Number:" value1={formData.pan_number} label2="Customer Type:" value2={formData.customer_type ? formData.customer_type.toUpperCase() : '-'} />
+                            <InfoTableRow label1="PO Number:" value1={formData.customer_po_number} label2="PO Date:" value2={formatDate(formData.po_date)} />
+                            <InfoTableRow label1="PO Expiry Date:" value1={formatDate(formData.po_expiry_date)} label2="" value2="" />
                         </div>
                     </div>
                 )}

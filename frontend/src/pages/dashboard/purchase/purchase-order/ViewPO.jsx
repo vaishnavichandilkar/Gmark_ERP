@@ -22,13 +22,13 @@ const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1,
             {label1}
         </div>
         <div className="sm:w-1/4 py-3.5 px-6 text-[13px] text-[#111827] border-r border-b sm:border-b-0 border-[#E5E7EB] bg-white flex items-center">
-            {isEditMode && renderEdit1 ? renderEdit1() : (value1 || '-')}
+            {isEditMode && renderEdit1 ? renderEdit1() : (value1 !== null && value1 !== undefined && value1 !== '' ? value1 : '-')}
         </div>
         <div className="sm:w-1/4 py-3.5 px-6 text-[13px] text-[#6B7280] border-r border-b sm:border-b-0 border-[#E5E7EB] bg-gray-50/10 font-semibold flex items-center">
             {label2}
         </div>
         <div className="sm:w-1/4 py-3.5 px-6 text-[13px] text-[#111827] bg-white flex items-center">
-            {isEditMode && renderEdit2 ? renderEdit2() : (value2 || '-')}
+            {isEditMode && renderEdit2 ? renderEdit2() : (value2 !== null && value2 !== undefined && value2 !== '' ? value2 : '-')}
         </div>
     </div>
 );

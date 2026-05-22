@@ -105,6 +105,8 @@ const SOPrintPreview = () => {
         gstNumber, gst_number,
         panNumber, pan_number,
         creditDays, credit_days,
+        customerPoNumber, customer_po_number,
+        poDate, po_date,
         items = []
     } = soData;
 
@@ -115,6 +117,8 @@ const SOPrintPreview = () => {
     const final_gst_number = gstNumber || gst_number || "-";
     const final_pan_number = panNumber || pan_number || "-";
     const final_credit_days = creditDays || credit_days || "0";
+    const final_customer_po_number = customerPoNumber || customer_po_number || "-";
+    const final_po_date = poDate || po_date || null;
 
     const subTotal = items.reduce((sum, item) => {
         const qty = parseFloat(item.quantity) || 0;
@@ -134,19 +138,40 @@ const SOPrintPreview = () => {
         return sum + (taxAmt || 0);
     }, 0);
     
-    const totalTaxOnCombined = materialTax;
-    
-    // Determine if it's Intra-state or Inter-state based on GST state codes
-    const sellerStateCode = sellerInfo?.gstNumber ? sellerInfo.gstNumber.substring(0, 2) : "";
-    const customerStateCode = final_gst_number ? final_gst_number.substring(0, 2) : "";
-    
-    // Default to CGST/SGST if either code is missing or if they match
-    const isIntraState = !sellerStateCode || !customerStateCode || sellerStateCode === customerStateCode;
-    
-    const cgst = isIntraState ? totalTaxOnCombined / 2 : 0;
-    const sgst = isIntraState ? totalTaxOnCombined / 2 : 0;
-    const igst = isIntraState ? 0 : totalTaxOnCombined;
-    
+    // Read directly from the saved sales order if available
+    const savedCgst = parseFloat(soData.cgstAmount || soData.cgst_amount || soData.cgst || soData.accountSummary?.cgst || 0);
+    const savedSgst = parseFloat(soData.sgstAmount || soData.sgst_amount || soData.sgst || soData.accountSummary?.sgst || 0);
+    const savedIgst = parseFloat(soData.igstAmount || soData.igst_amount || soData.igst || soData.accountSummary?.igst || 0);
+
+    let isIntraState = true;
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    let totalTaxOnCombined = 0;
+
+    if (savedCgst > 0 || savedSgst > 0 || savedIgst > 0) {
+        if (savedIgst > 0) {
+            isIntraState = false;
+            igst = savedIgst;
+        } else {
+            isIntraState = true;
+            cgst = savedCgst;
+            sgst = savedSgst;
+        }
+        totalTaxOnCombined = cgst + sgst + igst;
+    } else {
+        // Fallback to calculation
+        const totalTaxOnCombinedCalculated = materialTax;
+        const sellerStateCode = sellerInfo?.gstNumber && /^\d{2}$/.test(sellerInfo.gstNumber.substring(0, 2)) ? sellerInfo.gstNumber.substring(0, 2) : "";
+        const customerStateCode = final_gst_number && /^\d{2}$/.test(final_gst_number.substring(0, 2)) ? final_gst_number.substring(0, 2) : "";
+        
+        isIntraState = !sellerStateCode || !customerStateCode || sellerStateCode === customerStateCode;
+        totalTaxOnCombined = totalTaxOnCombinedCalculated;
+        cgst = isIntraState ? totalTaxOnCombinedCalculated / 2 : 0;
+        sgst = isIntraState ? totalTaxOnCombinedCalculated / 2 : 0;
+        igst = isIntraState ? 0 : totalTaxOnCombinedCalculated;
+    }
+
     const totalAmount = subTotal + totalTaxOnCombined;
 
     const numberToWords = (num) => {
@@ -313,27 +338,37 @@ const SOPrintPreview = () => {
                                 </div>
                             </div>
                             <div className="w-1/2 flex flex-col">
-                                <div className="flex border-b border-black h-[44px]">
-                                    <div className="w-[43%] flex items-center px-4 gap-4">
-                                        <span className="font-black text-[11px] whitespace-nowrap">SO No. :</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{final_so_no}</span>
+                                <div className="flex border-b border-black h-[34px]">
+                                    <div className="w-[45%] flex items-center px-4 gap-2">
+                                        <span className="font-black text-[10.5px] whitespace-nowrap">SO No. :</span>
+                                        <span className="font-semibold text-[10.5px] whitespace-nowrap">{final_so_no}</span>
                                     </div>
-                                    <div className="flex-1 flex items-center px-4 gap-4 border-l" style={{ borderColor: 'rgba(0, 0, 0, 0.1)' }}>
-                                        <span className="font-black text-[11px] whitespace-nowrap">SO Creation Date :</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(final_so_creation_date)}</span>
+                                    <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                        <span className="font-black text-[10.5px] whitespace-nowrap">SO Date :</span>
+                                        <span className="font-semibold text-[10.5px] whitespace-nowrap">{formatDate(final_so_creation_date)}</span>
                                     </div>
                                 </div>
-                                <div className="flex-1 border-b border-black flex items-center px-4 py-2.5 gap-4">
-                                    <span className="font-black text-[12px] min-w-[80px]">Pay. Terms</span>
-                                    <span className="font-semibold text-[12px]">{final_credit_days} Days</span>
+                                <div className="flex border-b border-black h-[34px]">
+                                    <div className="w-[45%] flex items-center px-4 gap-2">
+                                        <span className="font-black text-[10.5px] whitespace-nowrap">Cust. PO No :</span>
+                                        <span className="font-semibold text-[10.5px] whitespace-nowrap">{final_customer_po_number}</span>
+                                    </div>
+                                    <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                        <span className="font-black text-[10.5px] whitespace-nowrap">PO Date :</span>
+                                        <span className="font-semibold text-[10.5px] whitespace-nowrap">{formatDate(final_po_date)}</span>
+                                    </div>
                                 </div>
-                                <div className="flex items-center px-4 h-[44px] gap-4 border-b border-black">
-                                    <span className="font-black text-[12px] min-w-[80px]">Expiry Date:</span>
-                                    <span className="font-semibold text-[12px]">{formatDate(final_expiryDate)}</span>
+                                <div className="flex border-b border-black h-[34px] items-center px-4 gap-2">
+                                    <span className="font-black text-[11px] min-w-[80px]">Pay. Terms</span>
+                                    <span className="font-semibold text-[11px]">{final_credit_days} Days</span>
                                 </div>
-                                <div className="flex items-center px-4 h-[44px] gap-4">
-                                    <span className="font-black text-[12px] min-w-[80px]">GST No:</span>
-                                    <span className="font-semibold text-[12px] uppercase">{final_gst_number || "N/A"}</span>
+                                <div className="flex items-center px-4 h-[34px] gap-2 border-b border-black">
+                                    <span className="font-black text-[11px] min-w-[80px]">Expiry Date:</span>
+                                    <span className="font-semibold text-[11px]">{formatDate(final_expiryDate)}</span>
+                                </div>
+                                <div className="flex items-center px-4 h-[34px] gap-2">
+                                    <span className="font-black text-[11px] min-w-[80px]">GST No:</span>
+                                    <span className="font-semibold text-[11px] uppercase">{final_gst_number || "N/A"}</span>
                                 </div>
                             </div>
                         </div>

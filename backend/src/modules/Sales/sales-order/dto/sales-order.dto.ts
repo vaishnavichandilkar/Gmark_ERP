@@ -123,6 +123,21 @@ export class CreateSalesOrderDto {
     @IsNotEmpty()
     expiryDate: string;
 
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    customerPoNumber?: string;
+
+    @ApiPropertyOptional()
+    @IsDateString()
+    @IsOptional()
+    poDate?: string;
+
+    @ApiPropertyOptional()
+    @IsDateString()
+    @IsOptional()
+    poExpiryDate?: string;
+
     @ApiProperty({ type: [CreateSalesOrderItemDto] })
     @ValidateNested({ each: true })
     @Type(() => CreateSalesOrderItemDto)
@@ -174,6 +189,21 @@ export class UpdateSalesOrderDto {
     @IsOptional()
     @IsDateString()
     expiryDate?: string;
+
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsString()
+    customerPoNumber?: string;
+
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsDateString()
+    poDate?: string;
+
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsDateString()
+    poExpiryDate?: string;
 
     @ApiProperty({ enum: SOStatus, required: false })
     @IsOptional()

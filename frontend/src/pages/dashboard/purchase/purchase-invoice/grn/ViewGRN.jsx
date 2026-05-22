@@ -17,13 +17,13 @@ const InfoTableRow = ({ label1, value1, label2, value2 }) => (
             {label1}
         </div>
         <div className="sm:w-1/4 py-3.5 px-6 text-[13px] text-[#111827] border-r border-b sm:border-b-0 border-[#E5E7EB] bg-white flex items-center">
-            {value1 || '-'}
+            {value1 !== null && value1 !== undefined && value1 !== '' ? value1 : '-'}
         </div>
         <div className="sm:w-1/4 py-3.5 px-6 text-[13px] text-[#6B7280] border-r border-b sm:border-b-0 border-[#E5E7EB] bg-gray-50/10 font-semibold flex items-center">
             {label2}
         </div>
         <div className="sm:w-1/4 py-3.5 px-6 text-[13px] text-[#111827] bg-white flex items-center">
-            {value2 || '-'}
+            {value2 !== null && value2 !== undefined && value2 !== '' ? value2 : '-'}
         </div>
     </div>
 );
@@ -159,10 +159,12 @@ const ViewGRN = () => {
                                         <td className="px-4 py-4 text-center text-[13px] text-[#6B7280]">{index + 1}</td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-[#111827]">{item.productCode}</td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] font-bold text-[#111827]">{item.productName}</td>
-                                        <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right font-medium">{parseFloat(item.quantity).toFixed(2)}</td>
+                                        <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right font-medium">{parseFloat(item.receivedQty !== undefined && item.receivedQty !== null ? item.receivedQty : (item.quantity || 0)).toFixed(2)}</td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-center text-gray-500 uppercase">{getStandardGstUom(item.uom)}</td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right">₹{parseFloat(item.rate).toFixed(2)}</td>
-                                        <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right font-bold text-emerald-800">{parseFloat(item.taxPercent).toFixed(2)}%</td>
+                                        <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right font-bold text-emerald-800">
+                                            {parseFloat((grn.gstNumber && grn.gstNumber.trim() !== '' && grn.gstNumber !== '-') ? (item.taxPercent || 0) : 0).toFixed(2)}%
+                                        </td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right">₹{parseFloat(item.beforeTaxAmount).toFixed(2)}</td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right">₹{parseFloat(item.taxAmount).toFixed(2)}</td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right font-bold text-[#073318]">₹{parseFloat(item.totalAmount).toFixed(2)}</td>
@@ -173,7 +175,7 @@ const ViewGRN = () => {
                                 <tr>
                                     <td colSpan={3} className="px-4 py-5 text-[14px]">Total Summary</td>
                                     <td className="px-4 py-4 border-l border-[#F3F4F6] text-right">
-                                        {items.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0).toFixed(2)}
+                                        {items.reduce((s, i) => s + (parseFloat(i.receivedQty !== undefined && i.receivedQty !== null ? i.receivedQty : (i.quantity || 0)) || 0), 0).toFixed(2)}
                                     </td>
                                     <td colSpan={3} className="border-l border-[#F3F4F6]"></td>
                                     <td className="px-4 py-4 border-l border-[#F3F4F6] text-right">

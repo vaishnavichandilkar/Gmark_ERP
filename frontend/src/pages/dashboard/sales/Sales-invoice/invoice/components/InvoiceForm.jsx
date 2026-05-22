@@ -177,7 +177,7 @@ const InvoiceForm = ({
                         type="number"
                         min="0"
                         placeholder="Enter credit days"
-                        value={formData.creditDays || ''}
+                        value={formData.creditDays !== undefined && formData.creditDays !== null && formData.creditDays !== '' ? formData.creditDays : ''}
                         onChange={(e) => setFormData(prev => ({ ...prev, creditDays: e.target.value }))}
                         className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm ${errors.creditDays ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                     />
@@ -214,7 +214,7 @@ const InvoiceForm = ({
                     <label className="text-[14px] font-semibold text-[#374151]">SO Number (Optional)</label>
                     <div className="relative">
                         <select
-                            className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-10 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
+                            className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-14 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
                             value={formData.soId || ""}
                             onChange={(e) => handleSOChange(e.target.value)}
                         >
@@ -224,6 +224,18 @@ const InvoiceForm = ({
                                 <option value={formData.soId}>{formData.soNumber}</option>
                             )}
                         </select>
+                        {formData.soId && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSOChange("");
+                                }}
+                                className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors z-10"
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                     </div>
                 </div>

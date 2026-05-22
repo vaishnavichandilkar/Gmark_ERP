@@ -49,7 +49,10 @@ const AddSO = () => {
         creation_date: new Date().toLocaleDateString('en-CA'),
         expiry_date: '',
         pan_number: '',
-        customer_type: ''
+        customer_type: '',
+        customer_po_number: '',
+        po_date: '',
+        po_expiry_date: ''
     });
 
     const [errors, setErrors] = useState({});
@@ -237,7 +240,10 @@ const AddSO = () => {
                             creation_date: soToEdit.soCreationDate ? soToEdit.soCreationDate.split('T')[0] : formData.creation_date,
                             expiry_date: soToEdit.expiryDate ? soToEdit.expiryDate.split('T')[0] : '',
                             pan_number: soToEdit.panNumber || '',
-                            customer_type: soToEdit.customerType || ''
+                            customer_type: soToEdit.customerType || '',
+                            customer_po_number: soToEdit.customerPoNumber || '',
+                            po_date: soToEdit.poDate ? soToEdit.poDate.split('T')[0] : '',
+                            po_expiry_date: soToEdit.poExpiryDate ? soToEdit.poExpiryDate.split('T')[0] : ''
                         });
                         setCustomerSearch(soToEdit.customerName);
                         if (soToEdit.items) {
@@ -256,7 +262,7 @@ const AddSO = () => {
                                 before_tax: (item.quantity * item.rate - item.discountAmount).toFixed(2),
                                 tax_amount: item.taxAmount.toFixed(2),
                                 total_amount: item.totalAmount.toFixed(2),
-                                description: item.printDescription || ''
+                                description: item.printDescription || item.description || ''
                             })));
                         }
                     }
@@ -348,7 +354,7 @@ const AddSO = () => {
             customer_name: customer.customerName,
             address: customer.address || '',
             gst_number: customer.gstNumber || '',
-            credit_days: customer.creditDays || '',
+            credit_days: customer.creditDays !== undefined && customer.creditDays !== null ? customer.creditDays : '',
             pan_number: customer.panNumber || '',
             customer_type: customer.customerType || ''
         }));
@@ -361,6 +367,7 @@ const AddSO = () => {
         const taxRate = product.tax_rate || 0;
         const beforeTax = (1 * productRate); // qty=1 initially, no discount
         const taxAmt = isGstApplicable ? (beforeTax * taxRate / 100) : 0;
+        const printDesc = product.print_description || product.product_name || product.description || '';
         const newItem = {
             id: Date.now(),
             product_id: product.id,
@@ -376,7 +383,8 @@ const AddSO = () => {
             before_tax: beforeTax.toFixed(2),
             tax_amount: taxAmt.toFixed(2),
             total_amount: (beforeTax + taxAmt).toFixed(2),
-            description: product.description || ''
+            description: printDesc,
+            original_description: printDesc
         };
 
         let updatedItems = [...items];
@@ -453,6 +461,16 @@ const AddSO = () => {
 
         // Update the specific field with decimal limit for discounts
         let finalValue = value;
+        if (field === 'description') {
+            const originalPrefix = item.original_description || '';
+            if (originalPrefix && !value.startsWith(originalPrefix)) {
+                if (value.length < originalPrefix.length) {
+                    finalValue = originalPrefix;
+                } else {
+                    finalValue = originalPrefix + value.substring(originalPrefix.length);
+                }
+            }
+        }
         if (['discount_amount', 'discount_percent', 'discount_percentage', 'discount_amt'].includes(field)) {
             if (value.includes('.') && value.split('.')[1].length > 2) {
                 const [int, dec] = value.split('.');
@@ -549,6 +567,9 @@ const AddSO = () => {
             soNumber: formData.so_number,
             soCreationDate: formData.creation_date,
             expiryDate: formData.expiry_date,
+            customerPoNumber: formData.customer_po_number || null,
+            poDate: formData.po_date ? formData.po_date : null,
+            poExpiryDate: formData.po_expiry_date ? formData.po_expiry_date : null,
             creditDays: Number(formData.credit_days),
             items: items.filter(item => item.product_name).map(item => ({
                 productId: item.product_id,
@@ -737,7 +758,7 @@ const AddSO = () => {
                             <input
                                 type="number"
                                 min="0"
-                                value={formData.credit_days}
+                                value={formData.credit_days !== undefined && formData.credit_days !== null && formData.credit_days !== '' ? formData.credit_days : ''}
                                 onChange={(e) => setFormData({ ...formData, credit_days: e.target.value })}
                                 className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318]"
                                 placeholder="Enter credit days"
@@ -808,6 +829,62 @@ const AddSO = () => {
                                 <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover/date:text-[#073318] transition-colors" size={20} />
                             </div>
                             {errors.expiry_date && <p className="text-red-500 text-[12px] mt-1 italic font-medium">*{errors.expiry_date}</p>}
+                        </div>
+
+                        {/* PO Number */}
+                        <div className="space-y-2">
+                            <label className="text-[14px] font-semibold text-[#374151]">PO Number</label>
+                            <input
+                                type="text"
+                                value={formData.customer_po_number || ''}
+                                onChange={(e) => setFormData({ ...formData, customer_po_number: e.target.value })}
+                                className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] font-medium"
+                                placeholder="Enter PO Number"
+                            />
+                        </div>
+
+                        {/* PO Date */}
+                        <div className="space-y-2">
+                            <label className="text-[14px] font-semibold text-[#374151]">PO Date</label>
+                            <div className="relative group/date">
+                                <input
+                                    type="date"
+                                    value={formData.po_date || ''}
+                                    onKeyDown={(e) => e.preventDefault()}
+                                    onClick={(e) => {
+                                        try {
+                                            e.target.showPicker();
+                                        } catch (err) {}
+                                    }}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, po_date: e.target.value });
+                                    }}
+                                    className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-12 text-[14px] outline-none transition-all placeholder:text-gray-400 custom-date-input cursor-pointer focus:border-[#073318]"
+                                />
+                                <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover/date:text-[#073318] transition-colors" size={20} />
+                            </div>
+                        </div>
+
+                        {/* PO Expiry Date */}
+                        <div className="space-y-2">
+                            <label className="text-[14px] font-semibold text-[#374151]">PO Expiry Date</label>
+                            <div className="relative group/date">
+                                <input
+                                    type="date"
+                                    value={formData.po_expiry_date || ''}
+                                    onKeyDown={(e) => e.preventDefault()}
+                                    onClick={(e) => {
+                                        try {
+                                            e.target.showPicker();
+                                        } catch (err) {}
+                                    }}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, po_expiry_date: e.target.value });
+                                    }}
+                                    className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-12 text-[14px] outline-none transition-all placeholder:text-gray-400 custom-date-input cursor-pointer focus:border-[#073318]"
+                                />
+                                <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover/date:text-[#073318] transition-colors" size={20} />
+                            </div>
                         </div>
 
                         <div className="space-y-2">

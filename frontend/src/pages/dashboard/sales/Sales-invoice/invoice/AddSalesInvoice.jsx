@@ -315,57 +315,149 @@ const AddSalesInvoice = () => {
             console.error("Error fetching customer data:", error);
         }
     };
-
     const handleSOChange = async (soId) => {
+        if (!soId) {
+            setFormData(prev => ({
+                ...prev,
+                soId: '',
+                soNumber: '',
+                challanIds: []
+            }));
+            setItems([{
+                id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
+                uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0,
+                taxAmount: 0, totalAmount: 0, printDescription: ''
+            }]);
+            setExpenses([]);
+            return;
+        }
+
         const selectedSO = sos.find(s => s.id === parseInt(soId));
         if (!selectedSO) return;
 
-        setFormData(prev => ({
-            ...prev,
-            soId: selectedSO.id,
-            soNumber: selectedSO.soNumber,
-            challanIds: [] // Clear previously selected challans when SO changes
-        }));
+        // Find matching challans from challans list
+        const matchingChallans = (challans || []).filter(c => 
+            (c.soId && String(c.soId) === String(selectedSO.id)) ||
+            (c.soNumber && String(c.soNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === String(selectedSO.soNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase())
+        );
 
-        const mappedItems = selectedSO.items.map(item => {
-            const qty = item.remainingQty || item.quantity;
-            const rate = item.rate || 0;
-            const discAmt = item.discountAmount || 0;
-            const taxPct = item.taxPercent || 0;
-            
-            const baseAmt = qty * rate;
-            const befTax = Math.max(0, baseAmt - discAmt);
-            const taxAmt = (befTax * taxPct) / 100;
-            const totalAmt = befTax + taxAmt;
+        if (matchingChallans.length > 0) {
+            const matchingChallanIds = matchingChallans.map(c => c.id);
+            try {
+                const allItems = [];
+                const allExpenses = [];
 
-            return {
-                id: Date.now() + Math.random(),
-                productId: item.productId,
-                productCode: item.productCode,
-                productName: item.productName,
-                quantity: qty, 
-                totalSoQty: qty, 
-                rate: rate,
-                uom: item.uom,
-                hsnCode: item.hsnCode || '',
-                taxPercent: taxPct,
-                discountAmount: discAmt,
-                discountPercent: item.discountPercent || 0,
-                beforeTaxAmount: parseFloat(befTax.toFixed(2)),
-                taxAmount: parseFloat(taxAmt.toFixed(2)),
-                totalAmount: parseFloat(totalAmt.toFixed(2)),
-                printDescription: item.printDescription || item.productName || '',
-            };
-        });
+                for (const cid of matchingChallanIds) {
+                    const challanResponse = await challanService.getChallanById(cid);
+                    const challan = challanResponse.data ? challanResponse.data : challanResponse;
 
-        setItems(mappedItems);
+                    if (challan) {
+                        if (challan.items) {
+                            for (const item of challan.items) {
+                                const product = products.find(p => p.id === item.productId || p.product_code === item.productCode);
+                                const printDesc = item.printDescription || item.print_description || item.description || item.productName || '';
+                                allItems.push({
+                                    ...item,
+                                    id: Date.now() + Math.random(),
+                                    quantity: item.challanQty || item.quantity || 0,
+                                    totalSoQty: item.challanQty || item.quantity || 0,
+                                    hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
+                                    taxPercent: item.taxPercent || product?.tax_rate || product?.taxRate || 0,
+                                    challanId: cid,
+                                    challanNumber: challan.challanNumber,
+                                    printDescription: printDesc,
+                                    originalPrintDescription: printDesc,
+                                });
+                            }
+                        }
 
+                        if (challan.expenses) {
+                            for (const exp of challan.expenses) {
+                                allExpenses.push({
+                                    id: Date.now() + Math.random(),
+                                    groupName: exp.groupName,
+                                    amount: exp.amount,
+                                    isGstApplicable: exp.isGstApplicable,
+                                    taxRate: exp.taxRate,
+                                    isPostGst: exp.isPostGst,
+                                    challanId: cid
+                                });
+                            }
+                        }
+                    }
+                }
+
+                setItems(allItems.length > 0 ? allItems : [{
+                    id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
+                    uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0,
+                    taxAmount: 0, totalAmount: 0, printDescription: ''
+                }]);
+                setExpenses(allExpenses);
+
+                setFormData(prev => ({
+                    ...prev,
+                    soId: selectedSO.id,
+                    soNumber: selectedSO.soNumber,
+                    challanIds: matchingChallanIds
+                }));
+            } catch (error) {
+                console.error("Error loading matching challan details:", error);
+                toast.error("Failed to load challan details");
+            }
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                soId: selectedSO.id,
+                soNumber: selectedSO.soNumber,
+                challanIds: [] // Clear previously selected challans when SO changes
+            }));
+
+            const mappedItems = selectedSO.items.map(item => {
+                const qty = item.remainingQty || item.quantity;
+                const rate = item.rate || 0;
+                const discAmt = item.discountAmount || 0;
+                const taxPct = item.taxPercent || 0;
+                
+                const baseAmt = qty * rate;
+                const befTax = Math.max(0, baseAmt - discAmt);
+                const taxAmt = (befTax * taxPct) / 100;
+                const totalAmt = befTax + taxAmt;
+
+                const printDesc = item.printDescription || item.print_description || item.description || item.productName || '';
+                return {
+                    id: Date.now() + Math.random(),
+                    productId: item.productId,
+                    productCode: item.productCode,
+                    productName: item.productName,
+                    quantity: qty, 
+                    totalSoQty: qty, 
+                    rate: rate,
+                    uom: item.uom,
+                    hsnCode: item.hsnCode || '',
+                    taxPercent: taxPct,
+                    discountAmount: discAmt,
+                    discountPercent: item.discountPercent || 0,
+                    beforeTaxAmount: parseFloat(befTax.toFixed(2)),
+                    taxAmount: parseFloat(taxAmt.toFixed(2)),
+                    totalAmount: parseFloat(totalAmt.toFixed(2)),
+                    printDescription: printDesc,
+                    originalPrintDescription: printDesc,
+                };
+            });
+
+            setItems(mappedItems);
+            setExpenses([]);
+        }
     };
 
     const handleChallanChange = async (selectedIds) => {
-        setFormData(prev => ({ ...prev, challanIds: selectedIds }));
-        
-        if (selectedIds.length === 0) {
+        if (!selectedIds || selectedIds.length === 0) {
+            setFormData(prev => ({ 
+                ...prev, 
+                challanIds: [],
+                soId: '',
+                soNumber: ''
+            }));
             setItems([{
                 id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
                 uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0,
@@ -376,25 +468,37 @@ const AddSalesInvoice = () => {
         }
 
         try {
+            // Auto-select SO if any of the selected challans have an associated SO
+            let soFields = {};
+            const selectedChallanObjects = (challans || []).filter(c => selectedIds.map(String).includes(String(c.id)));
+            const firstWithSo = selectedChallanObjects.find(c => c.soId || c.soNumber);
+            if (firstWithSo) {
+                const matchedSO = (sos || []).find(s => 
+                    (firstWithSo.soId && String(s.id) === String(firstWithSo.soId)) ||
+                    (firstWithSo.soNumber && String(s.soNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === String(firstWithSo.soNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase())
+                );
+                if (matchedSO) {
+                    soFields = {
+                        soId: matchedSO.id,
+                        soNumber: matchedSO.soNumber
+                    };
+                }
+            }
+
             const allItems = [];
             const allExpenses = [];
-
-            let latestChallanDate = null;
 
             for (const cid of selectedIds) {
                 const challanResponse = await challanService.getChallanById(cid);
                 const challan = challanResponse.data ? challanResponse.data : challanResponse;
 
                 if (challan) {
-                    const cDate = new Date(challan.challanDate);
-                    if (!latestChallanDate || cDate > latestChallanDate) {
-                        latestChallanDate = cDate;
-                    }
                     if (challan.items) {
                         for (const item of challan.items) {
                             // Find product in master for fallback HSN/Tax
                             const product = products.find(p => p.id === item.productId || p.product_code === item.productCode);
                             
+                            const printDesc = item.printDescription || item.print_description || item.description || item.productName || '';
                             allItems.push({
                                 ...item,
                                 id: Date.now() + Math.random(),
@@ -403,7 +507,9 @@ const AddSalesInvoice = () => {
                                 hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
                                 taxPercent: item.taxPercent || product?.tax_rate || product?.taxRate || 0,
                                 challanId: cid,
-                                challanNumber: challan.challanNumber
+                                challanNumber: challan.challanNumber,
+                                printDescription: printDesc,
+                                originalPrintDescription: printDesc,
                             });
                         }
                     }
@@ -429,6 +535,12 @@ const AddSalesInvoice = () => {
                 taxAmount: 0, totalAmount: 0, printDescription: ''
             }]);
             setExpenses(allExpenses);
+
+            setFormData(prev => ({ 
+                ...prev, 
+                ...soFields,
+                challanIds: selectedIds 
+            }));
         } catch (error) {
             console.error("Error fetching challan details:", error);
             toast.error("Failed to load challan details");
@@ -562,11 +674,11 @@ const AddSalesInvoice = () => {
                     rate: parseFloat(item.rate) || 0,
                     uom: item.uom || 'Nos',
                     hsnCode: item.hsnCode || '',
-                    taxPercent: parseFloat(item.taxPercent) || 0,
+                    taxPercent: gstType.applicable ? (parseFloat(item.taxPercent) || 0) : 0,
                     discountAmount: parseFloat(item.discountAmount) || 0,
                     discountPercent: parseFloat(item.discountPercent) || 0,
                     beforeTaxAmount: parseFloat(item.beforeTaxAmount) || 0,
-                    taxAmount: parseFloat(item.taxAmount) || 0,
+                    taxAmount: gstType.applicable ? (parseFloat(item.taxAmount) || 0) : 0,
                     totalAmount: parseFloat(item.totalAmount) || 0,
                     printDescription: item.printDescription || '',
                     challanId: item.challanId ? parseInt(item.challanId) : null

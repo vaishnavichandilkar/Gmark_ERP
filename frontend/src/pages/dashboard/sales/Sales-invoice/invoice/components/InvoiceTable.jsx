@@ -55,6 +55,16 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
 
         // Update the specific field
         let finalValue = value;
+        if (field === 'printDescription') {
+            const originalPrefix = item.originalPrintDescription || '';
+            if (originalPrefix && !value.startsWith(originalPrefix)) {
+                if (value.length < originalPrefix.length) {
+                    finalValue = originalPrefix;
+                } else {
+                    finalValue = originalPrefix + value.substring(originalPrefix.length);
+                }
+            }
+        }
         if (field === 'discountAmount' || field === 'discountPercent') {
             if (value.includes('.') && value.split('.')[1].length > 2) {
                 const [int, dec] = value.split('.');
@@ -125,6 +135,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             finalTargetIndex = emptyIndex === -1 ? updatedItems.length : emptyIndex;
         }
 
+        const printDesc = product.print_description || product.product_name || product.description || '';
         const newItem = {
             id: updatedItems[finalTargetIndex]?.id || Date.now(),
             productId: product.id,
@@ -141,7 +152,8 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             totalSoQty: 0,
             discountAmount: 0,
             discountPercent: 0,
-            printDescription: product.print_description || product.product_name,
+            printDescription: printDesc,
+            originalPrintDescription: printDesc,
         };
 
         if (finalTargetIndex < updatedItems.length) {
@@ -399,7 +411,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                             <input
                                                 type="number"
                                                 min="0"
-                                                value={item.taxPercent === 0 ? '' : item.taxPercent}
+                                                value={item.taxPercent === 0 || item.taxPercent === '0' ? '0' : (item.taxPercent || '')}
                                                 onChange={(e) => handleItemChange(index, 'taxPercent', e.target.value)}
                                                 readOnly={isLinked}
                                                 className={`w-full h-[36px] border border-[#E5E7EB] rounded-[8px] pr-5 pl-2 text-[13px] font-black text-right outline-none transition-all ${isLinked ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white text-emerald-800 focus:border-[#073318]'}`}

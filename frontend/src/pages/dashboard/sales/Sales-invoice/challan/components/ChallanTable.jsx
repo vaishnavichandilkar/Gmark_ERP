@@ -60,6 +60,16 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
 
         // Update the specific field with decimal limit for discounts
         let finalValue = value;
+        if (field === 'printDescription') {
+            const originalPrefix = item.originalPrintDescription || '';
+            if (originalPrefix && !value.startsWith(originalPrefix)) {
+                if (value.length < originalPrefix.length) {
+                    finalValue = originalPrefix;
+                } else {
+                    finalValue = originalPrefix + value.substring(originalPrefix.length);
+                }
+            }
+        }
         if (field === 'discountAmount' || field === 'discountPercent') {
             if (value.includes('.') && value.split('.')[1].length > 2) {
                 const [int, dec] = value.split('.');
@@ -161,6 +171,7 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             finalTargetIndex = emptyIndex === -1 ? updatedItems.length : emptyIndex;
         }
 
+        const printDesc = product.print_description || product.product_name || product.description || '';
         const newItem = {
             id: updatedItems[finalTargetIndex]?.id || Date.now(),
             productId: product.id,
@@ -176,7 +187,8 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             beforeTaxAmount: baseAmount,
             taxAmount: taxAmt,
             totalAmount: total,
-            printDescription: product.print_description || product.product_name,
+            printDescription: printDesc,
+            originalPrintDescription: printDesc,
             totalSoQty: soQty,
             givenSoQty: givenCount,
             remainingQty: Math.max(0, soQty - givenCount - qty).toFixed(2)
@@ -484,7 +496,7 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-emerald-800">%</span>
                                             <input
                                                 type="number"
-                                                value={item.taxPercent === 0 ? '0' : item.taxPercent}
+                                                value={item.taxPercent === 0 || item.taxPercent === '0' ? '0' : (item.taxPercent || '')}
                                                 readOnly
                                                 className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] pr-5 pl-2 text-[13px] font-black text-right text-emerald-800 outline-none cursor-not-allowed"
                                             />

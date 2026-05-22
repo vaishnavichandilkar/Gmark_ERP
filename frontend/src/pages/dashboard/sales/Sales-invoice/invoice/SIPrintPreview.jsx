@@ -119,14 +119,41 @@ const SIPrintPreview = () => {
     const subtotalWithBeforeGstExpenses = subTotal + directExpenses;
 
     const effectiveTaxRate = subTotal > 0 ? (materialTax / subTotal) : 0;
-    const totalTaxOnCombined = !invoiceData.gstType?.applicable ? 0 : (materialTax + (directExpenses * effectiveTaxRate));
-    
-    // Assume 50/50 split for CGST/SGST if Intra, or whole thing for IGST
-    const isInterState = invoiceData.gstType?.type === 'INTER';
-    
-    const cgst = !isInterState ? totalTaxOnCombined / 2 : 0;
-    const sgst = !isInterState ? totalTaxOnCombined / 2 : 0;
-    const igst = isInterState ? totalTaxOnCombined : 0;
+    // Read directly from the saved invoice if available
+    const savedCgst = parseFloat(invoiceData.cgstAmount || invoiceData.cgst_amount || invoiceData.accountSummary?.cgst || 0);
+    const savedSgst = parseFloat(invoiceData.sgstAmount || invoiceData.sgst_amount || invoiceData.accountSummary?.sgst || 0);
+    const savedIgst = parseFloat(invoiceData.igstAmount || invoiceData.igst_amount || invoiceData.accountSummary?.igst || 0);
+
+    let isInterState = false;
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    let totalTaxOnCombined = 0;
+
+    if (savedCgst > 0 || savedSgst > 0 || savedIgst > 0) {
+        if (savedIgst > 0) {
+            isInterState = true;
+            igst = savedIgst;
+        } else {
+            isInterState = false;
+            cgst = savedCgst;
+            sgst = savedSgst;
+        }
+        totalTaxOnCombined = cgst + sgst + igst;
+    } else {
+        // Fallback to calculation
+        const gstTypeStr = typeof invoiceData.gstType === 'string' ? invoiceData.gstType : (invoiceData.gstType?.type || '');
+        const isApplicable = invoiceData.gstType?.applicable !== false && gstTypeStr !== 'NONE';
+        totalTaxOnCombined = !isApplicable ? 0 : (materialTax + (directExpenses * effectiveTaxRate));
+
+        const sellerStateCode = sellerInfo?.gstNumber && /^\d{2}$/.test(sellerInfo.gstNumber.substring(0, 2)) ? sellerInfo.gstNumber.substring(0, 2) : "";
+        const customerStateCode = final_gst_number && /^\d{2}$/.test(final_gst_number.substring(0, 2)) ? final_gst_number.substring(0, 2) : "";
+        isInterState = gstTypeStr === 'INTER' || (sellerStateCode && customerStateCode && sellerStateCode !== customerStateCode);
+
+        cgst = !isInterState ? totalTaxOnCombined / 2 : 0;
+        sgst = !isInterState ? totalTaxOnCombined / 2 : 0;
+        igst = isInterState ? totalTaxOnCombined : 0;
+    }
 
     const postGstExpenses = expenses.filter(e => e.isPostGst).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
     const grandTotal = subtotalWithBeforeGstExpenses + totalTaxOnCombined + postGstExpenses;
@@ -374,19 +401,18 @@ const SIPrintPreview = () => {
                                 <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[12px]">{subtotalWithBeforeGstExpenses.toFixed(2)}</div>
                             </div>
 
-                            {cgst > 0 && (
-                                <div className="flex border-b border-black h-[30px]">
-                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">CGST</div>
-                                    <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{cgst.toFixed(2)}</div>
-                                </div>
-                            )}
-                            {sgst > 0 && (
-                                <div className="flex border-b border-black h-[30px]">
-                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">SGST</div>
-                                    <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{sgst.toFixed(2)}</div>
-                                </div>
-                            )}
-                            {igst > 0 && (
+                            {!isInterState ? (
+                                <>
+                                    <div className="flex border-b border-black h-[30px]">
+                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">CGST</div>
+                                        <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{cgst.toFixed(2)}</div>
+                                    </div>
+                                    <div className="flex border-b border-black h-[30px]">
+                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">SGST</div>
+                                        <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{sgst.toFixed(2)}</div>
+                                    </div>
+                                </>
+                            ) : (
                                 <div className="flex border-b border-black h-[30px]">
                                     <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">IGST</div>
                                     <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{igst.toFixed(2)}</div>

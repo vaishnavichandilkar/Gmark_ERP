@@ -169,15 +169,15 @@ const LedgerView = () => {
                 tx.date,
                 tx.particulars,
                 (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
-                tx.debit !== '0' ? tx.debit : '-',
-                tx.credit !== '0' ? tx.credit : '-',
-                tx.balance
+                tx.debit !== '0' && tx.debit ? Number(tx.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
+                tx.credit !== '0' && tx.credit ? Number(tx.credit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
+                Number(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ` ${type === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
             ]);
 
             const footerRows = [
-                ['', '', '', 'Page Total', pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 }), `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}`],
-                ['', '', '', 'Transactions (Ledger)', periodTotals.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 }), periodTotals.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 }), `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}`],
-                ['', '', '', 'Closing Balance', '--', '--', `${Math.abs(finalBalance).toLocaleString('en-IN')} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}`]
+                ['', '', '', 'Page Total', pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}`],
+                ['', '', '', 'Transactions (Ledger)', periodTotals.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), periodTotals.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}`],
+                ['', '', '', 'Closing Balance', '--', '--', `${Math.abs(finalBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}`]
             ];
 
             autoTable(doc, {
@@ -213,16 +213,16 @@ const LedgerView = () => {
                 "Date": tx.date,
                 "Particular": tx.particulars,
                 "Narration": (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
-                "Debit (₹)": tx.debit,
-                "Credit (₹)": tx.credit,
-                "Balance": tx.balance
+                "Debit (₹)": tx.debit !== '0' && tx.debit ? Number(tx.debit) : null,
+                "Credit (₹)": tx.credit !== '0' && tx.credit ? Number(tx.credit) : null,
+                "Balance": `${Math.abs(Number(tx.balance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
             }));
 
             // Add summary rows to Excel
             exportData.push({}); // Empty row for spacing
-            exportData.push({ "Narration": "Page Total", "Debit (₹)": pageTotalDR, "Credit (₹)": pageTotalCR, "Balance": `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}` });
-            exportData.push({ "Narration": "Transactions (Ledger)", "Debit (₹)": periodTotals.debit, "Credit (₹)": periodTotals.credit, "Balance": `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}` });
-            exportData.push({ "Narration": "Closing Balance", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalBalance).toLocaleString('en-IN')} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}` });
+            exportData.push({ "Narration": "Page Total", "Debit (₹)": pageTotalDR, "Credit (₹)": pageTotalCR, "Balance": `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}` });
+            exportData.push({ "Narration": "Transactions (Ledger)", "Debit (₹)": periodTotals.debit, "Credit (₹)": periodTotals.credit, "Balance": `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}` });
+            exportData.push({ "Narration": "Closing Balance", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}` });
 
             const ws = XLSX.utils.json_to_sheet(exportData);
             
@@ -361,15 +361,15 @@ const LedgerView = () => {
                         <>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
                                 <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Total Debit</p>
-                                <h3 className="text-2xl font-extrabold text-[#111827]">₹ {totalDR.toLocaleString()}</h3>
+                                <h3 className="text-2xl font-extrabold text-[#111827]">₹ {periodTotals.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                             </div>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
                                 <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Total Credit</p>
-                                <h3 className="text-2xl font-extrabold text-[#111827]">₹ {totalCR.toLocaleString()}</h3>
+                                <h3 className="text-2xl font-extrabold text-[#111827]">₹ {periodTotals.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                             </div>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
                                 <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Closing Balance</p>
-                                <h3 className="text-2xl font-extrabold text-[#111827]">₹ {Math.abs(Number(finalBalance)).toLocaleString('en-IN')} {type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}</h3>
+                                <h3 className="text-2xl font-extrabold text-[#111827]">₹ {Math.abs(Number(finalBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}</h3>
                             </div>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
                                 <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Group</p>
@@ -497,10 +497,10 @@ const LedgerView = () => {
                                             <td className="px-6 py-5 text-gray-500 max-w-[300px]">
                                                 {tx.narration || '-'}
                                             </td>
-                                            <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.debit > 0 ? `₹ ${tx.debit.toLocaleString('en-IN')}` : '-'}</td>
-                                            <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.credit > 0 ? `₹ ${tx.credit.toLocaleString('en-IN')}` : '-'}</td>
+                                            <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.debit > 0 ? `₹ ${tx.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                                            <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.credit > 0 ? `₹ ${tx.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
                                             <td className="px-6 py-5 text-right font-extrabold text-[#111827]">
-                                                ₹ {Math.abs(tx.balance).toLocaleString('en-IN')} {type === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}
+                                                ₹ {Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {type === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}
                                             </td>
                                         </tr>
                                     ))
@@ -516,23 +516,23 @@ const LedgerView = () => {
                                 {/* Page Total Row */}
                                 <tr className="border-b border-gray-100">
                                     <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">PAGE TOTAL (NEW)</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">₹ {Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} {pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">₹ {Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}</td>
                                 </tr>
                                 {/* Transactions (Ledger) Row */}
                                 <tr className="border-b border-gray-100">
                                     <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Transactions (Ledger)</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {runningTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {runningTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">₹ {Math.abs(runningTotalCR - runningTotalDR).toLocaleString('en-IN', { minimumFractionDigits: 2 })} {runningTotalCR >= runningTotalDR ? 'Cr' : 'Dr'}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {runningTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {runningTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">₹ {Math.abs(runningTotalCR - runningTotalDR).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {runningTotalCR >= runningTotalDR ? 'Cr' : 'Dr'}</td>
                                 </tr>
                                 {/* Balance (Ledger) Row */}
                                 <tr>
                                     <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Closing Balance</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">₹ {Math.abs(currentClosingBalance).toLocaleString('en-IN')} {type === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">₹ {Math.abs(currentClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {type === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}</td>
                                 </tr>
                             </tfoot>
                         </table>

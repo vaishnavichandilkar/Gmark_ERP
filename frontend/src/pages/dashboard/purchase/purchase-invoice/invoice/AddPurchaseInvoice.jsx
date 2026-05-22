@@ -29,6 +29,7 @@ const AddPurchaseInvoice = () => {
     const [challans, setChallans] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [previewUrl, setPreviewUrl] = useState('');
 
     const [formData, setFormData] = useState({
         supplier_id: '',
@@ -48,6 +49,29 @@ const AddPurchaseInvoice = () => {
         attachment: null,
         supplier_state: ''
     });
+
+    useEffect(() => {
+        if (!formData.attachment) {
+            setPreviewUrl('');
+            return;
+        }
+
+        if (typeof formData.attachment === 'string') {
+            const root = BASE_URL.split('/api')[0];
+            setPreviewUrl(`${root}/${formData.attachment}`);
+            return;
+        }
+
+        try {
+            const objectUrl = URL.createObjectURL(formData.attachment);
+            setPreviewUrl(objectUrl);
+
+            return () => URL.revokeObjectURL(objectUrl);
+        } catch (e) {
+            console.error("Error creating object URL:", e);
+            setPreviewUrl('');
+        }
+    }, [formData.attachment]);
 
     const toIsoDate = (displayDate) => {
         if (!displayDate) return "";
@@ -167,7 +191,7 @@ const AddPurchaseInvoice = () => {
                         setItems(invoice.items.map(item => {
                             const quantity = item.quantity || 0;
                             const rate = item.rate || 0;
-                            const taxPct = item.taxPercent || 18;
+                            const taxPct = item.taxPercent !== undefined && item.taxPercent !== null ? item.taxPercent : 18;
                             const discAmt = item.discountAmount || 0;
                             const baseAmt = quantity * rate;
                             const befTax = baseAmt - discAmt;
@@ -275,7 +299,7 @@ const AddPurchaseInvoice = () => {
                                         beforeTaxAmount: newProduct.purchaseRate || 0,
                                         taxAmount: ((newProduct.purchaseRate || 0) * (newProduct.tax_rate || 0)) / 100,
                                         totalAmount: (newProduct.purchaseRate || 0) * (1 + (newProduct.tax_rate || 0) / 100),
-                                        printDescription: newProduct.description || newProduct.product_name,
+                                        printDescription: newProduct.print_description || newProduct.product_name || newProduct.description || '',
                                         totalPoQty: 0,
                                         receivedPoQty: 0,
                                         remainingQty: 0
@@ -402,7 +426,13 @@ const AddPurchaseInvoice = () => {
 
     const handleChallanChange = async (selectedGrnIds) => {
         if (!selectedGrnIds || selectedGrnIds.length === 0) {
-            setFormData(prev => ({ ...prev, grn_ids: [] }));
+            setFormData(prev => ({ 
+                ...prev, 
+                grn_ids: [],
+                po_id: '',
+                po_number: '',
+                po_date: ''
+            }));
             setItems([{ 
                 id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0, 
                 uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0, 
@@ -415,6 +445,34 @@ const AddPurchaseInvoice = () => {
             // Fetch all selected GRNs
             const grns = await Promise.all(selectedGrnIds.map(id => grnService.getGRNById(id)));
             
+            // Auto-select PO if any of the selected GRNs have an associated PO
+            let poFields = {};
+            const selectedChallanObjects = (challans || []).filter(c => selectedGrnIds.map(String).includes(String(c.id)));
+            const firstWithPo = selectedChallanObjects.find(c => c.poId || c.poNumber);
+            if (firstWithPo) {
+                const matchedPO = (pos || []).find(p => 
+                    (firstWithPo.poId && String(p.id) === String(firstWithPo.poId)) ||
+                    (firstWithPo.poNumber && String(p.poNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === String(firstWithPo.poNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase())
+                );
+                if (matchedPO) {
+                    try {
+                        const poDetails = await purchaseOrderService.getPurchaseOrderById(matchedPO.id);
+                        poFields = {
+                            po_id: poDetails.id,
+                            po_number: poDetails.poNumber,
+                            po_date: poDetails.poCreationDate?.split('T')[0] || ''
+                        };
+                    } catch (e) {
+                        console.error("Error fetching matching PO details:", e);
+                        poFields = {
+                            po_id: matchedPO.id,
+                            po_number: matchedPO.poNumber,
+                            po_date: matchedPO.poCreationDate?.split('T')[0] || ''
+                        };
+                    }
+                }
+            }
+
             // Merge logic
             const productMap = {};
             grns.forEach(grn => {
@@ -436,7 +494,7 @@ const AddPurchaseInvoice = () => {
                                 totalGross: itemGross, // Use this for weighted average rate
                                 uom: item.uom,
                                 hsnCode: item.hsnCode || '',
-                                taxPercent: item.taxPercent || 18,
+                                taxPercent: item.taxPercent !== undefined && item.taxPercent !== null ? item.taxPercent : 18,
                                 totalPoQty: item.totalPoQty || 0,
                                 discountAmount: itemDiscAmt,
                                 beforeTaxAmount: 0, 
@@ -484,6 +542,7 @@ const AddPurchaseInvoice = () => {
 
             setFormData(prev => ({ 
                 ...prev, 
+                ...poFields,
                 grn_ids: selectedGrnIds,
                 challan_date: grns.reduce((latest, g) => {
                     const gDate = g.grnDate || g.bookingDate;
@@ -499,7 +558,13 @@ const AddPurchaseInvoice = () => {
 
     const handlePOChange = async (poId) => {
         if (!poId) {
-            setFormData(prev => ({ ...prev, po_id: '', po_number: '' }));
+            setFormData(prev => ({ 
+                ...prev, 
+                po_id: '', 
+                po_number: '', 
+                po_date: '',
+                grn_ids: []
+            }));
             const resetItems = items.map(p => ({
                 ...p,
                 totalPoQty: 0,
@@ -515,67 +580,162 @@ const AddPurchaseInvoice = () => {
 
         try {
             const poDetails = await purchaseOrderService.getPurchaseOrderById(poId);
-            setFormData(prev => ({ 
-                ...prev, 
-                po_id: poDetails.id, 
-                po_number: poDetails.poNumber,
-                po_date: poDetails.poCreationDate?.split('T')[0] || '',
-                grn_ids: [] // Clear previously selected GRNs when PO changes
-            }));
+            const poDateVal = poDetails.poCreationDate?.split('T')[0] || '';
 
-            const poItems = await Promise.all(poDetails.items.map(async (item) => {
-                const quantity = item.quantity || 0;
-                const rate = item.rate || 0;
-                const discAmt = item.discountAmount || item.discountAmt || 0;
-                const taxPct = item.taxPercent || 0;
-                const discPct = item.discountPercent || 0;
+            // Find matching challans from challans list
+            const matchingChallans = (challans || []).filter(c => 
+                (c.poId && String(c.poId) === String(poDetails.id)) ||
+                (c.poNumber && String(c.poNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === String(poDetails.poNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase())
+            );
 
-                // Fetch received count for this product & supplier from GRN history
-                let receivedCount = item.receivedQty || 0;
-                try {
-                   const history = await grnService.getReceivedQty(formData.supplier_name, item.productCode || item.product_code, poDetails.poNumber);
-                   receivedCount = history.receivedPoQty;
-                } catch (e) {
-                   console.error("Failed to fetch received history", e);
-                }
+            if (matchingChallans.length > 0) {
+                const matchingGrnIds = matchingChallans.map(c => c.id);
+                // Fetch all matching GRNs
+                const grns = await Promise.all(matchingGrnIds.map(id => grnService.getGRNById(id)));
+                
+                // Merge logic
+                const productMap = {};
+                grns.forEach(grn => {
+                    if (grn && grn.items) {
+                        grn.items.forEach(item => {
+                            const pid = item.productId;
+                            const itemDiscAmt = parseFloat(item.discountAmount || item.discountAmt) || 0;
+                            const itemQty = parseFloat(item.receivedQty || item.quantity) || 0;
+                            const itemRate = parseFloat(item.rate) || 0;
+                            const itemGross = itemQty * itemRate;
 
-                const remainingInPO = quantity - receivedCount;
-                const effectiveQty = remainingInPO > 0 ? remainingInPO : 0;
-                const baseAmount = effectiveQty * rate;
+                            if (!productMap[pid]) {
+                                productMap[pid] = {
+                                    id: Date.now() + Math.random(),
+                                    productId: item.productId,
+                                    productCode: item.productCode,
+                                    productName: item.productName,
+                                    quantity: itemQty,
+                                    totalGross: itemGross, // Use this for weighted average rate
+                                    uom: item.uom,
+                                    hsnCode: item.hsnCode || '',
+                                    taxPercent: item.taxPercent !== undefined && item.taxPercent !== null ? item.taxPercent : 18,
+                                    totalPoQty: item.totalPoQty || 0,
+                                    discountAmount: itemDiscAmt,
+                                    beforeTaxAmount: 0, 
+                                    taxAmount: 0,
+                                    totalAmount: 0,
+                                    printDescription: item.productName
+                                };
+                            } else {
+                                productMap[pid].quantity += itemQty;
+                                productMap[pid].totalGross += itemGross;
+                                productMap[pid].discountAmount += itemDiscAmt;
+                            }
+                        });
+                    }
+                });
 
-                // Recalculate discount amount based on percentage or proportionally
-                let currentDiscAmt = 0;
-                if (discPct > 0) {
-                    currentDiscAmt = parseFloat(((baseAmount * discPct) / 100).toFixed(2));
-                } else if (quantity > 0 && discAmt > 0) {
-                    // Proportional scaling if only amount is provided
-                    currentDiscAmt = parseFloat(((discAmt / quantity) * effectiveQty).toFixed(2));
-                }
+                const mergedItems = Object.values(productMap).map(item => {
+                    const quantity = item.quantity;
+                    const totalGross = item.totalGross;
+                    const discAmt = item.discountAmount;
+                    const taxPct = item.taxPercent;
+                    
+                    const rate = quantity > 0 ? (totalGross / quantity) : 0;
+                    const discPercent = totalGross > 0 ? (discAmt / totalGross) * 100 : 0;
+                    
+                    const beforeTax = totalGross - discAmt;
+                    const taxAmt = (beforeTax * taxPct) / 100;
+                    
+                    return {
+                        ...item,
+                        rate: parseFloat(rate.toFixed(2)),
+                        discountPercent: parseFloat(discPercent.toFixed(2)),
+                        beforeTaxAmount: parseFloat(beforeTax.toFixed(2)),
+                        taxAmount: parseFloat(taxAmt.toFixed(2)),
+                        totalAmount: parseFloat((beforeTax + taxAmt).toFixed(2))
+                    };
+                });
 
-                const befTax = baseAmount - currentDiscAmt;
-                const taxAmt = (befTax * taxPct) / 100;
-                return {
-                    id: Date.now() + Math.random(),
-                    productId: item.productId,
-                    productCode: item.productCode,
-                    productName: item.productName,
-                    quantity: effectiveQty,
-                    rate: Number(item.rate) || 0,
-                    uom: item.uom,
-                    discountAmount: currentDiscAmt,
-                    discountPercent: item.discountPercent || 0,
-                    hsnCode: item.hsnCode || '',
-                    taxPercent: taxPct,
-                    beforeTaxAmount: befTax,
-                    taxAmount: taxAmt,
-                    totalAmount: befTax + taxAmt,
-                    printDescription: item.productName,
-                    totalPoQty: quantity,
-                    receivedPoQty: receivedCount,
-                    remainingQty: 0
-                };
-            }));
-            setItems(poItems);
+                setItems(mergedItems.length > 0 ? mergedItems : [{ 
+                    id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0, 
+                    uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0, 
+                    taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0 
+                }]);
+
+                const latestChallanDate = grns.reduce((latest, g) => {
+                    const gDate = g.grnDate || g.bookingDate;
+                    if (!latest || (gDate && gDate > latest)) return gDate?.split('T')[0];
+                    return latest;
+                }, '');
+
+                setFormData(prev => ({ 
+                    ...prev, 
+                    po_id: poDetails.id, 
+                    po_number: poDetails.poNumber,
+                    po_date: poDateVal,
+                    grn_ids: matchingGrnIds,
+                    challan_date: latestChallanDate
+                }));
+            } else {
+                setFormData(prev => ({ 
+                    ...prev, 
+                    po_id: poDetails.id, 
+                    po_number: poDetails.poNumber,
+                    po_date: poDateVal,
+                    grn_ids: [] // Clear previously selected GRNs when PO changes
+                }));
+
+                const poItems = await Promise.all(poDetails.items.map(async (item) => {
+                    const quantity = item.quantity || 0;
+                    const rate = item.rate || 0;
+                    const discAmt = item.discountAmount || item.discountAmt || 0;
+                    const taxPct = item.taxPercent || 0;
+                    const discPct = item.discountPercent || 0;
+
+                    // Fetch received count for this product & supplier from GRN history
+                    let receivedCount = item.receivedQty || 0;
+                    try {
+                       const history = await grnService.getReceivedQty(formData.supplier_name, item.productCode || item.product_code, poDetails.poNumber);
+                       receivedCount = history.receivedPoQty;
+                    } catch (e) {
+                       console.error("Failed to fetch received history", e);
+                    }
+
+                    const remainingInPO = quantity - receivedCount;
+                    const effectiveQty = remainingInPO > 0 ? remainingInPO : 0;
+                    const baseAmount = effectiveQty * rate;
+
+                    // Recalculate discount amount based on percentage or proportionally
+                    let currentDiscAmt = 0;
+                    if (discPct > 0) {
+                        currentDiscAmt = parseFloat(((baseAmount * discPct) / 100).toFixed(2));
+                    } else if (quantity > 0 && discAmt > 0) {
+                        // Proportional scaling if only amount is provided
+                        currentDiscAmt = parseFloat(((discAmt / quantity) * effectiveQty).toFixed(2));
+                    }
+
+                    const befTax = baseAmount - currentDiscAmt;
+                    const taxAmt = (befTax * taxPct) / 100;
+                    return {
+                        id: Date.now() + Math.random(),
+                        productId: item.productId,
+                        productCode: item.productCode,
+                        productName: item.productName,
+                        quantity: effectiveQty,
+                        rate: Number(item.rate) || 0,
+                        uom: item.uom,
+                        discountAmount: currentDiscAmt,
+                        discountPercent: item.discountPercent || 0,
+                        hsnCode: item.hsnCode || '',
+                        taxPercent: taxPct,
+                        beforeTaxAmount: befTax,
+                        taxAmount: taxAmt,
+                        totalAmount: befTax + taxAmt,
+                        printDescription: item.productName,
+                        totalPoQty: quantity,
+                        receivedPoQty: receivedCount,
+                        remainingQty: 0
+                    };
+                }));
+                setItems(poItems);
+            }
         } catch (error) {
             console.error("Error fetching PO details:", error);
         }
@@ -718,8 +878,8 @@ const AddPurchaseInvoice = () => {
                     uom: i.uom,
                     hsnCode: i.hsnCode,
                     discount: Number(i.discountAmount) || 0,
-                    taxPercent: parseFloat(i.taxPercent) || 0,
-                    taxAmount: parseFloat(i.taxAmount) || 0,
+                    taxPercent: gstResult.applicable ? (parseFloat(i.taxPercent) || 0) : 0,
+                    taxAmount: gstResult.applicable ? (parseFloat(i.taxAmount) || 0) : 0,
                     beforeTaxAmount: parseFloat(i.beforeTaxAmount) || 0,
                     totalAmount: parseFloat(i.totalAmount) || 0
                 })),
@@ -905,22 +1065,43 @@ const AddPurchaseInvoice = () => {
 
                         {formData.attachment && (
                             <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (typeof formData.attachment === 'string') {
-                                            const root = BASE_URL.split('/api')[0];
-                                            window.open(`${root}/${formData.attachment}`, '_blank');
-                                        } else {
-                                            const url = URL.createObjectURL(formData.attachment);
-                                            window.open(url, '_blank');
-                                        }
-                                    }}
-                                    className="p-2.5 bg-blue-50 text-blue-600 rounded-[10px] hover:bg-blue-100 transition-all shadow-sm border border-blue-100"
-                                    title="View Invoice"
-                                >
-                                    <Eye size={18} />
-                                </button>
+                                <div className="relative group/preview">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (previewUrl) {
+                                                window.open(previewUrl, '_blank');
+                                            }
+                                        }}
+                                        className="p-2.5 bg-blue-50 text-blue-600 rounded-[10px] hover:bg-blue-100 transition-all shadow-sm border border-blue-100"
+                                        title="View Invoice (Hover to preview, Click to open in new tab)"
+                                    >
+                                        <Eye size={18} />
+                                    </button>
+                                    {previewUrl && (
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover/preview:flex flex-col w-[380px] h-[480px] bg-white border border-gray-200 rounded-[16px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] z-[100] p-3 animate-in fade-in slide-in-from-bottom-2 duration-200 pointer-events-none">
+                                            <div className="text-[12px] font-bold text-gray-500 mb-2 border-b pb-1.5 flex items-center justify-between">
+                                                <span>Invoice Preview</span>
+                                                <span className="text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-black uppercase">Live View</span>
+                                            </div>
+                                            <div className="flex-1 w-full bg-gray-50 rounded-[8px] overflow-hidden border border-gray-100">
+                                                {typeof formData.attachment === 'string' || (formData.attachment instanceof File && formData.attachment.type?.includes('pdf')) ? (
+                                                    <iframe
+                                                        src={`${previewUrl}#toolbar=0&navpanes=0`}
+                                                        className="w-full h-full border-none"
+                                                        title="Invoice File Preview"
+                                                    />
+                                                ) : (
+                                                    <img
+                                                        src={previewUrl}
+                                                        alt="Invoice Preview"
+                                                        className="w-full h-full object-contain"
+                                                    />
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                                 <button
                                     type="button"
                                     onClick={() => setFormData({...formData, attachment: null, removeAttachment: true})}

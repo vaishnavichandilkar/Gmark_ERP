@@ -123,7 +123,7 @@ const AddGRN = () => {
                     setItems(grn.items.map(item => {
                         const qty = item.receivedQty || item.quantity || 0;
                         const rate = item.rate || 0;
-                        const taxPct = item.taxPercent || 18;
+                        const taxPct = item.taxPercent !== undefined && item.taxPercent !== null ? item.taxPercent : 18;
                         const discAmt = item.discountAmount || item.discountAmt || 0;
                         const discPct = item.discountPercent || 0;
                         const befTax = (qty * rate) - discAmt;
@@ -527,8 +527,8 @@ const AddGRN = () => {
                     uom: i.uom,
                     discountAmt: parseFloat(i.discountAmount) || 0,
                     discountPercent: parseFloat(i.discountPercent) || 0,
-                    taxPercent: parseFloat(i.taxPercent) || 0,
-                    taxAmount: parseFloat(i.taxAmount) || 0,
+                    taxPercent: gstResult.applicable ? (parseFloat(i.taxPercent) || 0) : 0,
+                    taxAmount: gstResult.applicable ? (parseFloat(i.taxAmount) || 0) : 0,
                     beforeTaxAmount: parseFloat(i.beforeTaxAmount) || 0,
                     hsnCode: i.hsnCode,
                     amount: (parseFloat(i.totalAmount) || 0),

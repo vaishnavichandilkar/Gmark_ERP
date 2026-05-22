@@ -173,7 +173,7 @@ const GRNForm = ({
                         type="number"
                         min="0"
                         placeholder="0"
-                        value={formData.credit_days || ''}
+                        value={formData.credit_days !== undefined && formData.credit_days !== null && formData.credit_days !== '' ? formData.credit_days : ''}
                         onChange={(e) => setFormData(prev => ({ ...prev, credit_days: e.target.value }))}
                         className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm ${errors.credit_days ? 'border-red-500' : 'border-[#E5E7EB]'}`}
                     />
@@ -210,13 +210,25 @@ const GRNForm = ({
                     <label className="text-[14px] font-semibold text-[#374151]">PO Number</label>
                     <div className="relative">
                         <select
-                            className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-10 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
+                            className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-14 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
                             value={formData.po_id || ""}
                             onChange={(e) => handlePOChange(e.target.value)}
                         >
-                            <option value="" disabled>Select PO Number</option>
+                            <option value="">Select PO Number</option>
                             {pos.map(p => <option key={p.id} value={p.id}>{p.poNumber}</option>)}
                         </select>
+                        {formData.po_id && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePOChange("");
+                                }}
+                                className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors z-10"
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                     </div>
                 </div>

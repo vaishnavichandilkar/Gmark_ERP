@@ -255,6 +255,17 @@ export class LedgerService {
       isBalanceRow: true,
     });
 
+    const paymentInvoices = paginatedTransactions.filter(t => t.transactionType === TransactionType.Payment && t.invoiceNumber).map(t => t.invoiceNumber as string);
+    const receiptInvoices = paginatedTransactions.filter(t => t.transactionType === TransactionType.Receipt && t.invoiceNumber).map(t => t.invoiceNumber as string);
+    
+    const [payments, receipts] = await Promise.all([
+      paymentInvoices.length > 0 ? this.prisma.paymentVoucher.findMany({ where: { voucherNumber: { in: paymentInvoices } } }) : Promise.resolve([]),
+      receiptInvoices.length > 0 ? this.prisma.receiptVoucher.findMany({ where: { voucherNumber: { in: receiptInvoices } } }) : Promise.resolve([])
+    ]);
+    
+    const paymentNarrationMap = new Map(payments.map(p => [p.voucherNumber, p.narration]));
+    const receiptNarrationMap = new Map(receipts.map(r => [r.voucherNumber, r.narration]));
+
     let pageCumulativeBalance = 0;
     for (const transaction of paginatedTransactions) {
       const debit = transaction.entryType === BalanceType.Dr ? Number(transaction.amount) : 0;
@@ -268,11 +279,20 @@ export class LedgerService {
         pageCumulativeBalance = pageCumulativeBalance + debit - credit;
       }
 
+      let displayNarration = transaction.invoiceNumber || '-';
+      if (transaction.transactionType === TransactionType.Payment && transaction.invoiceNumber) {
+        const n = paymentNarrationMap.get(transaction.invoiceNumber);
+        displayNarration = n || '-';
+      } else if (transaction.transactionType === TransactionType.Receipt && transaction.invoiceNumber) {
+        const n = receiptNarrationMap.get(transaction.invoiceNumber);
+        displayNarration = n || '-';
+      }
+
       ledgerItems.push({
         id: transaction.id,
         date: transaction.bookingDate,
         particulars: this.mapParticulars(transaction.transactionType),
-        narration: transaction.invoiceNumber || '-',
+        narration: displayNarration,
         debit,
         credit,
         balance: cumulativeBalance,

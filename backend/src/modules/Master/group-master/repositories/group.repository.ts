@@ -69,18 +69,30 @@ export class GroupMasterRepository {
 
         allAccounts.forEach(acc => {
             acc.groupName.forEach(g => {
-                if (!accountData[g]) {
-                    accountData[g] = [];
-                    counts[g] = 0;
+                const groupKeys = [g];
+                if (g === 'SUNDRY_DEBTORS') {
+                    groupKeys.push('Customers', 'Sundry Debtors', 'Sundry Debtors (Customer)');
+                } else if (g === 'SUNDRY_CREDITORS') {
+                    groupKeys.push('Suppliers', 'Sundry Creditors', 'Sundry Creditors (Supplier)');
                 }
-                accountData[g].push({
-                    id: `acc_${acc.id}`,
-                    group_name: acc.accountName,
-                    status: acc.status,
-                    isAccount: true,
-                    children: []
+
+                groupKeys.forEach(key => {
+                    if (!accountData[key]) {
+                        accountData[key] = [];
+                        counts[key] = 0;
+                    }
+                    const exists = accountData[key].some(a => a.id === `acc_${acc.id}`);
+                    if (!exists) {
+                        accountData[key].push({
+                            id: `acc_${acc.id}`,
+                            group_name: acc.accountName,
+                            status: acc.status,
+                            isAccount: true,
+                            children: []
+                        });
+                        counts[key]++;
+                    }
                 });
-                counts[g]++;
             });
         });
 

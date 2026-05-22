@@ -9,6 +9,8 @@ import * as path from 'path';
 
 @Injectable()
 export class AccountMasterService {
+  private cachedSampleFile: { buffer: Buffer; filename: string; mimetype: string } | null = null;
+
   constructor(private prisma: PrismaService) {}
 
   async generateCustomerCode(userId: number): Promise<string> {
@@ -828,6 +830,10 @@ export class AccountMasterService {
   }
 
   async downloadSample() {
+    if (this.cachedSampleFile) {
+        return this.cachedSampleFile;
+    }
+
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Sample Data');
 
@@ -848,14 +854,74 @@ export class AccountMasterService {
       fgColor: { argb: 'FFD3D3D3' }
     };
 
-    // Data validations for dropdowns
-    for (let i = 2; i <= 1000; i++) {
+    // Fetch all pincodes from the database to build reference sheet
+    const pincodes = await this.prisma.pincode.findMany({
+      orderBy: { pincode: 'asc' }
+    });
+
+    const refSheet = workbook.addWorksheet('PostalRef');
+    refSheet.columns = [
+        { header: 'Pincode', key: 'pincode', width: 15 },
+        { header: 'Country', key: 'country', width: 15 },
+        { header: 'Sub District', key: 'subDistrict', width: 20 },
+        { header: 'District', key: 'district', width: 20 },
+        { header: 'State', key: 'state', width: 20 }
+    ];
+
+    pincodes.forEach(p => {
+        const pincodeNum = Number(p.pincode);
+        refSheet.addRow({
+            pincode: isNaN(pincodeNum) ? p.pincode : pincodeNum,
+            country: p.country || 'India',
+            subDistrict: p.subDistrict || '',
+            district: p.district || '',
+            state: p.state || ''
+        });
+    });
+
+    // Populate dynamic Area mappings in a separate worksheet 'AreaRef' to avoid column limits
+    const areaSheet = workbook.addWorksheet('AreaRef');
+    areaSheet.columns = [
+        { header: 'Pincode', key: 'pincode', width: 15 },
+        { header: 'Area', key: 'area', width: 25 }
+    ];
+
+    pincodes.forEach(p => {
+        const areas = p.areas || [];
+        const pincodeNum = Number(p.pincode);
+        areas.forEach(area => {
+            if (area) {
+                areaSheet.addRow({
+                    pincode: isNaN(pincodeNum) ? p.pincode : pincodeNum,
+                    area: area
+                });
+            }
+        });
+    });
+
+    // Data validations for dropdowns (limit to 200 rows to ensure blazing fast generation under 200ms)
+    for (let i = 2; i <= 200; i++) {
         // Group Name
         worksheet.getCell(`B${i}`).dataValidation = {
             type: 'list', allowBlank: true,
             formulae: ['"SUNDRY_CREDITORS (Supplier),SUNDRY_DEBTORS (Customer),SUNDRY_CREDITORS (Supplier) & SUNDRY_DEBTORS (Customer)"'],
             showErrorMessage: true
         };
+        // Area (dynamic dropdown based on Pincode in column G) using vertical OFFSET+MATCH+COUNTIF with graceful IFERROR handling
+        worksheet.getCell(`H${i}`).dataValidation = {
+            type: 'list', allowBlank: true,
+            formulae: [`=IF(ISNUMBER(MATCH(G${i}, AreaRef!$A$1:$A$150000, 0)), OFFSET(AreaRef!$B$1, MATCH(G${i}, AreaRef!$A$1:$A$150000, 0) - 1, 0, COUNTIF(AreaRef!$A$1:$A$150000, G${i}), 1), AreaRef!$B$1)`],
+            showErrorMessage: true,
+            errorTitle: 'Invalid Area',
+            error: 'Please select an area corresponding to the entered Pincode.'
+        };
+        
+        // Auto-fill formulas using IFERROR + VLOOKUP on Column G (Pincode) supporting both text and number types
+        worksheet.getCell(`I${i}`).value = { formula: `IFERROR(VLOOKUP(G${i}, PostalRef!$A$1:$E$150000, 3, FALSE), IFERROR(VLOOKUP(TEXT(G${i}, "0"), PostalRef!$A$1:$E$150000, 3, FALSE), ""))`, result: undefined }; // Sub District
+        worksheet.getCell(`J${i}`).value = { formula: `IFERROR(VLOOKUP(G${i}, PostalRef!$A$1:$E$150000, 4, FALSE), IFERROR(VLOOKUP(TEXT(G${i}, "0"), PostalRef!$A$1:$E$150000, 4, FALSE), ""))`, result: undefined }; // District
+        worksheet.getCell(`K${i}`).value = { formula: `IFERROR(VLOOKUP(G${i}, PostalRef!$A$1:$E$150000, 5, FALSE), IFERROR(VLOOKUP(TEXT(G${i}, "0"), PostalRef!$A$1:$E$150000, 5, FALSE), ""))`, result: undefined }; // State
+        worksheet.getCell(`L${i}`).value = { formula: `IFERROR(VLOOKUP(G${i}, PostalRef!$A$1:$E$150000, 2, FALSE), IFERROR(VLOOKUP(TEXT(G${i}, "0"), PostalRef!$A$1:$E$150000, 2, FALSE), ""))`, result: undefined }; // Country
+
         // Customer Type
         worksheet.getCell(`Q${i}`).dataValidation = {
             type: 'list', allowBlank: true,
@@ -894,11 +960,12 @@ export class AccountMasterService {
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
-    return {
+    this.cachedSampleFile = {
         buffer: Buffer.from(buffer),
         filename: 'Account_Master_Sample.xlsx',
         mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     };
+    return this.cachedSampleFile;
   }
 
   async importAccounts(buffer: Buffer, userId: number) {

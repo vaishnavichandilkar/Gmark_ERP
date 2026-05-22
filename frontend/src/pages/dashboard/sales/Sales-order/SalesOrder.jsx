@@ -326,6 +326,9 @@ const SalesOrder = () => {
         "SO NO": so.soNumber,
         "CUSTOMER NAME": so.customerName,
         "CUSTOMER TYPE": so.customerType || 'Retail',
+        "PO NUMBER": so.customerPoNumber || '-',
+        "PO DATE": so.poDate ? formatDate(so.poDate) : '-',
+        "PO EXP. DATE": so.poExpiryDate ? formatDate(so.poExpiryDate) : '-',
         "CREATION DATE": formatDate(so.soCreationDate),
         "EXPIRY DATE": formatDate(so.expiryDate),
         "AMOUNT": (so.totalAmount || 0).toFixed(2),
@@ -340,7 +343,7 @@ const SalesOrder = () => {
         const timestampStr = `${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
 
         // Define Column Headers
-        const headers = ["SO No", "Customer Name", "Customer Type", "Cr. Date", "Exp. Date", "Amount", "GST Number", "Cr. Days", "Tax Amt", "Total Amt", "Status"];
+        const headers = ["SO No", "Customer Name", "Customer Type", "PO Number", "PO Date", "PO Exp. Date", "Cr. Date", "Exp. Date", "Amount", "GST Number", "Cr. Days", "Tax Amt", "Total Amt", "Status"];
 
         // Prepare Data for AOA (Array of Arrays)
         const aoaData = [
@@ -356,6 +359,9 @@ const SalesOrder = () => {
             so.soNumber || "-",
             so.customerName || "-",
             so.customerType || "Retail",
+            so.customerPoNumber || "-",
+            so.poDate ? formatDate(so.poDate) : "-",
+            so.poExpiryDate ? formatDate(so.poExpiryDate) : "-",
             formatDate(so.soCreationDate),
             formatDate(so.expiryDate),
             (so.totalAmount || 0).toFixed(2),
@@ -449,10 +455,13 @@ const SalesOrder = () => {
         const timestamp = `Exported on: ${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
         doc.text(timestamp, pageWidth - 14, 26, { align: "right" });
 
-        const head = [["SO No", "Customer Name", "Cr. Date", "Exp. Date", "Amount", "GST Number", "Cr. Days", "Tax Amt", "Total Amt", "Status"]];
+        const head = [["SO No", "Customer Name", "PO Number", "PO Date", "PO Exp. Date", "Cr. Date", "Exp. Date", "Amount", "GST Number", "Cr. Days", "Tax Amt", "Total Amt", "Status"]];
         const body = filteredData.map(so => [
           so.soNumber || "-",
           so.customerName || "-",
+          so.customerPoNumber || "-",
+          so.poDate ? formatDate(so.poDate) : "-",
+          so.poExpiryDate ? formatDate(so.poExpiryDate) : "-",
           formatDate(so.soCreationDate),
           formatDate(so.expiryDate),
           (so.totalAmount || 0).toFixed(2),
@@ -480,17 +489,19 @@ const SalesOrder = () => {
             halign: 'left'
           },
           columnStyles: {
-            0: { cellWidth: 28 }, // SO No
-            1: { cellWidth: 45 }, // Customer Name
-            4: { halign: 'right' }, // Amount
-            6: { halign: 'center' }, // Cr. Days
-            7: { halign: 'right' }, // Tax Amt
-            8: { halign: 'right' }, // Total Amt
-            9: { halign: 'left', fontStyle: 'bold' } // Status
+            0: { cellWidth: 22 }, // SO No
+            1: { cellWidth: 38 }, // Customer Name
+            2: { cellWidth: 28 }, // Customer PO No
+            3: { cellWidth: 22 }, // PO Date
+            6: { halign: 'right' }, // Amount
+            8: { halign: 'center' }, // Cr. Days
+            9: { halign: 'right' }, // Tax Amt
+            10: { halign: 'right' }, // Total Amt
+            11: { halign: 'left', fontStyle: 'bold' } // Status
           },
           didParseCell: function (data) {
             // Apply Status Colors
-            if (data.section === 'body' && data.column.index === 9) {
+            if (data.section === 'body' && data.column.index === 11) {
               const status = data.cell.raw;
               if (status === 'EXPIRING SOON') {
                 data.cell.styles.textColor = [217, 119, 6]; // Amber-600
@@ -525,30 +536,23 @@ const SalesOrder = () => {
 
   const handleDownloadSample = () => {
     try {
-      const sampleData = [{
-        "Customer Name*": "Global Exports Pvt Ltd",
-        "Credit Days": 30,
-        "Expiry Date (YYYY-MM-DD)*": "2024-05-15",
-        "Product Code*": "PRD001",
-        "Quantity*": 10,
-        "Rate*": 1200.00,
-        "Discount %": 5,
-        "Discount Amount": 600.00,
-        "Tax %": 18
-      }, {
-        "Customer Name*": "Global Exports Pvt Ltd",
-        "Credit Days": 30,
-        "Expiry Date (YYYY-MM-DD)*": "2024-05-15",
-        "Product Code*": "PRD002",
-        "Quantity*": 5,
-        "Rate*": 2500.00,
-        "Discount %": 0,
-        "Discount Amount": 0,
-        "Tax %": 12
-      }];
+      const headers = [
+        "Customer Name*",
+        "Credit Days",
+        "Expiry Date (YYYY-MM-DD)*",
+        "PO Number",
+        "PO Date (YYYY-MM-DD)",
+        "PO Expiry Date (YYYY-MM-DD)",
+        "Product Code*",
+        "Quantity*",
+        "Rate*",
+        "Discount %",
+        "Discount Amount",
+        "Tax %"
+      ];
 
       // Create worksheet
-      const worksheet = XLSX.utils.json_to_sheet(sampleData);
+      const worksheet = XLSX.utils.aoa_to_sheet([headers]);
 
       // Define Professional Styling
       const headerStyle = {
@@ -631,6 +635,9 @@ const SalesOrder = () => {
             soNumber: row["SO NO"] || row["SO Number"] || `SO-IMP-${index}`,
             customerName: row["CUSTOMER NAME"] || row["Customer Name"] || "Unknown Customer",
             customerType: row["CUSTOMER TYPE"] || row["Customer Type"] || "Retail",
+            customerPoNumber: row["CUSTOMER PO NUMBER"] || row["Customer PO Number"] || row["CUSTOMER PO NO"] || row["Customer PO No"] || row["PO Number"] || row["PO NUMBER"] || null,
+            poDate: row["PO DATE"] || row["PO Date"] || row["PO DATE (YYYY-MM-DD)"] || row["PO Date (YYYY-MM-DD)"] || null,
+            poExpiryDate: row["PO EXPIRY DATE"] || row["PO Expiry Date"] || row["PO EXPIRY DATE (YYYY-MM-DD)"] || row["PO Expiry Date (YYYY-MM-DD)"] || null,
             soCreationDate: row["CREATION DATE"] || row["Creation Date"] || new Date().toISOString(),
             expiryDate: row["EXPIRY DATE"] || row["Expiry Date"] || new Date().toISOString(),
             totalAmount: parseFloat(row["AMOUNT"] || row["Amount"]) || 0,
@@ -725,7 +732,7 @@ const SalesOrder = () => {
           <table className="w-full min-w-[1500px] border-collapse text-left font-outfit">
             <thead>
               <tr className="bg-emerald-900 text-white font-bold text-[15px] uppercase">
-                {["SO No", "Customer Name", "Customer Type", "Creation Date", "Expiry Date", "Amount", "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status", "Action"].map(h => (
+                {["SO No", "Customer Name", "Customer Type", "PO Number", "PO Date", "PO Exp. Date", "Creation Date", "Expiry Date", "Amount", "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status", "Action"].map(h => (
                   <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap" style={{ wordSpacing: '1px' }}>{h}</th>
                 ))}
               </tr>
@@ -737,6 +744,9 @@ const SalesOrder = () => {
                     <td className="px-6 py-5 font-bold">{so.soNumber}</td>
                     <td className="px-6 py-5 font-bold capitalize lowercase">{so.customerName}</td>
                     <td className="px-6 py-5 font-bold capitalize lowercase text-[#6B7280]">{so.customerType || 'Retail'}</td>
+                    <td className="px-6 py-5 font-bold text-[#4B5563]">{so.customerPoNumber || '-'}</td>
+                    <td className="px-6 py-5 font-bold text-[#4B5563]">{so.poDate ? formatDate(so.poDate) : '-'}</td>
+                    <td className="px-6 py-5 font-bold text-[#4B5563]">{so.poExpiryDate ? formatDate(so.poExpiryDate) : '-'}</td>
                     <td className="px-6 py-5 font-bold text-[#4B5563]">{formatDate(so.soCreationDate)}</td>
                     <td className="px-6 py-5 font-bold text-[#4B5563]">{formatDate(so.expiryDate)}</td>
                     <td className="px-6 py-5 font-bold">{(so.totalAmount || 0).toFixed(2)}</td>

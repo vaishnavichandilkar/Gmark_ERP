@@ -492,16 +492,19 @@ model PurchaseOrderItem {
 }
 
 model SalesOrder {
-  id             Int              @id @default(autoincrement())
-  soNumber       String
-  customerName   String
-  customerType   CustomerType?
-  address        String
-  creditDays     Int
-  soCreationDate DateTime         @default(now())
-  expiryDate     DateTime
-  gstNumber      String?
-  panNumber      String?
+  id               Int              @id @default(autoincrement())
+  soNumber         String
+  customerName     String
+  customerType     CustomerType?
+  address          String
+  creditDays       Int
+  soCreationDate   DateTime         @default(now())
+  expiryDate       DateTime
+  customerPoNumber String?
+  poDate           DateTime?
+  poExpiryDate     DateTime?
+  gstNumber        String?
+  panNumber        String?
   status         SOStatus         @default(PENDING)
   totalAmount    Float            @default(0)
   taxAmount      Float            @default(0)

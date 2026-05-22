@@ -130,19 +130,40 @@ const POPrintPreview = () => {
         return sum + (taxAmt || 0);
     }, 0);
     
-    const totalTaxOnCombined = materialTax;
-    
-    // Determine if it's Intra-state or Inter-state based on GST state codes
-    const sellerStateCode = sellerInfo?.gstNumber ? sellerInfo.gstNumber.substring(0, 2) : "";
-    const supplierStateCode = gst_number ? gst_number.substring(0, 2) : "";
-    
-    // Default to CGST/SGST if either code is missing or if they match
-    const isIntraState = !sellerStateCode || !supplierStateCode || sellerStateCode === supplierStateCode;
-    
-    const cgst = isIntraState ? totalTaxOnCombined / 2 : 0;
-    const sgst = isIntraState ? totalTaxOnCombined / 2 : 0;
-    const igst = isIntraState ? 0 : totalTaxOnCombined;
-    
+    // Read directly from the saved purchase order if available
+    const savedCgst = parseFloat(poData.cgstAmount || poData.cgst_amount || poData.cgst || poData.accountSummary?.cgst || 0);
+    const savedSgst = parseFloat(poData.sgstAmount || poData.sgst_amount || poData.sgst || poData.accountSummary?.sgst || 0);
+    const savedIgst = parseFloat(poData.igstAmount || poData.igst_amount || poData.igst || poData.accountSummary?.igst || 0);
+
+    let isIntraState = true;
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    let totalTaxOnCombined = 0;
+
+    if (savedCgst > 0 || savedSgst > 0 || savedIgst > 0) {
+        if (savedIgst > 0) {
+            isIntraState = false;
+            igst = savedIgst;
+        } else {
+            isIntraState = true;
+            cgst = savedCgst;
+            sgst = savedSgst;
+        }
+        totalTaxOnCombined = cgst + sgst + igst;
+    } else {
+        // Fallback to calculation
+        const totalTaxOnCombinedCalculated = materialTax;
+        const sellerStateCode = sellerInfo?.gstNumber && /^\d{2}$/.test(sellerInfo.gstNumber.substring(0, 2)) ? sellerInfo.gstNumber.substring(0, 2) : "";
+        const supplierStateCode = gst_number && /^\d{2}$/.test(gst_number.substring(0, 2)) ? gst_number.substring(0, 2) : "";
+        
+        isIntraState = !sellerStateCode || !supplierStateCode || sellerStateCode === supplierStateCode;
+        totalTaxOnCombined = totalTaxOnCombinedCalculated;
+        cgst = isIntraState ? totalTaxOnCombinedCalculated / 2 : 0;
+        sgst = isIntraState ? totalTaxOnCombinedCalculated / 2 : 0;
+        igst = isIntraState ? 0 : totalTaxOnCombinedCalculated;
+    }
+
     const totalAmount = subTotal + totalTaxOnCombined;
 
     const numberToWords = (num) => {

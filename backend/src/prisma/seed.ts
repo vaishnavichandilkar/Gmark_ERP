@@ -40,30 +40,30 @@ async function main() {
 
     // 3. Seed Pincodes
     const pincodes = [
-        { pincode: "411001", state: "Maharashtra", district: "Pune", isActive: true },
-        { pincode: "411002", state: "Maharashtra", district: "Pune", isActive: false },
-        { pincode: "411003", state: "Maharashtra", district: "Pune", isActive: true },
-        { pincode: "411004", state: "Maharashtra", district: "Pune", isActive: false },
-        { pincode: "411005", state: "Maharashtra", district: "Pune", isActive: true },
-        { pincode: "411006", state: "Maharashtra", district: "Pune", isActive: true },
-        { pincode: "411007", state: "Maharashtra", district: "Pune", isActive: false },
-        { pincode: "411008", state: "Maharashtra", district: "Pune", isActive: true },
-        { pincode: "411009", state: "Maharashtra", district: "Pune", isActive: false },
-        { pincode: "411010", state: "Maharashtra", district: "Pune", isActive: true },
-        { pincode: "411011", state: "Maharashtra", district: "Pune", isActive: true },
-        { pincode: "411012", state: "Maharashtra", district: "Pune", isActive: false },
-        { pincode: "411013", state: "Maharashtra", district: "Pune", isActive: true },
-        { pincode: "411014", state: "Maharashtra", district: "Pune", isActive: false },
-        { pincode: "411015", state: "Maharashtra", district: "Pune", isActive: true },
-        { pincode: "411016", state: "Maharashtra", district: "Pune", isActive: true },
-        { pincode: "411017", state: "Maharashtra", district: "Pune", isActive: false },
-        { pincode: "411018", state: "Maharashtra", district: "Pune", isActive: true },
+        { pincode: "411001", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Yerwada", "Bund Garden", "Pune Station"], isActive: true },
+        { pincode: "411002", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Bajirao Road", "Shaniwar Peth"], isActive: false },
+        { pincode: "411003", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Shivajinagar", "Congress House", "Deccan Gymkhana"], isActive: true },
+        { pincode: "411004", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Erandwane", "Karve Road"], isActive: false },
+        { pincode: "411005", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Pune University", "Ganeshkhind", "Aundh"], isActive: true },
+        { pincode: "411006", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Yerwada", "Kalyani Nagar", "Ramwadi"], isActive: true },
+        { pincode: "411007", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Ganeshkhind", "Pashan"], isActive: false },
+        { pincode: "411008", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Kothrud", "Bhusari Colony", "Ideal Colony"], isActive: true },
+        { pincode: "411009", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Parvati", "Dhankawadi"], isActive: false },
+        { pincode: "411010", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Swargate", "Parvati", "Sahakar Nagar"], isActive: true },
+        { pincode: "411011", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Kasba Peth", "Rasta Peth", "Budhwar Peth"], isActive: true },
+        { pincode: "411012", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Dapodi", "Khadki"], isActive: false },
+        { pincode: "411013", state: "Maharashtra", district: "Pune", subDistrict: "Haveli", country: "India", areas: ["Hadapsar", "Gadital", "Phursungi"], isActive: true },
+        { pincode: "411014", state: "Maharashtra", district: "Pune", subDistrict: "Haveli", country: "India", areas: ["Wadgaon Sheri", "Kharadi"], isActive: false },
+        { pincode: "411015", state: "Maharashtra", district: "Pune", subDistrict: "Haveli", country: "India", areas: ["Dhanori", "Viman Nagar", "Lohegaon"], isActive: true },
+        { pincode: "411016", state: "Maharashtra", district: "Pune", subDistrict: "Pune City", country: "India", areas: ["Gokhalenagar", "Model Colony", "Senapati Bapat Road"], isActive: true },
+        { pincode: "411018", state: "Maharashtra", district: "Pune", subDistrict: "Haveli", country: "India", areas: ["Pimpri", "Chinchwad", "Bhosari"], isActive: true },
+        { pincode: "590001", state: "Karnataka", district: "Belgaum", subDistrict: "Belgaum", country: "India", areas: ["Belgaum", "Belagavi City", "Shahapur"], isActive: true },
     ];
 
     for (const p of pincodes) {
         await prisma.pincode.upsert({
             where: { pincode: p.pincode },
-            update: { state: p.state, district: p.district, isActive: p.isActive },
+            update: { state: p.state, district: p.district, subDistrict: p.subDistrict, country: p.country, areas: p.areas, isActive: p.isActive },
             create: p,
         });
     }
