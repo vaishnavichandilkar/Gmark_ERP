@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -425,11 +425,55 @@ export class OnboardingService {
 
         return { message: 'Shop details saved successfully' };
     }
+    async getCurrentData(userId: number) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                shopDetail: true,
+                sellerDocuments: true
+            }
+        });
+
+        if (!user) throw new NotFoundException('User not found');
+
+        const udyogAadharDoc = user.sellerDocuments.find(d => d.category === 'UDYOG_AADHAR');
+        const gstNumberDoc = user.sellerDocuments.find(d => d.type === 'GST' && d.url === 'N/A');
+
+        const udyogAadharCert = user.sellerDocuments.find(d => d.category === 'UDYOG_AADHAR_CERT');
+        const gstCert = user.sellerDocuments.find(d => d.type === 'GST' && d.url !== 'N/A');
+        const shopActLicense = user.sellerDocuments.find(d => d.category === 'SHOP_ACT_LICENSE');
+        const businessProof = user.sellerDocuments.find(d => d.category === 'BUSINESS_PROOF');
+
+        return {
+            firstName: user.first_name || '',
+            lastName: user.last_name || '',
+            email: user.email || '',
+            phone: user.phone || '',
+            shopName: user.shopDetail?.shopName || '',
+            address: user.shopDetail?.address || '',
+            village: user.shopDetail?.village || '',
+            pinCode: user.shopDetail?.pinCode || '',
+            district: user.shopDetail?.district || '',
+            state: user.shopDetail?.state || '',
+            udyogAadhar: udyogAadharDoc?.name || '',
+            gstNumber: gstNumberDoc?.name || '',
+            udyogAadharFile: udyogAadharCert ? { name: udyogAadharCert.name, url: udyogAadharCert.url } : null,
+            gstFile: gstCert ? { name: gstCert.name, url: gstCert.url } : null,
+            shopActLicense: shopActLicense ? { name: shopActLicense.name, url: shopActLicense.url } : null,
+            businessProof: businessProof ? { name: businessProof.name, url: businessProof.url } : null,
+            rejectionReason: user.rejectionReason,
+            approvalStatus: user.approvalStatus
+        };
+    }
+
     async completeOnboarding(userId: number) {
         await this.prisma.user.update({
             where: { id: userId },
             data: {
                 onboarded_at: new Date(),
+                approvalStatus: 'PENDING',
+                isApproved: false,
+                rejectionReason: null
             }
         });
 
@@ -440,7 +484,8 @@ export class OnboardingService {
             where: { userId },
             data: {
                 status: 'PENDING_APPROVAL',
-                sellerId: userId // Set sellerId
+                sellerId: userId, // Set sellerId
+                rejectionReason: null
             }
         });
 
@@ -453,6 +498,14 @@ export class OnboardingService {
     // Helper functions
     private async saveFile(userId: number, type: any, file: any, category?: string) {
         const sellerProfile = await this.prisma.sellerProfile.findUnique({ where: { userId } });
+        // Clean up any existing document of this type and category to prevent duplicates
+        await this.prisma.sellerDocument.deleteMany({
+            where: {
+                uploadedByUserId: userId,
+                type,
+                category: category || null
+            }
+        });
         return this.prisma.sellerDocument.create({
             data: {
                 profileId: sellerProfile?.id || null,
@@ -468,6 +521,15 @@ export class OnboardingService {
 
     private async saveDocument(userId: number, type: any, name: string, category?: string) {
         const sellerProfile = await this.prisma.sellerProfile.findUnique({ where: { userId } });
+        // Clean up any existing text document of this type and category
+        await this.prisma.sellerDocument.deleteMany({
+            where: {
+                uploadedByUserId: userId,
+                type,
+                category: category || null,
+                url: 'N/A'
+            }
+        });
         return this.prisma.sellerDocument.create({
             data: {
                 profileId: sellerProfile?.id || null,

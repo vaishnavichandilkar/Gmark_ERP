@@ -7,10 +7,10 @@ import { useTranslation } from 'react-i18next';
 
 import RegistrationSuccessModal from '../../components/common/RegistrationSuccessModal';
 
-const FileUploadBox = ({ title, file, onFileChange, onRemove, onUploadStateChange, optional }) => {
+const FileUploadBox = ({ title, file, onFileChange, onRemove, onUploadStateChange, optional, error, status = 'NORMAL' }) => {
     const { t } = useTranslation(['auth', 'common']);
     const [progress, setProgress] = React.useState(0);
-    const [error, setError] = React.useState('');
+    const [localError, setLocalError] = React.useState('');
     const onUploadStateChangeRef = React.useRef(onUploadStateChange);
 
     const handleLocalFileChange = (e) => {
@@ -20,10 +20,10 @@ const FileUploadBox = ({ title, file, onFileChange, onRemove, onUploadStateChang
             const validExtensions = /\.(pdf|jpg|jpeg)$/i;
 
             if (validTypes.includes(selectedFile.type) || validExtensions.test(selectedFile.name)) {
-                setError('');
+                setLocalError('');
                 if (onFileChange) onFileChange(e);
             } else {
-                setError('Only PDF, JPG, and JPEG files are allowed.');
+                setLocalError('Only PDF, JPG, and JPEG files are allowed.');
                 e.target.value = '';
             }
         }
@@ -60,7 +60,7 @@ const FileUploadBox = ({ title, file, onFileChange, onRemove, onUploadStateChang
     const handleRemove = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        setError('');
+        setLocalError('');
         if (onRemove) onRemove();
     };
 
@@ -70,7 +70,11 @@ const FileUploadBox = ({ title, file, onFileChange, onRemove, onUploadStateChang
                 {title}{' '}{optional ? <span className="text-[#9CA3AF] font-normal">{t('auth:optional')}</span> : <span className="text-red-500">*</span>}
             </p>
             {file ? (
-                <div className="h-[120px] border border-[#D1D5DB] rounded-[8px] bg-[#FFFFFF] px-5 flex items-center justify-between w-full relative overflow-hidden">
+                <div className={`h-[120px] border rounded-[8px] bg-[#FFFFFF] px-5 flex items-center justify-between w-full relative overflow-hidden ${
+                    status === 'REJECTED' || (error && status === 'NORMAL') ? 'border-red-500 ring-1 ring-red-500/20' : 
+                    status === 'CORRECTED' ? 'border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/5' : 
+                    'border-[#D1D5DB]'
+                }`}>
                     <div className="flex items-center gap-4 w-full">
                         {(() => {
                             const isImage = file.type?.startsWith('image/') || /\.(jpg|jpeg)$/i.test(file.name || '');
@@ -86,7 +90,7 @@ const FileUploadBox = ({ title, file, onFileChange, onRemove, onUploadStateChang
                             <div className="flex justify-between items-center w-full mb-1">
                                 <div className="flex-1 min-w-0 mr-3">
                                     <p className="text-[14px] font-['Plus_Jakarta_Sans'] font-medium text-[#111827] truncate leading-tight">{file.name}</p>
-                                    <p className="text-[12px] font-['Plus_Jakarta_Sans'] text-[#6B7280] mt-0.5">{Math.round((file.size || 204800) / 1024)} KB</p>
+                                    <p className="text-[12px] font-['Plus_Jakarta_Sans'] text-[#6B7280] mt-0.5">{file.size ? `${Math.round(file.size / 1024)} KB` : 'Uploaded Document'}</p>
                                 </div>
                                 <div className="flex items-center gap-3 shrink-0">
                                     <label className="cursor-pointer flex items-center text-[#6B7280] hover:text-[#111827]">
@@ -98,7 +102,7 @@ const FileUploadBox = ({ title, file, onFileChange, onRemove, onUploadStateChang
                                     </span>
                                 </div>
                             </div>
-                            {progress < 100 ? (
+                            {progress < 100 && file.size ? (
                                 <div className="flex items-center gap-3 mt-2 w-full">
                                     <div className="flex-1 h-1.5 bg-[#F9FAFB] rounded-full overflow-hidden">
                                         <div className="h-full bg-[#0F3D2E] transition-all duration-300" style={{ width: `${progress}%` }}></div>
@@ -110,24 +114,52 @@ const FileUploadBox = ({ title, file, onFileChange, onRemove, onUploadStateChang
                     </div>
                 </div>
             ) : (
-                <label className="h-[120px] border border-dashed border-[#D1D5DB] rounded-[8px] bg-[#FFFFFF] px-4 flex flex-col items-center justify-center cursor-pointer transition-colors hover:border-[#0F3D2E] w-full font-['Plus_Jakarta_Sans']">
+                <label className={`h-[120px] border border-dashed rounded-[8px] bg-[#FFFFFF] px-4 flex flex-col items-center justify-center cursor-pointer transition-colors w-full font-['Plus_Jakarta_Sans'] ${
+                    status === 'REJECTED' || (error && status === 'NORMAL') ? 'border-red-500 hover:border-red-600 bg-red-50/5' : 
+                    status === 'CORRECTED' ? 'border-emerald-500 hover:border-emerald-600 bg-emerald-50/5' : 
+                    'border-[#D1D5DB] hover:border-[#0F3D2E]'
+                }`}>
                     <input type="file" className="hidden" onChange={handleLocalFileChange} accept=".pdf,.jpg,.jpeg" />
                     <FileText size={20} className="text-[#6B7280] mb-2" strokeWidth={1.5} />
                     <span className="text-[15px] font-[600] text-[#0F3D2E] leading-tight mb-1">{t('auth:click_to_upload')}</span>
                     <span className="text-[13px] text-[#9CA3AF] leading-tight">PDF or JPG ({t('auth:max_size')})</span>
                 </label>
             )}
-            {error && (
-                <div className="mt-1.5 text-red-500 text-[13px] font-medium animate-in fade-in slide-in-from-top-1 duration-300">
-                    {error}
+            {(status === 'REJECTED' || (localError || error && status === 'NORMAL')) && (
+                <div className="mt-1.5 text-red-500 text-[13px] font-semibold flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1 duration-300">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
+                    <span>{localError || error}</span>
+                </div>
+            )}
+            {status === 'CORRECTED' && (
+                <div className="mt-1.5 text-emerald-600 text-[13px] font-semibold flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1 duration-300">
+                    <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Corrected / Replaced Document</span>
                 </div>
             )}
         </div>
     );
 };
 
-const CustomInput = ({ label, type = 'text', value, onChange, onBlur, placeholder, name, select, children, className = '', prefix, error, info, optional, ...rest }) => {
+const CustomInput = ({ label, type = 'text', value, onChange, onBlur, placeholder, name, select, children, className = '', prefix, error, info, optional, status = 'NORMAL', ...rest }) => {
     const { t } = useTranslation(['auth', 'common']);
+
+    let borderClass = 'border-[#D1D5DB] focus:border-[#0F3D2E] focus:ring-[#0F3D2E]';
+    if (status === 'REJECTED' || (error && status === 'NORMAL')) {
+        borderClass = 'border-red-500 hover:border-red-500 focus:border-red-500 focus:ring-red-500/20';
+    } else if (status === 'CORRECTED') {
+        borderClass = 'border-emerald-500 hover:border-emerald-600 focus:border-emerald-500 focus:ring-emerald-500/20 bg-emerald-50/5';
+    }
+
+    let prefixContainerClass = 'border-[#D1D5DB] focus-within:border-[#0F3D2E] focus-within:ring-[#0F3D2E]';
+    if (status === 'REJECTED' || (error && status === 'NORMAL')) {
+        prefixContainerClass = 'border-red-500 hover:border-red-500 focus-within:border-red-500 focus-within:ring-red-500/20';
+    } else if (status === 'CORRECTED') {
+        prefixContainerClass = 'border-emerald-500 hover:border-emerald-600 focus-within:border-emerald-500 focus-within:ring-emerald-500/20 bg-emerald-50/5';
+    }
+
     return (
         <div className={`flex flex-col w-full ${className}`}>
             {label && (
@@ -143,7 +175,7 @@ const CustomInput = ({ label, type = 'text', value, onChange, onBlur, placeholde
                             value={value}
                             onChange={onChange}
                             onBlur={onBlur}
-                            className={`w-full h-[56px] px-[16px] text-[15px] border ${error ? 'border-red-500 hover:border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-[#D1D5DB] focus:border-[#0F3D2E] focus:ring-[#0F3D2E]'} rounded-[8px] outline-none bg-[#FFFFFF] font-['Plus_Jakarta_Sans'] appearance-none transition-all duration-300 focus:ring-1 ${!value ? 'text-[#6B7280]' : 'text-[#111827]'}`}
+                            className={`w-full h-[56px] px-[16px] text-[15px] border ${borderClass} rounded-[8px] outline-none bg-[#FFFFFF] font-['Plus_Jakarta_Sans'] appearance-none transition-all duration-300 focus:ring-1 ${!value ? 'text-[#6B7280]' : 'text-[#111827]'}`}
                         >
                             {children}
                         </select>
@@ -152,7 +184,7 @@ const CustomInput = ({ label, type = 'text', value, onChange, onBlur, placeholde
                         </div>
                     </>
                 ) : prefix ? (
-                    <div className={`relative flex items-center w-full h-[56px] border ${error ? 'border-red-500 hover:border-red-500 focus-within:border-red-500 focus-within:ring-red-500/20' : 'border-[#D1D5DB] focus-within:border-[#0F3D2E] focus-within:ring-[#0F3D2E]'} rounded-[8px] bg-[#FFFFFF] transition-all duration-300 focus-within:ring-1 overflow-hidden`}>
+                    <div className={`relative flex items-center w-full h-[56px] border ${prefixContainerClass} rounded-[8px] bg-[#FFFFFF] transition-all duration-300 focus-within:ring-1 overflow-hidden`}>
                         <div className="pl-4 pr-3 flex items-center h-full text-[#111827]">
                             {prefix}
                         </div>
@@ -175,17 +207,26 @@ const CustomInput = ({ label, type = 'text', value, onChange, onBlur, placeholde
                         onChange={onChange}
                         onBlur={onBlur}
                         placeholder={placeholder}
-                        className={`w-full h-[56px] px-[16px] text-[15px] border ${error ? 'border-red-500 hover:border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-[#D1D5DB] focus:border-[#0F3D2E] focus:ring-[#0F3D2E]'} rounded-[8px] outline-none bg-[#FFFFFF] font-['Plus_Jakarta_Sans'] transition-all duration-300 focus:ring-1 placeholder:text-[#9CA3AF] text-[#111827] ${rest.readOnly ? 'bg-gray-100 cursor-not-allowed opacity-80' : ''}`}
+                        className={`w-full h-[56px] px-[16px] text-[15px] border ${borderClass} rounded-[8px] outline-none bg-[#FFFFFF] font-['Plus_Jakarta_Sans'] transition-all duration-300 focus:ring-1 placeholder:text-[#9CA3AF] text-[#111827] ${rest.readOnly ? 'bg-gray-100 cursor-not-allowed opacity-80' : ''}`}
                         {...rest}
                     />
                 )}
             </div>
-            {error && (
-                <div className="mt-1.5 text-red-500 text-[13px] font-medium animate-in fade-in slide-in-from-top-1 duration-300">
-                    {error}
+            {(status === 'REJECTED' || (error && status === 'NORMAL')) && (
+                <div className="mt-1.5 text-red-500 text-[13px] font-semibold flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1 duration-300">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
+                    <span>{error}</span>
                 </div>
             )}
-            {info && !error && (
+            {status === 'CORRECTED' && (
+                <div className="mt-1.5 text-emerald-600 text-[13px] font-semibold flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1 duration-300">
+                    <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Corrected / Updated</span>
+                </div>
+            )}
+            {info && !error && status === 'NORMAL' && (
                 <div className="mt-1.5 text-blue-600 text-[13px] font-medium flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1 duration-300">
                     <div className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></div>
                     {info}
@@ -244,6 +285,165 @@ const SignUp = () => {
     const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
     const [showVillageDropdown, setShowVillageDropdown] = useState(false);
     const villageRef = useRef(null);
+
+    const [rejectionData, setRejectionData] = useState(null);
+    const [initialFormData, setInitialFormData] = useState(null);
+
+    useEffect(() => {
+        const fetchCurrentData = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            try {
+                const { getCurrentOnboardingDataApi } = await import('../../services/onboardingService');
+                const data = await getCurrentOnboardingDataApi();
+                if (data) {
+                    const prepopulated = {
+                        phone: data.phone || '',
+                        firstName: data.firstName || '',
+                        lastName: data.lastName || '',
+                        email: data.email || '',
+                        shopName: data.shopName || '',
+                        address: data.address || '',
+                        village: data.village || '',
+                        pinCode: data.pinCode || '',
+                        district: data.district || '',
+                        state: data.state || '',
+                        udyogAadhar: data.udyogAadhar || '',
+                        gstNumber: data.gstNumber || '',
+                        udyogAadharFile: data.udyogAadharFile || null,
+                        gstFile: data.gstFile || null,
+                        otherDocFile: data.businessProof || null,
+                    };
+                    setFormData(prev => ({
+                        ...prev,
+                        ...prepopulated
+                    }));
+                    setInitialFormData(prepopulated);
+
+                    if (data.rejectionReason) {
+                        try {
+                            const parsed = JSON.parse(data.rejectionReason);
+                            if (parsed && typeof parsed === 'object') {
+                                setRejectionData(parsed);
+                            }
+                        } catch (e) {
+                            setRejectionData({ generalRemark: data.rejectionReason, rejectedFields: [] });
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load pre-populated onboarding details', err);
+            }
+        };
+
+        fetchCurrentData();
+    }, []);
+
+    const getFieldRejectionReason = (fieldName) => {
+        if (!rejectionData || !rejectionData.rejectedFields) return null;
+        const found = rejectionData.rejectedFields.find(
+            item => item.field === fieldName || item.fieldName === fieldName
+        );
+        return found ? found.reason : null;
+    };
+
+    const dbToStateFieldMap = {
+        firstName: 'firstName',
+        lastName: 'lastName',
+        email: 'email',
+        shopName: 'shopName',
+        address: 'address',
+        pinCode: 'pinCode',
+        village: 'village',
+        district: 'district',
+        state: 'state',
+        udyogAadharNumber: 'udyogAadhar',
+        gstNumber: 'gstNumber',
+        udyogAadharCert: 'udyogAadharFile',
+        gstCert: 'gstFile',
+        businessProof: 'otherDocFile',
+    };
+
+    const isFieldChanged = (fieldName) => {
+        if (!initialFormData) return false;
+        const currentVal = formData[fieldName];
+        const initialVal = initialFormData[fieldName];
+        
+        if (currentVal instanceof File) {
+            return true;
+        }
+        
+        return currentVal !== initialVal;
+    };
+
+    const getFieldStatus = (stateFieldName) => {
+        const dbField = Object.keys(dbToStateFieldMap).find(key => dbToStateFieldMap[key] === stateFieldName);
+        if (!dbField) return 'NORMAL';
+        
+        const hasRejection = getFieldRejectionReason(dbField);
+        if (!hasRejection) return 'NORMAL';
+        
+        if (isFieldChanged(stateFieldName)) {
+            return 'CORRECTED';
+        }
+        return 'REJECTED';
+    };
+
+    const getCurrentStepFields = () => {
+        if (step === 1) return ['firstName', 'lastName', 'email'];
+        if (step === 2) return ['shopName', 'address', 'pinCode', 'village', 'district', 'state'];
+        if (step === 3) return ['udyogAadhar', 'gstNumber', 'udyogAadharFile', 'gstFile', 'otherDocFile'];
+        return [];
+    };
+
+    const renderRejectionBanner = () => {
+        if (!rejectionData || !rejectionData.generalRemark) return null;
+
+        const currentStepFields = getCurrentStepFields();
+        const flaggedFields = currentStepFields.filter(field => {
+            const dbField = Object.keys(dbToStateFieldMap).find(key => dbToStateFieldMap[key] === field);
+            return dbField && getFieldRejectionReason(dbField);
+        });
+
+        if (flaggedFields.length === 0) return null;
+
+        const anyCorrected = flaggedFields.some(field => getFieldStatus(field) === 'CORRECTED');
+
+        if (anyCorrected) {
+            return (
+                <div className="mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-[12px] flex items-start gap-3 w-full shadow-2xs animate-in fade-in duration-300">
+                    <div className="p-1 bg-emerald-100 rounded-full text-emerald-600 shrink-0 flex items-center justify-center">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <div className="flex-1 text-left">
+                        <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider block mb-0.5">Flagged Fields Corrected</span>
+                        <p className="text-[13px] text-gray-800 font-semibold leading-relaxed">
+                            {rejectionData.generalRemark}
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-[12px] flex items-start gap-3 w-full shadow-2xs">
+                <div className="p-1 bg-red-100 rounded-full text-red-600 shrink-0 flex items-center justify-center">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <div className="flex-1 text-left">
+                    <span className="text-[11px] font-bold text-red-600 uppercase tracking-wider block mb-0.5">Please Correct Flagged Fields</span>
+                    <p className="text-[13px] text-gray-800 font-semibold leading-relaxed">
+                        {rejectionData.generalRemark}
+                    </p>
+                </div>
+            </div>
+        );
+    };
 
     useEffect(() => {
         if (formData.pinCode.length === 6 && /^\d{6}$/.test(formData.pinCode)) {
@@ -553,6 +753,8 @@ const SignUp = () => {
                                 </p>
                             </div>
 
+                            {renderRejectionBanner()}
+
                             <form noValidate onSubmit={(e) => e.preventDefault()} className="w-full">
                                 {error && <div className="mb-4 text-red-500 text-[13px] font-medium animate-in fade-in slide-in-from-top-1 duration-300">{error}</div>}
                                 <div className="mb-4">
@@ -563,7 +765,8 @@ const SignUp = () => {
                                         value={formData.firstName}
                                         onChange={handleChange}
                                         onBlur={handleBlur}
-                                        error={fieldErrors.firstName}
+                                        error={fieldErrors.firstName || getFieldRejectionReason('firstName')}
+                                        status={getFieldStatus('firstName')}
                                     />
                                 </div>
                                 <div className="mb-4">
@@ -574,7 +777,8 @@ const SignUp = () => {
                                         value={formData.lastName}
                                         onChange={handleChange}
                                         onBlur={handleBlur}
-                                        error={fieldErrors.lastName}
+                                        error={fieldErrors.lastName || getFieldRejectionReason('lastName')}
+                                        status={getFieldStatus('lastName')}
                                     />
                                 </div>
                                 <div className="mb-6">
@@ -586,7 +790,8 @@ const SignUp = () => {
                                         value={formData.email}
                                         onChange={handleChange}
                                         onBlur={handleBlur}
-                                        error={fieldErrors.email}
+                                        error={fieldErrors.email || getFieldRejectionReason('email')}
+                                        status={getFieldStatus('email')}
                                     />
                                 </div>
                                 <button
@@ -628,6 +833,8 @@ const SignUp = () => {
                                     {t('auth:shop_subtitle')}
                                 </p>
 
+                                {renderRejectionBanner()}
+
                                 <form noValidate onSubmit={(e) => e.preventDefault()} className="w-full">
                                     {error && <div className="mb-4 text-red-500 text-[13px] font-medium animate-in fade-in slide-in-from-top-1 duration-300">{error}</div>}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-[24px] gap-y-[16px] w-full">
@@ -638,7 +845,8 @@ const SignUp = () => {
                                             value={formData.shopName}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            error={fieldErrors.shopName}
+                                            error={fieldErrors.shopName || getFieldRejectionReason('shopName')}
+                                            status={getFieldStatus('shopName')}
                                         />
                                         <CustomInput
                                             label={t('auth:address')}
@@ -647,7 +855,8 @@ const SignUp = () => {
                                             value={formData.address}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            error={fieldErrors.address}
+                                            error={fieldErrors.address || getFieldRejectionReason('address')}
+                                            status={getFieldStatus('address')}
                                         />
                                         <CustomInput
                                             label={t('auth:pincode')}
@@ -657,59 +866,94 @@ const SignUp = () => {
                                             value={formData.pinCode}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            error={fieldErrors.pinCode}
+                                            error={fieldErrors.pinCode || getFieldRejectionReason('pinCode')}
                                             info={isManualLocation ? "Location not found. Please enter manually." : null}
+                                            status={getFieldStatus('pinCode')}
                                         />
                                         <div className="flex flex-col w-full relative" ref={villageRef}>
                                             <label className="text-[14px] text-[#374151] mb-2 font-['Plus_Jakarta_Sans'] font-medium block">
                                                 {t('auth:village')} <span className="text-red-500">*</span>
                                             </label>
                                             <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    name="village"
-                                                    autoComplete="off"
-                                                    value={formData.village}
-                                                    onChange={(e) => {
-                                                        handleChange(e);
-                                                        setShowVillageDropdown(true);
-                                                    }}
-                                                    onFocus={() => setShowVillageDropdown(true)}
-                                                    onBlur={(e) => {
-                                                        handleBlur(e);
-                                                    }}
-                                                    placeholder={t('auth:placeholder_village')}
-                                                    className={`w-full h-[56px] pl-[16px] pr-[40px] text-[15px] border ${fieldErrors.village ? 'border-red-500' : 'border-[#D1D5DB] focus:border-[#0F3D2E] focus:ring-[#0F3D2E]'} rounded-[8px] outline-none bg-[#FFFFFF] transition-all duration-300 focus:ring-1 placeholder:text-[#9CA3AF] text-[#111827]`}
-                                                />
-                                                <div
-                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280] cursor-pointer"
-                                                    onClick={() => setShowVillageDropdown(!showVillageDropdown)}
-                                                >
-                                                    <ChevronDown size={20} className={`transition-transform duration-300 ${showVillageDropdown ? 'rotate-180' : ''}`} />
-                                                </div>
+                                                {(() => {
+                                                    const villageStatus = getFieldStatus('village');
+                                                    let villageBorderClass = 'border-[#D1D5DB] focus:border-[#0F3D2E] focus:ring-[#0F3D2E]';
+                                                    if (villageStatus === 'REJECTED' || ((fieldErrors.village || getFieldRejectionReason('village')) && villageStatus === 'NORMAL')) {
+                                                        villageBorderClass = 'border-red-500 hover:border-red-600 focus:border-red-500 focus:ring-red-500/20 bg-red-50/5';
+                                                    } else if (villageStatus === 'CORRECTED') {
+                                                        villageBorderClass = 'border-emerald-500 hover:border-emerald-600 focus:border-emerald-500 focus:ring-emerald-500/20 bg-emerald-50/5';
+                                                    }
+                                                    return (
+                                                        <>
+                                                            <input
+                                                                type="text"
+                                                                name="village"
+                                                                autoComplete="off"
+                                                                value={formData.village}
+                                                                onChange={(e) => {
+                                                                    handleChange(e);
+                                                                    setShowVillageDropdown(true);
+                                                                }}
+                                                                onFocus={() => setShowVillageDropdown(true)}
+                                                                onBlur={(e) => {
+                                                                    handleBlur(e);
+                                                                }}
+                                                                placeholder={t('auth:placeholder_village')}
+                                                                className={`w-full h-[56px] pl-[16px] pr-[40px] text-[15px] border ${villageBorderClass} rounded-[8px] outline-none bg-[#FFFFFF] transition-all duration-300 focus:ring-1 placeholder:text-[#9CA3AF] text-[#111827]`}
+                                                            />
+                                                            <div
+                                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280] cursor-pointer"
+                                                                onClick={() => setShowVillageDropdown(!showVillageDropdown)}
+                                                            >
+                                                                <ChevronDown size={20} className={`transition-transform duration-300 ${showVillageDropdown ? 'rotate-180' : ''}`} />
+                                                            </div>
 
-                                                {showVillageDropdown && (formData.areas || []).length > 0 && (
-                                                    <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[8px] shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)] z-[100] max-h-[220px] overflow-y-auto">
-                                                        <div className="py-1">
-                                                            {(formData.areas || []).map((area, idx) => (
-                                                                <div
-                                                                    key={idx}
-                                                                    className="px-4 py-2.5 hover:bg-[#F3F4F6] cursor-pointer text-[14px] font-['Plus_Jakarta_Sans'] text-[#374151] transition-colors flex items-center justify-between group"
-                                                                    onClick={() => {
-                                                                        setFormData(prev => ({ ...prev, village: area }));
-                                                                        setShowVillageDropdown(false);
-                                                                        setFieldErrors(prev => ({ ...prev, village: '' }));
-                                                                    }}
-                                                                >
-                                                                    <span>{area}</span>
-                                                                    <div className="w-1.5 h-1.5 rounded-full bg-[#0F3D2E] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                            {showVillageDropdown && (formData.areas || []).length > 0 && (
+                                                                <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[8px] shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)] z-[100] max-h-[220px] overflow-y-auto">
+                                                                    <div className="py-1">
+                                                                        {(formData.areas || []).map((area, idx) => (
+                                                                            <div
+                                                                                key={idx}
+                                                                                className="px-4 py-2.5 hover:bg-[#F3F4F6] cursor-pointer text-[14px] font-['Plus_Jakarta_Sans'] text-[#374151] transition-colors flex items-center justify-between group"
+                                                                                onClick={() => {
+                                                                                    setFormData(prev => ({ ...prev, village: area }));
+                                                                                    setShowVillageDropdown(false);
+                                                                                    setFieldErrors(prev => ({ ...prev, village: '' }));
+                                                                                }}
+                                                                            >
+                                                                                <span>{area}</span>
+                                                                                <div className="w-1.5 h-1.5 rounded-full bg-[#0F3D2E] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
                                                                 </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
                                             </div>
-                                            {fieldErrors.village && <span className="mt-1.5 text-red-500 text-[13px] font-medium">{fieldErrors.village}</span>}
+                                            {(() => {
+                                                const villageStatus = getFieldStatus('village');
+                                                if (villageStatus === 'REJECTED' || ((fieldErrors.village || getFieldRejectionReason('village')) && villageStatus === 'NORMAL')) {
+                                                    return (
+                                                        <span className="mt-1.5 text-red-500 text-[13px] font-semibold flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1 duration-300">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
+                                                            <span>{fieldErrors.village || getFieldRejectionReason('village')}</span>
+                                                        </span>
+                                                    );
+                                                }
+                                                if (villageStatus === 'CORRECTED') {
+                                                    return (
+                                                        <div className="mt-1.5 text-emerald-600 text-[13px] font-semibold flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1 duration-300">
+                                                            <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                            <span>Corrected / Updated</span>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
                                         </div>
                                         <CustomInput
                                             label={t('auth:district')}
@@ -718,8 +962,9 @@ const SignUp = () => {
                                             value={formData.district}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            error={fieldErrors.district}
+                                            error={fieldErrors.district || getFieldRejectionReason('district')}
                                             readOnly={!isManualLocation}
+                                            status={getFieldStatus('district')}
                                         />
                                         <CustomInput
                                             label={t('auth:state')}
@@ -728,8 +973,9 @@ const SignUp = () => {
                                             value={formData.state}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            error={fieldErrors.state}
+                                            error={fieldErrors.state || getFieldRejectionReason('state')}
                                             readOnly={!isManualLocation}
+                                            status={getFieldStatus('state')}
                                         />
                                     </div>
 
@@ -762,6 +1008,8 @@ const SignUp = () => {
                                     {t('auth:business_subtitle')}
                                 </p>
 
+                                {renderRejectionBanner()}
+
                                 <form noValidate onSubmit={(e) => e.preventDefault()} className="w-full">
                                     {error && <div className="mb-4 text-red-500 text-[13px] font-medium animate-in fade-in slide-in-from-top-1 duration-300">{error}</div>}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px] w-full">
@@ -773,7 +1021,8 @@ const SignUp = () => {
                                             value={formData.udyogAadhar}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            error={fieldErrors.udyogAadhar}
+                                            error={fieldErrors.udyogAadhar || getFieldRejectionReason('udyogAadharNumber')}
+                                            status={getFieldStatus('udyogAadhar')}
                                         />
                                         <CustomInput
                                             label={t('auth:gst')}
@@ -783,7 +1032,8 @@ const SignUp = () => {
                                             value={formData.gstNumber}
                                             onChange={handleChange}
                                             onBlur={handleBlur}
-                                            error={fieldErrors.gstNumber}
+                                            error={fieldErrors.gstNumber || getFieldRejectionReason('gstNumber')}
+                                            status={getFieldStatus('gstNumber')}
                                         />
                                         <FileUploadBox
                                             title={t('auth:upload_udyog')}
@@ -792,6 +1042,8 @@ const SignUp = () => {
                                             onFileChange={(e) => handleFileChange('udyogAadharFile', e.target.files[0])}
                                             onRemove={() => handleFileRemove('udyogAadharFile')}
                                             onUploadStateChange={(isUploading) => handleUploadStateChange('udyogAadharFile', isUploading)}
+                                            error={getFieldRejectionReason('udyogAadharCert')}
+                                            status={getFieldStatus('udyogAadharFile')}
                                         />
                                         <FileUploadBox
                                             title={t('auth:upload_gst')}
@@ -800,6 +1052,8 @@ const SignUp = () => {
                                             onFileChange={(e) => handleFileChange('gstFile', e.target.files[0])}
                                             onRemove={() => handleFileRemove('gstFile')}
                                             onUploadStateChange={(isUploading) => handleUploadStateChange('gstFile', isUploading)}
+                                            error={getFieldRejectionReason('gstCert')}
+                                            status={getFieldStatus('gstFile')}
                                         />
                                         <div className="col-span-1 md:col-span-2 w-full flex justify-center mb-2">
                                             <div className="w-full md:w-[calc(50%-12px)]">
@@ -810,6 +1064,8 @@ const SignUp = () => {
                                                     onFileChange={(e) => handleFileChange('otherDocFile', e.target.files[0])}
                                                     onRemove={() => handleFileRemove('otherDocFile')}
                                                     onUploadStateChange={(isUploading) => handleUploadStateChange('otherDocFile', isUploading)}
+                                                    error={getFieldRejectionReason('businessProof')}
+                                                    status={getFieldStatus('otherDocFile')}
                                                 />
                                             </div>
                                         </div>

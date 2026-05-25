@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 // Placeholder for new modules
 export const Placeholder = ({ title, subtitle }) => (
@@ -53,6 +53,7 @@ export const AuthGuard = () => {
   const token = localStorage.getItem("token");
   const refreshToken = localStorage.getItem("refreshToken");
   const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const location = useLocation();
 
   // If already have a session, go to their dashboard or status page
   if ((token || refreshToken) && user.role) {
@@ -61,10 +62,14 @@ export const AuthGuard = () => {
       return <Navigate to="/superadmin/dashboard" replace />;
 
     // Strictly block sellers from Auth flow if they are in PENDING, REJECTED, or first-time APPROVED
+    // EXCEPT when they are on the signup page to correct and resubmit a rejected application.
     if (
       role === "SELLER" &&
       (user.approvalStatus !== "APPROVED" || user.isFirstApprovalLogin)
     ) {
+      if (location.pathname === "/signup" && user.approvalStatus === "REJECTED") {
+        return <Outlet />;
+      }
       return <Navigate to="/application-status" replace />;
     }
 

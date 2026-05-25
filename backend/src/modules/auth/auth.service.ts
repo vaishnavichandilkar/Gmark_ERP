@@ -175,6 +175,7 @@ export class AuthService {
                 profileImage: userProfile?.profile_image,
                 role: roleType,
                 approvalStatus: user.approvalStatus,
+                rejectionReason: user.rejectionReason,
                 isFirstApprovalLogin: user.isFirstApprovalLogin,
                 selectedLanguage: user.selected_language || 'Hindi',
             },

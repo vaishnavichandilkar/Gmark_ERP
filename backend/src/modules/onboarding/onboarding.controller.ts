@@ -124,6 +124,14 @@ export class OnboardingController {
         return this.onboardingService.getPincodeInfo(pincode);
     }
 
+    @Get('current-data')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get current seller onboarding data' })
+    getCurrentData(@Request() req) {
+        return this.onboardingService.getCurrentData(req.user.userId);
+    }
+
     @Post('step7-complete')
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()

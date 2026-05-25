@@ -5,8 +5,19 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 export class SuperAdminService {
     constructor(private prisma: PrismaService) { }
 
+    private mapUserFields(user: any) {
+        if (!user) return null;
+        return {
+            ...user,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            createdAt: user.created_at,
+            updatedAt: user.updated_at
+        };
+    }
+
     async getPendingSellers() {
-        return this.prisma.user.findMany({
+        const users = await this.prisma.user.findMany({
             where: {
                 role: 'seller',
                 isApproved: false,
@@ -20,10 +31,11 @@ export class SuperAdminService {
                 created_at: 'desc'
             }
         });
+        return users.map(user => this.mapUserFields(user));
     }
 
     async getApprovedSellers() {
-        return this.prisma.user.findMany({
+        const users = await this.prisma.user.findMany({
             where: {
                 role: 'seller',
                 isApproved: true,
@@ -37,10 +49,11 @@ export class SuperAdminService {
                 updated_at: 'desc'
             }
         });
+        return users.map(user => this.mapUserFields(user));
     }
 
     async getRejectedSellers() {
-        return this.prisma.user.findMany({
+        const users = await this.prisma.user.findMany({
             where: {
                 role: 'seller',
                 approvalStatus: 'REJECTED'
@@ -53,7 +66,9 @@ export class SuperAdminService {
                 updated_at: 'desc'
             }
         });
+        return users.map(user => this.mapUserFields(user));
     }
+
 
     async approveSeller(sellerId: number) {
         const user = await this.prisma.user.findUnique({ where: { id: sellerId } });

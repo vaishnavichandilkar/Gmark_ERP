@@ -14,6 +14,11 @@ export const getOnboardingStatusApi = async () => {
     return response.data;
 };
 
+export const getCurrentOnboardingDataApi = async () => {
+    const response = await axiosInstance.get('/onboarding/current-data');
+    return response.data;
+};
+
 export const submitOnboardingStepApi = async (stepNumber, data) => {
     const endpoint = typeof ONBOARDING_ENDPOINTS.SUBMIT_STEP === 'function'
         ? ONBOARDING_ENDPOINTS.SUBMIT_STEP(stepNumber)
@@ -46,9 +51,15 @@ export const saveBusinessDetailsApi = async (data, files) => {
     const formData = new FormData();
     formData.append('udyogAadharNumber', data.udyogAadhar || 'N/A');
     formData.append('gstNumber', data.gstNumber || 'N/A');
-    if (files.udyogAadharFile) formData.append('udyogAadharCertificate', files.udyogAadharFile);
-    if (files.gstFile) formData.append('gstCertificate', files.gstFile);
-    if (files.otherDocFile) formData.append('businessProof', files.otherDocFile);
+    if (files.udyogAadharFile && files.udyogAadharFile instanceof File) {
+        formData.append('udyogAadharCertificate', files.udyogAadharFile);
+    }
+    if (files.gstFile && files.gstFile instanceof File) {
+        formData.append('gstCertificate', files.gstFile);
+    }
+    if (files.otherDocFile && files.otherDocFile instanceof File) {
+        formData.append('businessProof', files.otherDocFile);
+    }
 
     const response = await axiosInstance.post(ONBOARDING_ENDPOINTS.STEP6_BUSINESS, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }

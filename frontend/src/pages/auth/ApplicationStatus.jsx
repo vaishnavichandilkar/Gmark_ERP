@@ -170,27 +170,59 @@ const ApplicationStatus = () => {
         </div>
     );
 
-    const renderFeedbackList = () => (
-        <div className="bg-[#F9FAFB] rounded-[16px] p-5 w-full text-left mb-6">
-            <h4 className="text-[13px] text-center text-[#4B5563] font-['Plus_Jakarta_Sans'] font-medium mb-6 leading-relaxed">
-                {t('feedback_header')}
-            </h4>
-            <div className="space-y-4">
-                {rejectionReason ? (
-                    <div className="flex gap-4 items-start">
-                        <p className="text-[13px] text-[#111827] font-semibold leading-[1.4] font-['Plus_Jakarta_Sans']">{rejectionReason}</p>
+    const parseRejectionReason = (reason) => {
+        if (!reason) return null;
+        try {
+            const parsed = JSON.parse(reason);
+            if (parsed && typeof parsed === 'object' && (parsed.rejectedFields || parsed.generalRemark)) {
+                return parsed;
+            }
+        } catch (e) {
+            // Not JSON
+        }
+        return { generalRemark: reason, rejectedFields: [] };
+    };
+
+    const renderFeedbackList = () => {
+        const parsed = parseRejectionReason(rejectionReason);
+        if (!parsed) return null;
+
+        const { generalRemark: remark, rejectedFields = [] } = parsed;
+
+        return (
+            <div className="bg-[#F9FAFB] border border-gray-100 rounded-[20px] p-5 w-full text-left mb-6 shadow-sm">
+                <h4 className="text-[13px] text-center text-[#4B5563] font-['Plus_Jakarta_Sans'] font-bold mb-4 leading-relaxed uppercase tracking-wider">
+                    {t('feedback_header') || 'Rejection Details'}
+                </h4>
+                
+                {remark && (
+                    <div className="mb-5 p-3.5 bg-red-50/50 border border-red-100/50 rounded-xl">
+                        <span className="text-[10px] font-bold text-red-500 uppercase tracking-wide block mb-1">Super Admin Remarks</span>
+                        <p className="text-[13px] text-gray-800 font-semibold leading-relaxed font-['Plus_Jakarta_Sans']">
+                            {remark}
+                        </p>
                     </div>
-                ) : (
-                    [1, 2, 3].map((num) => (
-                        <div key={num} className="flex gap-4 items-start">
-                            <span className="text-[13px] font-medium text-[#6B7280] font-['Plus_Jakarta_Sans'] shrink-0 w-10">{t('step_label')} {num}</span>
-                            <p className="text-[13px] text-[#111827] font-semibold leading-[1.4] font-['Plus_Jakarta_Sans']">{t('feedback_placeholder')}</p>
-                        </div>
-                    ))
+                )}
+
+                {rejectedFields.length > 0 && (
+                    <div className="space-y-3">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide block">Incorrect Details & Guidelines</span>
+                        {rejectedFields.map((item, idx) => (
+                            <div key={idx} className="flex flex-col gap-1 p-3.5 bg-white border border-gray-100 rounded-xl shadow-2xs hover:shadow-xs transition-shadow">
+                                <div className="flex items-center gap-1.5 text-xs font-bold text-red-600">
+                                    <AlertCircle size={14} />
+                                    <span>{item.fieldName || item.field}</span>
+                                </div>
+                                <p className="text-[12.5px] text-gray-600 font-semibold pl-5 mt-0.5 leading-normal">
+                                    {item.reason}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
-        </div>
-    );
+        );
+    };
 
     const renderRejectedState = () => (
         <div className="flex flex-col items-center justify-start text-center w-full max-w-[420px] mx-auto animate-in fade-in zoom-in duration-500 pt-2 pb-10 relative">
@@ -223,7 +255,13 @@ const ApplicationStatus = () => {
             {renderFeedbackList()}
 
             <Button
-                className="w-full py-3 mt-2 text-[15px] font-semibold font-['Plus_Jakarta_Sans'] rounded-[8px] !bg-[#0B3D2E] hover:!bg-[#092E22] text-white"
+                onClick={() => navigate('/signup?step=1')}
+                className="w-full py-3 mt-2 text-[15px] font-bold font-['Plus_Jakarta_Sans'] rounded-[8px] !bg-[#0B3D2E] hover:!bg-[#092E22] text-white transition-all transform active:scale-95 shadow-lg shadow-[#0B3D2E]/20 cursor-pointer flex items-center justify-center gap-1.5"
+            >
+                <span>Edit & Resubmit Application</span>
+            </Button>
+            <Button
+                className="w-full py-3 mt-3 text-[15px] font-semibold font-['Plus_Jakarta_Sans'] rounded-[8px] !bg-gray-150 hover:!bg-gray-200 text-gray-800 border border-gray-200/50 cursor-pointer"
             >
                 {t('contact_us')}
             </Button>
