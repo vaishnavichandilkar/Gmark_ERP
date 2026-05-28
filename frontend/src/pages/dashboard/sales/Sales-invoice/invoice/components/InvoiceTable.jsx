@@ -135,7 +135,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             finalTargetIndex = emptyIndex === -1 ? updatedItems.length : emptyIndex;
         }
 
-        const printDesc = product.print_description || product.product_name || product.description || '';
+        const printDesc = product.print_description || product.description || product.product_name || '';
         const newItem = {
             id: updatedItems[finalTargetIndex]?.id || Date.now(),
             productId: product.id,

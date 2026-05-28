@@ -116,12 +116,18 @@ const AddPurchaseInvoice = () => {
     const [companyInfo, setCompanyInfo] = useState(null);
     const [gstType, setGstType] = useState({ type: 'NONE' });
 
+    const getFinancialYearStart = () => {
+        const now = new Date();
+        const year = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
+        return `${year}-04-01`;
+    };
+
     useEffect(() => {
         const fetchInitialData = async () => {
             setIsLoading(true);
             try {
                 const [accRes, prodRes, profileRes] = await Promise.all([
-                    accountService.getAllAccounts({ groupName: 'SUNDRY_CREDITORS', limit: 1000 }),
+                    accountService.getAllAccounts({ groupName: 'SUNDRY_CREDITORS', limit: 1000, status: 'ACTIVE' }),
                     productService.getProducts({ limit: 1000 }),
                     getProfileApi()
                 ]);
@@ -299,7 +305,7 @@ const AddPurchaseInvoice = () => {
                                         beforeTaxAmount: newProduct.purchaseRate || 0,
                                         taxAmount: ((newProduct.purchaseRate || 0) * (newProduct.tax_rate || 0)) / 100,
                                         totalAmount: (newProduct.purchaseRate || 0) * (1 + (newProduct.tax_rate || 0) / 100),
-                                        printDescription: newProduct.print_description || newProduct.product_name || newProduct.description || '',
+                                        printDescription: newProduct.print_description || newProduct.description || newProduct.product_name || '',
                                         totalPoQty: 0,
                                         receivedPoQty: 0,
                                         remainingQty: 0
@@ -753,20 +759,40 @@ const AddPurchaseInvoice = () => {
             newErrors.document_date = "Invoice date is required";
         } else {
             const today = new Date().toISOString().split('T')[0];
-            if (isoDocDate > today) {
-                newErrors.document_date = "Date cannot be in the future";
-            }
+            const hasPO = !!formData.po_id;
+            const hasGRN = !!(formData.grn_ids && formData.grn_ids.length > 0);
 
-            const hasLink = formData.po_id || (formData.grn_ids && formData.grn_ids.length > 0);
-            if (hasLink) {
-                const minAllowed = formData.challan_date || formData.po_date;
-                if (minAllowed && isoDocDate < minAllowed) {
-                    newErrors.document_date = `Date cannot be before ${formData.challan_date ? 'challan' : 'PO'} date (${minAllowed})`;
+            if (hasPO && hasGRN) {
+                // Condition 1B: PO + GRN exists
+                // Supplier Invoice Date allowed from: Last GRN Date for that Supplier → Till Today
+                // Validation Message: Supplier Invoice Date must be between Last GRN Date and Current Date.
+                const lastGrnDate = formData.challan_date;
+                if (isoDocDate > today || (lastGrnDate && isoDocDate < lastGrnDate)) {
+                    newErrors.document_date = "Supplier Invoice Date must be between Last GRN Date and Current Date.";
+                }
+            } else if (hasPO && !hasGRN) {
+                // Condition 1C: Direct Invoice Against PO (Without GRN)
+                // Supplier Invoice Date allowed from: PO Date → Till Today
+                // Validation Message: Supplier Invoice Date must be between PO Date and Current Date.
+                const poDate = formData.po_date;
+                if (isoDocDate > today || (poDate && isoDocDate < poDate)) {
+                    newErrors.document_date = "Supplier Invoice Date must be between PO Date and Current Date.";
+                }
+            } else if (!hasPO && hasGRN) {
+                // Condition 2B: GRN Created Without PO
+                // Supplier Invoice Date allowed from: GRN Date → Till Today
+                // Validation Message: Supplier Invoice Date must be between GRN Date and Current Date.
+                const grnDate = formData.challan_date;
+                if (isoDocDate > today || (grnDate && isoDocDate < grnDate)) {
+                    newErrors.document_date = "Supplier Invoice Date must be between GRN Date and Current Date.";
                 }
             } else {
-                // Without PO and GRN, must be today (Condition 3)
-                if (isoDocDate !== today) {
-                    newErrors.document_date = "Date must be current date for standalone invoices";
+                // Condition 3: Direct Purchase Invoice Without PO and Without GRN
+                // Supplier Invoice Date allowed from: Financial Year Start Date → Till Today
+                // Validation Message: Supplier Invoice Date must be within current financial year.
+                const fyStart = getFinancialYearStart();
+                if (isoDocDate > today || isoDocDate < fyStart) {
+                    newErrors.document_date = "Supplier Invoice Date must be within current financial year.";
                 }
             }
         }
@@ -944,16 +970,7 @@ const AddPurchaseInvoice = () => {
         }
     }, [formData, items, expenses, isEditMode]);
 
-    // Date locking logic for standalone invoices (Condition 3)
-    useEffect(() => {
-        const hasLink = !!(formData.po_id || (formData.grn_ids && formData.grn_ids.length > 0));
-        if (!hasLink) {
-            const today = new Date().toISOString().split('T')[0];
-            if (formData.document_date !== today) {
-                setFormData(prev => ({ ...prev, document_date: today }));
-            }
-        }
-    }, [formData.po_id, formData.grn_ids, formData.document_date]);
+
 
     if (isLoading && !isEditMode) {
         return (
@@ -978,12 +995,18 @@ const AddPurchaseInvoice = () => {
 
                 <div className="p-8 border-b border-[#F3F4F6]">
                     {(() => {
-                        const hasLink = !!(formData.po_id || (formData.grn_ids && formData.grn_ids.length > 0));
+                        const hasPO = !!formData.po_id;
+                        const hasGRN = !!(formData.grn_ids && formData.grn_ids.length > 0);
                         const today = new Date().toISOString().split('T')[0];
                         
-                        // Condition 3: No PO and No GRN -> Locked to Today
-                        const isLocked = !hasLink;
-                        const minDate = hasLink ? (formData.challan_date || formData.po_date) : today;
+                        let minDate = getFinancialYearStart();
+                        if (hasPO && hasGRN) {
+                            minDate = formData.challan_date || getFinancialYearStart();
+                        } else if (hasPO && !hasGRN) {
+                            minDate = formData.po_date || getFinancialYearStart();
+                        } else if (!hasPO && hasGRN) {
+                            minDate = formData.challan_date || getFinancialYearStart();
+                        }
 
                         return (
                             <GRNForm 
@@ -1001,7 +1024,7 @@ const AddPurchaseInvoice = () => {
                                 onAddSupplier={handleAddNewSupplier}
                                 minDate={minDate}
                                 maxDate={today}
-                                isDocumentDateReadOnly={isLocked}
+                                isDocumentDateReadOnly={false}
                             />
                         );
                     })()}

@@ -7,6 +7,26 @@ export const getAllAccounts = async (params) => {
     return response.data;
 };
 
+export const getActiveCustomers = async () => {
+    const response = await axiosInstance.get(`${API_PATH}/customers/active`);
+    return response.data;
+};
+
+export const getActiveSuppliers = async () => {
+    const response = await axiosInstance.get(`${API_PATH}/suppliers/active`);
+    return response.data;
+};
+
+export const getReceiptEligibleCustomers = async () => {
+    const response = await axiosInstance.get(`${API_PATH}/customers/receipt-eligible`);
+    return response.data;
+};
+
+export const getPaymentEligibleSuppliers = async () => {
+    const response = await axiosInstance.get(`${API_PATH}/suppliers/payment-eligible`);
+    return response.data;
+};
+
 export const getAccountById = async (id) => {
     const response = await axiosInstance.get(`${API_PATH}/${id}`);
     return response.data;
@@ -22,9 +42,9 @@ export const updateAccount = async (id, data) => {
     return response.data;
 };
 
-export const toggleStatus = async (id, status) => {
-    // Backend expects { status: 'ACTIVE' | 'INACTIVE' } in the body
-    const response = await axiosInstance.patch(`${API_PATH}/${id}/status`, { status });
+export const toggleStatus = async (id, status, customerStatus, supplierStatus) => {
+    // Backend expects { status: 'ACTIVE' | 'INACTIVE', customerStatus, supplierStatus } in the body
+    const response = await axiosInstance.patch(`${API_PATH}/${id}/status`, { status, customerStatus, supplierStatus });
     return response.data;
 };
 
@@ -90,5 +110,9 @@ export default {
     generateAccountCode,
     generateCustomerCode,
     generateSupplierCode,
-    getBusinessProfile
+    getBusinessProfile,
+    getActiveCustomers,
+    getActiveSuppliers,
+    getReceiptEligibleCustomers,
+    getPaymentEligibleSuppliers
 };

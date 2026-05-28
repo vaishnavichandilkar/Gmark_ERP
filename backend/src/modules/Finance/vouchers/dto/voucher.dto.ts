@@ -3,6 +3,23 @@ import { Type } from 'class-transformer';
 import { PaymentMode } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export class VoucherItemSettlementDto {
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  invoiceId?: number;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  settlementType: string; // 'ADVANCE', 'AGAINST_REFERENCE', 'ON_ACCOUNT'
+
+  @ApiProperty()
+  @IsNumber()
+  @IsNotEmpty()
+  settledAmount: number;
+}
+
 export class VoucherItemDto {
   @ApiProperty()
   @IsNumber()
@@ -14,6 +31,18 @@ export class VoucherItemDto {
   @Min(0.01)
   @IsNotEmpty()
   amount: number;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  accountType?: string;
+
+  @ApiPropertyOptional({ type: [VoucherItemSettlementDto] })
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => VoucherItemSettlementDto)
+  settlements?: VoucherItemSettlementDto[];
 }
 
 export class CreateVoucherDto {
@@ -43,4 +72,12 @@ export class CreateVoucherDto {
   @Type(() => VoucherItemDto)
   @IsNotEmpty()
   items: VoucherItemDto[];
+
+  @ApiPropertyOptional({ type: [VoucherItemSettlementDto] })
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => VoucherItemSettlementDto)
+  settlements?: VoucherItemSettlementDto[];
 }
+

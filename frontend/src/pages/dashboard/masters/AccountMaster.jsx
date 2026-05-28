@@ -53,6 +53,7 @@ const AccountMaster = () => {
     const [currentView, setCurrentView] = useState('list');
     const [previousView, setPreviousView] = useState(null);
     const [selectedAccount, setSelectedAccount] = useState(null);
+    const [statusConfirmModal, setStatusConfirmModal] = useState({ show: false, account: null });
     const [toastMessage, setToastMessage] = useState({ show: false, message: '', type: 'success' });
 
     const showToast = (message, type = 'success') => {
@@ -292,9 +293,29 @@ const AccountMaster = () => {
     };
 
     const toggleStatus = async (account, event) => {
-        event.stopPropagation();
+        event?.stopPropagation();
+        
+        const isCustomer = account.groupName?.includes('SUNDRY_DEBTORS') || !!account.customerCode;
+        const isSupplier = account.groupName?.includes('SUNDRY_CREDITORS') || !!account.supplierCode;
+        
+        if (account.status === 'ACTIVE' && isCustomer && isSupplier) {
+            // Open selection modal
+            setStatusConfirmModal({
+                show: true,
+                account
+            });
+            setDropdownIndex(null);
+            return;
+        }
+
+        // Toggle normally
         const newStatus = account.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-        await dispatch(toggleAccountStatus({ id: account.id, status: newStatus }));
+        await dispatch(toggleAccountStatus({ 
+            id: account.id, 
+            status: newStatus,
+            customerStatus: newStatus,
+            supplierStatus: newStatus
+        }));
         dispatch(fetchAllAccounts({ page: currentPage, limit: rowsPerPage, search: searchQuery, ...appliedFilters }));
         showToast(`Account ${newStatus === 'ACTIVE' ? 'activated' : 'inactivated'} successfully`);
         setDropdownIndex(null);
@@ -627,10 +648,23 @@ const AccountMaster = () => {
                                     <td className="text-[#4B5563] font-medium border-r border-[#F3F4F6]">{row.supplierOpeningBalance || 0}</td>
                                     <td className="text-[#6B7280] max-w-[200px] truncate border-r border-[#F3F4F6]" title={row.addressLine1}>{row.addressLine1 || '-'}</td>
                                     <td className="border-r border-[#F3F4F6]">
-                                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${row.status === 'ACTIVE' ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
-                                            <span className={`w-1.5 h-1.5 rounded-full ${row.status === 'ACTIVE' ? 'bg-[#059669]' : 'bg-[#DC2626]'}`}></span>
-                                            {row.status === 'ACTIVE' ? t('common:active') : t('common:inactive')}
-                                        </div>
+                                        {(row.groupName?.includes('SUNDRY_DEBTORS') || !!row.customerCode) && (row.groupName?.includes('SUNDRY_CREDITORS') || !!row.supplierCode) ? (
+                                            <div className="flex flex-row items-center gap-1.5 flex-wrap justify-start">
+                                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold whitespace-nowrap ${row.customerStatus === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${row.customerStatus === 'ACTIVE' ? 'bg-emerald-600' : 'bg-red-600'}`}></span>
+                                                    Cust: {row.customerStatus === 'ACTIVE' ? 'Active' : 'Inactive'}
+                                                </div>
+                                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold whitespace-nowrap ${row.supplierStatus === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${row.supplierStatus === 'ACTIVE' ? 'bg-emerald-600' : 'bg-red-600'}`}></span>
+                                                    Supp: {row.supplierStatus === 'ACTIVE' ? 'Active' : 'Inactive'}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${row.status === 'ACTIVE' ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
+                                                <span className={`w-1.5 h-1.5 rounded-full ${row.status === 'ACTIVE' ? 'bg-[#059669]' : 'bg-[#DC2626]'}`}></span>
+                                                {row.status === 'ACTIVE' ? t('common:active') : t('common:inactive')}
+                                            </div>
+                                        )}
                                     </td>
                                     <td className={`text-center relative ${dropdownIndex === index ? 'z-[100]' : ''}`} ref={dropdownIndex === index ? dropdownRef : null}>
                                         <button
@@ -887,6 +921,95 @@ const AccountMaster = () => {
                     sampleFileName="Account_Master_Sample.xlsx"
                     sampleHeaders={['Account Name*', 'Group Name*', 'GST NO', 'PAN NO*', 'Address1*', 'Address2', 'Pincode*', 'Area', 'Sub District', 'District', 'State', 'Country', 'Supplier Credit Days', 'Supplier Opening Balance', 'Customer Credit Days', 'Customer Opening Balance', 'Customer Type', 'MSME Enabled', 'MSME ID', 'Reg.Under', 'Reg.Type', 'Status']}
                 />
+            )}
+            
+            {statusConfirmModal.show && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/40 backdrop-blur-[4px] p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[20px] shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-[#E5E7EB] w-full max-w-[420px] overflow-hidden animate-in zoom-in-95 duration-200 font-['Plus_Jakarta_Sans']">
+                        <div className="px-6 py-5 border-b border-[#F3F4F6] flex items-center justify-between bg-emerald-50/50">
+                            <h3 className="text-[16px] font-bold text-[#111827]">
+                                Inactivate Account Role
+                            </h3>
+                            <button 
+                                onClick={() => setStatusConfirmModal({ show: false, account: null })}
+                                className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 flex flex-col gap-4">
+                            <p className="text-[14px] text-gray-500 font-medium leading-relaxed">
+                                This account <strong>{statusConfirmModal.account?.accountName}</strong> operates as both a Customer and a Supplier. Which role would you like to make Inactive?
+                            </p>
+                            
+                            <div className="flex flex-col gap-2.5">
+                                <button
+                                    onClick={async () => {
+                                        const acc = statusConfirmModal.account;
+                                        await dispatch(toggleAccountStatus({
+                                            id: acc.id,
+                                            status: 'ACTIVE',
+                                            customerStatus: 'INACTIVE',
+                                            supplierStatus: 'ACTIVE'
+                                        }));
+                                        setStatusConfirmModal({ show: false, account: null });
+                                        dispatch(fetchAllAccounts({ page: currentPage, limit: rowsPerPage, search: searchQuery, ...appliedFilters }));
+                                        showToast(`Customer role inactivated successfully`);
+                                    }}
+                                    className="w-full text-left px-4 py-3 rounded-[12px] border border-[#E5E7EB] hover:border-[#073318] hover:bg-emerald-50/20 text-[14px] font-bold text-gray-700 transition-all active:scale-[0.99]"
+                                >
+                                    🚨 Inactivate Customer Only
+                                </button>
+                                
+                                <button
+                                    onClick={async () => {
+                                        const acc = statusConfirmModal.account;
+                                        await dispatch(toggleAccountStatus({
+                                            id: acc.id,
+                                            status: 'ACTIVE',
+                                            customerStatus: 'ACTIVE',
+                                            supplierStatus: 'INACTIVE'
+                                        }));
+                                        setStatusConfirmModal({ show: false, account: null });
+                                        dispatch(fetchAllAccounts({ page: currentPage, limit: rowsPerPage, search: searchQuery, ...appliedFilters }));
+                                        showToast(`Supplier role inactivated successfully`);
+                                    }}
+                                    className="w-full text-left px-4 py-3 rounded-[12px] border border-[#E5E7EB] hover:border-[#073318] hover:bg-emerald-50/20 text-[14px] font-bold text-gray-700 transition-all active:scale-[0.99]"
+                                >
+                                    🚨 Inactivate Supplier Only
+                                </button>
+                                
+                                <button
+                                    onClick={async () => {
+                                        const acc = statusConfirmModal.account;
+                                        await dispatch(toggleAccountStatus({
+                                            id: acc.id,
+                                            status: 'INACTIVE',
+                                            customerStatus: 'INACTIVE',
+                                            supplierStatus: 'INACTIVE'
+                                        }));
+                                        setStatusConfirmModal({ show: false, account: null });
+                                        dispatch(fetchAllAccounts({ page: currentPage, limit: rowsPerPage, search: searchQuery, ...appliedFilters }));
+                                        showToast(`Entire account inactivated successfully`);
+                                    }}
+                                    className="w-full text-left px-4 py-3 rounded-[12px] border border-red-100 bg-red-50/50 hover:bg-red-50 text-[14px] font-bold text-red-700 transition-all active:scale-[0.99]"
+                                >
+                                    ❌ Inactivate Entire Account
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="px-6 py-4 bg-gray-50 border-t border-[#F3F4F6] flex justify-end">
+                            <button
+                                onClick={() => setStatusConfirmModal({ show: false, account: null })}
+                                className="px-4 py-2 border border-[#E5E7EB] rounded-[10px] text-[13px] font-bold text-gray-500 hover:bg-gray-100 transition-all"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

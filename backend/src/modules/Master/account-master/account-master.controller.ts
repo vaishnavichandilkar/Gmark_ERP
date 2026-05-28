@@ -325,6 +325,18 @@ export class AccountMasterController {
     }));
   }
 
+  @Get('customers/active')
+  @ApiOperation({ summary: 'Get all active customer accounts' })
+  async getActiveCustomers(@Req() req: any) {
+    return this.accountMasterService.findActiveCustomers(req.user.id);
+  }
+
+  @Get('customers/receipt-eligible')
+  @ApiOperation({ summary: 'Get receipt-eligible customer accounts' })
+  async getReceiptEligibleCustomers(@Req() req: any) {
+    return this.accountMasterService.findReceiptEligibleCustomers(req.user.id);
+  }
+
   @Get('suppliers')
   @ApiOperation({ summary: 'Get all active supplier accounts' })
   async findSuppliers(@Req() req: any) {
@@ -339,6 +351,18 @@ export class AccountMasterController {
       accountName: acc.accountName,
       accountType: 'SUPPLIER'
     }));
+  }
+
+  @Get('suppliers/active')
+  @ApiOperation({ summary: 'Get all active supplier accounts' })
+  async getActiveSuppliers(@Req() req: any) {
+    return this.accountMasterService.findActiveSuppliers(req.user.id);
+  }
+
+  @Get('suppliers/payment-eligible')
+  @ApiOperation({ summary: 'Get payment-eligible supplier accounts' })
+  async getPaymentEligibleSuppliers(@Req() req: any) {
+    return this.accountMasterService.findPaymentEligibleSuppliers(req.user.id);
   }
 
   @Get('generate-supplier-code')

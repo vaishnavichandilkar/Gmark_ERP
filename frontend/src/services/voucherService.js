@@ -11,12 +11,12 @@ export const getBankCashAccounts = async () => {
 };
 
 export const getCustomers = async () => {
-    const response = await axiosInstance.get(`${ACCOUNT_PATH}/customers`);
+    const response = await axiosInstance.get(`${ACCOUNT_PATH}/customers/receipt-eligible`);
     return response.data;
 };
 
 export const getSuppliers = async () => {
-    const response = await axiosInstance.get(`${ACCOUNT_PATH}/suppliers`);
+    const response = await axiosInstance.get(`${ACCOUNT_PATH}/suppliers/payment-eligible`);
     return response.data;
 };
 
@@ -40,6 +40,26 @@ export const getPaymentVouchers = async () => {
     return response.data;
 };
 
+export const deleteReceiptVoucher = async (id) => {
+    const response = await axiosInstance.delete(`${RECEIPT_PATH}/${id}`);
+    return response.data;
+};
+
+export const deletePaymentVoucher = async (id) => {
+    const response = await axiosInstance.delete(`${PAYMENT_PATH}/${id}`);
+    return response.data;
+};
+
+export const updateReceiptVoucher = async (id, data) => {
+    const response = await axiosInstance.put(`${RECEIPT_PATH}/${id}`, data);
+    return response.data;
+};
+
+export const updatePaymentVoucher = async (id, data) => {
+    const response = await axiosInstance.put(`${PAYMENT_PATH}/${id}`, data);
+    return response.data;
+};
+
 export default {
     getBankCashAccounts,
     getCustomers,
@@ -47,5 +67,9 @@ export default {
     createReceiptVoucher,
     createPaymentVoucher,
     getReceiptVouchers,
-    getPaymentVouchers
+    getPaymentVouchers,
+    deleteReceiptVoucher,
+    deletePaymentVoucher,
+    updateReceiptVoucher,
+    updatePaymentVoucher
 };

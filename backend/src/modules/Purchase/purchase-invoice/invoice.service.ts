@@ -123,7 +123,7 @@ export class PurchaseInvoiceService {
       where: {
         userId,
         groupName: { has: 'SUNDRY_CREDITORS' },
-        status: 'ACTIVE',
+        supplierStatus: 'ACTIVE',
       },
       select: {
         id: true,
@@ -223,65 +223,115 @@ export class PurchaseInvoiceService {
     return `INV-${(lastNumber + 1).toString().padStart(4, '0')}`;
   }
 
+  private async validateInvoiceDate(invoiceDate: Date, poIds?: string[], challanNumbers?: string[]) {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    
+    const hasPO = poIds && poIds.length > 0;
+    const hasGRN = challanNumbers && challanNumbers.length > 0;
+
+    if (hasPO && hasGRN) {
+      // Condition 1B: Supplier Invoice Date Validation (GRN Exists)
+      // Rule: Supplier Invoice Date allowed from: Last GRN Date for that Supplier → Till Today
+      // Message: Supplier Invoice Date must be between Last GRN Date and Current Date.
+      let lastGrnDate: Date | null = null;
+      const grns = await this.prisma.grn.findMany({
+        where: { id: { in: challanNumbers.map(n => Number(n)) } }
+      });
+      grns.forEach(g => {
+        if (!lastGrnDate || g.grnDate > lastGrnDate) lastGrnDate = g.grnDate;
+      });
+
+      if (lastGrnDate) {
+        const minOnlyDate = new Date(lastGrnDate);
+        minOnlyDate.setHours(0, 0, 0, 0);
+        const invOnlyDate = new Date(invoiceDate);
+        invOnlyDate.setHours(0, 0, 0, 0);
+
+        if (invOnlyDate < minOnlyDate || invoiceDate > today) {
+          throw new BadRequestException('Supplier Invoice Date must be between Last GRN Date and Current Date.');
+        }
+      } else if (invoiceDate > today) {
+        throw new BadRequestException('Supplier Invoice Date must be between Last GRN Date and Current Date.');
+      }
+    } else if (hasPO && !hasGRN) {
+      // Condition 1C: Direct Invoice Against PO (Without GRN)
+      // Rule: Supplier Invoice Date allowed from: PO Date → Till Today
+      // Message: Supplier Invoice Date must be between PO Date and Current Date.
+      let poDate: Date | null = null;
+      const pos = await this.prisma.purchaseOrder.findMany({
+        where: {
+          OR: [
+            { poNumber: { in: poIds } },
+            { id: { in: poIds.map(id => Number(id)).filter(id => !isNaN(id)) } }
+          ]
+        }
+      });
+      pos.forEach(p => {
+        if (!poDate || p.poCreationDate > poDate) poDate = p.poCreationDate;
+      });
+
+      if (poDate) {
+        const minOnlyDate = new Date(poDate);
+        minOnlyDate.setHours(0, 0, 0, 0);
+        const invOnlyDate = new Date(invoiceDate);
+        invOnlyDate.setHours(0, 0, 0, 0);
+
+        if (invOnlyDate < minOnlyDate || invoiceDate > today) {
+          throw new BadRequestException('Supplier Invoice Date must be between PO Date and Current Date.');
+        }
+      } else if (invoiceDate > today) {
+        throw new BadRequestException('Supplier Invoice Date must be between PO Date and Current Date.');
+      }
+    } else if (!hasPO && hasGRN) {
+      // Condition 2B: Supplier Invoice Date Validation
+      // Rule: Supplier Invoice Date allowed from: GRN Date → Till Today
+      // Message: Supplier Invoice Date must be between GRN Date and Current Date.
+      let grnDate: Date | null = null;
+      const grns = await this.prisma.grn.findMany({
+        where: { id: { in: challanNumbers.map(n => Number(n)) } }
+      });
+      grns.forEach(g => {
+        if (!grnDate || g.grnDate > grnDate) grnDate = g.grnDate;
+      });
+
+      if (grnDate) {
+        const minOnlyDate = new Date(grnDate);
+        minOnlyDate.setHours(0, 0, 0, 0);
+        const invOnlyDate = new Date(invoiceDate);
+        invOnlyDate.setHours(0, 0, 0, 0);
+
+        if (invOnlyDate < minOnlyDate || invoiceDate > today) {
+          throw new BadRequestException('Supplier Invoice Date must be between GRN Date and Current Date.');
+        }
+      } else if (invoiceDate > today) {
+        throw new BadRequestException('Supplier Invoice Date must be between GRN Date and Current Date.');
+      }
+    } else {
+      // Condition 3: Direct Purchase Invoice Without PO and Without GRN
+      // Rule: Supplier Invoice Date allowed from: Financial Year Start Date → Till Today
+      // Message: Supplier Invoice Date must be within current financial year.
+      const now = new Date();
+      const fyStart = new Date(now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear(), 3, 1);
+      fyStart.setHours(0, 0, 0, 0);
+
+      const minOnlyDate = new Date(fyStart);
+      minOnlyDate.setHours(0, 0, 0, 0);
+      const invOnlyDate = new Date(invoiceDate);
+      invOnlyDate.setHours(0, 0, 0, 0);
+
+      if (invOnlyDate < minOnlyDate || invoiceDate > today) {
+        throw new BadRequestException('Supplier Invoice Date must be within current financial year.');
+      }
+    }
+  }
+
   async create(createDto: CreatePurchaseInvoiceDto, userId: number, uploadedFilePath?: string) {
     const invoiceNumber = await this.generateInvoiceNumber(userId);
 
     const bookingDate = new Date(); // Enforced (Condition 1, 2, 3)
     const invoiceDate = new Date(createDto.invoiceDate || new Date());
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-
-    if (invoiceDate > today) {
-        throw new BadRequestException('Supplier Invoice Date cannot be in the future');
-    }
-
-    const hasLink = (createDto.poIds && createDto.poIds.length > 0) || (createDto.challanNumbers && createDto.challanNumbers.length > 0);
-    
-    if (hasLink) {
-        let minDate: Date | null = null;
-        
-        // Check GRNs (Challans)
-        if (createDto.challanNumbers && createDto.challanNumbers.length > 0) {
-            const grns = await this.prisma.grn.findMany({
-                where: { id: { in: createDto.challanNumbers.map(n => Number(n)) } }
-            });
-            grns.forEach(g => {
-                if (!minDate || g.grnDate > minDate) minDate = g.grnDate;
-            });
-        }
-        
-        // Fallback to PO if no GRN or PO is newer? 
-        // User says "Supplier Invoice Date... range: Supplier Challan Date -> Current Date"
-        if (!minDate && createDto.poIds && createDto.poIds.length > 0) {
-             const pos = await this.prisma.purchaseOrder.findMany({
-                 where: { poNumber: { in: createDto.poIds } }
-             });
-             pos.forEach(p => {
-                 if (!minDate || p.poCreationDate > minDate) minDate = p.poCreationDate;
-             });
-        }
-
-        if (minDate) {
-            const minOnlyDate = new Date(minDate);
-            minOnlyDate.setHours(0, 0, 0, 0);
-            const invOnlyDate = new Date(invoiceDate);
-            invOnlyDate.setHours(0, 0, 0, 0);
-
-            if (invOnlyDate < minOnlyDate) {
-                throw new BadRequestException(`Supplier Invoice Date cannot be before latest Challan/PO date (${minOnlyDate.toLocaleDateString()})`);
-            }
-        }
-    } else {
-        // Condition 3: Without PO and GRN -> Must be Today
-        const startOfToday = new Date();
-        startOfToday.setHours(0,0,0,0);
-        const invOnlyDate = new Date(invoiceDate);
-        invOnlyDate.setHours(0,0,0,0);
-
-        if (invOnlyDate.getTime() !== startOfToday.getTime()) {
-            throw new BadRequestException('Standalone invoices must be dated today');
-        }
-    }
+    await this.validateInvoiceDate(invoiceDate, createDto.poIds, createDto.challanNumbers);
 
     // Supplier Logic
     const supplier = await this.prisma.accountMaster.findFirst({
@@ -289,6 +339,10 @@ export class PurchaseInvoiceService {
     });
 
     if (!supplier) throw new BadRequestException('Supplier not found');
+
+    if (supplier.status !== 'ACTIVE' || supplier.supplierStatus !== 'ACTIVE') {
+      throw new BadRequestException('Supplier is inactive. New purchase transactions are not allowed.');
+    }
 
     // As per requirement: Check if supplier is valid for purchase
     // Defaulting to groupName including 'SUNDRY_CREDITORS' if type isn't natively available
@@ -630,6 +684,12 @@ export class PurchaseInvoiceService {
     });
 
     if (!company) throw new BadRequestException('Company detail not found');
+
+    const mergedPoIds = updateDto.poIds !== undefined ? updateDto.poIds : (existing.poId ? [existing.poId.toString()] : []);
+    const mergedChallanNumbers = updateDto.challanNumbers !== undefined ? updateDto.challanNumbers : (existing.challanNumber ? existing.challanNumber.split(',') : []);
+    const mergedInvoiceDate = updateDto.invoiceDate ? new Date(updateDto.invoiceDate) : existing.supplierInvoiceDate;
+
+    await this.validateInvoiceDate(mergedInvoiceDate, mergedPoIds, mergedChallanNumbers);
 
     const gstNo = updateDto.gstNumber || existing.gstNumber;
 

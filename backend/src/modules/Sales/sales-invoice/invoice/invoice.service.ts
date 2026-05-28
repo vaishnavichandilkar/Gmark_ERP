@@ -21,7 +21,7 @@ export class SalesInvoiceService {
       where: {
         userId,
         groupName: { has: 'SUNDRY_DEBTORS' },
-        status: 'ACTIVE',
+        customerStatus: 'ACTIVE',
       },
       select: {
         id: true,
@@ -138,71 +138,145 @@ export class SalesInvoiceService {
     return `${fyString}/${(lastNumber + 1).toString().padStart(4, '0')}`;
   }
 
+  private async validateInvoiceDate(
+    invoiceDateStr: string | Date | undefined,
+    soId: number | null | undefined,
+    challanNumbers: string[] | undefined,
+    soNumbers?: string[]
+  ) {
+    const invoiceDate = new Date(invoiceDateStr || new Date());
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    let resolvedSoId = soId;
+    if (!resolvedSoId && soNumbers && soNumbers.length > 0) {
+      const soRecord = await this.prisma.salesOrder.findFirst({
+        where: { soNumber: { in: soNumbers } }
+      });
+      if (soRecord) {
+        resolvedSoId = soRecord.id;
+      }
+    }
+
+    const hasChallan = challanNumbers && challanNumbers.length > 0;
+    const hasSo = !!resolvedSoId;
+
+    if (hasSo && hasChallan) {
+      let latestChallanDate: Date | null = null;
+      const challanIds = challanNumbers.map(n => Number(n)).filter(n => !isNaN(n));
+      const challanRecords = await this.prisma.salesChallan.findMany({
+        where: {
+          OR: [
+            { id: { in: challanIds } },
+            { challanNumber: { in: challanNumbers } }
+          ]
+        }
+      });
+      for (const challan of challanRecords) {
+        const cDate = challan.challanDate || challan.bookingDate;
+        if (cDate && (!latestChallanDate || cDate > latestChallanDate)) {
+          latestChallanDate = cDate;
+        }
+      }
+
+      if (latestChallanDate) {
+        const minDate = new Date(latestChallanDate);
+        minDate.setHours(0, 0, 0, 0);
+        const invOnlyDate = new Date(invoiceDate);
+        invOnlyDate.setHours(0, 0, 0, 0);
+
+        if (invOnlyDate < minDate || invoiceDate > today) {
+          throw new BadRequestException('Customer Invoice Date must be between Latest Challan Date and Current Date.');
+        }
+      } else {
+        if (invoiceDate > today) {
+          throw new BadRequestException('Customer Invoice Date must be between Latest Challan Date and Current Date.');
+        }
+      }
+    } else if (hasSo && !hasChallan) {
+      const so = await this.prisma.salesOrder.findUnique({
+        where: { id: Number(resolvedSoId) }
+      });
+      if (so) {
+        const soDate = new Date(so.soCreationDate);
+        soDate.setHours(0, 0, 0, 0);
+        const invOnlyDate = new Date(invoiceDate);
+        invOnlyDate.setHours(0, 0, 0, 0);
+
+        if (invOnlyDate < soDate || invoiceDate > today) {
+          throw new BadRequestException('Customer Invoice Date must be between SO Date and Current Date.');
+        }
+      } else {
+        if (invoiceDate > today) {
+          throw new BadRequestException('Customer Invoice Date must be between SO Date and Current Date.');
+        }
+      }
+    } else if (!hasSo && hasChallan) {
+      let latestChallanDate: Date | null = null;
+      const challanIds = challanNumbers.map(n => Number(n)).filter(n => !isNaN(n));
+      const challanRecords = await this.prisma.salesChallan.findMany({
+        where: {
+          OR: [
+            { id: { in: challanIds } },
+            { challanNumber: { in: challanNumbers } }
+          ]
+        }
+      });
+      for (const challan of challanRecords) {
+        const cDate = challan.challanDate || challan.bookingDate;
+        if (cDate && (!latestChallanDate || cDate > latestChallanDate)) {
+          latestChallanDate = cDate;
+        }
+      }
+
+      if (latestChallanDate) {
+        const minDate = new Date(latestChallanDate);
+        minDate.setHours(0, 0, 0, 0);
+        const invOnlyDate = new Date(invoiceDate);
+        invOnlyDate.setHours(0, 0, 0, 0);
+
+        if (invOnlyDate < minDate || invoiceDate > today) {
+          throw new BadRequestException('Customer Invoice Date must be between Challan Date and Current Date.');
+        }
+      } else {
+        if (invoiceDate > today) {
+          throw new BadRequestException('Customer Invoice Date must be between Challan Date and Current Date.');
+        }
+      }
+    } else {
+      const now = new Date();
+      const fyStart = new Date(now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear(), 3, 1);
+      fyStart.setHours(0, 0, 0, 0);
+      const invOnlyDate = new Date(invoiceDate);
+      invOnlyDate.setHours(0, 0, 0, 0);
+
+      if (invOnlyDate < fyStart || invoiceDate > today) {
+        throw new BadRequestException('Customer Invoice Date must be within current financial year.');
+      }
+    }
+  }
+
   async create(createDto: CreateSalesInvoiceDto, userId: number, uploadedFilePath?: string) {
     const invoiceNumber = await this.generateInvoiceNumber(userId);
     const customerInvoiceNumber = await this.generateCustomerInvoiceNumber(userId);
 
-    const bookingDate = new Date(); // Enforced (Condition 1, 2, 3)
-    const invoiceDate = new Date(createDto.invoiceDate || new Date());
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-
-    if (invoiceDate > today) {
-        throw new BadRequestException('Customer Invoice Date cannot be in the future');
-    }
-
-    const hasLink = (createDto.soId) || (createDto.challanNumbers && createDto.challanNumbers.length > 0);
-    
-    if (hasLink) {
-        let minDate: Date | null = null;
-        
-        // Multiple Challan Rule: Use the latest challan date
-        if (createDto.challanNumbers && createDto.challanNumbers.length > 0) {
-            const challanIds = createDto.challanNumbers.map(n => Number(n)).filter(n => !isNaN(n));
-            const challans = await this.prisma.salesChallan.findMany({
-                where: { id: { in: challanIds } }
-            });
-            challans.forEach(c => {
-                const cDate = c.challanDate || c.bookingDate;
-                if (!minDate || cDate > minDate) minDate = cDate;
-            });
-        }
-        
-        // Fallback to SO if no Challans or SO is newer (though usually Challan is after SO)
-        if (!minDate && createDto.soId) {
-             const so = await this.prisma.salesOrder.findUnique({
-                 where: { id: Number(createDto.soId) }
-             });
-             if (so) minDate = so.soCreationDate;
-        }
-
-        if (minDate) {
-            const minOnlyDate = new Date(minDate);
-            minOnlyDate.setHours(0, 0, 0, 0);
-            const invOnlyDate = new Date(invoiceDate);
-            invOnlyDate.setHours(0, 0, 0, 0);
-
-            if (invOnlyDate < minOnlyDate) {
-                throw new BadRequestException(`Customer Invoice Date cannot be before latest Challan/SO date (${minOnlyDate.toLocaleDateString()})`);
-            }
-        }
-    } else {
-        // Condition 3: Without SO and Challan -> Must be Today
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        const invOnlyDate = new Date(invoiceDate);
-        invOnlyDate.setHours(0, 0, 0, 0);
-
-        if (invOnlyDate.getTime() !== startOfToday.getTime()) {
-            throw new BadRequestException('Standalone invoices must be dated today');
-        }
-    }
+    const invDateToValidate = createDto.customerInvoiceDate || createDto.invoiceDate || new Date();
+    await this.validateInvoiceDate(
+      invDateToValidate,
+      createDto.soId,
+      createDto.challanNumbers,
+      createDto.soNumbers
+    );
 
     const customer = await this.prisma.accountMaster.findUnique({
       where: { id: createDto.customerId },
     });
 
     if (!customer) throw new BadRequestException('Customer not found');
+
+    if (customer.status !== 'ACTIVE' || customer.customerStatus !== 'ACTIVE') {
+      throw new BadRequestException('Customer is inactive. New sales transactions are not allowed.');
+    }
 
     const address = createDto.address || customer.addressLine1;
     const creditDays = createDto.creditDays || customer.customerCreditDays || 0;
@@ -435,6 +509,30 @@ export class SalesInvoiceService {
       include: { items: true, expenses: true },
     });
     if (!existing) throw new NotFoundException(`Invoice ID ${id} not found or access denied`);
+
+    const resolvedInvoiceDate = updateDto.customerInvoiceDate || updateDto.invoiceDate || existing.customerInvoiceDate || existing.invoiceDate;
+    const resolvedSoId = updateDto.soId !== undefined ? updateDto.soId : existing.soId;
+    
+    let resolvedChallanNumbers: string[] = [];
+    if (updateDto.challanNumbers !== undefined) {
+      resolvedChallanNumbers = updateDto.challanNumbers;
+    } else if (existing.challanNumber) {
+      resolvedChallanNumbers = existing.challanNumber.split(',').map(n => n.trim()).filter(Boolean);
+    }
+
+    let resolvedSoNumbers: string[] = [];
+    if (updateDto.soNumbers !== undefined) {
+      resolvedSoNumbers = updateDto.soNumbers;
+    } else if (existing.soNumber) {
+      resolvedSoNumbers = existing.soNumber.split(',').map(n => n.trim()).filter(Boolean);
+    }
+
+    await this.validateInvoiceDate(
+      resolvedInvoiceDate,
+      resolvedSoId,
+      resolvedChallanNumbers,
+      resolvedSoNumbers
+    );
 
     // Robust implementation that recalculates everything for data integrity
     const itemsToCreate = [];

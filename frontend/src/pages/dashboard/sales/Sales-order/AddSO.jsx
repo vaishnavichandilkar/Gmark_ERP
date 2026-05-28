@@ -39,6 +39,7 @@ const AddSO = () => {
     const customerTypes = ['industrial', 'institutional', 'dealer', 'retailer', 'wholesaler'];
     const [customerSearch, setCustomerSearch] = useState('');
     const [customers, setCustomers] = useState([]);
+    const [poType, setPoType] = useState('');
     const [formData, setFormData] = useState({
         customer_id: '',
         customer_name: '',
@@ -52,7 +53,8 @@ const AddSO = () => {
         customer_type: '',
         customer_po_number: '',
         po_date: '',
-        po_expiry_date: ''
+        po_expiry_date: '',
+        customer_amt: ''
     });
 
     const [errors, setErrors] = useState({});
@@ -113,6 +115,11 @@ const AddSO = () => {
                             setFormData(draft.formData);
                             setItems(draft.items);
                             setCustomerSearch(draft.formData.customer_name || '');
+                            if (draft.formData.customer_po_number === 'verbal') {
+                                setPoType('verbal');
+                            } else if (draft.formData.customer_po_number) {
+                                setPoType('written');
+                            }
                         } else if (!isEditMode) {
                             // Partial restore for general draft (existing behavior)
                             const {
@@ -243,8 +250,14 @@ const AddSO = () => {
                             customer_type: soToEdit.customerType || '',
                             customer_po_number: soToEdit.customerPoNumber || '',
                             po_date: soToEdit.poDate ? soToEdit.poDate.split('T')[0] : '',
-                            po_expiry_date: soToEdit.poExpiryDate ? soToEdit.poExpiryDate.split('T')[0] : ''
+                            po_expiry_date: soToEdit.poExpiryDate ? soToEdit.poExpiryDate.split('T')[0] : '',
+                            customer_amt: soToEdit.customerAmt || ''
                         });
+                        if (soToEdit.customerPoNumber === 'verbal') {
+                            setPoType('verbal');
+                        } else if (soToEdit.customerPoNumber) {
+                            setPoType('written');
+                        }
                         setCustomerSearch(soToEdit.customerName);
                         if (soToEdit.items) {
                             setItems(soToEdit.items.map(item => ({
@@ -364,10 +377,10 @@ const AddSO = () => {
 
     const handleQuickAddProduct = (product, targetIndex = null) => {
         const productRate = product.sellingRate || product.rate || 0;
-        const taxRate = product.tax_rate || 0;
+        const taxRate = parseFloat(product.tax_rate ?? product.taxRate ?? product.taxPercent ?? product.tax_percent ?? product.tax ?? 0);
         const beforeTax = (1 * productRate); // qty=1 initially, no discount
         const taxAmt = isGstApplicable ? (beforeTax * taxRate / 100) : 0;
-        const printDesc = product.print_description || product.product_name || product.description || '';
+        const printDesc = product.print_description || product.description || product.product_name || '';
         const newItem = {
             id: Date.now(),
             product_id: product.id,
@@ -570,6 +583,7 @@ const AddSO = () => {
             customerPoNumber: formData.customer_po_number || null,
             poDate: formData.po_date ? formData.po_date : null,
             poExpiryDate: formData.po_expiry_date ? formData.po_expiry_date : null,
+            customerAmt: formData.customer_amt ? parseFloat(formData.customer_amt) : null,
             creditDays: Number(formData.credit_days),
             items: items.filter(item => item.product_name).map(item => ({
                 productId: item.product_id,
@@ -781,7 +795,7 @@ const AddSO = () => {
                             <label className="text-[14px] font-semibold text-[#374151]">SO Creation Date</label>
                             <input
                                 type="text"
-                                value={formatDate(new Date())}
+                                value={formatDate(formData.creation_date)}
                                 readOnly
                                 className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium"
                             />
@@ -831,61 +845,122 @@ const AddSO = () => {
                             {errors.expiry_date && <p className="text-red-500 text-[12px] mt-1 italic font-medium">*{errors.expiry_date}</p>}
                         </div>
 
-                        {/* PO Number */}
+                        {/* Customer PO Type */}
                         <div className="space-y-2">
-                            <label className="text-[14px] font-semibold text-[#374151]">PO Number</label>
-                            <input
-                                type="text"
-                                value={formData.customer_po_number || ''}
-                                onChange={(e) => setFormData({ ...formData, customer_po_number: e.target.value })}
+                            <label className="text-[14px] font-semibold text-[#374151]">Customer PO Type</label>
+                            <select
+                                value={poType}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setPoType(val);
+                                    if (val === 'verbal') {
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            customer_po_number: 'verbal',
+                                            po_date: '',
+                                            po_expiry_date: '',
+                                            customer_amt: ''
+                                        }));
+                                    } else if (val === 'written') {
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            customer_po_number: prev.customer_po_number === 'verbal' ? '' : prev.customer_po_number
+                                        }));
+                                    } else {
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            customer_po_number: '',
+                                            po_date: '',
+                                            po_expiry_date: '',
+                                            customer_amt: ''
+                                        }));
+                                    }
+                                }}
                                 className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] font-medium"
-                                placeholder="Enter PO Number"
-                            />
+                            >
+                                <option value="">Select PO Type...</option>
+                                <option value="verbal">Verbal</option>
+                                <option value="written">Written</option>
+                            </select>
                         </div>
 
-                        {/* PO Date */}
-                        <div className="space-y-2">
-                            <label className="text-[14px] font-semibold text-[#374151]">PO Date</label>
-                            <div className="relative group/date">
+                        {/* Customer PO Number */}
+                        {poType === 'written' && (
+                            <div className="space-y-2 animate-in fade-in duration-300">
+                                <label className="text-[14px] font-semibold text-[#374151]">Customer PO Number</label>
                                 <input
-                                    type="date"
-                                    value={formData.po_date || ''}
-                                    onKeyDown={(e) => e.preventDefault()}
-                                    onClick={(e) => {
-                                        try {
-                                            e.target.showPicker();
-                                        } catch (err) {}
-                                    }}
-                                    onChange={(e) => {
-                                        setFormData({ ...formData, po_date: e.target.value });
-                                    }}
-                                    className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-12 text-[14px] outline-none transition-all placeholder:text-gray-400 custom-date-input cursor-pointer focus:border-[#073318]"
+                                    type="text"
+                                    value={formData.customer_po_number || ''}
+                                    onChange={(e) => setFormData({ ...formData, customer_po_number: e.target.value })}
+                                    className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] font-medium"
+                                    placeholder="Enter Customer PO Number"
                                 />
-                                <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover/date:text-[#073318] transition-colors" size={20} />
                             </div>
-                        </div>
+                        )}
 
-                        {/* PO Expiry Date */}
-                        <div className="space-y-2">
-                            <label className="text-[14px] font-semibold text-[#374151]">PO Expiry Date</label>
-                            <div className="relative group/date">
-                                <input
-                                    type="date"
-                                    value={formData.po_expiry_date || ''}
-                                    onKeyDown={(e) => e.preventDefault()}
-                                    onClick={(e) => {
-                                        try {
-                                            e.target.showPicker();
-                                        } catch (err) {}
-                                    }}
-                                    onChange={(e) => {
-                                        setFormData({ ...formData, po_expiry_date: e.target.value });
-                                    }}
-                                    className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-12 text-[14px] outline-none transition-all placeholder:text-gray-400 custom-date-input cursor-pointer focus:border-[#073318]"
-                                />
-                                <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover/date:text-[#073318] transition-colors" size={20} />
+                        {/* Customer PO Date */}
+                        {poType === 'written' && (
+                            <div className="space-y-2 animate-in fade-in duration-300">
+                                <label className="text-[14px] font-semibold text-[#374151]">Customer PO Date</label>
+                                <div className="relative group/date">
+                                    <input
+                                        type="date"
+                                        value={formData.po_date || ''}
+                                        onKeyDown={(e) => e.preventDefault()}
+                                        onClick={(e) => {
+                                            try {
+                                                e.target.showPicker();
+                                            } catch (err) {}
+                                        }}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, po_date: e.target.value });
+                                        }}
+                                        className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-12 text-[14px] outline-none transition-all placeholder:text-gray-400 custom-date-input cursor-pointer focus:border-[#073318]"
+                                    />
+                                    <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover/date:text-[#073318] transition-colors" size={20} />
+                                </div>
                             </div>
-                        </div>
+                        )}
+
+                        {/* Customer PO Expiry Date */}
+                        {poType === 'written' && (
+                            <div className="space-y-2 animate-in fade-in duration-300">
+                                <label className="text-[14px] font-semibold text-[#374151]">Customer PO Expiry Date</label>
+                                <div className="relative group/date">
+                                    <input
+                                        type="date"
+                                        value={formData.po_expiry_date || ''}
+                                        onKeyDown={(e) => e.preventDefault()}
+                                        onClick={(e) => {
+                                            try {
+                                                e.target.showPicker();
+                                            } catch (err) {}
+                                        }}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, po_expiry_date: e.target.value });
+                                        }}
+                                        className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-12 text-[14px] outline-none transition-all placeholder:text-gray-400 custom-date-input cursor-pointer focus:border-[#073318]"
+                                    />
+                                    <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover/date:text-[#073318] transition-colors" size={20} />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Customer PO Amount */}
+                        {poType === 'written' && (
+                            <div className="space-y-2 animate-in fade-in duration-300">
+                                <label className="text-[14px] font-semibold text-[#374151]">Customer PO Amount</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={formData.customer_amt || ''}
+                                    onChange={(e) => setFormData({ ...formData, customer_amt: e.target.value })}
+                                    className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] font-medium text-[#073318]"
+                                    placeholder="Enter Customer PO Amount"
+                                />
+                            </div>
+                        )}
 
                         <div className="space-y-2">
                             <label className="text-[14px] font-semibold text-[#374151]">GST Number</label>
@@ -1348,7 +1423,7 @@ const AddSO = () => {
                                         <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                             <input
                                                 type="text"
-                                                value={item.tax_percent ? `${item.tax_percent}%` : ''}
+                                                value={item.tax_percent !== undefined && item.tax_percent !== null && item.tax_percent !== '' ? `${item.tax_percent}%` : ''}
                                                 readOnly={!!item.product_name}
                                                 onKeyDown={(e) => handleSearchKeyDown(e, index)}
                                                 onFocus={() => {

@@ -403,19 +403,23 @@ const AddGRN = () => {
             newErrors.document_date = "Challan date is required";
         } else {
             const today = new Date().toISOString().split('T')[0];
-            if (formData.document_date > today) {
-                newErrors.document_date = "Date cannot be in the future";
-            }
+            const hasPO = !!formData.po_id;
             
-            // Validation based on PO or FY
-            if (formData.po_id && formData.po_date) {
-                if (formData.document_date < formData.po_date) {
-                    newErrors.document_date = `Date cannot be before PO date (${formData.po_date})`;
+            if (hasPO) {
+                // Condition 1A: Supplier Challan Date Validation
+                // Allowed: PO Date to Today
+                // Validation Message: Supplier Challan Date must be between PO Date and Current Date.
+                const poDate = formData.po_date;
+                if (formData.document_date > today || (poDate && formData.document_date < poDate)) {
+                    newErrors.document_date = "Supplier Challan Date must be between PO Date and Current Date.";
                 }
             } else {
+                // Condition 2A: Supplier Challan Date Validation (Without PO)
+                // Allowed: Financial Year Start Date to Today
+                // Validation Message: Supplier Challan Date must be within current financial year.
                 const fyStart = getFinancialYearStart();
-                if (formData.document_date < fyStart) {
-                    newErrors.document_date = `Date cannot be before FY start (${fyStart})`;
+                if (formData.document_date > today || formData.document_date < fyStart) {
+                    newErrors.document_date = "Supplier Challan Date must be within current financial year.";
                 }
             }
         }

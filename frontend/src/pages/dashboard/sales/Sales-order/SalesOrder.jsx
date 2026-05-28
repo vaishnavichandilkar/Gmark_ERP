@@ -326,9 +326,9 @@ const SalesOrder = () => {
         "SO NO": so.soNumber,
         "CUSTOMER NAME": so.customerName,
         "CUSTOMER TYPE": so.customerType || 'Retail',
-        "PO NUMBER": so.customerPoNumber || '-',
-        "PO DATE": so.poDate ? formatDate(so.poDate) : '-',
-        "PO EXP. DATE": so.poExpiryDate ? formatDate(so.poExpiryDate) : '-',
+        "CUSTOMER PO NUMBER": so.customerPoNumber || '-',
+        "CUSTOMER PO DATE": so.poDate ? formatDate(so.poDate) : '-',
+        "CUSTOMER PO EXP. DATE": so.poExpiryDate ? formatDate(so.poExpiryDate) : '-',
         "CREATION DATE": formatDate(so.soCreationDate),
         "EXPIRY DATE": formatDate(so.expiryDate),
         "AMOUNT": (so.totalAmount || 0).toFixed(2),
@@ -343,7 +343,7 @@ const SalesOrder = () => {
         const timestampStr = `${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
 
         // Define Column Headers
-        const headers = ["SO No", "Customer Name", "Customer Type", "PO Number", "PO Date", "PO Exp. Date", "Cr. Date", "Exp. Date", "Amount", "GST Number", "Cr. Days", "Tax Amt", "Total Amt", "Status"];
+        const headers = ["SO No", "Customer Name", "Customer Type", "Customer PO Number", "Customer PO Date", "Customer PO Exp. Date", "Cr. Date", "Exp. Date", "Amount", "GST Number", "Cr. Days", "Tax Amt", "Total Amt", "Status"];
 
         // Prepare Data for AOA (Array of Arrays)
         const aoaData = [
@@ -455,7 +455,7 @@ const SalesOrder = () => {
         const timestamp = `Exported on: ${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
         doc.text(timestamp, pageWidth - 14, 26, { align: "right" });
 
-        const head = [["SO No", "Customer Name", "PO Number", "PO Date", "PO Exp. Date", "Cr. Date", "Exp. Date", "Amount", "GST Number", "Cr. Days", "Tax Amt", "Total Amt", "Status"]];
+        const head = [["SO No", "Customer Name", "Customer PO Number", "Customer PO Date", "Customer PO Exp. Date", "Cr. Date", "Exp. Date", "Amount", "GST Number", "Cr. Days", "Tax Amt", "Total Amt", "Status"]];
         const body = filteredData.map(so => [
           so.soNumber || "-",
           so.customerName || "-",
@@ -540,9 +540,9 @@ const SalesOrder = () => {
         "Customer Name*",
         "Credit Days",
         "Expiry Date (YYYY-MM-DD)*",
-        "PO Number",
-        "PO Date (YYYY-MM-DD)",
-        "PO Expiry Date (YYYY-MM-DD)",
+        "Customer PO Number",
+        "Customer PO Date (YYYY-MM-DD)",
+        "Customer PO Expiry Date (YYYY-MM-DD)",
         "Product Code*",
         "Quantity*",
         "Rate*",
@@ -732,7 +732,7 @@ const SalesOrder = () => {
           <table className="w-full min-w-[1500px] border-collapse text-left font-outfit">
             <thead>
               <tr className="bg-emerald-900 text-white font-bold text-[15px] uppercase">
-                {["SO No", "Customer Name", "Customer Type", "PO Number", "PO Date", "PO Exp. Date", "Creation Date", "Expiry Date", "Amount", "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status", "Action"].map(h => (
+                {["SO No", "Customer Name", "Customer Type", "Customer PO Number", "Customer PO Date", "Customer PO Exp. Date", "Creation Date", "Expiry Date", "Amount", "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status", "Action"].map(h => (
                   <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap" style={{ wordSpacing: '1px' }}>{h}</th>
                 ))}
               </tr>

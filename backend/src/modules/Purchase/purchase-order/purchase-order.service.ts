@@ -76,6 +76,16 @@ export class PurchaseOrderService {
   }
 
   async create(createDto: CreatePurchaseOrderDto, userId: number) {
+    const fullSupplier = await this.prisma.accountMaster.findUnique({
+      where: { id: createDto.supplierId }
+    });
+    if (!fullSupplier) {
+      throw new BadRequestException('Supplier not found');
+    }
+    if (fullSupplier.status !== 'ACTIVE' || fullSupplier.supplierStatus !== 'ACTIVE') {
+      throw new BadRequestException('Supplier is inactive. New purchase transactions are not allowed.');
+    }
+
     const supplier = await this.getSupplierDetails(createDto.supplierId, userId);
     
     // Requirement 4 & 8: Prefer passed poNumber (if validly unique) or generate new

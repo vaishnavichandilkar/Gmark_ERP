@@ -101,7 +101,8 @@ const AddPO = () => {
 
                 const response = await accountService.getAllAccounts({
                     groupName: 'SUNDRY_CREDITORS',
-                    limit: 1000
+                    limit: 1000,
+                    status: 'ACTIVE'
                 });
                 const fetchedSuppliers = response.data || [];
                 setSuppliers(fetchedSuppliers);
@@ -403,7 +404,7 @@ const AddPO = () => {
     };
 
     const handleQuickAddProduct = (product, targetIndex = null) => {
-        const printDesc = product.print_description || product.product_name || product.description || product.printDescription || '';
+        const printDesc = product.print_description || product.description || product.printDescription || product.product_name || '';
         const newItem = {
             id: Date.now(),
             product_id: product.id,

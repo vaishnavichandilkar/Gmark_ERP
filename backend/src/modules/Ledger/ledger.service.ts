@@ -26,6 +26,7 @@ export class LedgerService {
               gte: query.startDate ? new Date(query.startDate) : undefined,
               lte: query.endDate ? new Date(query.endDate) : undefined,
             },
+            transactionType: { in: [TransactionType.Purchase, TransactionType.Payment] },
           },
         },
       },
@@ -34,10 +35,10 @@ export class LedgerService {
     return accounts.map((account) => {
       const openingBalance = account.supplierBalanceType === BalanceType.Dr ? -Number(account.supplierOpeningBalance || 0) : Number(account.supplierOpeningBalance || 0);
       const debit = account.transactions
-        .filter((t) => t.transactionType === TransactionType.Payment)
+        .filter((t) => t.entryType === BalanceType.Dr)
         .reduce((sum, t) => sum + Number(t.amount), 0);
       const credit = account.transactions
-        .filter((t) => t.transactionType === TransactionType.Purchase)
+        .filter((t) => t.entryType === BalanceType.Cr)
         .reduce((sum, t) => sum + Number(t.amount), 0);
       const closingBalance = openingBalance + credit - debit;
 
@@ -71,6 +72,7 @@ export class LedgerService {
               gte: query.startDate ? new Date(query.startDate) : undefined,
               lte: query.endDate ? new Date(query.endDate) : undefined,
             },
+            transactionType: { in: [TransactionType.Sales, TransactionType.Receipt] },
           },
         },
       },
@@ -79,10 +81,10 @@ export class LedgerService {
     return accounts.map((account) => {
       const openingBalance = account.customerBalanceType === BalanceType.Cr ? -Number(account.customerOpeningBalance || 0) : Number(account.customerOpeningBalance || 0);
       const debit = account.transactions
-        .filter((t) => t.transactionType === TransactionType.Sales)
+        .filter((t) => t.entryType === BalanceType.Dr)
         .reduce((sum, t) => sum + Number(t.amount), 0);
       const credit = account.transactions
-        .filter((t) => t.transactionType === TransactionType.Receipt)
+        .filter((t) => t.entryType === BalanceType.Cr)
         .reduce((sum, t) => sum + Number(t.amount), 0);
       const closingBalance = openingBalance + debit - credit;
 
@@ -181,6 +183,21 @@ export class LedgerService {
       isCreditorLedger = true;
     }
 
+    const isBankOrCash = 
+      account.accountType === AccountType.Bank || 
+      account.accountType === AccountType.Cash || 
+      account.accountType === AccountType.BANK || 
+      account.accountType === AccountType.CASH || 
+      account.accountType?.toUpperCase() === 'BANK' || 
+      account.accountType?.toUpperCase() === 'CASH' ||
+      (type && (type === 'Bank' || type === 'Cash'));
+
+    const allowedTypes = isBankOrCash
+      ? [TransactionType.Payment, TransactionType.Receipt]
+      : isCreditorLedger
+        ? [TransactionType.Purchase, TransactionType.Payment]
+        : [TransactionType.Sales, TransactionType.Receipt];
+
     const baseOpeningBalance = isCreditorLedger
       ? (account.supplierBalanceType === BalanceType.Dr ? -Number(account.supplierOpeningBalance || 0) : Number(account.supplierOpeningBalance || 0))
       : (account.customerBalanceType === BalanceType.Cr ? -Number(account.customerOpeningBalance || 0) : Number(account.customerOpeningBalance || 0));
@@ -195,7 +212,7 @@ export class LedgerService {
           accountId,
           userId,
           bookingDate: { lt: new Date(startDate) },
-          transactionType: { in: isCreditorLedger ? [TransactionType.Purchase, TransactionType.Payment] : [TransactionType.Sales, TransactionType.Receipt] },
+          transactionType: { in: allowedTypes },
         },
       });
 
@@ -221,7 +238,7 @@ export class LedgerService {
           gte: startDate ? new Date(startDate) : undefined,
           lte: endDate ? new Date(endDate) : undefined,
         },
-        transactionType: { in: isCreditorLedger ? [TransactionType.Purchase, TransactionType.Payment] : [TransactionType.Sales, TransactionType.Receipt] },
+        transactionType: { in: allowedTypes },
       },
       orderBy: { bookingDate: 'asc' },
     });
@@ -255,8 +272,12 @@ export class LedgerService {
       isBalanceRow: true,
     });
 
-    const paymentInvoices = paginatedTransactions.filter(t => t.transactionType === TransactionType.Payment && t.invoiceNumber).map(t => t.invoiceNumber as string);
-    const receiptInvoices = paginatedTransactions.filter(t => t.transactionType === TransactionType.Receipt && t.invoiceNumber).map(t => t.invoiceNumber as string);
+    const paymentInvoices = paginatedTransactions
+      .filter(t => t.invoiceNumber && (t.invoiceNumber.startsWith('PV-') || (!t.invoiceNumber.startsWith('RV-') && t.transactionType === TransactionType.Payment)))
+      .map(t => t.invoiceNumber as string);
+    const receiptInvoices = paginatedTransactions
+      .filter(t => t.invoiceNumber && (t.invoiceNumber.startsWith('RV-') || (!t.invoiceNumber.startsWith('PV-') && t.transactionType === TransactionType.Receipt)))
+      .map(t => t.invoiceNumber as string);
     
     const [payments, receipts] = await Promise.all([
       paymentInvoices.length > 0 ? this.prisma.paymentVoucher.findMany({ where: { voucherNumber: { in: paymentInvoices } } }) : Promise.resolve([]),
@@ -280,18 +301,26 @@ export class LedgerService {
       }
 
       let displayNarration = transaction.invoiceNumber || '-';
-      if (transaction.transactionType === TransactionType.Payment && transaction.invoiceNumber) {
-        const n = paymentNarrationMap.get(transaction.invoiceNumber);
-        displayNarration = n || '-';
-      } else if (transaction.transactionType === TransactionType.Receipt && transaction.invoiceNumber) {
-        const n = receiptNarrationMap.get(transaction.invoiceNumber);
-        displayNarration = n || '-';
+      if (transaction.invoiceNumber) {
+        if (transaction.invoiceNumber.startsWith('PV-')) {
+          const n = paymentNarrationMap.get(transaction.invoiceNumber);
+          displayNarration = n || '-';
+        } else if (transaction.invoiceNumber.startsWith('RV-')) {
+          const n = receiptNarrationMap.get(transaction.invoiceNumber);
+          displayNarration = n || '-';
+        } else if (transaction.transactionType === TransactionType.Payment) {
+          const n = paymentNarrationMap.get(transaction.invoiceNumber);
+          displayNarration = n || '-';
+        } else if (transaction.transactionType === TransactionType.Receipt) {
+          const n = receiptNarrationMap.get(transaction.invoiceNumber);
+          displayNarration = n || '-';
+        }
       }
 
       ledgerItems.push({
         id: transaction.id,
         date: transaction.bookingDate,
-        particulars: this.mapParticulars(transaction.transactionType),
+        particulars: this.mapParticulars(transaction.transactionType, transaction.invoiceNumber || undefined),
         narration: displayNarration,
         debit,
         credit,
@@ -315,7 +344,11 @@ export class LedgerService {
     };
   }
 
-  private mapParticulars(type: TransactionType): string {
+  private mapParticulars(type: TransactionType, invoiceNumber?: string): string {
+    if (invoiceNumber) {
+      if (invoiceNumber.startsWith('RV-')) return 'Receipt';
+      if (invoiceNumber.startsWith('PV-')) return 'Payment';
+    }
     switch (type) {
       case TransactionType.Purchase: return 'Purchase';
       case TransactionType.Sales: return 'Sales';

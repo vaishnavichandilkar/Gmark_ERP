@@ -60,7 +60,7 @@ const AddChallan = () => {
             setIsLoading(true);
             try {
                 const [custRes, prodRes, profileRes] = await Promise.all([
-                    accountService.getAllAccounts({ limit: 1000, groupName: 'SUNDRY_DEBTORS' }),
+                    accountService.getAllAccounts({ limit: 1000, groupName: 'SUNDRY_DEBTORS', status: 'ACTIVE' }),
                     productService.getProducts({ limit: 1000 }),
                     getProfileApi()
                 ]);
@@ -378,9 +378,37 @@ const AddChallan = () => {
 
     const validateForm = () => {
         const newErrors = {};
-        if (!formData.customerId && !formData.customerName) newErrors.customerName = "Customer";
-        if (!formData.customerChallanNumber) newErrors.customerChallanNumber = "Challan Number";
-        if (!formData.customerChallanDate) newErrors.customerChallanDate = "Challan Date";
+        if (!formData.customerId && !formData.customerName) newErrors.customerName = "Customer is required";
+        if (!formData.customerChallanNumber) newErrors.customerChallanNumber = "Challan Number is required";
+        
+        if (!formData.customerChallanDate) {
+            newErrors.customerChallanDate = "Challan Date is required";
+        } else {
+            const challanDate = new Date(formData.customerChallanDate);
+            const today = new Date();
+            today.setHours(23, 59, 59, 999);
+
+            if (formData.soId) {
+                const soDate = new Date(formData.soCreationDate);
+                soDate.setHours(0, 0, 0, 0);
+                const challanOnlyDate = new Date(challanDate);
+                challanOnlyDate.setHours(0, 0, 0, 0);
+
+                if (challanOnlyDate < soDate || challanDate > today) {
+                    newErrors.customerChallanDate = "Challan Date must be between SO Date and Current Date.";
+                }
+            } else {
+                const now = new Date();
+                const fyStart = new Date(now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear(), 3, 1);
+                fyStart.setHours(0, 0, 0, 0);
+                const challanOnlyDate = new Date(challanDate);
+                challanOnlyDate.setHours(0, 0, 0, 0);
+
+                if (challanOnlyDate < fyStart || challanDate > today) {
+                    newErrors.customerChallanDate = "Challan Date must be within current financial year.";
+                }
+            }
+        }
 
         const validItems = items.filter(item => item.productId && parseFloat(item.quantity) > 0);
         if (validItems.length === 0) {
@@ -394,20 +422,7 @@ const AddChallan = () => {
     const handleSave = async () => {
         const isValid = validateForm();
         if (!isValid) {
-            const missingFields = Object.values(errors).join(", ");
-            toast.error(`Please fill required fields: ${missingFields || "Correct errors in items list"}`);
-            
-            // Re-validate to get fresh errors for the message if needed
-            const newErrors = {};
-            if (!formData.customerId) newErrors.customerName = "Customer";
-            if (!formData.customerChallanNumber) newErrors.customerChallanNumber = "Challan Number";
-            if (!formData.customerChallanDate) newErrors.customerChallanDate = "Challan Date";
-            if (items.length === 0 || (items.length === 1 && !items[0].productId)) newErrors.items = "at least one product";
-            
-            const fieldNames = Object.values(newErrors).join(", ");
-            if (fieldNames) {
-                toast.error(`Required missing: ${fieldNames}`, { duration: 4000 });
-            }
+            toast.error("Please correct the errors in the form before saving.");
             return;
         }
 

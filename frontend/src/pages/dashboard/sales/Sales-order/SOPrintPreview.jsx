@@ -107,6 +107,8 @@ const SOPrintPreview = () => {
         creditDays, credit_days,
         customerPoNumber, customer_po_number,
         poDate, po_date,
+        poExpiryDate, po_expiry_date,
+        customerAmt, customer_amt,
         items = []
     } = soData;
 
@@ -119,6 +121,8 @@ const SOPrintPreview = () => {
     const final_credit_days = creditDays || credit_days || "0";
     const final_customer_po_number = customerPoNumber || customer_po_number || "-";
     const final_po_date = poDate || po_date || null;
+    const final_po_expiry_date = poExpiryDate || po_expiry_date || null;
+    const final_customer_amt = customerAmt !== undefined ? customerAmt : (customer_amt !== undefined ? customer_amt : null);
 
     const subTotal = items.reduce((sum, item) => {
         const qty = parseFloat(item.quantity) || 0;
@@ -132,7 +136,7 @@ const SOPrintPreview = () => {
         const qty = parseFloat(item.quantity) || 0;
         const rate = parseFloat(item.rate) || 0;
         const discAmt = parseFloat(item.discountAmount || item.discount_amount || 0);
-        const taxPct = parseFloat(item.taxPercent || item.tax_percent || 0);
+        const taxPct = parseFloat(item.taxPercent ?? item.tax_percent ?? 0);
         const beforeTax = parseFloat(item.before_tax || item.beforeTaxAmount || (qty * rate - discAmt));
         const taxAmt = parseFloat(item.tax_amount || item.taxAmount || (beforeTax * taxPct / 100));
         return sum + (taxAmt || 0);
@@ -348,16 +352,41 @@ const SOPrintPreview = () => {
                                         <span className="font-semibold text-[10.5px] whitespace-nowrap">{formatDate(final_so_creation_date)}</span>
                                     </div>
                                 </div>
-                                <div className="flex border-b border-black h-[34px]">
-                                    <div className="w-[45%] flex items-center px-4 gap-2">
-                                        <span className="font-black text-[10.5px] whitespace-nowrap">Cust. PO No :</span>
-                                        <span className="font-semibold text-[10.5px] whitespace-nowrap">{final_customer_po_number}</span>
+                                {final_customer_po_number === 'verbal' ? (
+                                    <div className="flex border-b border-black h-[34px]">
+                                        <div className="w-[45%] flex items-center px-4 gap-2">
+                                            <span className="font-black text-[10.5px] whitespace-nowrap">Customer PO No:</span>
+                                            <span className="font-semibold text-[10.5px] whitespace-nowrap">Verbal</span>
+                                        </div>
+                                        <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                            <span className="font-black text-[10.5px] whitespace-nowrap"></span>
+                                            <span className="font-semibold text-[10.5px] whitespace-nowrap"></span>
+                                        </div>
                                     </div>
-                                    <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
-                                        <span className="font-black text-[10.5px] whitespace-nowrap">PO Date :</span>
-                                        <span className="font-semibold text-[10.5px] whitespace-nowrap">{formatDate(final_po_date)}</span>
-                                    </div>
-                                </div>
+                                ) : (
+                                    <>
+                                        <div className="flex border-b border-black h-[34px]">
+                                            <div className="w-[45%] flex items-center px-4 gap-2">
+                                                <span className="font-black text-[10.5px] whitespace-nowrap">Customer PO No:</span>
+                                                <span className="font-semibold text-[10.5px] whitespace-nowrap">{final_customer_po_number}</span>
+                                            </div>
+                                            <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                                <span className="font-black text-[10.5px] whitespace-nowrap">Customer PO Date:</span>
+                                                <span className="font-semibold text-[10.5px] whitespace-nowrap">{formatDate(final_po_date)}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex border-b border-black h-[34px]">
+                                            <div className="w-[45%] flex items-center px-4 gap-2">
+                                                <span className="font-black text-[10.5px] whitespace-nowrap">Cust. PO Expiry:</span>
+                                                <span className="font-semibold text-[10.5px] whitespace-nowrap">{formatDate(final_po_expiry_date)}</span>
+                                            </div>
+                                            <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                                <span className="font-black text-[10.5px] whitespace-nowrap">Cust. PO Amt:</span>
+                                                <span className="font-semibold text-[10.5px] whitespace-nowrap">{final_customer_amt !== null && final_customer_amt !== undefined && final_customer_amt !== '' ? `₹ ${parseFloat(final_customer_amt).toFixed(2)}` : '-'}</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                                 <div className="flex border-b border-black h-[34px] items-center px-4 gap-2">
                                     <span className="font-black text-[11px] min-w-[80px]">Pay. Terms</span>
                                     <span className="font-semibold text-[11px]">{final_credit_days} Days</span>
@@ -401,7 +430,7 @@ const SOPrintPreview = () => {
                                             </div>
                                         </td>
                                         <td className="border-b border-r border-black text-center">{item.hsnCode || item.hsn}</td>
-                                        <td className="border-b border-r border-black text-center">{item.taxPercent || item.tax_percent}</td>
+                                        <td className="border-b border-r border-black text-center">{item.taxPercent ?? item.tax_percent ?? 0}</td>
                                         <td className="border-b border-r border-black text-center">{item.quantity}</td>
                                         <td className="border-b border-r border-black text-center uppercase">{getStandardGstUom(item.uom)}</td>
                                         <td className="border-b border-r border-black text-center">{item.rate}</td>

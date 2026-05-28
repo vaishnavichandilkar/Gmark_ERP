@@ -259,7 +259,12 @@ const ChallanForm = ({
                             ref={challanDateRef}
                             className="absolute opacity-0 pointer-events-none w-0 h-0"
                             value={formData.customerChallanDate || ''}
-                            min={formData.soCreationDate ? formData.soCreationDate.split('T')[0] : ''}
+                            min={formData.soId && formData.soCreationDate ? formData.soCreationDate.split('T')[0] : (() => {
+                                const today = new Date();
+                                const currentMonth = today.getMonth();
+                                const startYear = currentMonth < 3 ? today.getFullYear() - 1 : today.getFullYear();
+                                return `${startYear}-04-01`;
+                            })()}
                             max={new Date().toISOString().split('T')[0]}
                             onKeyDown={(e) => e.preventDefault()}
                             onChange={(e) => setFormData({ ...formData, customerChallanDate: e.target.value })}

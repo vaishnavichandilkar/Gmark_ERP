@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 
 import ledgerService from '../../../services/ledgerService';
 import voucherService from '../../../services/voucherService';
+import PaymentModal from '../../../components/common/PaymentModal';
 
 const Finance = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -28,6 +29,11 @@ const Finance = () => {
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [rowsPerPage, setRowsPerPage] = useState(5);
     const [currentPage, setCurrentPage] = useState(1);
+    
+    // Edit Voucher States
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editVoucherData, setEditVoucherData] = useState(null);
+    const [editVoucherType, setEditVoucherType] = useState('Receipt');
     const getCurrentFiscalYear = () => {
         const now = new Date();
         const year = now.getFullYear();
@@ -51,7 +57,7 @@ const Finance = () => {
     const [summaryData, setSummaryData] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    const fiscalYears = ['2024-2025', '2025-2026', '2026-2027'];
+    const fiscalYears = ['2025-2026', '2026-2027'];
 
     const handleFiscalYearChange = (year) => {
         setActiveFiscalYear(year);
@@ -128,42 +134,63 @@ const Finance = () => {
 
     const [bankData, setBankData] = useState([]);
 
-    useEffect(() => {
-        const fetchVouchers = async () => {
-            if (activeMainTab !== 'Bank Reconciliation') return;
-            setLoading(true);
-            try {
-                let response;
-                if (activeSubTab === 'Receipts') {
-                    response = await voucherService.getReceiptVouchers();
-                } else if (activeSubTab === 'Payments') {
-                    response = await voucherService.getPaymentVouchers();
-                } else {
-                    setBankData([]);
-                    return;
-                }
-                
-                // Map backend data to table format
-                const mappedData = response.map(v => ({
-                    id: v.id,
-                    date: new Date(v.voucherDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
-                    vchNo: v.voucherNumber,
-                    account: v.items?.map(i => i.account?.accountName).join(', ') || 'Unknown',
-                    bank: v.bankCashLedger?.accountName || '-',
-                    narration: v.narration,
-                    amount: v.totalAmount,
-                    status: 'Pending'
-                }));
-                
-                setBankData(mappedData);
-            } catch (error) {
-                console.error('Error fetching vouchers:', error);
-                toast.error('Failed to load vouchers');
-            } finally {
-                setLoading(false);
+    const fetchVouchers = async () => {
+        if (activeMainTab !== 'Bank Reconciliation') return;
+        setLoading(true);
+        try {
+            let response;
+            if (activeSubTab === 'Receipts') {
+                response = await voucherService.getReceiptVouchers();
+            } else if (activeSubTab === 'Payments') {
+                response = await voucherService.getPaymentVouchers();
+            } else {
+                setBankData([]);
+                return;
             }
-        };
+            
+            // Map backend data to table format
+            const mappedData = response.map(v => ({
+                id: v.id,
+                date: new Date(v.voucherDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
+                vchNo: v.voucherNumber,
+                account: v.items?.map(i => i.account?.accountName).join(', ') || 'Unknown',
+                bank: v.bankCashLedger?.accountName || '-',
+                narration: v.narration,
+                amount: v.totalAmount,
+                status: 'Pending',
+                originalVoucher: v
+            }));
+            
+            setBankData(mappedData);
+        } catch (error) {
+            console.error('Error fetching vouchers:', error);
+            toast.error('Failed to load vouchers');
+        } finally {
+            setLoading(false);
+        }
+    };
 
+    const handleDeleteVoucher = async (item) => {
+        if (!window.confirm(`Are you sure you want to delete voucher ${item.vchNo}?`)) {
+            return;
+        }
+
+        try {
+            if (activeSubTab === 'Receipts') {
+                await voucherService.deleteReceiptVoucher(item.id);
+            } else if (activeSubTab === 'Payments') {
+                await voucherService.deletePaymentVoucher(item.id);
+            }
+            toast.success('Voucher deleted successfully');
+            fetchVouchers();
+        } catch (error) {
+            console.error('Error deleting voucher:', error);
+            const msg = error.response?.data?.message;
+            toast.error(Array.isArray(msg) ? msg[0] : (msg || 'Failed to delete voucher'));
+        }
+    };
+
+    useEffect(() => {
         fetchVouchers();
     }, [activeMainTab, activeSubTab, searchQuery, startDate, endDate]);
 
@@ -605,9 +632,9 @@ const Finance = () => {
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Bank/Cash</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Narration</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Amount</th>
+                                            <th className="px-6 py-4 whitespace-nowrap text-center">Action</th>
                                         </>
                                     )}
-                                    <th className="px-6 py-4 whitespace-nowrap text-center">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="text-[14px] text-[#111827]">
@@ -640,52 +667,57 @@ const Finance = () => {
                                                 <td className="px-6 py-4 text-center font-bold text-[#111827]">₹ {item.amount}</td>
                                             </>
                                         )}
-                                        <td className="px-6 py-4 text-center relative">
-                                            <button 
-                                                className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors inline-flex"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setOpenActionMenuId(openActionMenuId === item.id ? null : item.id);
-                                                }}
-                                            >
-                                                <MoreVertical size={20} />
-                                            </button>
+                                        {activeMainTab !== 'Ledger' && (
+                                            <td className="px-6 py-4 text-center relative">
+                                                <button 
+                                                    className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors inline-flex"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setOpenActionMenuId(openActionMenuId === item.id ? null : item.id);
+                                                    }}
+                                                >
+                                                    <MoreVertical size={20} />
+                                                </button>
 
-                                            {/* Dropdown Menu */}
-                                            {openActionMenuId === item.id && (
-                                                <>
-                                                    <div className="fixed inset-0 z-[100]" onClick={() => setOpenActionMenuId(null)} />
-                                                    <div className={`absolute right-0 ${index >= currentRows.length - 2 && currentRows.length > 2 ? 'bottom-full mb-2' : 'top-12'} w-48 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.15)] z-[101] flex flex-col py-2 font-outfit animate-in fade-in zoom-in-95 duration-200`}>
-                                                        <button 
-                                                            className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
-                                                            onClick={() => {
-                                                                if (activeMainTab === 'Ledger') {
-                                                                    const name = item.accountName || item.account || '';
-                                                                    const qs = `?name=${encodeURIComponent(name)}${startDate ? `&startDate=${startDate}` : ''}${endDate ? `&endDate=${endDate}` : ''}&type=${encodeURIComponent(activeSubTab)}`;
-                                                                    navigate(`/seller/finance/ledger/${item.id}${qs}`);
-                                                                } else {
-                                                                    setSelectedAccount(item);
-                                                                }
-                                                                setOpenActionMenuId(null);
-                                                            }}
-                                                        >
-                                                            <Eye size={18} className="text-[#9CA3AF]" />
-                                                            View & Edit
-                                                        </button>
-                                                        {activeSubTab !== 'Sundry Creditors' && activeSubTab !== 'Sundry Debtors' && activeSubTab !== 'Bank' && activeSubTab !== 'Cash' && (
+                                                {/* Dropdown Menu */}
+                                                {openActionMenuId === item.id && (
+                                                    <>
+                                                        <div className="fixed inset-0 z-[100]" onClick={() => setOpenActionMenuId(null)} />
+                                                        <div className={`absolute right-0 ${index >= currentRows.length - 2 && currentRows.length > 2 ? 'bottom-full mb-2' : 'top-12'} w-48 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.15)] z-[101] flex flex-col py-2 font-outfit animate-in fade-in zoom-in-95 duration-200`}>
                                                             <button 
-                                                                className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-red-600 hover:bg-red-50 transition-colors"
-                                                                onClick={() => setOpenActionMenuId(null)}
+                                                                className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
+                                                                onClick={() => {
+                                                                    if (activeMainTab === 'Ledger') {
+                                                                        const name = item.accountName || item.account || '';
+                                                                        const qs = `?name=${encodeURIComponent(name)}${startDate ? `&startDate=${startDate}` : ''}${endDate ? `&endDate=${endDate}` : ''}&type=${encodeURIComponent(activeSubTab)}`;
+                                                                        navigate(`/seller/finance/ledger/${item.id}${qs}`);
+                                                                    } else {
+                                                                        setSelectedAccount(item);
+                                                                    }
+                                                                    setOpenActionMenuId(null);
+                                                                }}
                                                             >
-                                                                <Trash2 size={18} className="text-red-400" />
-                                                                Delete
+                                                                <Eye size={18} className="text-[#9CA3AF]" />
+                                                                View & Edit
                                                             </button>
-                                                        )}
+                                                            {activeSubTab !== 'Sundry Creditors' && activeSubTab !== 'Sundry Debtors' && activeSubTab !== 'Bank' && activeSubTab !== 'Cash' && (
+                                                                <button 
+                                                                    className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+                                                                    onClick={() => {
+                                                                        handleDeleteVoucher(item);
+                                                                        setOpenActionMenuId(null);
+                                                                    }}
+                                                                >
+                                                                    <Trash2 size={18} className="text-red-400" />
+                                                                    Delete
+                                                                </button>
+                                                            )}
 
-                                                    </div>
-                                                </>
-                                            )}
-                                        </td>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
@@ -772,6 +804,19 @@ const Finance = () => {
                                     </div>
                                     <div className="bg-[#F8FAFC] p-6 rounded-[20px] border border-[#E2E8F0]">
                                         <p className="text-[14px] font-medium text-[#64748B] italic">Note: These details are for internal reconciliation purposes. To view the full ledger for this account, please use the Ledger tab.</p>
+                                    </div>
+                                    <div className="mt-8 flex justify-end gap-3">
+                                        <button 
+                                            onClick={() => {
+                                                setEditVoucherData(selectedAccount.originalVoucher);
+                                                setEditVoucherType(activeSubTab === 'Receipts' ? 'Receipt' : 'Payment');
+                                                setIsEditModalOpen(true);
+                                                setSelectedAccount(null); // Close the view modal
+                                            }}
+                                            className="px-6 py-2.5 rounded-xl bg-[#073318] text-white font-bold hover:bg-[#0a4422] transition-all text-[14px] shadow-[0_4px_14px_rgba(7,51,24,0.25)] flex items-center gap-2"
+                                        >
+                                            Edit Voucher
+                                        </button>
                                     </div>
                                 </div>
                             ) : (
@@ -996,6 +1041,19 @@ const Finance = () => {
                     </div>
                 </div>,
                 document.body
+            )}
+
+            {isEditModalOpen && (
+                <PaymentModal
+                    isOpen={isEditModalOpen}
+                    onClose={() => {
+                        setIsEditModalOpen(false);
+                        setEditVoucherData(null);
+                        fetchVouchers();
+                    }}
+                    type={editVoucherType}
+                    initialData={editVoucherData}
+                />
             )}
         </div>
     );

@@ -249,6 +249,8 @@ model AccountMaster {
   accountType            AccountType?
   userId                 Int
   status                 MasterStatus  @default(ACTIVE)
+  customerStatus         MasterStatus  @default(ACTIVE)
+  supplierStatus         MasterStatus  @default(ACTIVE)
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
   user                   User          @relation(fields: [userId], references: [id])
@@ -503,6 +505,7 @@ model SalesOrder {
   customerPoNumber String?
   poDate           DateTime?
   poExpiryDate     DateTime?
+  customerAmt      Float?
   gstNumber        String?
   panNumber        String?
   status         SOStatus         @default(PENDING)
@@ -1104,4 +1107,20 @@ enum TransactionType {
   Payment
   Receipt
 }
+
+model VoucherSettlement {
+  id              Int      @id @default(autoincrement())
+  voucher_id      Int
+  voucher_type    String   // "RECEIPT" or "PAYMENT"
+  ledger_id       Int
+  invoice_id      Int?     // Nullable for ADVANCE / ON_ACCOUNT
+  settlement_type String   // "ADVANCE", "AGAINST_REFERENCE", "ON_ACCOUNT"
+  invoice_total   Decimal?
+  invoice_balance Decimal?
+  settled_amount  Decimal
+  created_at      DateTime @default(now())
+
+  @@map("voucher_settlements")
+}
+
 

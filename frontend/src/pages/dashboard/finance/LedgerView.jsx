@@ -27,7 +27,7 @@ const LedgerView = () => {
     const [endDate, setEndDate] = useState('');
     const [type, setType] = useState('');
     const [showExportMenu, setShowExportMenu] = useState(false);
-    const [activeFiscalYear, setActiveFiscalYear] = useState('2024-2025');
+    const [activeFiscalYear, setActiveFiscalYear] = useState('2025-2026');
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
@@ -35,7 +35,7 @@ const LedgerView = () => {
     const [totalTransactions, setTotalTransactions] = useState(0);
     const [periodTotals, setPeriodTotals] = useState({ debit: 0, credit: 0 });
 
-    const fiscalYears = ['2024-2025', '2025-2026', '2026-2027'];
+    const fiscalYears = ['2025-2026', '2026-2027'];
 
     const handleFiscalYearChange = (year) => {
         setActiveFiscalYear(year);

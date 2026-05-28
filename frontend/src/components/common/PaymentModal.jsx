@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import voucherService from '../../services/voucherService';
 import AccountSearchDropdown from './AccountSearchDropdown';
 import toast from 'react-hot-toast';
+import SettlementModal from './SettlementModal';
 
 const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null }) => {
     const [formData, setFormData] = useState({
@@ -19,7 +20,16 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     const [bankCashOptions, setBankCashOptions] = useState([]);
-    const [ledgerAccountOptions, setLedgerAccountOptions] = useState([]);
+    const [customers, setCustomers] = useState([]);
+    const [suppliers, setSuppliers] = useState([]);
+    const [isSettlementOpen, setIsSettlementOpen] = useState(false);
+    const [activeEntryId, setActiveEntryId] = useState(null);
+
+    const getRowOptions = (filterMode) => {
+        if (filterMode === 'Customer') return customers;
+        if (filterMode === 'Supplier') return suppliers;
+        return [...customers, ...suppliers];
+    };
 
     const paymentModeOptions = [
         { label: 'Debit Card', value: 'DEBIT_CARD' },
@@ -37,14 +47,13 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                 const bankCashRes = await voucherService.getBankCashAccounts();
                 setBankCashOptions(bankCashRes || []);
                 
-                // Fetch Customer or Supplier accounts based on voucher type
-                let ledgerRes;
-                if (type === 'Receipt') {
-                    ledgerRes = await voucherService.getCustomers();
-                } else {
-                    ledgerRes = await voucherService.getSuppliers();
-                }
-                setLedgerAccountOptions(ledgerRes || []);
+                // Fetch both Customer and Supplier accounts concurrently
+                const [customersRes, suppliersRes] = await Promise.all([
+                    voucherService.getCustomers(),
+                    voucherService.getSuppliers()
+                ]);
+                setCustomers(customersRes || []);
+                setSuppliers(suppliersRes || []);
 
                 if (bankCashRes?.length > 0 && !formData.bankCashLedgerId) {
                     setFormData(prev => ({ ...prev, bankCashLedgerId: bankCashRes[0].id }));
@@ -56,13 +65,56 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
         };
 
         if (isOpen) {
-            setFormData({
-                date: new Date().toISOString().split('T')[0],
-                bankCashLedgerId: '',
-                entries: [{ id: Date.now(), accountId: initialData?.accountId || '', accountName: initialData?.account || '', amount: '' }],
-                narration: '',
-                paymentMode: 'NET_BANKING'
-            });
+            if (initialData && initialData.id) {
+                // Edit Mode!
+                setFormData({
+                    date: initialData.voucherDate ? initialData.voucherDate.split('T')[0] : new Date().toISOString().split('T')[0],
+                    bankCashLedgerId: initialData.bankCashLedgerId || '',
+                    entries: initialData.items?.map(item => {
+                        const settlements = item.settlements || [];
+                        const summaryParts = [];
+                        settlements.forEach(s => {
+                            if (s.settlementType === 'ADVANCE') {
+                                summaryParts.push(`Advance - ₹${s.settledAmount}`);
+                            } else if (s.settlementType === 'ON_ACCOUNT') {
+                                summaryParts.push(`On Account - ₹${s.settledAmount}`);
+                            } else if (s.settlementType === 'AGAINST_REFERENCE') {
+                                summaryParts.push(`Against Ref: [₹${s.settledAmount}]`);
+                            }
+                        });
+                        return {
+                            id: item.id || Date.now() + Math.random(),
+                            accountId: `${item.accountId}-${item.accountType || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER')}`,
+                            accountName: item.account?.accountName || '',
+                            amount: item.amount || '',
+                            filterMode: (item.accountType || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER')) === 'CUSTOMER' ? 'Customer' : 'Supplier',
+                            settlementType: settlements.length > 0 ? (settlements.length === 1 ? settlements[0].settlementType : 'MIXED') : null,
+                            settlements: settlements.map(s => ({
+                                invoiceId: s.invoiceId,
+                                settlementType: s.settlementType,
+                                settledAmount: s.settledAmount
+                            })),
+                            settlementSummary: summaryParts.join('; ')
+                        };
+                    }) || [],
+                    narration: initialData.narration || '',
+                    paymentMode: initialData.paymentMode || 'NET_BANKING'
+                });
+            } else {
+                setFormData({
+                    date: new Date().toISOString().split('T')[0],
+                    bankCashLedgerId: '',
+                    entries: [{ 
+                        id: Date.now(), 
+                        accountId: initialData?.accountId ? `${initialData.accountId}-${initialData.accountType || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER')}` : '', 
+                        accountName: initialData?.account || '', 
+                        amount: '',
+                        filterMode: (initialData?.accountType || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER')) === 'CUSTOMER' ? 'Customer' : 'Supplier'
+                    }],
+                    narration: '',
+                    paymentMode: 'NET_BANKING'
+                });
+            }
             setIsSuccess(false);
             setIsSubmitting(false);
             fetchData();
@@ -93,16 +145,29 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                 bankCashLedgerId: Number(formData.bankCashLedgerId),
                 paymentMode: formData.paymentMode,
                 narration: formData.narration,
-                items: validEntries.map(e => ({
-                    accountId: Number(e.accountId),
-                    amount: Number(e.amount)
-                }))
+                items: validEntries.map(e => {
+                    const parts = String(e.accountId).split('-');
+                    return {
+                        accountId: Number(parts[0]),
+                        amount: Number(e.amount),
+                        accountType: parts[1] || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER'),
+                        settlements: e.settlements || []
+                    };
+                })
             };
 
-            if (type === 'Receipt') {
-                await voucherService.createReceiptVoucher(payload);
+            if (initialData && initialData.id) {
+                if (type === 'Receipt') {
+                    await voucherService.updateReceiptVoucher(initialData.id, payload);
+                } else {
+                    await voucherService.updatePaymentVoucher(initialData.id, payload);
+                }
             } else {
-                await voucherService.createPaymentVoucher(payload);
+                if (type === 'Receipt') {
+                    await voucherService.createReceiptVoucher(payload);
+                } else {
+                    await voucherService.createPaymentVoucher(payload);
+                }
             }
 
             // Dispatch event for UI updates
@@ -132,18 +197,97 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
     };
 
     const handleEntryChange = (id, field, value, extra = {}) => {
-        setFormData(prev => ({
-            ...prev,
-            entries: prev.entries.map(entry => 
-                entry.id === id ? { ...entry, [field]: value, ...extra } : entry
-            )
-        }));
+        setFormData(prev => {
+            const updatedEntries = prev.entries.map(entry => {
+                if (entry.id === id) {
+                    const clearedFields = field === 'accountId' ? {
+                        settlementType: null,
+                        settlements: [],
+                        settlementSummary: ''
+                    } : {};
+
+                    let updatedSettlement = {};
+                    if (field === 'amount' && (entry.settlementType === 'ADVANCE' || entry.settlementType === 'ON_ACCOUNT')) {
+                        const amtNum = parseFloat(value) || 0;
+                        const label = entry.settlementType === 'ADVANCE' 
+                            ? (type === 'Receipt' ? 'Advance Receipt' : 'Advance Payment')
+                            : (type === 'Receipt' ? 'On Account Receipt' : 'On Account Payment');
+                        
+                        updatedSettlement = {
+                            settlements: [{ settlementType: entry.settlementType, settledAmount: amtNum }],
+                            settlementSummary: `${label} - ₹${value}`
+                        };
+                    }
+
+                    return { ...entry, [field]: value, ...clearedFields, ...updatedSettlement, ...extra };
+                }
+                return entry;
+            });
+
+            let newNarration = prev.narration;
+            if (field === 'amount') {
+                const summaries = updatedEntries
+                    .map(e => e.settlementSummary)
+                    .filter(Boolean)
+                    .join('; ');
+                newNarration = summaries || prev.narration;
+            }
+
+            return {
+                ...prev,
+                entries: updatedEntries,
+                narration: newNarration
+            };
+        });
+    };
+
+    const handleAmountClick = (entry) => {
+        if (!entry.accountId) {
+            toast.error(`Please select a ${type === 'Receipt' ? 'Customer' : 'Supplier'} first`);
+            return;
+        }
+        setActiveEntryId(entry.id);
+        setIsSettlementOpen(true);
+    };
+
+    const handleSaveSettlement = ({ settlementType, amount, settlements, narration }) => {
+        setFormData(prev => {
+            const updatedEntries = prev.entries.map(entry => {
+                if (entry.id === activeEntryId) {
+                    return {
+                        ...entry,
+                        amount,
+                        settlementType,
+                        settlements,
+                        settlementSummary: narration
+                    };
+                }
+                return entry;
+            });
+
+            const summaries = updatedEntries
+                .map(e => e.settlementSummary)
+                .filter(Boolean)
+                .join('; ');
+
+            return {
+                ...prev,
+                entries: updatedEntries,
+                narration: summaries || prev.narration
+            };
+        });
     };
 
     const handleAddRow = () => {
         setFormData(prev => ({
             ...prev,
-            entries: [...prev.entries, { id: Date.now(), accountId: '', accountName: '', amount: '' }]
+            entries: [...prev.entries, { 
+                id: Date.now(), 
+                accountId: '', 
+                accountName: '', 
+                amount: '',
+                filterMode: type === 'Receipt' ? 'Customer' : 'Supplier'
+            }]
         }));
     };
 
@@ -180,7 +324,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-white rounded-t-[16px]">
                     <h2 className="text-[18px] font-bold text-gray-800 tracking-wide">
-                        {type} Voucher
+                        {initialData?.id ? 'Edit' : 'New'} {type} Voucher
                     </h2>
                     <button 
                         onClick={onClose}
@@ -195,7 +339,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                     {isSuccess ? (
                         <div className="py-16 flex flex-col items-center justify-center text-center">
                             <CheckCircle2 className="w-12 h-12 text-green-500 mb-4" />
-                            <h3 className="text-[20px] font-bold text-gray-900">{type} Voucher Saved Successfully</h3>
+                            <h3 className="text-[20px] font-bold text-gray-900">{type} Voucher {initialData?.id ? 'Updated' : 'Saved'} Successfully</h3>
                         </div>
                     ) : (
                     <div className="space-y-6">
@@ -284,9 +428,9 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                                 <td className="px-4 py-3">
                                                     <AccountSearchDropdown 
                                                         value={entry.accountId}
-                                                        options={ledgerAccountOptions}
+                                                        options={getRowOptions('Both')}
                                                         onChange={(id, name) => handleEntryChange(entry.id, 'accountId', id, { accountName: name })}
-                                                        placeholder={`Search ${type === 'Receipt' ? 'Customer' : 'Supplier'}...`}
+                                                        placeholder="Search Customer/Supplier..."
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3">
@@ -294,10 +438,32 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                                         type="number"
                                                         placeholder="0.00"
                                                         value={entry.amount}
+                                                        readOnly={entry.settlementType === 'AGAINST_REFERENCE'}
+                                                        onClick={(!entry.settlementType || entry.settlementType === 'AGAINST_REFERENCE') ? () => handleAmountClick(entry) : undefined}
                                                         onChange={(e) => handleEntryChange(entry.id, 'amount', e.target.value)}
-                                                        className="w-full h-10 px-3 bg-[#F9FAFB] border border-transparent rounded-lg focus:bg-white focus:border-[#073318] outline-none text-[14px] text-right font-bold text-[#073318] transition-all"
+                                                        className={`w-full h-10 px-3 border border-transparent rounded-lg outline-none text-[14px] text-right font-bold text-[#073318] transition-all ${
+                                                            entry.settlementType === 'AGAINST_REFERENCE'
+                                                            ? 'bg-[#073318]/5 border-[#073318]/20 cursor-pointer hover:bg-[#073318]/10' 
+                                                            : entry.settlementType
+                                                            ? 'bg-[#073318]/5 border-[#073318]/20 focus:bg-white focus:border-[#073318]'
+                                                            : 'bg-[#F9FAFB] focus:bg-white focus:border-[#073318]'
+                                                        }`}
                                                         required
                                                     />
+                                                    {entry.settlementType && (
+                                                        <div 
+                                                            onClick={() => handleAmountClick(entry)}
+                                                            className="text-[10px] text-gray-500 mt-1 font-semibold text-right leading-tight max-w-[200px] ml-auto cursor-pointer hover:text-[#073318] transition-colors"
+                                                            title="Click to edit settlement details"
+                                                        >
+                                                            <span className="text-[#073318] capitalize font-bold block">
+                                                                {entry.settlementType.toLowerCase().replace('_', ' ')}
+                                                            </span>
+                                                            <span className="block truncate" title={entry.settlementSummary}>
+                                                                {entry.settlementSummary}
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-2 text-center">
                                                     {formData.entries.length > 1 && (
@@ -391,16 +557,30 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                 {isSubmitting ? (
                                     <>
                                         <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        Saving...
+                                        {initialData?.id ? 'Updating...' : 'Saving...'}
                                     </>
                                 ) : (
-                                    <>Save</>
+                                    <>{initialData?.id ? 'Update' : 'Save'}</>
                                 )}
                             </button>
                         </div>
                     )}
                 </form>
             </motion.div>
+            <AnimatePresence>
+                {isSettlementOpen && (
+                    <SettlementModal
+                        isOpen={isSettlementOpen}
+                        onClose={() => setIsSettlementOpen(false)}
+                        type={type}
+                        ledgerId={formData.entries.find(e => e.id === activeEntryId)?.accountId ? Number(String(formData.entries.find(e => e.id === activeEntryId)?.accountId).split('-')[0]) : null}
+                        ledgerName={formData.entries.find(e => e.id === activeEntryId)?.accountName}
+                        accountType={formData.entries.find(e => e.id === activeEntryId)?.accountId ? String(formData.entries.find(e => e.id === activeEntryId)?.accountId).split('-')[1] : null}
+                        initialData={formData.entries.find(e => e.id === activeEntryId)}
+                        onSave={handleSaveSettlement}
+                    />
+                )}
+            </AnimatePresence>
         </div>,
         document.body
     );

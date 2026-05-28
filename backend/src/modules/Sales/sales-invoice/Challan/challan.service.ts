@@ -19,21 +19,29 @@ export class ChallanService {
     const today = new Date();
     today.setHours(23, 59, 59, 999);
 
-    if (challanDate > today) {
-      throw new BadRequestException('Challan Date cannot be in the future');
-    }
-
     if (dto.soId) {
       const so = await this.prisma.salesOrder.findUnique({ where: { id: Number(dto.soId) } });
-      if (so) {
-        const soDate = new Date(so.soCreationDate);
+      const soDate = so ? new Date(so.soCreationDate) : null;
+      if (soDate) {
         soDate.setHours(0, 0, 0, 0);
         const challanOnlyDate = new Date(challanDate);
         challanOnlyDate.setHours(0, 0, 0, 0);
         
-        if (challanOnlyDate < soDate) {
-          throw new BadRequestException(`Challan Date cannot be before SO Creation Date (${soDate.toLocaleDateString()})`);
+        if (challanOnlyDate < soDate || challanDate > today) {
+          throw new BadRequestException('Challan Date must be between SO Date and Current Date.');
         }
+      } else if (challanDate > today) {
+        throw new BadRequestException('Challan Date must be between SO Date and Current Date.');
+      }
+    } else {
+      const now = new Date();
+      const fyStart = new Date(now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear(), 3, 1);
+      fyStart.setHours(0, 0, 0, 0);
+      const challanOnlyDate = new Date(challanDate);
+      challanOnlyDate.setHours(0, 0, 0, 0);
+
+      if (challanOnlyDate < fyStart || challanDate > today) {
+        throw new BadRequestException('Challan Date must be within current financial year.');
       }
     }
 
@@ -44,6 +52,10 @@ export class ChallanService {
 
     if (!company) throw new BadRequestException('Company detail not found');
     if (!customer) throw new BadRequestException(`Customer '${dto.customerName}' not found`);
+
+    if (customer.status !== 'ACTIVE' || customer.customerStatus !== 'ACTIVE') {
+      throw new BadRequestException('Customer is inactive. New sales transactions are not allowed.');
+    }
 
     const userGstDoc = await this.prisma.sellerDocument.findFirst({
       where: { uploadedByUserId: userId, type: 'GST' },

@@ -19,21 +19,19 @@ export class GrnService {
     const today = new Date();
     today.setHours(23, 59, 59, 999);
 
-    if (grnDate > today) {
-      throw new BadRequestException('Supplier Challan Date cannot be in the future');
-    }
-
     if (dto.poId) {
       const po = await this.prisma.purchaseOrder.findUnique({ where: { id: Number(dto.poId) } });
-      if (po) {
-        const poDate = new Date(po.poCreationDate);
+      const poDate = po ? new Date(po.poCreationDate) : null;
+      if (poDate) {
         poDate.setHours(0, 0, 0, 0);
         const grnOnlyDate = new Date(grnDate);
         grnOnlyDate.setHours(0, 0, 0, 0);
         
-        if (grnOnlyDate < poDate) {
-          throw new BadRequestException(`Supplier Challan Date cannot be before PO Creation Date (${poDate.toLocaleDateString()})`);
+        if (grnOnlyDate < poDate || grnDate > today) {
+          throw new BadRequestException('Supplier Challan Date must be between PO Date and Current Date.');
         }
+      } else if (grnDate > today) {
+        throw new BadRequestException('Supplier Challan Date must be between PO Date and Current Date.');
       }
     } else {
       const now = new Date();
@@ -42,8 +40,8 @@ export class GrnService {
       const grnOnlyDate = new Date(grnDate);
       grnOnlyDate.setHours(0, 0, 0, 0);
 
-      if (grnOnlyDate < fyStart) {
-        throw new BadRequestException(`Supplier Challan Date cannot be before Financial Year Start (${fyStart.toLocaleDateString()})`);
+      if (grnOnlyDate < fyStart || grnDate > today) {
+        throw new BadRequestException('Supplier Challan Date must be within current financial year.');
       }
     }
 
@@ -57,11 +55,15 @@ export class GrnService {
         userId,
         accountName: { equals: dto.supplierName, mode: 'insensitive' }
       },
-      select: { state: true, gstNo: true }
+      select: { state: true, gstNo: true, status: true, supplierStatus: true }
     });
 
     if (!company) throw new BadRequestException('Company shop details not found');
     if (!supplier) throw new BadRequestException(`Supplier '${dto.supplierName}' not found in Account Master`);
+
+    if (supplier.status !== 'ACTIVE' || supplier.supplierStatus !== 'ACTIVE') {
+      throw new BadRequestException('Supplier is inactive. New purchase transactions are not allowed.');
+    }
 
     // Fetch user's registered GST
     const userGstDoc = await this.prisma.sellerDocument.findFirst({

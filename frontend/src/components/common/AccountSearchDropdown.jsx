@@ -13,18 +13,59 @@ const AccountSearchDropdown = ({
     const [searchQuery, setSearchQuery] = useState("");
     const containerRef = useRef(null);
 
+    const getAccountCode = (opt) => {
+        if (!opt) return null;
+        if (opt.accountType === 'SUPPLIER') {
+            return opt.supplierCode;
+        }
+        if (opt.accountType === 'CUSTOMER') {
+            return opt.customerCode;
+        }
+        return opt.supplierCode || opt.customerCode;
+    };
+
+    const getAccountTypeLabel = (opt) => {
+        if (!opt) return null;
+        if (opt.accountType === 'SUPPLIER') {
+            return 'Supplier';
+        }
+        if (opt.accountType === 'CUSTOMER') {
+            return 'Customer';
+        }
+
+        // Fallback using code prefixes
+        const code = (opt.supplierCode || opt.customerCode || '').toUpperCase();
+        if (code.startsWith('SP')) {
+            return 'Supplier';
+        }
+        if (code.startsWith('CT')) {
+            return 'Customer';
+        }
+
+        if (opt.supplierCode) {
+            return 'Supplier';
+        }
+        if (opt.customerCode) {
+            return 'Customer';
+        }
+        return null;
+    };
+
     // Find the selected option to display its label
     const selectedOption = useMemo(() => {
-        return options.find(opt => opt.id === value);
+        return options.find(opt => `${opt.id}-${opt.accountType}` === value || opt.id === value);
     }, [options, value]);
 
     // Filter options based on search query
     const filteredOptions = useMemo(() => {
         if (!searchQuery) return options;
         const query = searchQuery.toLowerCase();
-        return options.filter(opt => 
-            (opt.accountName || opt.ledgerName || "").toLowerCase().includes(query)
-        );
+        return options.filter(opt => {
+            const code = getAccountCode(opt) || '';
+            const typeLabel = getAccountTypeLabel(opt) || '';
+            const searchStr = `${opt.accountName || ''} ${opt.ledgerName || ''} ${code} ${typeLabel} ${opt.isInactive ? 'inactive pending settlement' : ''}`.toLowerCase();
+            return searchStr.includes(query);
+        });
     }, [options, searchQuery]);
 
     useEffect(() => {
@@ -38,7 +79,7 @@ const AccountSearchDropdown = ({
     }, []);
 
     const handleSelect = (option) => {
-        onChange(option.id, option.accountName || option.ledgerName);
+        onChange(`${option.id}-${option.accountType}`, option.accountName || option.ledgerName);
         setIsOpen(false);
         setSearchQuery("");
     };
@@ -50,10 +91,26 @@ const AccountSearchDropdown = ({
                 onClick={() => setIsOpen(!isOpen)}
                 className="w-full h-10 px-3 bg-[#F9FAFB] border border-transparent rounded-lg flex items-center justify-between text-[14px] transition-all hover:bg-gray-100 focus:bg-white focus:border-[#073318]"
             >
-                <span className={selectedOption ? "text-gray-900 font-medium" : "text-gray-400"}>
-                    {selectedOption ? (selectedOption.accountName || selectedOption.ledgerName) : placeholder}
-                </span>
-                <ChevronDown size={16} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <div className="flex-1 flex items-center justify-between min-w-0 pr-2">
+                    <span className={selectedOption ? "text-gray-900 font-medium truncate" : "text-gray-400"}>
+                        {selectedOption ? (
+                            <span>
+                                {selectedOption.accountName || selectedOption.ledgerName}
+                                {getAccountTypeLabel(selectedOption) && (
+                                    <span className="text-gray-400 ml-1.5 font-normal text-[11px]">
+                                        ({getAccountTypeLabel(selectedOption)})
+                                    </span>
+                                )}
+                            </span>
+                        ) : placeholder}
+                    </span>
+                    {selectedOption?.isInactive && (
+                        <span className="shrink-0 px-1.5 py-0.5 text-[9px] font-extrabold bg-amber-50 text-amber-700 rounded border border-amber-200 uppercase tracking-wider">
+                            Inactive - Pending Settlement
+                        </span>
+                    )}
+                </div>
+                <ChevronDown size={16} className="text-gray-400 transition-transform shrink-0" />
             </button>
 
             <AnimatePresence>
@@ -86,10 +143,22 @@ const AccountSearchDropdown = ({
                                         onClick={() => handleSelect(opt)}
                                         className="w-full px-4 py-2 text-left text-[13px] flex items-center justify-between hover:bg-[#073318]/5 transition-colors group"
                                     >
-                                        <span className={value === opt.id ? "text-[#073318] font-bold" : "text-gray-700 font-medium"}>
-                                            {opt.accountName || opt.ledgerName}
-                                        </span>
-                                        {value === opt.id && <Check size={14} className="text-[#073318]" />}
+                                        <div className="flex-1 flex items-center justify-between min-w-0 pr-2">
+                                            <span className={(value === `${opt.id}-${opt.accountType}` || value === opt.id) ? "text-[#073318] font-bold truncate" : "text-gray-700 font-medium truncate"}>
+                                                {opt.accountName || opt.ledgerName}
+                                                {getAccountTypeLabel(opt) && (
+                                                    <span className="text-gray-400 ml-1.5 font-normal text-[11px]">
+                                                        ({getAccountTypeLabel(opt)})
+                                                    </span>
+                                                )}
+                                            </span>
+                                            {opt.isInactive && (
+                                                <span className="shrink-0 px-1.5 py-0.5 text-[9px] font-extrabold bg-amber-50 text-amber-700 rounded border border-amber-200 uppercase tracking-wider">
+                                                    Inactive - Pending Settlement
+                                                </span>
+                                            )}
+                                        </div>
+                                        {(value === `${opt.id}-${opt.accountType}` || value === opt.id) && <Check size={14} className="text-[#073318] shrink-0" />}
                                     </button>
                                 ))
                             ) : (

@@ -570,6 +570,89 @@ const AddSalesInvoice = () => {
         const isoDocDate = toIsoDate(formData.customerInvoiceDate);
         if (!isoDocDate) {
             newErrors.customerInvoiceDate = "Invoice Date is required";
+        } else {
+            const invoiceDate = new Date(isoDocDate);
+            const today = new Date();
+            today.setHours(23, 59, 59, 999);
+
+            const hasChallan = formData.challanIds && formData.challanIds.length > 0;
+            const hasSo = !!formData.soId;
+
+            if (hasSo && hasChallan) {
+                let latestChallanDate = null;
+                const selectedChallans = challans.filter(c => formData.challanIds.includes(c.id));
+                if (selectedChallans.length > 0) {
+                    latestChallanDate = selectedChallans.reduce((latest, c) => {
+                        const cDate = c.challanDate?.split('T')[0] || c.bookingDate?.split('T')[0];
+                        return (!latest || cDate > latest) ? cDate : latest;
+                    }, '');
+                }
+
+                if (latestChallanDate) {
+                    const minDate = new Date(latestChallanDate);
+                    minDate.setHours(0, 0, 0, 0);
+                    const invOnlyDate = new Date(invoiceDate);
+                    invOnlyDate.setHours(0, 0, 0, 0);
+
+                    if (invOnlyDate < minDate || invoiceDate > today) {
+                        newErrors.customerInvoiceDate = "Customer Invoice Date must be between Latest Challan Date and Current Date.";
+                    }
+                } else {
+                    if (invoiceDate > today) {
+                        newErrors.customerInvoiceDate = "Customer Invoice Date must be between Latest Challan Date and Current Date.";
+                    }
+                }
+            } else if (hasSo && !hasChallan) {
+                const selectedSO = sos.find(s => s.id === parseInt(formData.soId));
+                if (selectedSO?.soCreationDate) {
+                    const soDate = new Date(selectedSO.soCreationDate);
+                    soDate.setHours(0, 0, 0, 0);
+                    const invOnlyDate = new Date(invoiceDate);
+                    invOnlyDate.setHours(0, 0, 0, 0);
+
+                    if (invOnlyDate < soDate || invoiceDate > today) {
+                        newErrors.customerInvoiceDate = "Customer Invoice Date must be between SO Date and Current Date.";
+                    }
+                } else {
+                    if (invoiceDate > today) {
+                        newErrors.customerInvoiceDate = "Customer Invoice Date must be between SO Date and Current Date.";
+                    }
+                }
+            } else if (!hasSo && hasChallan) {
+                let latestChallanDate = null;
+                const selectedChallans = challans.filter(c => formData.challanIds.includes(c.id));
+                if (selectedChallans.length > 0) {
+                    latestChallanDate = selectedChallans.reduce((latest, c) => {
+                        const cDate = c.challanDate?.split('T')[0] || c.bookingDate?.split('T')[0];
+                        return (!latest || cDate > latest) ? cDate : latest;
+                    }, '');
+                }
+
+                if (latestChallanDate) {
+                    const minDate = new Date(latestChallanDate);
+                    minDate.setHours(0, 0, 0, 0);
+                    const invOnlyDate = new Date(invoiceDate);
+                    invOnlyDate.setHours(0, 0, 0, 0);
+
+                    if (invOnlyDate < minDate || invoiceDate > today) {
+                        newErrors.customerInvoiceDate = "Customer Invoice Date must be between Challan Date and Current Date.";
+                    }
+                } else {
+                    if (invoiceDate > today) {
+                        newErrors.customerInvoiceDate = "Customer Invoice Date must be between Challan Date and Current Date.";
+                    }
+                }
+            } else {
+                const now = new Date();
+                const fyStart = new Date(now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear(), 3, 1);
+                fyStart.setHours(0, 0, 0, 0);
+                const invOnlyDate = new Date(invoiceDate);
+                invOnlyDate.setHours(0, 0, 0, 0);
+
+                if (invOnlyDate < fyStart || invoiceDate > today) {
+                    newErrors.customerInvoiceDate = "Customer Invoice Date must be within current financial year.";
+                }
+            }
         }
 
         if (!itemsToValidate || itemsToValidate.length === 0) {
@@ -596,7 +679,10 @@ const AddSalesInvoice = () => {
         }
 
         setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        return {
+            isValid: Object.keys(newErrors).length === 0,
+            errors: newErrors
+        };
     };
 
     const filteredChallans = React.useMemo(() => {
@@ -649,8 +735,13 @@ const AddSalesInvoice = () => {
             // We return and wait for the re-render or just use updatedItems for validation
         }
 
-        if (!validateForm(updatedItems)) {
-            toast.error("Please fill all required fields correctly");
+        const validation = validateForm(updatedItems);
+        if (!validation.isValid) {
+            if (validation.errors.customerInvoiceDate) {
+                toast.error(validation.errors.customerInvoiceDate);
+            } else {
+                toast.error("Please fill all required fields correctly");
+            }
             return;
         }
 
@@ -741,8 +832,13 @@ const AddSalesInvoice = () => {
             setItems(updatedItems);
         }
 
-        if (!validateForm(updatedItems)) {
-            toast.error("Please fill all required fields before previewing");
+        const validation = validateForm(updatedItems);
+        if (!validation.isValid) {
+            if (validation.errors.customerInvoiceDate) {
+                toast.error(validation.errors.customerInvoiceDate);
+            } else {
+                toast.error("Please fill all required fields before previewing");
+            }
             return;
         }
 
@@ -830,24 +926,34 @@ const AddSalesInvoice = () => {
                         let isLocked = false;
 
                         if (!hasLink) {
-                            // Condition 3: Without SO and Challan -> Locked to Today
-                            minDate = today;
-                            isLocked = true;
+                            const todayDate = new Date();
+                            const currentMonth = todayDate.getMonth();
+                            const startYear = currentMonth < 3 ? todayDate.getFullYear() - 1 : todayDate.getFullYear();
+                            minDate = `${startYear}-04-01`;
+                            isLocked = false;
                         } else {
-                            // Multiple Challan Rule: Use the latest challan date
-                            if (formData.challanIds && formData.challanIds.length > 0) {
+                            const hasChallan = formData.challanIds && formData.challanIds.length > 0;
+                            const hasSo = !!formData.soId;
+
+                            if (hasSo && hasChallan) {
                                 const selectedChallans = challans.filter(c => formData.challanIds.includes(c.id));
                                 if (selectedChallans.length > 0) {
-                                    const latestDate = selectedChallans.reduce((latest, c) => {
+                                    minDate = selectedChallans.reduce((latest, c) => {
                                         const cDate = c.challanDate?.split('T')[0] || c.bookingDate?.split('T')[0];
                                         return (!latest || cDate > latest) ? cDate : latest;
                                     }, '');
-                                    minDate = latestDate;
                                 }
-                            } else if (formData.soId) {
-                                // Fallback to SO Creation Date if only SO is selected
+                            } else if (hasSo && !hasChallan) {
                                 const selectedSO = sos.find(s => s.id === parseInt(formData.soId));
                                 minDate = selectedSO?.soCreationDate?.split('T')[0] || '';
+                            } else if (!hasSo && hasChallan) {
+                                const selectedChallans = challans.filter(c => formData.challanIds.includes(c.id));
+                                if (selectedChallans.length > 0) {
+                                    minDate = selectedChallans.reduce((latest, c) => {
+                                        const cDate = c.challanDate?.split('T')[0] || c.bookingDate?.split('T')[0];
+                                        return (!latest || cDate > latest) ? cDate : latest;
+                                    }, '');
+                                }
                             }
                         }
 

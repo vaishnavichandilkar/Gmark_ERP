@@ -44,6 +44,7 @@ export class SalesOrderService {
                 customerCode: {
                     not: null,
                 },
+                customerStatus: 'ACTIVE',
             },
         });
 
@@ -107,6 +108,16 @@ export class SalesOrderService {
     }
 
     async create(createDto: CreateSalesOrderDto, userId: number) {
+        const fullCustomer = await this.prisma.accountMaster.findUnique({
+            where: { id: createDto.customerId }
+        });
+        if (!fullCustomer) {
+            throw new BadRequestException('Customer not found');
+        }
+        if (fullCustomer.status !== 'ACTIVE' || fullCustomer.customerStatus !== 'ACTIVE') {
+            throw new BadRequestException('Customer is inactive. New sales transactions are not allowed.');
+        }
+
         const customer = await this._getCustomerDetails(createDto.customerId);
         
         const userGstDoc = await this.prisma.sellerDocument.findFirst({
@@ -138,6 +149,7 @@ export class SalesOrderService {
                         customerPoNumber: createDto.customerPoNumber || null,
                         poDate: createDto.poDate ? new Date(createDto.poDate) : null,
                         poExpiryDate: createDto.poExpiryDate ? new Date(createDto.poExpiryDate) : null,
+                        customerAmt: createDto.customerAmt !== undefined && createDto.customerAmt !== null ? Number(createDto.customerAmt) : null,
                         gstNumber: customer.gstNumber || createDto.gstNo || '',
                         panNumber: customer.panNumber || createDto.panNo || '',
                         totalAmount,
@@ -239,12 +251,13 @@ export class SalesOrderService {
                 customerPoNumber: updateDto.customerPoNumber !== undefined ? updateDto.customerPoNumber : so.customerPoNumber,
                 poDate: updateDto.poDate !== undefined ? (updateDto.poDate ? new Date(updateDto.poDate) : null) : so.poDate,
                 poExpiryDate: updateDto.poExpiryDate !== undefined ? (updateDto.poExpiryDate ? new Date(updateDto.poExpiryDate) : null) : so.poExpiryDate,
+                customerAmt: updateDto.customerAmt !== undefined ? (updateDto.customerAmt !== null ? Number(updateDto.customerAmt) : null) : so.customerAmt,
                 status: updateDto.status ?? (so.status as any),
                 address: updateDto.address ?? so.address,
                 gstNumber: updateDto.gstNo ?? so.gstNumber,
                 panNumber: updateDto.panNo ?? so.panNumber,
                 soNumber: updateDto.soNumber ?? so.soNumber,
-                soCreationDate: updateDto.soCreationDate ? new Date(updateDto.soCreationDate) : so.soCreationDate,
+                soCreationDate: so.soCreationDate,
                 customerType: updateDto.customerType ?? so.customerType,
             };
 

@@ -63,20 +63,25 @@ export class ProductMasterService {
                 { header: 'Status', key: 'status', width: 12 },
             ];
 
+            worksheet.getColumn('productCode').numFmt = '@';
+            worksheet.getColumn('hsnCode').numFmt = '@';
+
             (products as any[]).forEach((prod, index) => {
-                worksheet.addRow({
+                const row = worksheet.addRow({
                     srNo: index + 1,
-                    productCode: prod.product_code,
+                    productCode: prod.product_code ? String(prod.product_code) : '',
                     productName: prod.product_name,
                     uom: prod.uom?.gst_uom || '-',
                     productType: prod.product_type,
                     category: prod.category?.name || '-',
                     subCategory: prod.sub_category?.name || '-',
                     subSubCategory: prod.sub_sub_category?.name || '-',
-                    hsnCode: prod.hsn_code,
+                    hsnCode: prod.hsn_code ? String(prod.hsn_code) : '',
                     taxRate: `${prod.tax_rate}%`,
                     status: prod.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive',
                 });
+                row.getCell('productCode').numFmt = '@';
+                row.getCell('hsnCode').numFmt = '@';
             });
 
             worksheet.spliceRows(1, 0, [], [], [], []);
@@ -423,6 +428,7 @@ export class ProductMasterService {
                 allowBlank: true,
                 formulae: ['"ACTIVE,INACTIVE"']
             };
+            worksheet.getCell(`F${i}`).numFmt = '@';
         }
 
         worksheet.columns = headers.map(() => ({ width: 22 }));
@@ -486,7 +492,12 @@ export class ProductMasterService {
         const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
             const colIdx = colMap[key];
             if (!colIdx) return defaultVal;
-            return row.getCell(colIdx).value;
+            const cell = row.getCell(colIdx);
+            const textValue = cell.text;
+            if (textValue !== undefined && textValue !== null && textValue !== '') {
+                return textValue;
+            }
+            return cell.value !== undefined && cell.value !== null ? cell.value : defaultVal;
         };
 
         for (let i = headerRowIndex + 1; i <= rowCount; i++) {
@@ -557,6 +568,9 @@ export class ProductMasterService {
                 let sub_category_id: number = subCat.id;
 
                 let hsnCode = String(getVal(row, 'hsn')).trim();
+                if (/^\d+$/.test(hsnCode) && hsnCode.length % 2 !== 0) {
+                    hsnCode = '0' + hsnCode;
+                }
                 let hsnDetails: { hsnCode?: string, taxRate: string, description: string } = { taxRate: "0", description: 'Default' };
                 
                 if (hsnCode && hsnCode !== '-') {

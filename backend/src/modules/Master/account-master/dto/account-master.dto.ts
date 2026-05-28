@@ -221,4 +221,14 @@ export class UpdateAccountStatusDto {
   @IsEnum(MasterStatus)
   @IsNotEmpty()
   status: MasterStatus;
+
+  @ApiPropertyOptional({ enum: MasterStatus })
+  @IsEnum(MasterStatus)
+  @IsOptional()
+  customerStatus?: MasterStatus;
+
+  @ApiPropertyOptional({ enum: MasterStatus })
+  @IsEnum(MasterStatus)
+  @IsOptional()
+  supplierStatus?: MasterStatus;
 }

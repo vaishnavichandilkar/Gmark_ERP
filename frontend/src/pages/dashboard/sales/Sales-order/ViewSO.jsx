@@ -52,7 +52,9 @@ const ViewSO = () => {
         status: '',
         customer_type: '',
         customer_po_number: '',
-        po_date: ''
+        po_date: '',
+        po_expiry_date: '',
+        customer_amt: ''
     });
     const [items, setItems] = useState([]);
 
@@ -76,7 +78,8 @@ const ViewSO = () => {
                     customer_type: so.customerType,
                     customer_po_number: so.customerPoNumber,
                     po_date: so.poDate,
-                    po_expiry_date: so.poExpiryDate
+                    po_expiry_date: so.poExpiryDate,
+                    customer_amt: so.customerAmt
                 });
                 setItems(so.items || []);
             } catch (error) {
@@ -162,8 +165,24 @@ const ViewSO = () => {
                             <InfoTableRow label1="Address:" value1={formData.address} label2="SO Creation Date:" value2={formatDate(formData.creation_date)} />
                             <InfoTableRow label1="Expiry Date:" value1={formatDate(formData.expiry_date)} label2="GST Number:" value2={formData.gst_number} />
                             <InfoTableRow label1="PAN Number:" value1={formData.pan_number} label2="Customer Type:" value2={formData.customer_type ? formData.customer_type.toUpperCase() : '-'} />
-                            <InfoTableRow label1="PO Number:" value1={formData.customer_po_number} label2="PO Date:" value2={formatDate(formData.po_date)} />
-                            <InfoTableRow label1="PO Expiry Date:" value1={formatDate(formData.po_expiry_date)} label2="" value2="" />
+                            {formData.customer_po_number === 'verbal' ? (
+                                <InfoTableRow label1="Customer PO Number:" value1="Verbal" label2="" value2="" />
+                            ) : (
+                                <>
+                                    <InfoTableRow 
+                                        label1="Customer PO Number:" 
+                                        value1={formData.customer_po_number} 
+                                        label2="Customer PO Date:" 
+                                        value2={formatDate(formData.po_date)} 
+                                    />
+                                    <InfoTableRow 
+                                        label1="Customer PO Expiry Date:" 
+                                        value1={formatDate(formData.po_expiry_date)} 
+                                        label2="Customer PO Amount:" 
+                                        value2={formData.customer_amt !== null && formData.customer_amt !== undefined && formData.customer_amt !== '' ? `₹ ${parseFloat(formData.customer_amt).toFixed(2)}` : '-'} 
+                                    />
+                                </>
+                            )}
                         </div>
                     </div>
                 )}

@@ -322,7 +322,13 @@ export class AccountMasterService {
     if (filter.status) {
       const statusStr = String(filter.status).toUpperCase();
       if (statusStr === 'ACTIVE' || statusStr === 'INACTIVE') {
-         where.status = statusStr as MasterStatus;
+         if (filter.groupName?.includes('SUNDRY_DEBTORS')) {
+           where.customerStatus = statusStr as MasterStatus;
+         } else if (filter.groupName?.includes('SUNDRY_CREDITORS')) {
+           where.supplierStatus = statusStr as MasterStatus;
+         } else {
+           where.status = statusStr as MasterStatus;
+         }
       }
     }
 
@@ -424,6 +430,204 @@ export class AccountMasterService {
     };
   }
 
+  async findActiveCustomers(userId: number) {
+    const customers = await this.prisma.accountMaster.findMany({
+      where: {
+        userId,
+        groupName: { has: 'SUNDRY_DEBTORS' },
+        customerStatus: MasterStatus.ACTIVE,
+        status: MasterStatus.ACTIVE,
+      },
+      orderBy: { accountName: 'asc' },
+    });
+    return customers.map(acc => ({
+      id: acc.id,
+      accountName: acc.accountName,
+      customerCreditDays: acc.customerCreditDays || 0,
+      address: acc.addressLine1 + (acc.addressLine2 ? ', ' + acc.addressLine2 : ''),
+      gstNumber: acc.gstNo,
+      panNumber: acc.panNo,
+      state: acc.state,
+      customerType: acc.customerType,
+    }));
+  }
+
+  async findActiveSuppliers(userId: number) {
+    const suppliers = await this.prisma.accountMaster.findMany({
+      where: {
+        userId,
+        groupName: { has: 'SUNDRY_CREDITORS' },
+        supplierStatus: MasterStatus.ACTIVE,
+        status: MasterStatus.ACTIVE,
+      },
+      orderBy: { accountName: 'asc' },
+    });
+    return suppliers.map(acc => ({
+      id: acc.id,
+      accountName: acc.accountName,
+      supplierCreditDays: acc.supplierCreditDays || 0,
+      address: acc.addressLine1 + (acc.addressLine2 ? ', ' + acc.addressLine2 : ''),
+      gstNumber: acc.gstNo,
+      panNumber: acc.panNo,
+      state: acc.state,
+    }));
+  }
+
+  async findReceiptEligibleCustomers(userId: number) {
+    // 1. Fetch all customerIds that have invoices
+    const invoicedCustomerIds = await this.prisma.salesInvoice.findMany({
+      where: { userId, status: { not: 'DELETED' } },
+      select: { customerId: true },
+      distinct: ['customerId'],
+    });
+    const customerIdsWithInvoices = invoicedCustomerIds
+      .map(inv => inv.customerId)
+      .filter((id): id is number => id !== null);
+
+    // 2. Fetch all accountIds from transaction history
+    const transactingCustomerIds = await this.prisma.transaction.findMany({
+      where: { userId },
+      select: { accountId: true },
+      distinct: ['accountId'],
+    });
+    const customerIdsWithTransactions = transactingCustomerIds
+      .map(t => t.accountId)
+      .filter((id): id is number => id !== null);
+
+    // 3. Fetch all ledger_ids from settlements
+    const settledCustomerIds = await this.prisma.voucherSettlement.findMany({
+      where: { voucher_type: 'RECEIPT' },
+      select: { ledger_id: true },
+      distinct: ['ledger_id'],
+    });
+    const customerIdsWithSettlements = settledCustomerIds
+      .map(s => s.ledger_id)
+      .filter((id): id is number => id !== null);
+
+    // Combine them
+    const eligibleIds = Array.from(new Set([
+      ...customerIdsWithInvoices,
+      ...customerIdsWithTransactions,
+      ...customerIdsWithSettlements
+    ]));
+
+    // Fetch eligible customers: ACTIVE OR (INACTIVE but has history)
+    const customers = await this.prisma.accountMaster.findMany({
+      where: {
+        userId,
+        groupName: { has: 'SUNDRY_DEBTORS' },
+        OR: [
+          {
+            customerStatus: MasterStatus.ACTIVE,
+            status: MasterStatus.ACTIVE,
+          },
+          {
+            id: { in: eligibleIds }
+          }
+        ]
+      },
+      orderBy: { accountName: 'asc' }
+    });
+
+    return customers.map(acc => {
+      const isInactive = acc.status === MasterStatus.INACTIVE || acc.customerStatus === MasterStatus.INACTIVE;
+      return {
+        id: acc.id,
+        accountName: acc.accountName,
+        displayName: isInactive ? `${acc.accountName} (Inactive - Pending Settlement)` : acc.accountName,
+        isInactive,
+        customerStatus: acc.customerStatus,
+        status: acc.status,
+        customerCreditDays: acc.customerCreditDays || 0,
+        address: acc.addressLine1 + (acc.addressLine2 ? ', ' + acc.addressLine2 : ''),
+        gstNumber: acc.gstNo,
+        panNumber: acc.panNo,
+        state: acc.state,
+        customerType: acc.customerType,
+        customerCode: acc.customerCode,
+        supplierCode: acc.supplierCode,
+        accountType: 'CUSTOMER'
+      };
+    });
+  }
+
+  async findPaymentEligibleSuppliers(userId: number) {
+    // 1. Fetch all supplierIds that have invoices
+    const invoicedSupplierIds = await this.prisma.purchaseInvoice.findMany({
+      where: { userId, status: { not: 'DELETED' } },
+      select: { supplierId: true },
+      distinct: ['supplierId'],
+    });
+    const supplierIdsWithInvoices = invoicedSupplierIds
+      .map(inv => inv.supplierId)
+      .filter((id): id is number => id !== null);
+
+    // 2. Fetch all accountIds from transaction history
+    const transactingSupplierIds = await this.prisma.transaction.findMany({
+      where: { userId },
+      select: { accountId: true },
+      distinct: ['accountId'],
+    });
+    const supplierIdsWithTransactions = transactingSupplierIds
+      .map(t => t.accountId)
+      .filter((id): id is number => id !== null);
+
+    // 3. Fetch all ledger_ids from settlements
+    const settledSupplierIds = await this.prisma.voucherSettlement.findMany({
+      where: { voucher_type: 'PAYMENT' },
+      select: { ledger_id: true },
+      distinct: ['ledger_id'],
+    });
+    const supplierIdsWithSettlements = settledSupplierIds
+      .map(s => s.ledger_id)
+      .filter((id): id is number => id !== null);
+
+    // Combine them
+    const eligibleIds = Array.from(new Set([
+      ...supplierIdsWithInvoices,
+      ...supplierIdsWithTransactions,
+      ...supplierIdsWithSettlements
+    ]));
+
+    // Fetch eligible suppliers: ACTIVE OR (INACTIVE but has history)
+    const suppliers = await this.prisma.accountMaster.findMany({
+      where: {
+        userId,
+        groupName: { has: 'SUNDRY_CREDITORS' },
+        OR: [
+          {
+            supplierStatus: MasterStatus.ACTIVE,
+            status: MasterStatus.ACTIVE,
+          },
+          {
+            id: { in: eligibleIds }
+          }
+        ]
+      },
+      orderBy: { accountName: 'asc' }
+    });
+
+    return suppliers.map(acc => {
+      const isInactive = acc.status === MasterStatus.INACTIVE || acc.supplierStatus === MasterStatus.INACTIVE;
+      return {
+        id: acc.id,
+        accountName: acc.accountName,
+        displayName: isInactive ? `${acc.accountName} (Inactive - Pending Settlement)` : acc.accountName,
+        isInactive,
+        supplierStatus: acc.supplierStatus,
+        status: acc.status,
+        supplierCreditDays: acc.supplierCreditDays || 0,
+        address: acc.addressLine1 + (acc.addressLine2 ? ', ' + acc.addressLine2 : ''),
+        gstNumber: acc.gstNo,
+        panNumber: acc.panNo,
+        state: acc.state,
+        customerCode: acc.customerCode,
+        supplierCode: acc.supplierCode,
+        accountType: 'SUPPLIER'
+      };
+    });
+  }
+
   async findOne(id: number, userId: number) {
     const account = await this.prisma.accountMaster.findUnique({
       where: { id, userId },
@@ -523,10 +727,57 @@ export class AccountMasterService {
   }
 
   async updateStatus(id: number, updateStatusDto: UpdateAccountStatusDto, userId: number) {
-    await this.findOne(id, userId);
+    const account = await this.findOne(id, userId);
+    const data: any = {
+      status: updateStatusDto.status,
+    };
+    if (updateStatusDto.customerStatus) {
+      data.customerStatus = updateStatusDto.customerStatus;
+    }
+    if (updateStatusDto.supplierStatus) {
+      data.supplierStatus = updateStatusDto.supplierStatus;
+    }
+
+    const hasCustomerRole = account.groupName?.includes('SUNDRY_DEBTORS') || !!account.customerCode;
+    const hasSupplierRole = account.groupName?.includes('SUNDRY_CREDITORS') || !!account.supplierCode;
+
+    // Resolve final status based on individual active roles
+    const currentCustomerStatus = data.customerStatus || account.customerStatus;
+    const currentSupplierStatus = data.supplierStatus || account.supplierStatus;
+
+    if (hasCustomerRole && hasSupplierRole) {
+      if (currentCustomerStatus === 'INACTIVE' && currentSupplierStatus === 'INACTIVE') {
+        data.status = 'INACTIVE';
+      } else {
+        data.status = 'ACTIVE';
+      }
+    } else if (hasCustomerRole) {
+      if (currentCustomerStatus === 'INACTIVE') {
+        data.status = 'INACTIVE';
+      } else {
+        data.status = 'ACTIVE';
+      }
+    } else if (hasSupplierRole) {
+      if (currentSupplierStatus === 'INACTIVE') {
+        data.status = 'INACTIVE';
+      } else {
+        data.status = 'ACTIVE';
+      }
+    }
+
+    // Reactivate both roles if activating overall status AND they were not explicitly passed
+    if (updateStatusDto.status === 'ACTIVE') {
+      if (!updateStatusDto.customerStatus) {
+        data.customerStatus = 'ACTIVE';
+      }
+      if (!updateStatusDto.supplierStatus) {
+        data.supplierStatus = 'ACTIVE';
+      }
+    }
+
     return this.prisma.accountMaster.update({
       where: { id, userId },
-      data: { status: updateStatusDto.status },
+      data,
     });
   }
 
