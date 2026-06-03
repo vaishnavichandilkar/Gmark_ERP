@@ -21,6 +21,7 @@ import AccountMaster from "../pages/dashboard/masters/AccountMaster";
 import UnitMaster from "../pages/dashboard/masters/UnitMaster";
 import CategoryMaster from "../pages/dashboard/masters/CategoryMaster";
 import ProductMaster from "../pages/dashboard/masters/ProductMaster";
+import HSNMasterPage from "../pages/dashboard/masters/HSNMasterPage";
 
 // Purchase Pages
 import PurchaseLayout from "../pages/dashboard/purchase/PurchaseLayout";
@@ -184,6 +185,15 @@ export const router = createBrowserRouter([
                       { path: "add", element: <ProductMaster /> },
                       { path: "view/:id", element: <ProductMaster /> },
                       { path: "edit/:id", element: <ProductMaster /> },
+                    ],
+                  },
+                  {
+                    path: "hsn-master",
+                    children: [
+                      { index: true, element: <HSNMasterPage /> },
+                      { path: "add", element: <HSNMasterPage /> },
+                      { path: "view/:id", element: <HSNMasterPage /> },
+                      { path: "edit/:id", element: <HSNMasterPage /> },
                     ],
                   },
                 ],

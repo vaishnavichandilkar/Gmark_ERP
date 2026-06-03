@@ -55,18 +55,20 @@ export class GroupMasterService {
 
         // 3. Save to the correct table based on target level
         let data;
+        const opening_balance = dto.opening_balance !== undefined && dto.opening_balance !== null && dto.opening_balance !== '' ? Number(dto.opening_balance) : null;
+        const balance_type = dto.balance_type || null;
         switch (targetLevel) {
             case 2:
-                data = await this.groupRepository.createSubGroup({ subgroup_name: group_name, group_id: parent_raw_id, userId });
+                data = await this.groupRepository.createSubGroup({ subgroup_name: group_name, group_id: parent_raw_id, userId, opening_balance, balance_type });
                 break;
             case 3:
-                data = await this.groupRepository.createSubSubGroup({ name: group_name, sub_group_id: parent_raw_id, userId });
+                data = await this.groupRepository.createSubSubGroup({ name: group_name, sub_group_id: parent_raw_id, userId, opening_balance, balance_type });
                 break;
             case 4:
-                data = await this.groupRepository.createSubSubSubGroup({ name: group_name, sub_sub_group_id: parent_raw_id, userId });
+                data = await this.groupRepository.createSubSubSubGroup({ name: group_name, sub_sub_group_id: parent_raw_id, userId, opening_balance, balance_type });
                 break;
             case 5:
-                data = await this.groupRepository.createSubSubSubSubGroup({ name: group_name, sub_sub_sub_group_id: parent_raw_id, userId });
+                data = await this.groupRepository.createSubSubSubSubGroup({ name: group_name, sub_sub_sub_group_id: parent_raw_id, userId, opening_balance, balance_type });
                 break;
             default:
                 throw new ForbiddenException('Invalid hierarchy level');
@@ -117,9 +119,13 @@ export class GroupMasterService {
             throw new ConflictException(`Group "${group_name}" already exists under this parent`);
         }
 
+        const opening_balance = dto.opening_balance !== undefined && dto.opening_balance !== null && dto.opening_balance !== '' ? Number(dto.opening_balance) : null;
+        const balance_type = dto.balance_type || null;
         const data = await this.groupRepository.updateGroupName(raw_id, level, {
             group_name,
             parent_id: parent_raw_id,
+            opening_balance,
+            balance_type,
         }, userId);
 
         return {
@@ -156,11 +162,23 @@ export class GroupMasterService {
         worksheet.columns = [
             { header: 'Group Name', key: 'group_name', width: 30 },
             { header: 'Group Under', key: 'group_under', width: 30 },
+            { header: 'Opening Balance', key: 'opening_balance', width: 20 },
+            { header: 'Balance Type', key: 'balance_type', width: 15 },
             { header: 'Status', key: 'status', width: 15 },
         ];
 
-        // Add validation for status (now in column C)
-        (worksheet as any).dataValidations.add('C2:C100', {
+        // Add validation for balance type (now in column D)
+        (worksheet as any).dataValidations.add('D2:D100', {
+            type: 'list',
+            allowBlank: true,
+            formulae: ['"Dr,Cr"'],
+            showErrorMessage: true,
+            errorTitle: 'Invalid Balance Type',
+            error: 'Please select from the list (Dr, Cr)'
+        });
+
+        // Add validation for status (now in column E)
+        (worksheet as any).dataValidations.add('E2:E100', {
             type: 'list',
             allowBlank: true,
             formulae: ['"active,inactive"'],
@@ -202,6 +220,8 @@ export class GroupMasterService {
                 const val = String(cell.value || '').trim().toLowerCase();
                 if (val === 'group name') { colMap['groupName'] = colNumber; found = true; }
                 if (val === 'group under' || val === 'under') colMap['under'] = colNumber;
+                if (val === 'opening balance' || val === 'opening' || val === 'opening_balance') colMap['openingBalance'] = colNumber;
+                if (val === 'balance type' || val === 'balance_type' || val === 'type') colMap['balanceType'] = colNumber;
                 if (val === 'status') colMap['status'] = colNumber;
             });
             if (found) {
@@ -233,6 +253,22 @@ export class GroupMasterService {
 
             try {
                 const status = (statusStr === 'inactive') ? MasterStatus.INACTIVE : MasterStatus.ACTIVE;
+                const opBalStr = getVal(row, 'openingBalance');
+                const openingBalance = opBalStr ? parseFloat(opBalStr) : null;
+                const balTypeStr = getVal(row, 'balanceType');
+                let balanceType = null;
+                if (balTypeStr) {
+                    const norm = balTypeStr.trim().toLowerCase();
+                    if (norm === 'cr' || norm === 'credit') balanceType = 'Cr';
+                    else if (norm === 'dr' || norm === 'debit') balanceType = 'Dr';
+                }
+                if (openingBalance !== null && !balanceType) {
+                    balanceType = 'Dr';
+                }
+
+                const isExpense = (groupName === 'Direct Expense' || groupName === 'Indirect Expense');
+                const finalOpeningBalance = isExpense ? null : openingBalance;
+                const finalBalanceType = isExpense ? null : balanceType;
 
                 if (!underName || underName.toLowerCase() === 'primary' || underName === '1') {
                     // Create Level 1 Group
@@ -240,10 +276,10 @@ export class GroupMasterService {
                         where: { group_name: groupName, OR: [{ userId: null, is_header: true }, { userId }] }
                     });
                     if (!existing) {
-                        await this.groupRepository.createPrimaryGroup({ group_name: groupName, userId });
+                        await this.groupRepository.createPrimaryGroup({ group_name: groupName, userId, opening_balance: finalOpeningBalance, balance_type: finalBalanceType });
                         importedRows++;
                     } else if (existing.userId === userId) {
-                        await prisma.group.update({ where: { id: existing.id }, data: { status } });
+                        await prisma.group.update({ where: { id: existing.id }, data: { status, opening_balance: finalOpeningBalance, balance_type: finalBalanceType } });
                     }
                 } else {
                     // Find parent group by name (searching levels 1 to 4)
@@ -276,27 +312,31 @@ export class GroupMasterService {
                     }
 
                     const targetLevel = parentInfo.level + 1;
+                    const parentIsExpense = await this.isExpenseAncestor(parentInfo.id, parentInfo.level, userId, prisma);
+                    const finalOpeningBalanceParent = parentIsExpense ? null : openingBalance;
+                    const finalBalanceTypeParent = parentIsExpense ? null : balanceType;
+
                     const existing = await this.groupRepository.findGroupByNameAndParent(groupName, targetLevel, parentInfo.id, userId);
 
                     if (!existing) {
                         switch (targetLevel) {
                             case 2:
-                                await this.groupRepository.createSubGroup({ subgroup_name: groupName, group_id: parentInfo.id, userId });
+                                await this.groupRepository.createSubGroup({ subgroup_name: groupName, group_id: parentInfo.id, userId, opening_balance: finalOpeningBalanceParent, balance_type: finalBalanceTypeParent });
                                 break;
                             case 3:
-                                await this.repositoryHelper(prisma.subSubGroup, { name: groupName, sub_group_id: parentInfo.id, userId, status });
+                                await this.repositoryHelper(prisma.subSubGroup, { name: groupName, sub_group_id: parentInfo.id, userId, status, opening_balance: finalOpeningBalanceParent, balance_type: finalBalanceTypeParent });
                                 break;
                             case 4:
-                                await this.repositoryHelper(prisma.subSubSubGroup, { name: groupName, sub_sub_group_id: parentInfo.id, userId, status });
+                                await this.repositoryHelper(prisma.subSubSubGroup, { name: groupName, sub_sub_group_id: parentInfo.id, userId, status, opening_balance: finalOpeningBalanceParent, balance_type: finalBalanceTypeParent });
                                 break;
                             case 5:
-                                await this.repositoryHelper(prisma.subSubSubSubGroup, { name: groupName, sub_sub_sub_group_id: parentInfo.id, userId, status });
+                                await this.repositoryHelper(prisma.subSubSubSubGroup, { name: groupName, sub_sub_sub_group_id: parentInfo.id, userId, status, opening_balance: finalOpeningBalanceParent, balance_type: finalBalanceTypeParent });
                                 break;
                         }
                         importedRows++;
                     } else {
-                        // Update status
-                        await this.groupRepository.updateGroupStatus(existing.id, targetLevel, status, userId);
+                        // Update status, opening balance, and balance type
+                        await this.groupRepository.updateGroupStatus(existing.id, targetLevel, status, userId, finalOpeningBalanceParent, finalBalanceTypeParent);
                     }
                 }
             } catch (error) {
@@ -314,6 +354,39 @@ export class GroupMasterService {
 
     private async repositoryHelper(model: any, data: any) {
         return model.create({ data });
+    }
+
+    private async isExpenseAncestor(parentId: number, level: number, userId: number, prisma: any): Promise<boolean> {
+        let currentId = parentId;
+        let currentLevel = level;
+
+        while (currentLevel >= 1 && currentId) {
+            if (currentLevel === 1) {
+                const g = await prisma.group.findUnique({ where: { id: currentId } });
+                if (g && (g.group_name === 'Direct Expense' || g.group_name === 'Indirect Expense')) {
+                    return true;
+                }
+                break;
+            } else if (currentLevel === 2) {
+                const sg = await prisma.subGroup.findUnique({ where: { id: currentId } });
+                if (!sg) break;
+                currentId = sg.group_id;
+                currentLevel = 1;
+            } else if (currentLevel === 3) {
+                const ssg = await prisma.subSubGroup.findUnique({ where: { id: currentId } });
+                if (!ssg) break;
+                currentId = ssg.sub_group_id;
+                currentLevel = 2;
+            } else if (currentLevel === 4) {
+                const sssg = await prisma.subSubSubGroup.findUnique({ where: { id: currentId } });
+                if (!sssg) break;
+                currentId = sssg.sub_sub_group_id;
+                currentLevel = 3;
+            } else {
+                break;
+            }
+        }
+        return false;
     }
 
     async exportGroups(format: string, userId: number) {
@@ -334,37 +407,42 @@ export class GroupMasterService {
             worksheet.columns = [
                 { header: 'Group Name', key: 'groupName', width: 40 },
                 { header: 'Level', key: 'level', width: 10 },
+                { header: 'Opening Balance', key: 'openingBalance', width: 20 },
+                { header: 'Balance Type', key: 'balanceType', width: 15 },
                 { header: 'Status', key: 'status', width: 15 },
             ];
 
-            const addGroupToSheet = (group: any, level: number) => {
+            const addGroupToSheet = (group: any, level: number, isExpense: boolean) => {
+                const currentIsExpense = isExpense || group.group_name === 'Direct Expense' || group.group_name === 'Indirect Expense';
                 worksheet.addRow({
                     groupName: '  '.repeat(level - 1) + (group.group_name),
                     level: level,
+                    openingBalance: currentIsExpense ? '' : (group.opening_balance ? Number(group.opening_balance) : 0),
+                    balanceType: currentIsExpense ? '' : (group.balance_type || 'Dr'),
                     status: group.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive',
                 });
 
                 if (group.children && group.children.length > 0) {
-                    group.children.forEach((child: any) => addGroupToSheet(child, level + 1));
+                    group.children.forEach((child: any) => addGroupToSheet(child, level + 1, currentIsExpense));
                 }
             };
 
-            groups.forEach(group => addGroupToSheet(group, 1));
+            groups.forEach(group => addGroupToSheet(group, 1, false));
 
             worksheet.spliceRows(1, 0, [], [], [], []);
-            worksheet.mergeCells('A1:C1');
+            worksheet.mergeCells('A1:E1');
             const titleCell = worksheet.getCell('A1');
             titleCell.value = 'ERP';
             titleCell.font = { size: 18, bold: true };
             titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-            worksheet.mergeCells('A2:C2');
+            worksheet.mergeCells('A2:E2');
             const subtitleCell = worksheet.getCell('A2');
             subtitleCell.value = 'Group Master Report';
             subtitleCell.font = { size: 14 };
             subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-            worksheet.mergeCells('A3:C3');
+            worksheet.mergeCells('A3:E3');
             const timestampCell = worksheet.getCell('A3');
             timestampCell.value = `Exported on: ${timestamp}`;
             timestampCell.font = { size: 10 };
@@ -403,8 +481,8 @@ export class GroupMasterService {
                 doc.moveDown();
 
                 const tableTop = 100;
-                const colX = [30, 400, 480];
-                const headers = ['Group Name', 'Level', 'Status'];
+                const colX = [30, 240, 310, 410, 490];
+                const headers = ['Group Name', 'Level', 'Opening Balance', 'Balance Type', 'Status'];
 
                 doc.rect(20, tableTop - 5, 555, 20).fill('#4472C4');
                 doc.fontSize(10).font('Helvetica-Bold').fillColor('#FFFFFF');
@@ -413,23 +491,27 @@ export class GroupMasterService {
                 let y = tableTop + 20;
                 doc.fillColor('#000000').font('Helvetica');
 
-                const addGroupToPdf = (group: any, level: number) => {
+                const addGroupToPdf = (group: any, level: number, isExpense: boolean) => {
                     if (y > 750) { doc.addPage(); y = 40; }
                     doc.fontSize(9);
                     if (level === 1) doc.font('Helvetica-Bold');
                     else doc.font('Helvetica');
 
+                    const currentIsExpense = isExpense || group.group_name === 'Direct Expense' || group.group_name === 'Indirect Expense';
+
                     doc.text('  '.repeat(level - 1) + (group.group_name), colX[0], y);
                     doc.font('Helvetica').text(String(level), colX[1], y);
-                    doc.text(group.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[2], y);
+                    doc.text(currentIsExpense ? '-' : (group.opening_balance ? Number(group.opening_balance).toFixed(2) : '0.00'), colX[2], y);
+                    doc.text(currentIsExpense ? '-' : (group.balance_type || 'Dr'), colX[3], y);
+                    doc.text(group.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[4], y);
                     y += 15;
 
                     if (group.children && group.children.length > 0) {
-                        group.children.forEach((child: any) => addGroupToPdf(child, level + 1));
+                        group.children.forEach((child: any) => addGroupToPdf(child, level + 1, currentIsExpense));
                     }
                 };
 
-                groups.forEach(group => addGroupToPdf(group, 1));
+                groups.forEach(group => addGroupToPdf(group, 1, false));
 
                 doc.end();
             });

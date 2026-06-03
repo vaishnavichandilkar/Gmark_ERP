@@ -9,10 +9,20 @@ export class VoucherItemSettlementDto {
   @IsOptional()
   invoiceId?: number;
 
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  voucherId?: number;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  settlementId?: number;
+
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  settlementType: string; // 'ADVANCE', 'AGAINST_REFERENCE', 'ON_ACCOUNT'
+  settlementType: string; // 'ADVANCE', 'AGAINST_REFERENCE', 'ON_ACCOUNT', 'ABSORB_VOUCHER'
 
   @ApiProperty()
   @IsNumber()
@@ -28,7 +38,7 @@ export class VoucherItemDto {
 
   @ApiProperty()
   @IsNumber()
-  @Min(0.01)
+  @Min(0)
   @IsNotEmpty()
   amount: number;
 

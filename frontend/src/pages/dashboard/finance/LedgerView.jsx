@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Download, Search, FileText, FileSpreadsheet, RotateCcw } from 'lucide-react';
+import { ChevronLeft, Download, Search, FileText, FileSpreadsheet, RotateCcw, XSquare } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -27,6 +27,7 @@ const LedgerView = () => {
     const [endDate, setEndDate] = useState('');
     const [type, setType] = useState('');
     const [showExportMenu, setShowExportMenu] = useState(false);
+    const [showAllocations, setShowAllocations] = useState(false);
     const [activeFiscalYear, setActiveFiscalYear] = useState('2025-2026');
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -65,8 +66,8 @@ const LedgerView = () => {
                     // Account type would ideally be returned in meta or summary
                 }));
             } catch (error) {
-                console.error('Error fetching ledger:', error);
-                toast.error('Failed to load ledger data');
+                console.error('Error fetching ledger details:', error);
+                toast.error('Failed to load ledger details');
             } finally {
                 setLoading(false);
             }
@@ -74,6 +75,31 @@ const LedgerView = () => {
 
         fetchLedger();
     }, [id, startDate, endDate, type, currentPage]);
+
+    const handleDeleteAllocation = async (allocationId) => {
+        if (!window.confirm('Are you sure you want to delete this allocation?')) return;
+        try {
+            await ledgerService.deleteAllocation(allocationId);
+            toast.success('Allocation deleted successfully');
+            
+            // Refresh data
+            setLoading(true);
+            const params = { startDate, endDate, type, page: currentPage, limit: 14 };
+            const response = await ledgerService.getDetailedLedger(id, params);
+            setTransactions(response.data.items || []);
+            setTotalPages(response.data.totalPages || 1);
+            setTotalTransactions(response.data.total || 0);
+            setPeriodTotals({
+                debit: response.data.periodDebit || 0,
+                credit: response.data.periodCredit || 0
+            });
+            setLoading(false);
+        } catch (error) {
+            console.error('Error deleting allocation:', error);
+            toast.error('Failed to delete allocation');
+            setLoading(false);
+        }
+    };
 
     React.useEffect(() => {
         const start = searchParams.get('startDate');
@@ -163,21 +189,22 @@ const LedgerView = () => {
             doc.setFontSize(16);
             doc.text(`Ledger Account: ${accountData.name}`, 14, 20);
             
-            const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "DR", "CR", "Balance"];
+            const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "Unallocated", "DR", "CR", "Balance"];
             const tableRows = filteredTransactions.map((tx, idx) => [
                 idx + 1,
                 tx.date,
                 tx.particulars,
                 (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
+                tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
                 tx.debit !== '0' && tx.debit ? Number(tx.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
                 tx.credit !== '0' && tx.credit ? Number(tx.credit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
                 Number(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ` ${type === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
             ]);
 
             const footerRows = [
-                ['', '', '', 'Page Total', pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}`],
-                ['', '', '', 'Transactions (Ledger)', periodTotals.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), periodTotals.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}`],
-                ['', '', '', 'Closing Balance', '--', '--', `${Math.abs(finalBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}`]
+                ['', '', '', 'Page Total', '', pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}`],
+                ['', '', '', 'Transactions (Ledger)', '', periodTotals.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), periodTotals.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}`],
+                ['', '', '', 'Closing Balance', '', '--', '--', `${Math.abs(finalBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}`]
             ];
 
             autoTable(doc, {
@@ -213,6 +240,7 @@ const LedgerView = () => {
                 "Date": tx.date,
                 "Particular": tx.particulars,
                 "Narration": (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
+                "Unallocated (₹)": tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated) : null,
                 "Debit (₹)": tx.debit !== '0' && tx.debit ? Number(tx.debit) : null,
                 "Credit (₹)": tx.credit !== '0' && tx.credit ? Number(tx.credit) : null,
                 "Balance": `${Math.abs(Number(tx.balance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
@@ -220,9 +248,9 @@ const LedgerView = () => {
 
             // Add summary rows to Excel
             exportData.push({}); // Empty row for spacing
-            exportData.push({ "Narration": "Page Total", "Debit (₹)": pageTotalDR, "Credit (₹)": pageTotalCR, "Balance": `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}` });
-            exportData.push({ "Narration": "Transactions (Ledger)", "Debit (₹)": periodTotals.debit, "Credit (₹)": periodTotals.credit, "Balance": `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}` });
-            exportData.push({ "Narration": "Closing Balance", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}` });
+            exportData.push({ "Narration": "Page Total", "Unallocated (₹)": "--", "Debit (₹)": pageTotalDR, "Credit (₹)": pageTotalCR, "Balance": `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}` });
+            exportData.push({ "Narration": "Transactions (Ledger)", "Unallocated (₹)": "--", "Debit (₹)": periodTotals.debit, "Credit (₹)": periodTotals.credit, "Balance": `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}` });
+            exportData.push({ "Narration": "Closing Balance", "Unallocated (₹)": "--", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}` });
 
             const ws = XLSX.utils.json_to_sheet(exportData);
             
@@ -232,6 +260,7 @@ const LedgerView = () => {
                 {wch: 15}, // Date
                 {wch: 30}, // Particular
                 {wch: 40}, // Narration
+                {wch: 15}, // Unallocated
                 {wch: 15}, // Debit
                 {wch: 15}, // Credit
                 {wch: 15}  // Balance
@@ -425,7 +454,14 @@ const LedgerView = () => {
                             </div>
                         </div>
 
-                        <div className="relative">
+                        <div className="flex items-center gap-3">
+                            <button 
+                                className={`h-[44px] px-6 transition-all flex items-center shadow-lg rounded-[12px] font-bold text-[15px] ${showAllocations ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-[#073318] hover:bg-[#0a4422] text-white'}`}
+                                onClick={() => setShowAllocations(!showAllocations)}
+                            >
+                                {showAllocations ? 'Hide Allocation' : 'Allocation'}
+                            </button>
+                            <div className="relative">
                             <button 
                                 className="h-[44px] px-6 bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] rounded-[12px] font-bold text-[15px] transition-all flex items-center gap-2 shadow-sm"
                                 onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}
@@ -456,6 +492,7 @@ const LedgerView = () => {
                                 </>
                             )}
                         </div>
+                        </div>
                     </div>
                 </div>
 
@@ -469,6 +506,7 @@ const LedgerView = () => {
                                     <th className="px-6 py-4 text-left font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Date</th>
                                     <th className="px-6 py-4 text-left font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Particulars</th>
                                     <th className="px-6 py-4 text-left font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Narration</th>
+                                    <th className="px-6 py-4 text-right font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Unallocated</th>
                                     <th className="px-6 py-4 text-right font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Debit (₹)</th>
                                     <th className="px-6 py-4 text-right font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Credit (₹)</th>
                                     <th className="px-6 py-4 text-right font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Balance</th>
@@ -486,23 +524,90 @@ const LedgerView = () => {
                                     </tr>
                                 ) : filteredTransactions.length > 0 ? (
                                     filteredTransactions.map((tx, idx) => (
-                                        <tr key={tx.id || idx} className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors">
-                                            <td className="px-6 py-5 text-center text-gray-500 font-medium">
-                                                {(tx.isBalanceRow || tx.particulars.toLowerCase().includes('balance')) ? '-' : ((currentPage - 1) * 14 + idx)}
-                                            </td>
-                                            <td className="px-6 py-5 font-medium text-gray-700">
-                                                {new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}
-                                            </td>
-                                            <td className="px-6 py-5 font-bold text-gray-900">{tx.particulars}</td>
-                                            <td className="px-6 py-5 text-gray-500 max-w-[300px]">
-                                                {tx.narration || '-'}
-                                            </td>
-                                            <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.debit > 0 ? `₹ ${tx.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
-                                            <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.credit > 0 ? `₹ ${tx.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
-                                            <td className="px-6 py-5 text-right font-extrabold text-[#111827]">
-                                                ₹ {Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {type === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}
-                                            </td>
-                                        </tr>
+                                        <React.Fragment key={tx.id || idx}>
+                                            <tr className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors">
+                                                <td className="px-6 py-5 text-center text-gray-500 font-medium">
+                                                    {(tx.isBalanceRow || tx.particulars.toLowerCase().includes('balance')) ? '-' : ((currentPage - 1) * 14 + idx + 1)}
+                                                </td>
+                                                <td className="px-6 py-5 font-medium text-gray-700">
+                                                    {new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}
+                                                </td>
+                                                <td className="px-6 py-5 font-bold text-gray-900">{tx.particulars}</td>
+                                                <td className="px-6 py-5 text-gray-500 max-w-[300px]">
+                                                    {tx.narration || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center font-medium text-gray-700">
+                                                    {(() => {
+                                                        if (tx.isBalanceRow || tx.particulars.toLowerCase().includes('balance')) return '-';
+                                                        if (tx.unallocated === undefined || tx.unallocated === null) return '-';
+                                                        const totalAllocated = tx.allocations ? tx.allocations.reduce((s, a) => s + a.amount, 0) : 0;
+                                                        const remainingUnallocated = Math.max(0, tx.unallocated - totalAllocated);
+                                                        const displayAmount = showAllocations ? tx.unallocated : remainingUnallocated;
+                                                        const pType = tx.particulars || '';
+                                                        const suffix = pType.includes('Purchase') || pType.includes('Receipt') ? 'Cr' : (pType.includes('Sales') || pType.includes('Payment') ? 'Dr' : '');
+                                                        
+                                                        if (displayAmount === 0) return `-- ${suffix}`.trim();
+                                                        return `₹ ${displayAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${suffix}`.trim();
+                                                    })()}
+                                                </td>
+                                                <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.debit > 0 ? `₹ ${tx.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                                                <td className="px-6 py-5 text-right font-bold text-[#111827]">{tx.credit > 0 ? `₹ ${tx.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                                                <td className="px-6 py-5 text-right font-extrabold text-[#111827]">
+                                                    ₹ {Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {type === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}
+                                                </td>
+                                            </tr>
+                                            {showAllocations && tx.allocations && tx.allocations.length > 0 && (
+                                                <>
+                                                    {tx.allocations.map((alloc) => (
+                                                        <tr key={`alloc-${alloc.id}`} className="bg-[#FAFAFA] border-b border-[#F1F5F9]">
+                                                            <td className="px-6 py-3"></td>
+                                                            <td className="px-6 py-3 text-[13px] text-gray-500 font-medium">
+                                                                {new Date(alloc.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}
+                                                            </td>
+                                                            <td className="px-6 py-3 text-[13px] font-bold text-gray-700">{alloc.type}</td>
+                                                            <td className="px-6 py-3">
+                                                                {alloc.voucherNo !== '-' ? (
+                                                                    <div className="flex flex-col gap-0.5">
+                                                                        <span className="text-[13px] font-bold text-gray-700">{alloc.voucherNo}</span>
+                                                                        {alloc.narration && alloc.narration !== '-' && (
+                                                                            <span className="text-[11.5px] font-medium text-gray-500 italic">{alloc.narration}</span>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-[13px] text-gray-500">{alloc.narration}</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-6 py-3 text-center">
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    <span className="text-[12px] font-bold text-gray-700">
+                                                                        {formatCurrency(alloc.amount)} {tx.particulars && (tx.particulars.includes('Purchase') || tx.particulars.includes('Receipt')) ? 'Dr' : (tx.particulars && (tx.particulars.includes('Sales') || tx.particulars.includes('Payment')) ? 'Cr' : '')}
+                                                                    </span>
+                                                                    <button 
+                                                                        onClick={() => handleDeleteAllocation(alloc.id)}
+                                                                        className="w-5 h-5 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                                                                        title="Delete Allocation"
+                                                                    >
+                                                                        <XSquare size={12} />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                            <td colSpan="3"></td>
+                                                        </tr>
+                                                    ))}
+                                                    <tr className="bg-[#FAFAFA] border-b border-[#F3F4F6]">
+                                                        <td colSpan="4" className="px-6 py-2 text-right text-[12px] font-medium text-gray-500">
+                                                            Unallocated Balance:
+                                                        </td>
+                                                        <td className="px-6 py-2 text-center text-[13px] font-bold text-gray-700">
+                                                            {(tx.unallocated ? Math.max(0, tx.unallocated - tx.allocations.reduce((s, a) => s + a.amount, 0)) : 0) > 0 
+                                                                ? `₹ ${(tx.unallocated - tx.allocations.reduce((s, a) => s + a.amount, 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${tx.particulars && (tx.particulars.includes('Purchase') || tx.particulars.includes('Receipt')) ? 'Cr' : (tx.particulars && (tx.particulars.includes('Sales') || tx.particulars.includes('Payment')) ? 'Dr' : '')}` 
+                                                                : `-- ${tx.particulars && (tx.particulars.includes('Purchase') || tx.particulars.includes('Receipt')) ? 'Cr' : (tx.particulars && (tx.particulars.includes('Sales') || tx.particulars.includes('Payment')) ? 'Dr' : '')}`}
+                                                        </td>
+                                                        <td colSpan="3"></td>
+                                                    </tr>
+                                                </>
+                                            )}
+                                        </React.Fragment>
                                     ))
                                 ) : (
                                     <tr>
@@ -516,6 +621,7 @@ const LedgerView = () => {
                                 {/* Page Total Row */}
                                 <tr className="border-b border-gray-100">
                                     <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">PAGE TOTAL (NEW)</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">₹ {Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}</td>
@@ -523,6 +629,7 @@ const LedgerView = () => {
                                 {/* Transactions (Ledger) Row */}
                                 <tr className="border-b border-gray-100">
                                     <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Transactions (Ledger)</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {runningTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {runningTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">₹ {Math.abs(runningTotalCR - runningTotalDR).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {runningTotalCR >= runningTotalDR ? 'Cr' : 'Dr'}</td>
@@ -530,6 +637,7 @@ const LedgerView = () => {
                                 {/* Balance (Ledger) Row */}
                                 <tr>
                                     <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Closing Balance</td>
+                                    <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100 bg-gray-50/50">₹ {Math.abs(currentClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {type === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}</td>

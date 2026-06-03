@@ -711,11 +711,11 @@ const SalesOrder = () => {
 
           <div className="flex items-center gap-3">
             <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 uppercase">
-              <Upload size={18} className="text-gray-400" /> Import
+              <Download size={18} className="text-gray-400" /> Import
             </button>
             <div className="relative" ref={exportRef}>
               <button onClick={() => setIsExportOpen(!isExportOpen)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 uppercase">
-                <Download size={18} className="text-gray-400" /> Export
+                <Upload size={18} className="text-gray-400" /> Export
               </button>
               {isExportOpen && (
                 <div className="absolute top-full right-0 mt-2 w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-50 py-2 animate-in slide-in-from-top-2 duration-200 uppercase font-bold">

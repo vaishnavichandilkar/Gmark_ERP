@@ -76,7 +76,7 @@ const ViewProduct = ({ initialData, onBack, onEdit }) => {
                     <div className="border border-[#E5E7EB] rounded-[8px] overflow-hidden flex flex-col w-full">
                         <SectionHeading title={t('modules:product_information')} />
                         <InfoTableRow 
-                            label1={`${t('modules:product_name')}:`} value1={translateDynamic(data.product_name, t)} 
+                            label1={`${data.product_type === 'SERVICES' ? t('modules:service_name', 'Service Name') : t('modules:product_name')}:`} value1={translateDynamic(data.product_name, t)} 
                             label2={`${t('modules:product_code')}:`} value2={data.product_code} 
                         />
                         <InfoTableRow 

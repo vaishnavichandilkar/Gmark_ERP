@@ -317,11 +317,14 @@ const AddSalesInvoice = () => {
     };
     const handleSOChange = async (soId) => {
         if (!soId) {
+            const customer = accounts.find(c => c.id === parseInt(formData.customerId));
+            const defaultCreditDays = customer ? (customer.customerCreditDays || customer.creditDays || 0) : 0;
             setFormData(prev => ({
                 ...prev,
                 soId: '',
                 soNumber: '',
-                challanIds: []
+                challanIds: [],
+                creditDays: defaultCreditDays
             }));
             setItems([{
                 id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
@@ -398,6 +401,7 @@ const AddSalesInvoice = () => {
                     ...prev,
                     soId: selectedSO.id,
                     soNumber: selectedSO.soNumber,
+                    creditDays: selectedSO.creditDays !== undefined && selectedSO.creditDays !== null ? selectedSO.creditDays : prev.creditDays,
                     challanIds: matchingChallanIds
                 }));
             } catch (error) {
@@ -409,6 +413,7 @@ const AddSalesInvoice = () => {
                 ...prev,
                 soId: selectedSO.id,
                 soNumber: selectedSO.soNumber,
+                creditDays: selectedSO.creditDays !== undefined && selectedSO.creditDays !== null ? selectedSO.creditDays : prev.creditDays,
                 challanIds: [] // Clear previously selected challans when SO changes
             }));
 
@@ -452,11 +457,14 @@ const AddSalesInvoice = () => {
 
     const handleChallanChange = async (selectedIds) => {
         if (!selectedIds || selectedIds.length === 0) {
+            const customer = accounts.find(c => c.id === parseInt(formData.customerId));
+            const defaultCreditDays = customer ? (customer.customerCreditDays || customer.creditDays || 0) : 0;
             setFormData(prev => ({ 
                 ...prev, 
                 challanIds: [],
                 soId: '',
-                soNumber: ''
+                soNumber: '',
+                creditDays: defaultCreditDays
             }));
             setItems([{
                 id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
@@ -478,10 +486,21 @@ const AddSalesInvoice = () => {
                     (firstWithSo.soNumber && String(s.soNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === String(firstWithSo.soNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase())
                 );
                 if (matchedSO) {
-                    soFields = {
-                        soId: matchedSO.id,
-                        soNumber: matchedSO.soNumber
-                    };
+                    try {
+                        const soDetails = await salesOrderService.getSalesOrderById(matchedSO.id);
+                        soFields = {
+                            soId: soDetails.id,
+                            soNumber: soDetails.soNumber,
+                            creditDays: soDetails.creditDays !== undefined && soDetails.creditDays !== null ? soDetails.creditDays : undefined
+                        };
+                    } catch (e) {
+                        console.error("Error fetching matching SO details:", e);
+                        soFields = {
+                            soId: matchedSO.id,
+                            soNumber: matchedSO.soNumber,
+                            creditDays: matchedSO.creditDays !== undefined && matchedSO.creditDays !== null ? matchedSO.creditDays : undefined
+                        };
+                    }
                 }
             }
 
@@ -536,11 +555,28 @@ const AddSalesInvoice = () => {
             }]);
             setExpenses(allExpenses);
 
-            setFormData(prev => ({ 
-                ...prev, 
-                ...soFields,
-                challanIds: selectedIds 
-            }));
+            setFormData(prev => {
+                let mergedCreditDays = prev.creditDays;
+                if (soFields.creditDays !== undefined) {
+                    mergedCreditDays = soFields.creditDays;
+                } else {
+                    // Try to get creditDays from the first valid challan
+                    for (const cid of selectedIds) {
+                        const challanResponse = challans.find(c => String(c.id) === String(cid));
+                        if (challanResponse && challanResponse.creditDays !== undefined && challanResponse.creditDays !== null) {
+                            mergedCreditDays = challanResponse.creditDays;
+                            break;
+                        }
+                    }
+                }
+                
+                return { 
+                    ...prev, 
+                    ...soFields,
+                    creditDays: mergedCreditDays,
+                    challanIds: selectedIds 
+                };
+            });
         } catch (error) {
             console.error("Error fetching challan details:", error);
             toast.error("Failed to load challan details");

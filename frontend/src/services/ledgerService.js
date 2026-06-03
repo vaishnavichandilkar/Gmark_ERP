@@ -6,6 +6,7 @@ const ledgerService = {
     getBankCash: (params) => api.get('/ledger/bank-cash', { params }),
     getBankCashAccounts: () => api.get('/ledger/bank-cash-accounts'),
     getDetailedLedger: (id, params) => api.get(`/ledger/${id}`, { params }),
+    deleteAllocation: (id) => api.delete(`/ledger/allocation/${id}`),
 };
 
 export default ledgerService;

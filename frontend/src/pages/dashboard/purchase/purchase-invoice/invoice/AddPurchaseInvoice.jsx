@@ -432,12 +432,15 @@ const AddPurchaseInvoice = () => {
 
     const handleChallanChange = async (selectedGrnIds) => {
         if (!selectedGrnIds || selectedGrnIds.length === 0) {
+            const supplier = suppliers.find(s => s.id === parseInt(formData.supplier_id));
+            const defaultCreditDays = supplier ? (supplier.supplierCreditDays || supplier.creditDays || 0) : 0;
             setFormData(prev => ({ 
                 ...prev, 
                 grn_ids: [],
                 po_id: '',
                 po_number: '',
-                po_date: ''
+                po_date: '',
+                credit_days: defaultCreditDays
             }));
             setItems([{ 
                 id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0, 
@@ -466,14 +469,16 @@ const AddPurchaseInvoice = () => {
                         poFields = {
                             po_id: poDetails.id,
                             po_number: poDetails.poNumber,
-                            po_date: poDetails.poCreationDate?.split('T')[0] || ''
+                            po_date: poDetails.poCreationDate?.split('T')[0] || '',
+                            credit_days: poDetails.creditDays !== undefined && poDetails.creditDays !== null ? poDetails.creditDays : undefined
                         };
                     } catch (e) {
                         console.error("Error fetching matching PO details:", e);
                         poFields = {
                             po_id: matchedPO.id,
                             po_number: matchedPO.poNumber,
-                            po_date: matchedPO.poCreationDate?.split('T')[0] || ''
+                            po_date: matchedPO.poCreationDate?.split('T')[0] || '',
+                            credit_days: matchedPO.creditDays !== undefined && matchedPO.creditDays !== null ? matchedPO.creditDays : undefined
                         };
                     }
                 }
@@ -546,16 +551,26 @@ const AddPurchaseInvoice = () => {
                 taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0 
             }]);
 
-            setFormData(prev => ({ 
-                ...prev, 
-                ...poFields,
-                grn_ids: selectedGrnIds,
-                challan_date: grns.reduce((latest, g) => {
-                    const gDate = g.grnDate || g.bookingDate;
-                    if (!latest || (gDate && gDate > latest)) return gDate?.split('T')[0];
-                    return latest;
-                }, '')
-            }));
+            setFormData(prev => {
+                let mergedCreditDays = prev.credit_days;
+                if (poFields.credit_days !== undefined) {
+                    mergedCreditDays = poFields.credit_days;
+                } else if (grns.length > 0 && grns[0].creditDays !== undefined && grns[0].creditDays !== null) {
+                    mergedCreditDays = grns[0].creditDays;
+                }
+                
+                return { 
+                    ...prev, 
+                    ...poFields,
+                    credit_days: mergedCreditDays,
+                    grn_ids: selectedGrnIds,
+                    challan_date: grns.reduce((latest, g) => {
+                        const gDate = g.grnDate || g.bookingDate;
+                        if (!latest || (gDate && gDate > latest)) return gDate?.split('T')[0];
+                        return latest;
+                    }, '')
+                };
+            });
         } catch (error) {
             console.error("Error fetching GRN details:", error);
             toast.error("Failed to fetch challan details");
@@ -564,12 +579,15 @@ const AddPurchaseInvoice = () => {
 
     const handlePOChange = async (poId) => {
         if (!poId) {
+            const supplier = suppliers.find(s => s.id === parseInt(formData.supplier_id));
+            const defaultCreditDays = supplier ? (supplier.supplierCreditDays || supplier.creditDays || 0) : 0;
             setFormData(prev => ({ 
                 ...prev, 
                 po_id: '', 
                 po_number: '', 
                 po_date: '',
-                grn_ids: []
+                grn_ids: [],
+                credit_days: defaultCreditDays
             }));
             const resetItems = items.map(p => ({
                 ...p,
@@ -676,6 +694,7 @@ const AddPurchaseInvoice = () => {
                     po_id: poDetails.id, 
                     po_number: poDetails.poNumber,
                     po_date: poDateVal,
+                    credit_days: poDetails.creditDays !== undefined && poDetails.creditDays !== null ? poDetails.creditDays : prev.credit_days,
                     grn_ids: matchingGrnIds,
                     challan_date: latestChallanDate
                 }));
@@ -685,6 +704,7 @@ const AddPurchaseInvoice = () => {
                     po_id: poDetails.id, 
                     po_number: poDetails.poNumber,
                     po_date: poDateVal,
+                    credit_days: poDetails.creditDays !== undefined && poDetails.creditDays !== null ? poDetails.creditDays : prev.credit_days,
                     grn_ids: [] // Clear previously selected GRNs when PO changes
                 }));
 

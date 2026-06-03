@@ -235,6 +235,18 @@ export class PurchaseOrderService {
       throw new ForbiddenException(`Update forbidden in status ${po.status}`);
     }
 
+    // Check if PO is linked to any GRN or Purchase Invoice
+    const linkedGrns = await this.prisma.grn.count({ 
+      where: { poId: id, status: { not: 'DELETED' } } 
+    });
+    const linkedInvoices = await this.prisma.purchaseInvoice.count({ 
+      where: { poId: id, status: { not: 'DELETED' } } 
+    });
+
+    if (linkedGrns > 0 || linkedInvoices > 0) {
+      throw new ForbiddenException(`Purchase Order cannot be edited because it is linked to a GRN or Purchase Invoice.`);
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const data: any = {
         creditDays: updateDto.creditDays ?? po.creditDays,
@@ -303,6 +315,19 @@ export class PurchaseOrderService {
   async softDelete(id: number, userId: number) {
     const po = await this.findOne(id, userId);
     if (po.status === 'DELETED') return po;
+
+    // Check if PO is linked to any GRN or Purchase Invoice
+    const linkedGrns = await this.prisma.grn.count({ 
+      where: { poId: id, status: { not: 'DELETED' } } 
+    });
+    const linkedInvoices = await this.prisma.purchaseInvoice.count({ 
+      where: { poId: id, status: { not: 'DELETED' } } 
+    });
+
+    if (linkedGrns > 0 || linkedInvoices > 0) {
+      throw new ForbiddenException(`Purchase Order cannot be deleted because it is linked to a GRN or Purchase Invoice.`);
+    }
+
     return this.prisma.purchaseOrder.update({
       where: { id },
       data: { status: 'DELETED' },

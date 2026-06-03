@@ -555,7 +555,7 @@ const CategoryMaster = () => {
                 onClick={() => setIsImportModalOpen(true)}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[13px] sm:text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all duration-200 bg-white shadow-sm"
               >
-                <Upload size={18} className="text-gray-400" />
+                <Download size={18} className="text-gray-400" />
                 <span className="hidden sm:inline">
                   {t("common:import", "Import")}
                 </span>
@@ -567,7 +567,7 @@ const CategoryMaster = () => {
                   className={`w-full sm:w-auto flex items-center justify-center gap-2 px-3 sm:px-4 h-[42px] border rounded-[10px] text-[13px] sm:text-[14px] font-bold transition-all duration-200 bg-white
                     ${isExportOpen ? "border-[#073318] text-[#073318]" : "border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50"}`}
                 >
-                  <Download
+                  <Upload
                     size={18}
                     className={
                       isExportOpen ? "text-[#073318]" : "text-gray-400"
@@ -647,14 +647,14 @@ const CategoryMaster = () => {
                   onClick={() => setIsImportModalOpen(true)}
                   className="w-10 h-10 flex items-center justify-center text-gray-500"
                 >
-                  <Upload size={20} />
+                  <Download size={20} />
                 </button>
                 <div className="relative">
                   <button
                     onClick={() => setIsExportOpen(!isExportOpen)}
                     className={`w-10 h-10 flex items-center justify-center transition-colors ${isExportOpen ? "text-[#073318]" : "text-gray-500"}`}
                   >
-                    <Download size={20} />
+                    <Upload size={20} />
                   </button>
                   {isExportOpen && (
                     <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-lg z-[100] py-1">
@@ -705,12 +705,12 @@ const CategoryMaster = () => {
             {t("modules:category_sub_category")}
             <ChevronsUpDown size={14} className="opacity-70" />
           </div>
-          <div className="flex shrink-0">
-            <div className="w-[110px] md:w-[120px] justify-center px-4 gap-2 border-l border-white/10">
+          <div className="flex items-stretch shrink-0 !p-0 !border-r-0">
+            <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4 gap-2 border-l border-white/10">
               {t("common:status")}
               <ChevronsUpDown size={14} className="opacity-70" />
             </div>
-            <div className="w-16 md:w-20 justify-center px-4 border-l border-white/10">
+            <div className="w-16 md:w-20 flex items-center justify-center px-4 border-l border-white/10">
               {t("common:action")}
             </div>
           </div>

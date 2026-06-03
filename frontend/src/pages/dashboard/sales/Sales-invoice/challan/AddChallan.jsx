@@ -240,7 +240,9 @@ const AddChallan = () => {
     const handleSOChange = async (soId) => {
         if (!soId) {
             // Clear SO selection
-            setFormData(prev => ({ ...prev, soId: '', soNumber: '' }));
+            const customer = customers.find(c => c.id === parseInt(formData.customerId));
+            const defaultCreditDays = customer ? (customer.customerCreditDays || customer.creditDays || 0) : 0;
+            setFormData(prev => ({ ...prev, soId: '', soNumber: '', creditDays: defaultCreditDays }));
             setItems([{
                 id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
                 uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0,
@@ -253,11 +255,22 @@ const AddChallan = () => {
         const selectedSO = sos.find(s => s.id === parseInt(soId));
         if (!selectedSO) return;
 
+        let soCreditDays = selectedSO.creditDays;
+        if (soCreditDays === undefined || soCreditDays === null) {
+            try {
+                const soDetails = await salesOrderService.getSalesOrderById(soId);
+                soCreditDays = soDetails.creditDays;
+            } catch (e) {
+                console.error("Error fetching SO details:", e);
+            }
+        }
+
         setFormData(prev => ({
             ...prev,
             soId: selectedSO.id,
             soNumber: selectedSO.soNumber,
-            soCreationDate: selectedSO.soCreationDate
+            soCreationDate: selectedSO.soCreationDate,
+            creditDays: soCreditDays !== undefined && soCreditDays !== null ? soCreditDays : prev.creditDays
         }));
 
         // Build items with totalSoQty from SO, then fetch givenSoQty for each product

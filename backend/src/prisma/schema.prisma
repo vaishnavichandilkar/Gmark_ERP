@@ -294,33 +294,37 @@ model UnitMaster {
 }
 
 model Group {
-  id         Int          @id @default(autoincrement())
-  group_name String
-  parent_id  Int?
-  userId     Int?
-  is_header  Boolean      @default(false)
-  status     MasterStatus @default(ACTIVE)
-  created_at DateTime     @default(now())
-  updated_at DateTime     @updatedAt
-  parent     Group?       @relation("GroupToGroup", fields: [parent_id], references: [id])
-  children   Group[]      @relation("GroupToGroup")
-  user       User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sub_groups SubGroup[]
+  id              Int          @id @default(autoincrement())
+  group_name      String
+  parent_id       Int?
+  userId          Int?
+  is_header       Boolean      @default(false)
+  status          MasterStatus @default(ACTIVE)
+  opening_balance Decimal?
+  balance_type    BalanceType?
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  parent          Group?       @relation("GroupToGroup", fields: [parent_id], references: [id])
+  children        Group[]      @relation("GroupToGroup")
+  user            User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sub_groups      SubGroup[]
 
   @@map("groups")
 }
 
 model SubGroup {
-  id             Int           @id @default(autoincrement())
-  group_id       Int
-  subgroup_name  String
-  userId         Int?
-  status         MasterStatus  @default(ACTIVE)
-  created_at     DateTime      @default(now())
-  updated_at     DateTime      @updatedAt
-  group          Group         @relation(fields: [group_id], references: [id], onDelete: Cascade)
-  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sub_sub_groups SubSubGroup[]
+  id              Int           @id @default(autoincrement())
+  group_id        Int
+  subgroup_name   String
+  userId          Int?
+  status          MasterStatus  @default(ACTIVE)
+  opening_balance Decimal?
+  balance_type    BalanceType?
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+  group           Group         @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user            User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sub_sub_groups  SubSubGroup[]
 
   @@map("sub_groups")
 }
@@ -331,6 +335,8 @@ model SubSubGroup {
   name               String
   userId             Int?
   status             MasterStatus     @default(ACTIVE)
+  opening_balance    Decimal?
+  balance_type    BalanceType?
   created_at         DateTime         @default(now())
   updated_at         DateTime         @updatedAt
   sub_group          SubGroup         @relation(fields: [sub_group_id], references: [id], onDelete: Cascade)
@@ -346,6 +352,8 @@ model SubSubSubGroup {
   name                   String
   userId                 Int?
   status                 MasterStatus        @default(ACTIVE)
+  opening_balance        Decimal?
+  balance_type    BalanceType?
   created_at             DateTime            @default(now())
   updated_at             DateTime            @updatedAt
   sub_sub_group          SubSubGroup         @relation(fields: [sub_sub_group_id], references: [id], onDelete: Cascade)
@@ -361,6 +369,8 @@ model SubSubSubSubGroup {
   name                 String
   userId               Int?
   status               MasterStatus   @default(ACTIVE)
+  opening_balance      Decimal?
+  balance_type    BalanceType?
   created_at           DateTime       @default(now())
   updated_at           DateTime       @updatedAt
   sub_sub_sub_group    SubSubSubGroup @relation(fields: [sub_sub_sub_group_id], references: [id], onDelete: Cascade)
@@ -438,7 +448,8 @@ model Product {
   sub_sub_category_id Int?
   category            Category        @relation(fields: [category_id], references: [id])
   creator             User            @relation(fields: [created_by], references: [id])
-  hsn                 Hsn             @relation(fields: [hsn_code], references: [hsnCode])
+  hsnMasterId         String?         @db.Uuid @map("hsn_master_id")
+  hsnMaster           HsnMaster?      @relation(fields: [hsnMasterId], references: [id])
   sub_category        SubCategory?    @relation(fields: [sub_category_id], references: [id])
   sub_sub_category    SubSubCategory? @relation(fields: [sub_sub_category_id], references: [id])
   uom                 UnitMaster      @relation(fields: [uom_id], references: [id])
@@ -989,7 +1000,6 @@ model Hsn {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   taxDetails      TaxDetail[]
-  products        Product[]
 
   @@index([hsnCode])
   @@map("hsn")
@@ -1121,6 +1131,29 @@ model VoucherSettlement {
   created_at      DateTime @default(now())
 
   @@map("voucher_settlements")
+}
+
+enum HsnMasterType {
+  HSN
+  SAC
+}
+
+model HsnMaster {
+  id          String        @id @default(uuid()) @db.Uuid
+  type        HsnMasterType
+  code        String
+  taxRate     Decimal       @db.Decimal(5, 2)
+  description String?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  createdBy   Int?
+  updatedBy   Int?
+  products    Product[]
+
+  @@unique([code, createdBy])
+  @@index([code], name: "idx_hsn_master_code")
+  @@map("hsn_master")
 }
 
 

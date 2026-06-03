@@ -5,6 +5,7 @@ import { MasterStatus, ProductType } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { HsnMasterService } from '../../hsn-master/hsn-master.service';
+import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
 
 interface GetProductsQuery {
     page?: number;
@@ -19,7 +20,8 @@ interface GetProductsQuery {
 export class ProductMasterService {
     constructor(
         private readonly repository: ProductMasterRepository,
-        private readonly hsnService: HsnMasterService
+        private readonly hsnService: HsnMasterService,
+        private readonly prisma: PrismaService
     ) { }
 
     // ... existing methods ...
@@ -49,12 +51,15 @@ export class ProductMasterService {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Products');
 
+            const isService = query.product_type === 'SERVICES';
+            const nameHeader = isService ? 'Service Name' : 'Product Name';
+
             worksheet.columns = [
                 { header: 'Sr. No', key: 'srNo', width: 10 },
-                { header: 'Prod Code', key: 'productCode', width: 15 },
-                { header: 'Product Name', key: 'productName', width: 30 },
-                { header: 'UOM', key: 'uom', width: 15 },
                 { header: 'Type', key: 'productType', width: 15 },
+                { header: nameHeader, key: 'productName', width: 30 },
+                { header: 'Prod Code', key: 'productCode', width: 15 },
+                { header: 'UOM', key: 'uom', width: 15 },
                 { header: 'Category', key: 'category', width: 20 },
                 { header: 'Sub Category', key: 'subCategory', width: 20 },
                 { header: 'Sub-SubCategory', key: 'subSubCategory', width: 20 },
@@ -69,10 +74,10 @@ export class ProductMasterService {
             (products as any[]).forEach((prod, index) => {
                 const row = worksheet.addRow({
                     srNo: index + 1,
-                    productCode: prod.product_code ? String(prod.product_code) : '',
-                    productName: prod.product_name,
-                    uom: prod.uom?.gst_uom || '-',
                     productType: prod.product_type,
+                    productName: prod.product_name,
+                    productCode: prod.product_code ? String(prod.product_code) : '',
+                    uom: prod.uom?.gst_uom || '-',
                     category: prod.category?.name || '-',
                     subCategory: prod.sub_category?.name || '-',
                     subSubCategory: prod.sub_sub_category?.name || '-',
@@ -139,10 +144,13 @@ export class ProductMasterService {
                 doc.fontSize(10).text(`Exported on: ${timestamp}`, { align: 'right' });
                 doc.moveDown();
 
+                const isService = query.product_type === 'SERVICES';
+                const nameHeader = isService ? 'Service Name' : 'Product Name';
+
                 const tableTop = 100;
-                const colX = [20, 50, 110, 230, 280, 340, 440, 540, 620, 680];
+                const colX = [20, 50, 95, 215, 275, 325, 425, 525, 605, 665];
                 const headers = [
-                    'Sr.', 'Prod Code', 'Product Name', 'UOM', 'Type',
+                    'Sr.', 'Type', nameHeader, 'Prod Code', 'UOM',
                     'Category', 'Sub Category', 'HSN', 'Tax%', 'Status'
                 ];
 
@@ -175,16 +183,15 @@ export class ProductMasterService {
 
                     doc.fontSize(7);
                     doc.text((index + 1).toString(), colX[0], y);
-                    doc.text(prod.product_code, colX[1], y);
+                    doc.text(prod.product_type, colX[1], y);
                     doc.text(prod.product_name, colX[2], y, { width: 110 });
-                    doc.text(prod.uom?.gst_uom || '-', colX[3], y);
-                    doc.text(prod.product_type, colX[4], y);
+                    doc.text(prod.product_code, colX[3], y);
+                    doc.text(prod.uom?.gst_uom || '-', colX[4], y);
                     doc.text(prod.category?.name || '-', colX[5], y, { width: 90 });
                     doc.text(prod.sub_category?.name || '-', colX[6], y, { width: 90 });
-                    doc.text(prod.sub_sub_category?.name || '-', colX[7], y, { width: 90 });
-                    doc.text(prod.hsn_code, colX[8], y);
-                    doc.text(`${prod.tax_rate}%`, colX[9], y);
-                    doc.text(prod.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[10], y);
+                    doc.text(prod.hsn_code, colX[7], y);
+                    doc.text(`${prod.tax_rate}%`, colX[8], y);
+                    doc.text(prod.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[9], y);
 
                     y += 18;
                 });
@@ -222,8 +229,8 @@ export class ProductMasterService {
         return this.repository.getActiveUomsForDropdown(userId);
     }
 
-    async getTaxByHsn(hsnCode: string) {
-        return this.hsnService.getLatestTaxByCode(hsnCode);
+    async getTaxByHsn(hsnCode: string, userId?: number) {
+        return this.hsnService.getLatestTaxByCode(hsnCode, userId);
     }
 
     async getCategoryDropdown(userId: number) {
@@ -273,6 +280,17 @@ export class ProductMasterService {
             }
         }
 
+        // Validate HSN record exists and is active
+        const hsnMaster = await this.prisma.hsnMaster.findFirst({
+            where: { id: dto.hsnMasterId, createdBy: userId }
+        });
+        if (!hsnMaster) {
+            throw new BadRequestException('Please select a valid HSN Code.');
+        }
+        if (!hsnMaster.isActive) {
+            throw new BadRequestException('The selected HSN Code is inactive.');
+        }
+
         const product_code = await this.generateProductCode(userId);
 
         return this.repository.createProduct({
@@ -283,9 +301,10 @@ export class ProductMasterService {
             category_id: dto.category_id,
             sub_category_id: dto.sub_category_id,
             sub_sub_category_id: dto.sub_sub_category_id,
-            hsn_code: dto.hsn_code,
-            tax_rate: dto.tax_rate,
-            hsn_description: dto.hsn_description,
+            hsnMasterId: hsnMaster.id,
+            hsn_code: hsnMaster.code,
+            tax_rate: parseFloat(String(hsnMaster.taxRate)),
+            hsn_description: hsnMaster.description || '',
             description: dto.description,
             created_by: userId
         });
@@ -338,6 +357,22 @@ export class ProductMasterService {
             }
         }
 
+        if (dto.hsnMasterId) {
+            const hsnMaster = await this.prisma.hsnMaster.findFirst({
+                where: { id: dto.hsnMasterId, createdBy: userId }
+            });
+            if (!hsnMaster) {
+                throw new BadRequestException('Please select a valid HSN Code.');
+            }
+            if (!hsnMaster.isActive) {
+                throw new BadRequestException('The selected HSN Code is inactive.');
+            }
+            updateData.hsnMasterId = hsnMaster.id;
+            updateData.hsn_code = hsnMaster.code;
+            updateData.tax_rate = parseFloat(String(hsnMaster.taxRate));
+            updateData.hsn_description = hsnMaster.description || '';
+        }
+
         return this.repository.updateProduct(id, updateData);
     }
 
@@ -370,7 +405,7 @@ export class ProductMasterService {
             product_type = query.product_type;
         }
 
-        return this.repository.getProducts({
+        const result = await this.repository.getProducts({
             skip,
             take: limit,
             searchTerm: query.search,
@@ -380,12 +415,30 @@ export class ProductMasterService {
             created_by: userId,
             isExport: (query as any).isExport
         });
+
+        const mappedProducts = result.products.map((prod: any) => ({
+            ...prod,
+            hsn_code: prod.hsnMaster ? prod.hsnMaster.code : prod.hsn_code,
+            tax_rate: prod.hsnMaster ? parseFloat(String(prod.hsnMaster.taxRate)) : prod.tax_rate,
+            hsn_description: prod.hsnMaster ? prod.hsnMaster.description : prod.hsn_description,
+        }));
+
+        return {
+            products: mappedProducts,
+            total: result.total,
+            totalPages: result.totalPages
+        };
     }
 
     async getProductById(id: number, userId: number) {
         const product = await this.repository.findProductById(id);
         if (!product || product.created_by !== userId) throw new NotFoundException('Product not found');
-        return product;
+        return {
+            ...product,
+            hsn_code: (product as any).hsnMaster ? (product as any).hsnMaster.code : product.hsn_code,
+            tax_rate: (product as any).hsnMaster ? parseFloat(String((product as any).hsnMaster.taxRate)) : product.tax_rate,
+            hsn_description: (product as any).hsnMaster ? (product as any).hsnMaster.description : product.hsn_description,
+        };
     }
 
     async toggleStatus(id: number, dto: ToggleProductStatusDto, userId: number) {
@@ -404,7 +457,7 @@ export class ProductMasterService {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Sample Data');
 
-        const headers = ['Product Name*', 'UOM*', 'Product Type*', 'Category*', 'Sub Category*', 'HSN Code*', 'Product Description', 'Status'];
+        const headers = ['Product Type*', 'Product Name*', 'UOM*', 'Category*', 'Sub Category*', 'HSN Code*', 'Product Description', 'Status'];
         worksheet.addRow(headers);
 
         const headerRow = worksheet.getRow(1);
@@ -415,10 +468,10 @@ export class ProductMasterService {
             fgColor: { argb: 'FFD3D3D3' }
         };
 
-        // Adding Product Type Data Validation (dropdown) to 'C' column (3rd column)
+        // Adding Product Type Data Validation (dropdown) to 'A' column (1st column)
         // Adding Status Data Validation (dropdown) to 'H' column (8th column)
         for (let i = 2; i <= 1000; i++) {
-            worksheet.getCell(`C${i}`).dataValidation = {
+            worksheet.getCell(`A${i}`).dataValidation = {
                 type: 'list',
                 allowBlank: true,
                 formulae: ['"GOODS,SERVICES"']
@@ -457,6 +510,7 @@ export class ProductMasterService {
 
         let imported = 0;
         let failed = 0;
+        let duplicates = 0;
         const errors: string[] = [];
         const prisma = (this.repository as any).prisma;
 
@@ -469,13 +523,13 @@ export class ProductMasterService {
             row.eachCell((cell, colNumber) => {
                 const val = String(cell.value || '').trim().toLowerCase();
                 if (val.includes('prod code') || val.includes('product code')) colMap['prodCode'] = colNumber;
-                if (val.includes('product name')) { colMap['prodName'] = colNumber; foundHeaders = true; }
+                if (val.includes('product name') || val.includes('service name')) { colMap['prodName'] = colNumber; foundHeaders = true; }
                 if (val.includes('uom')) colMap['uom'] = colNumber;
                 if (val.includes('type') || val.includes('product type')) colMap['productType'] = colNumber;
                 if (val.includes('category')) colMap['category'] = colNumber;
                 if (val.includes('sub category')) colMap['subCategory'] = colNumber;
                 if (val.includes('hsn code') || val.includes('hsn')) colMap['hsn'] = colNumber;
-                if (val.includes('product description') || val.includes('description')) colMap['description'] = colNumber;
+                if (val.includes('product description') || val.includes('description') || val.includes('service description')) colMap['description'] = colNumber;
                 if (val === 'status') colMap['status'] = colNumber;
             });
 
@@ -486,7 +540,7 @@ export class ProductMasterService {
         }
 
         if (headerRowIndex === -1) {
-            throw new BadRequestException('Could not find Product Name column in the provided Excel file.');
+            throw new BadRequestException('Could not find Product Name or Service Name column in the provided Excel file.');
         }
 
         const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
@@ -524,15 +578,18 @@ export class ProductMasterService {
                     else if (nameLower.includes('packet') || nameLower.includes('pkt')) gstUom = 'PAC';
                     else if (nameLower.includes('box')) gstUom = 'BOX';
 
-                    uom = await prisma.unitMaster.create({
-                        data: { 
-                            user_id: userId, 
-                            unit_name: uomName, 
-                            gst_uom: gstUom, 
-                            full_name_of_measurement: uomName, 
-                            source: 'USER' 
-                        }
-                    });
+                    uom = await prisma.unitMaster.findFirst({ where: { user_id: userId, gst_uom: gstUom } });
+                    if (!uom) {
+                        uom = await prisma.unitMaster.create({
+                            data: { 
+                                user_id: userId, 
+                                unit_name: uomName, 
+                                gst_uom: gstUom, 
+                                full_name_of_measurement: uomName, 
+                                source: 'USER' 
+                            }
+                        });
+                    }
                 }
                 if (!uom) uom = await prisma.unitMaster.findFirst({ where: { user_id: userId } });
                 if (!uom) {
@@ -571,24 +628,23 @@ export class ProductMasterService {
                 if (/^\d+$/.test(hsnCode) && hsnCode.length % 2 !== 0) {
                     hsnCode = '0' + hsnCode;
                 }
-                let hsnDetails: { hsnCode?: string, taxRate: string, description: string } = { taxRate: "0", description: 'Default' };
                 
+                let hsnMasterId = '';
+                let taxRateValue = 0;
+                let hsnDescValue = '';
+
                 if (hsnCode && hsnCode !== '-') {
-                    try {
-                        const hsnResponse = await this.hsnService.getLatestTaxByCode(hsnCode);
-                        const latest = hsnResponse.taxDetails[0] || { rateOfTax: "0", description: "" };
-                        hsnDetails = {
-                            hsnCode: hsnResponse.hsnCode,
-                            taxRate: latest.rateOfTax,
-                            description: latest.description
-                        };
-                    } catch (e) {
-                        // If HSN not found, we can either fail the row or use 0 tax.
-                        // The requirement says "HSN not found -> return error", so I'll throw to catch it per row.
-                        throw new BadRequestException(`HSN Code ${hsnCode} not found in master`);
+                    const hsnMaster = await prisma.hsnMaster.findFirst({
+                        where: { code: hsnCode, createdBy: userId }
+                    });
+                    if (!hsnMaster) {
+                        throw new BadRequestException('HSN Code does not exist in HSN Master.');
                     }
+                    hsnMasterId = hsnMaster.id;
+                    taxRateValue = parseFloat(String(hsnMaster.taxRate));
+                    hsnDescValue = hsnMaster.description || '';
                 } else {
-                    throw new BadRequestException(`HSN Code is required`);
+                    throw new BadRequestException('HSN Code is required');
                 }
 
                 const statusStr = String(getVal(row, 'status')).trim().toUpperCase();
@@ -600,39 +656,35 @@ export class ProductMasterService {
                 }
 
                 const existing = await prisma.product.findFirst({
-                    where: { created_by: userId, OR: [{ product_code: codeToUse }, { product_name: prodName }] },
+                    where: {
+                        created_by: userId,
+                        OR: [
+                            { product_code: { equals: codeToUse, mode: 'insensitive' } },
+                            { product_name: { equals: prodName, mode: 'insensitive' } }
+                        ]
+                    },
                 });
 
                 if (existing) {
-                    await this.repository.updateProduct(existing.id, {
-                        product_name: prodName,
-                        product_code: codeToUse,
-                        uom_id,
-                        product_type: productType,
-                        category_id,
-                        sub_category_id,
-                        hsn_code: hsnCode,
-                        tax_rate: parseFloat(hsnDetails.taxRate),
-                        hsn_description: hsnDetails.description,
-                        description: (description && description !== '-') ? description : '',
-                        status
-                    });
-                } else {
-                    await this.repository.createProduct({
-                        product_name: prodName,
-                        product_code: codeToUse,
-                        uom_id,
-                        product_type: productType,
-                        category_id,
-                        sub_category_id,
-                        hsn_code: hsnCode,
-                        tax_rate: parseFloat(hsnDetails.taxRate),
-                        hsn_description: hsnDetails.description,
-                        description: (description && description !== '-') ? description : '',
-                        status,
-                        created_by: userId,
-                    });
+                    duplicates++;
+                    continue;
                 }
+
+                await this.repository.createProduct({
+                    product_name: prodName,
+                    product_code: codeToUse,
+                    uom_id,
+                    product_type: productType,
+                    category_id,
+                    sub_category_id,
+                    hsnMasterId,
+                    hsn_code: hsnCode,
+                    tax_rate: taxRateValue,
+                    hsn_description: hsnDescValue,
+                    description: (description && description !== '-') ? description : '',
+                    status,
+                    created_by: userId,
+                });
                 imported++;
 
             } catch (error) {
@@ -645,13 +697,20 @@ export class ProductMasterService {
             throw new BadRequestException(`Import failed: ${errors[0]}`);
         }
 
+        if (imported === 0 && duplicates > 0 && failed === 0) {
+            return {
+                success: true,
+                message: `No new products/services imported. ${duplicates} duplicate rows were skipped.`,
+            };
+        }
+
         if (imported === 0 && failed === 0) {
             throw new BadRequestException('No data found to import');
         }
 
         return {
             success: true,
-            message: `Imported ${imported} products. ${failed > 0 ? failed + ' rows failed.' : ''}`,
+            message: `Successfully imported ${imported} products/services. ${duplicates} duplicate rows were skipped.${failed > 0 ? ' ' + failed + ' failed.' : ''}`,
             errors: failed > 0 ? errors : undefined,
         };
     }

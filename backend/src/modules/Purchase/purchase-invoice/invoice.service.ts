@@ -352,7 +352,7 @@ export class PurchaseInvoiceService {
 
     // Auto-fill from supplier
     const address = supplier.addressLine1 || createDto.address;
-    const creditDays = supplier.supplierCreditDays || createDto.creditDays || 0;
+    const creditDays = (createDto.creditDays !== undefined && createDto.creditDays !== null) ? createDto.creditDays : (supplier.supplierCreditDays || 0);
     const gstNo = supplier.gstNo || createDto.gstNumber;
 
     const company = await this.prisma.shopDetail.findUnique({
@@ -576,7 +576,7 @@ export class PurchaseInvoiceService {
           supplierId: supplier.id,
           supplierName: supplier.accountName,
           address: createDto.address,
-          creditDays: createDto.creditDays,
+          creditDays: creditDays,
           gstNumber: createDto.gstNumber,
           poNumber: resolvedPoNumberStr,
           poId: resolvedPoId,

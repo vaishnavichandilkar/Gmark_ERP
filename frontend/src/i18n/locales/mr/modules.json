@@ -277,6 +277,7 @@
     "customerLedgerDetails": "ग्राहक खाते तपशील",
     "supplierLedgerDetails": "पुरवठादार खाते तपशील",
     "openingBalance": "प्रारंभिक शिल्लक",
+    "balanceType": "शिल्लक प्रकार",
     "msme_id": "MSME ID",
     "customerType": "ग्राहक प्रकार",
     "selectCustomerType": "ग्राहक प्रकार निवडा",

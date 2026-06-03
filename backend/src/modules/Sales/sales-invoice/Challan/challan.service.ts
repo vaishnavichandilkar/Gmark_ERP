@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
 import { CreateChallanDto, UpdateChallanDto } from './dto/challan.dto';
 import { SalesOrderService } from '../../sales-order/sales-order.service';
@@ -461,7 +461,21 @@ export class ChallanService {
       this.prisma.salesChallan.count({ where })
     ]);
 
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    const invoices = await this.prisma.salesInvoice.findMany({
+      where: { userId: query.userId, status: { not: 'DELETED' } },
+      select: { challanNumber: true }
+    });
+
+    const mappedData = data.map(challan => {
+      const isLinked = invoices.some(inv => {
+        if (!inv.challanNumber) return false;
+        const challanIds = inv.challanNumber.split(',').map(idx => idx.trim());
+        return challanIds.includes(challan.id.toString()) || challanIds.includes(challan.challanNumber);
+      });
+      return { ...challan, isInvoiced: isLinked };
+    });
+
+    return { data: mappedData, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
   async findOne(id: number, userId: number) {
@@ -470,7 +484,18 @@ export class ChallanService {
       include: { items: true, expenses: true }
     });
     if (!challan) throw new NotFoundException(`Challan ID ${id} not found or access denied`);
-    return challan;
+
+    const invoices = await this.prisma.salesInvoice.findMany({
+      where: { userId, status: { not: 'DELETED' } },
+      select: { challanNumber: true }
+    });
+    const isLinked = invoices.some(inv => {
+      if (!inv.challanNumber) return false;
+      const challanIds = inv.challanNumber.split(',').map(idx => idx.trim());
+      return challanIds.includes(id.toString()) || challanIds.includes(challan.challanNumber);
+    });
+
+    return { ...challan, isInvoiced: isLinked };
   }
 
   async update(id: number, updateDto: any, userId: number) {
@@ -479,6 +504,20 @@ export class ChallanService {
       include: { items: true, expenses: true } 
     });
     if (!existing) throw new NotFoundException('Challan not found');
+
+    // Check if Challan is linked to any Sales Invoice
+    const invoices = await this.prisma.salesInvoice.findMany({
+      where: { userId, status: { not: 'DELETED' } },
+      select: { challanNumber: true }
+    });
+    const isLinked = invoices.some(inv => {
+      if (!inv.challanNumber) return false;
+      const challanIds = inv.challanNumber.split(',').map(idx => idx.trim());
+      return challanIds.includes(id.toString()) || challanIds.includes(existing.challanNumber);
+    });
+    if (isLinked) {
+      throw new ForbiddenException(`Challan cannot be edited because it is linked to a Sales Invoice.`);
+    }
 
     return this.prisma.$transaction(async (tx) => {
       await tx.salesChallanItem.deleteMany({ where: { salesChallanId: id } });
@@ -531,6 +570,23 @@ export class ChallanService {
   }
 
   async remove(id: number, userId: number) {
+    const existing = await this.prisma.salesChallan.findUnique({ where: { id, userId } });
+    if (!existing) throw new NotFoundException('Challan not found');
+
+    // Check if Challan is linked to any Sales Invoice
+    const invoices = await this.prisma.salesInvoice.findMany({
+      where: { userId, status: { not: 'DELETED' } },
+      select: { challanNumber: true }
+    });
+    const isLinked = invoices.some(inv => {
+      if (!inv.challanNumber) return false;
+      const challanIds = inv.challanNumber.split(',').map(idx => idx.trim());
+      return challanIds.includes(id.toString()) || challanIds.includes(existing.challanNumber);
+    });
+    if (isLinked) {
+      throw new ForbiddenException(`Challan cannot be deleted because it is linked to a Sales Invoice.`);
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const challan = await tx.salesChallan.update({ 
         where: { id, userId }, 

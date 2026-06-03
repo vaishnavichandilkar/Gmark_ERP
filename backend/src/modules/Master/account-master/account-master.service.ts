@@ -1235,6 +1235,7 @@ export class AccountMasterService {
 
     let imported = 0;
     let failed = 0;
+    let duplicates = 0;
     const errors: string[] = [];
 
     let headerRowIndex = -1;
@@ -1284,24 +1285,26 @@ export class AccountMasterService {
     const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
         const colIdx = colMap[key];
         if (!colIdx) return defaultVal;
-        return row.getCell(colIdx).value;
+        const val = row.getCell(colIdx).value;
+        return (val !== undefined && val !== null) ? val : defaultVal;
     };
 
     const parseOptional = (val: any) => {
-        const s = String(val || '').trim();
+        const s = String(val === undefined || val === null ? '' : val).trim();
         return s && s !== '-' ? s : undefined;
     };
 
     const parseBoolean = (val: any) => {
-        const s = String(val || '').trim().toLowerCase();
+        const s = String(val === undefined || val === null ? '' : val).trim().toLowerCase();
         return s === 'yes' || s === 'true' || s === 'y' || s === '1';
     };
 
     for (let i = headerRowIndex + 1; i <= rowCount; i++) {
         const row = worksheet.getRow(i);
         
-        const rawAccountName = String(getVal(row, 'accountName')).trim();
-        if (!rawAccountName || rawAccountName === '-') continue; // Skip empty rows
+        const val = getVal(row, 'accountName');
+        const rawAccountName = (val !== undefined && val !== null ? String(val).trim() : '');
+        if (!rawAccountName || rawAccountName === '-' || rawAccountName === 'null' || rawAccountName === 'undefined') continue; // Skip empty rows
 
         try {
             const accountName = rawAccountName;
@@ -1391,17 +1394,52 @@ export class AccountMasterService {
                 otherDocumentNames: []
             };
 
+            // Check for duplicate account name for this user
+            const existingName = await this.prisma.accountMaster.findFirst({
+                where: {
+                    accountName: { equals: accountName, mode: 'insensitive' },
+                    userId: userId
+                }
+            });
+
+            if (existingName) {
+                duplicates++;
+                continue;
+            }
+
+            // Check for duplicate PAN card for this user
+            const panNo = dto.panNo ? String(dto.panNo).trim() : '';
+            if (panNo && panNo !== '-' && panNo !== 'null' && panNo !== 'undefined') {
+                const existingPan = await this.prisma.accountMaster.findFirst({
+                    where: {
+                        panNo: { equals: panNo, mode: 'insensitive' },
+                        userId: userId
+                    }
+                });
+                if (existingPan) {
+                    duplicates++;
+                    continue;
+                }
+            }
+
             await this.create(dto, userId);
             imported++;
 
         } catch (error) {
             failed++;
-            errors.push(`Row ${i} (${row.getCell(3).value}): ${error.message}`);
+            errors.push(`Row ${i} (${rawAccountName}): ${error.message}`);
         }
     }
 
     if (imported === 0 && failed > 0) {
         throw new BadRequestException(`Import failed: ${errors[0]}`);
+    }
+
+    if (imported === 0 && duplicates > 0 && failed === 0) {
+        return {
+            success: true,
+            message: `No new accounts imported. ${duplicates} duplicate rows were skipped.`,
+        };
     }
 
     if (imported === 0 && failed === 0) {
@@ -1410,7 +1448,7 @@ export class AccountMasterService {
 
     return {
         success: true,
-        message: `Successfully imported ${imported} accounts. ${failed > 0 ? failed + ' failed.' : ''}`,
+        message: `Successfully imported ${imported} accounts. ${duplicates} duplicate rows were skipped.${failed > 0 ? ' ' + failed + ' failed.' : ''}`,
         errors: failed > 0 ? errors : undefined,
     };
   }

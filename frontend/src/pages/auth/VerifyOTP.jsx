@@ -266,7 +266,7 @@ const VerifyOTP = () => {
                         onError={(e) => { e.target.style.display = 'none' }}
                     />
                     <div className="bg-[#F3F4F6] text-[#374151] px-[12px] py-[6px] rounded-full text-[12px] font-medium">
-                        {t('step_label')} 00/03
+                        {t('step_label')} 01/04
                     </div>
                 </div>
                 <div className="text-left w-full mb-8">

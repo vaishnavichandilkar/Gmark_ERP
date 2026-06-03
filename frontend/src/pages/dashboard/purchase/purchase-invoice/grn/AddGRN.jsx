@@ -307,7 +307,9 @@ const AddGRN = () => {
 
     const handlePOChange = async (poId) => {
         if (!poId) {
-            setFormData(prev => ({ ...prev, po_id: '', po_number: '' }));
+            const supplier = suppliers.find(s => s.id === parseInt(formData.supplier_id));
+            const defaultCreditDays = supplier ? (supplier.supplierCreditDays || 0) : 0;
+            setFormData(prev => ({ ...prev, po_id: '', po_number: '', credit_days: defaultCreditDays }));
             const resetItems = items.map(item => ({
                 ...item,
                 totalPoQty: 0,
@@ -327,7 +329,8 @@ const AddGRN = () => {
                 ...prev, 
                 po_id: poDetails.id, 
                 po_number: poDetails.poNumber,
-                po_date: poDetails.poCreationDate?.split('T')[0] || '' 
+                po_date: poDetails.poCreationDate?.split('T')[0] || '',
+                credit_days: poDetails.creditDays !== undefined && poDetails.creditDays !== null ? poDetails.creditDays : (prev.credit_days || 0)
             }));
 
             const poItems = await Promise.all(poDetails.items.map(async (item) => {

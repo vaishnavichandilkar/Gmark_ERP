@@ -347,12 +347,12 @@ const UnitMaster = () => {
                             </div>
                             <div className="flex items-center gap-3" ref={exportRef}>
                                 <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all duration-200 bg-white">
-                                    <Upload size={18} className="text-gray-400" />
+                                    <Download size={18} className="text-gray-400" />
                                     {t('common:import')}
                                 </button>
                                 <div className="relative">
                                     <button onClick={() => setIsExportOpen(!isExportOpen)} className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563]'}`}>
-                                        <Download size={18} />
+                                        <Upload size={18} />
                                         {t('common:export')}
                                     </button>
                                     {isExportOpen && (
@@ -414,14 +414,14 @@ const UnitMaster = () => {
                                             <RefreshCw size={20} />
                                         </button>
                                         <button onClick={() => setIsImportModalOpen(true)} className="w-10 h-10 flex items-center justify-center text-gray-500">
-                                            <Upload size={20} />
+                                            <Download size={20} />
                                         </button>
                                         <div className="relative">
                                             <button 
                                                 onClick={() => setIsExportOpen(!isExportOpen)} 
                                                 className={`w-10 h-10 flex items-center justify-center transition-colors ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}
                                             >
-                                                <Download size={20} />
+                                                <Upload size={20} />
                                             </button>
                                             {isExportOpen && (
                                                 <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-[100] py-1 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">

@@ -246,11 +246,12 @@ const GroupMaster = () => {
         }
     };
 
-    const renderGroupRow = (group, depth = 0, index = 0, siblingsLength = 0) => {
+    const renderGroupRow = (group, depth = 0, index = 0, siblingsLength = 0, isExpenseAncestor = false) => {
         const hasChildren = group.children && group.children.length > 0;
         const isExpanded = expandedGroups[group.id] || (searchQuery && hasMatchingChild(group, searchQuery));
         const dropdownId = `dropdown-${group.id}`;
         const isHighlighted = searchQuery && group.group_name.toLowerCase().includes(searchQuery.toLowerCase());
+        const currentIsExpense = isExpenseAncestor || group.group_name === 'Direct Expense' || group.group_name === 'Indirect Expense';
 
         return (
             <React.Fragment key={group.id}>
@@ -301,6 +302,20 @@ const GroupMaster = () => {
 
                     {/* Properly Aligned Actions Area - Matching Header Structure */}
                     <div className="flex items-stretch shrink-0">
+                        {/* Opening Balance Column */}
+                        <div className="w-[170px] flex items-center justify-center px-3">
+                            <span className="text-[13px] text-gray-900 font-semibold">
+                                {currentIsExpense ? '-' : (group.opening_balance !== null && group.opening_balance !== undefined ? Number(group.opening_balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00')}
+                            </span>
+                        </div>
+
+                        {/* Balance Type Column */}
+                        <div className="w-[150px] flex items-center justify-center px-3">
+                            <span className="text-[13px] text-gray-900 font-semibold">
+                                {currentIsExpense ? '-' : (group.balance_type || 'Dr')}
+                            </span>
+                        </div>
+
                         {/* Status Column */}
                         <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4">
                             <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${group.status === 'ACTIVE' ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
@@ -349,7 +364,7 @@ const GroupMaster = () => {
                 {/* Recursive Children with Indentation */}
                 {hasChildren && isExpanded && (
                     <div className="animate-in slide-in-from-top-2 duration-300">
-                        {group.children.map((child, childIndex) => renderGroupRow(child, depth + 1, childIndex, group.children.length))}
+                        {group.children.map((child, childIndex) => renderGroupRow(child, depth + 1, childIndex, group.children.length, currentIsExpense))}
                     </div>
                 )}
             </React.Fragment>
@@ -439,7 +454,7 @@ const GroupMaster = () => {
                     </div>
                     <div className="flex items-center gap-3" ref={exportRef}>
                         <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 bg-white">
-                            <Upload size={18} className="text-gray-400" />
+                            <Download size={18} className="text-gray-400" />
                             {t('common:import')}
                         </button>
 
@@ -449,7 +464,7 @@ const GroupMaster = () => {
                                 className={`flex items-center justify-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all duration-200 bg-white
                                     ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
                             >
-                                <Download size={18} className={isExportOpen ? 'text-[#073318]' : 'text-gray-400'} />
+                                <Upload size={18} className={isExportOpen ? 'text-[#073318]' : 'text-gray-400'} />
                                 {t('common:export')}
                             </button>
 
@@ -518,14 +533,14 @@ const GroupMaster = () => {
                                     <RefreshCw size={20} />
                                 </button>
                                 <button onClick={() => setIsImportModalOpen(true)} className="w-10 h-10 flex items-center justify-center text-gray-500">
-                                    <Upload size={20} />
+                                    <Download size={20} />
                                 </button>
                                 <div className="relative">
                                     <button 
                                         onClick={() => setIsExportOpen(!isExportOpen)} 
                                         className={`w-10 h-10 flex items-center justify-center transition-colors ${isExportOpen ? 'text-[#073318]' : 'text-gray-500'}`}
                                     >
-                                        <Download size={20} />
+                                        <Upload size={20} />
                                     </button>
                                     {isExportOpen && (
                                         <div className="absolute top-full right-0 mt-2 w-[140px] bg-white border border-gray-100 rounded-[12px] shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-[100] py-1 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
@@ -554,18 +569,28 @@ const GroupMaster = () => {
                 </div>
 
                 <ScrollableTable className="w-full">
-                    <div className="min-w-[800px]">
+                    <div className="min-w-[1130px]">
                     <div className="master-table-header">
                         <div className="flex-1 pl-9 gap-2">
                             {t('modules:group_master')}
                             <ChevronsUpDown size={14} className="opacity-70" />
                         </div>
-                        <div className="flex shrink-0">
-                            <div className="w-[110px] md:w-[120px] justify-center px-4 gap-2 border-l border-white/10">
+                        <div className="flex items-stretch shrink-0 !p-0 !border-r-0">
+                            <div className="w-[170px] flex items-center justify-center px-3 gap-2 border-l border-white/10">
+                                {t('modules:openingBalance', 'Opening Balance')}
+                                <ChevronsUpDown size={14} className="opacity-70" />
+                            </div>
+                            <div className="w-[150px] flex items-center justify-center px-3 gap-2 border-l border-white/10">
+                                {t('modules:balanceType', 'Balance Type')}
+                                <ChevronsUpDown size={14} className="opacity-70" />
+                            </div>
+                            <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4 gap-2 border-l border-white/10">
                                 {t('common:status')}
                                 <ChevronsUpDown size={14} className="opacity-70" />
                             </div>
-                            <div className="w-16 md:w-20 justify-center px-4 border-l border-white/10">{t('common:action')}</div>
+                            <div className="w-16 md:w-20 flex items-center justify-center px-4 border-l border-white/10">
+                                {t('common:action')}
+                            </div>
                         </div>
                     </div>
                     <div className="flex flex-col divide-y divide-[#F3F4F6]">
@@ -575,7 +600,10 @@ const GroupMaster = () => {
                                 <p className="text-[#6B7280] text-[14px] font-medium">{t('common:loading')}...</p>
                             </div>
                         ) : filteredData.length > 0 ? (
-                            filteredData.map((group, index) => renderGroupRow(group, 0, index, filteredData.length))
+                            filteredData.map((group, index) => {
+                                const isExpense = group.group_name === 'Direct Expense' || group.group_name === 'Indirect Expense';
+                                return renderGroupRow(group, 0, index, filteredData.length, isExpense);
+                            })
                         ) : (
                             <div className="p-16 text-center">
                                 <Search size={40} className="mx-auto text-gray-200 mb-4" />
@@ -604,7 +632,7 @@ const GroupMaster = () => {
                 onImport={handleImportExcel}
                 onDownloadSample={() => masterService.downloadGroupSampleExcel()}
                 sampleFileName="group_master_sample.xlsx"
-                sampleHeaders={['Group Name', 'Group Under', 'Status']}
+                sampleHeaders={['Group Name', 'Group Under', 'Opening Balance', 'Balance Type', 'Status']}
             />
         )}
     </div>

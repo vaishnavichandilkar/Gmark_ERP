@@ -250,7 +250,8 @@ const Challan = () => {
 
     const mappedChallans = useMemo(() => {
         return challans.map(item => {
-            const statusLabel = item.status?.toUpperCase() === 'DELETED' ? 'Deleted' : 'Generated';
+            let statusLabel = item.status?.toUpperCase() === 'DELETED' ? 'Deleted' : 'Generated';
+            if (item.isInvoiced && statusLabel !== 'Deleted') statusLabel = 'Invoiced';
             return {
                 ...item,
                 customerName: item.customerName || "-",
@@ -261,7 +262,7 @@ const Challan = () => {
                 gstNo: item.gstNumber || "-",
                 grandTotal: item.grandTotal?.toFixed(2) || "0.00",
                 status: statusLabel,
-                bgClass: statusLabel === 'Generated' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
+                bgClass: statusLabel === 'Deleted' ? 'bg-red-50 text-red-600 border border-red-100' : (statusLabel === 'Invoiced' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-blue-50 text-blue-600 border border-blue-100')
             };
         });
     }, [challans]);
@@ -324,14 +325,14 @@ const Challan = () => {
 
                     <div className="flex items-center gap-3">
                         <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all">
-                            <Upload size={18} className="text-gray-400" /> Import
+                            <Download size={18} className="text-gray-400" /> Import
                         </button>
                         <div className="relative" ref={exportRef}>
                             <button
                                 onClick={() => setIsExportOpen(!isExportOpen)}
                                 className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563]'}`}
                             >
-                                <Download size={18} /> Export
+                                <Upload size={18} /> Export
                             </button>
                             {isExportOpen && (
                                 <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -397,9 +398,9 @@ const Challan = () => {
                                                 >
                                                     <button onClick={() => { setActiveDropdown(null); navigate(`view/${row.id}`); }} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50">
                                                         <Eye size={18} className="text-emerald-600" /> 
-                                                        {row.status === 'Deleted' ? 'View Challan' : 'View/Edit Challan'}
+                                                        {row.status === 'Generated' ? 'View/Edit Challan' : 'View Challan'}
                                                     </button>
-                                                    {row.status !== 'Deleted' && (
+                                                    {row.status === 'Generated' && (
                                                         <button onClick={() => { setActiveDropdown(null); handleDeleteClick(row.id); }} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50">
                                                             <Trash2 size={18} /> Delete
                                                         </button>

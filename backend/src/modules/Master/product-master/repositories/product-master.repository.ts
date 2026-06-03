@@ -22,7 +22,7 @@ export class ProductMasterRepository {
     async findProductById(id: number) {
         return this.prisma.product.findUnique({
             where: { id, is_deleted: false },
-            include: { uom: true, category: true, sub_category: true, sub_sub_category: true, hsn: true }
+            include: { uom: true, category: true, sub_category: true, sub_sub_category: true, hsnMaster: true }
         });
     }
 
@@ -76,7 +76,7 @@ export class ProductMasterRepository {
         const findOptions: Prisma.ProductFindManyArgs = {
             where,
             orderBy: { created_at: 'desc' },
-            include: { uom: true, category: true, sub_category: true, sub_sub_category: true, hsn: true }
+            include: { uom: true, category: true, sub_category: true, sub_sub_category: true, hsnMaster: true }
         };
 
         if (!isExport) {

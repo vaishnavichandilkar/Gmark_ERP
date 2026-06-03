@@ -332,6 +332,7 @@
     "customerLedgerDetails": "Customer Ledger Details",
     "supplierLedgerDetails": "Supplier Ledger Details",
     "openingBalance": "Opening Balance",
+    "balanceType": "Balance Type",
     "msme_id": "MSME ID",
     "customerType": "Customer Type",
     "selectCustomerType": "Select Customer Type",
@@ -534,5 +535,6 @@
     "perPage": "per page",
     "paginationRange": "{{from}}-{{to}} of {{total}}",
     "expiringSoon": "Expiring Soon",
-    "filter": "Filter"
+    "filter": "Filter",
+    "hsn_master": "HSN Master"
 }

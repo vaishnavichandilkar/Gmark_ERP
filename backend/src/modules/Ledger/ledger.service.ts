@@ -213,6 +213,7 @@ export class LedgerService {
           userId,
           bookingDate: { lt: new Date(startDate) },
           transactionType: { in: allowedTypes },
+          amount: { gt: 0 },
         },
       });
 
@@ -239,12 +240,63 @@ export class LedgerService {
           lte: endDate ? new Date(endDate) : undefined,
         },
         transactionType: { in: allowedTypes },
+        amount: { gt: 0 },
       },
       orderBy: { bookingDate: 'asc' },
     });
 
     const totalTransactionsInRange = transactionsInRange.length;
     const paginatedTransactions = transactionsInRange.slice(skip, skip + limit);
+
+    // Fetch all voucher settlements for this ledger to calculate unallocated amounts for invoices
+    const allSettlements = await this.prisma.voucherSettlement.findMany({
+      where: { ledger_id: accountId }
+    });
+    const settlementSums = new Map();
+    for (const s of allSettlements) {
+      if (s.invoice_id) {
+        const current = settlementSums.get(s.invoice_id) || 0;
+        settlementSums.set(s.invoice_id, current + Number(s.settled_amount));
+      }
+    }
+
+    // Need to fetch invoices for the paginated transactions to get their IDs
+    const invoiceNumbers = paginatedTransactions.map(t => t.invoiceNumber).filter(Boolean);
+    const [salesInvs, purchInvs] = await Promise.all([
+      this.prisma.salesInvoice.findMany({ 
+        where: { 
+          customerId: accountId,
+          OR: [
+            { invoiceNumber: { in: invoiceNumbers } },
+            { customerInvoiceNumber: { in: invoiceNumbers } }
+          ]
+        }, 
+        select: { id: true, invoiceNumber: true, customerInvoiceNumber: true } 
+      }),
+      this.prisma.purchaseInvoice.findMany({ 
+        where: { 
+          supplierId: accountId,
+          OR: [
+            { invoiceNumber: { in: invoiceNumbers } },
+            { supplierInvoiceNumber: { in: invoiceNumbers } }
+          ]
+        }, 
+        select: { id: true, invoiceNumber: true, supplierInvoiceNumber: true } 
+      })
+    ]);
+    const invoiceIdMap = new Map();
+    salesInvs.forEach(inv => {
+      invoiceIdMap.set(inv.invoiceNumber, inv.id);
+      if (inv.customerInvoiceNumber) {
+        invoiceIdMap.set(inv.customerInvoiceNumber, inv.id);
+      }
+    });
+    purchInvs.forEach(inv => {
+      invoiceIdMap.set(inv.invoiceNumber, inv.id);
+      if (inv.supplierInvoiceNumber) {
+        invoiceIdMap.set(inv.supplierInvoiceNumber, inv.id);
+      }
+    });
 
     const ledgerItems = [];
     let cumulativeBalance = effectiveOpeningBalance;
@@ -286,6 +338,35 @@ export class LedgerService {
     
     const paymentNarrationMap = new Map(payments.map(p => [p.voucherNumber, p.narration]));
     const receiptNarrationMap = new Map(receipts.map(r => [r.voucherNumber, r.narration]));
+    const voucherIdMap = new Map();
+    payments.forEach(p => voucherIdMap.set(p.voucherNumber, { id: p.id, type: 'PAYMENT' }));
+    receipts.forEach(r => voucherIdMap.set(r.voucherNumber, { id: r.id, type: 'RECEIPT' }));
+
+    // Fetch details for allocations
+    const neededVoucherIds = new Set<number>();
+    const neededInvoiceIds = new Set<number>();
+    for (const s of allSettlements) {
+      if (s.invoice_id && Array.from(invoiceIdMap.values()).includes(s.invoice_id)) {
+        neededVoucherIds.add(s.voucher_id);
+      }
+      if (s.voucher_id && Array.from(voucherIdMap.values()).map(v => v.id).includes(s.voucher_id) && s.invoice_id) {
+        neededInvoiceIds.add(s.invoice_id);
+      }
+    }
+
+    const [additionalPayments, additionalReceipts, additionalSales, additionalPurchases] = await Promise.all([
+      neededVoucherIds.size > 0 ? this.prisma.paymentVoucher.findMany({ where: { id: { in: Array.from(neededVoucherIds) } }, select: { id: true, voucherNumber: true, voucherDate: true, narration: true, updatedAt: true } }) : Promise.resolve([]),
+      neededVoucherIds.size > 0 ? this.prisma.receiptVoucher.findMany({ where: { id: { in: Array.from(neededVoucherIds) } }, select: { id: true, voucherNumber: true, voucherDate: true, narration: true, updatedAt: true } }) : Promise.resolve([]),
+      neededInvoiceIds.size > 0 ? this.prisma.salesInvoice.findMany({ where: { id: { in: Array.from(neededInvoiceIds) } }, select: { id: true, invoiceNumber: true, invoiceDate: true, updatedAt: true } }) : Promise.resolve([]),
+      neededInvoiceIds.size > 0 ? this.prisma.purchaseInvoice.findMany({ where: { id: { in: Array.from(neededInvoiceIds) } }, select: { id: true, invoiceNumber: true, invoiceDate: true, updatedAt: true } }) : Promise.resolve([])
+    ]);
+
+    const settlementRefMap = new Map();
+    additionalPayments.forEach(p => settlementRefMap.set(`PAYMENT_${p.id}`, { no: p.voucherNumber, date: p.voucherDate, narration: p.narration, type: 'Payment', updatedAt: p.updatedAt }));
+    additionalReceipts.forEach(r => settlementRefMap.set(`RECEIPT_${r.id}`, { no: r.voucherNumber, date: r.voucherDate, narration: r.narration, type: 'Bank Receipt', updatedAt: r.updatedAt }));
+    // Just in case JOURNAL is ever implemented or handled in voucher_type
+    additionalSales.forEach(s => settlementRefMap.set(`INVOICE_${s.id}`, { no: s.invoiceNumber, date: s.invoiceDate, narration: '-', type: 'Sales Invoice', updatedAt: s.updatedAt }));
+    additionalPurchases.forEach(p => settlementRefMap.set(`INVOICE_${p.id}`, { no: p.invoiceNumber, date: p.invoiceDate, narration: '-', type: 'Purchase Invoice', updatedAt: p.updatedAt }));
 
     let pageCumulativeBalance = 0;
     for (const transaction of paginatedTransactions) {
@@ -317,11 +398,73 @@ export class LedgerService {
         }
       }
 
+      let unallocated = null;
+      let allocations = [];
+      if (transaction.invoiceNumber) {
+        if (transaction.transactionType === TransactionType.Sales || transaction.transactionType === TransactionType.Purchase) {
+          const invId = invoiceIdMap.get(transaction.invoiceNumber);
+          if (invId) {
+             unallocated = Number(transaction.amount);
+             
+             // Map allocations for this invoice (SETTLED_ADVANCE, SETTLED_ON_ACCOUNT, and AGAINST_REFERENCE are visible)
+             const invSettlements = allSettlements.filter(s => 
+               s.invoice_id === invId && 
+               (s.settlement_type === 'SETTLED_ADVANCE' || s.settlement_type === 'SETTLED_ON_ACCOUNT' || s.settlement_type === 'AGAINST_REFERENCE')
+             );
+             allocations = invSettlements.map(s => {
+                 const ref = settlementRefMap.get(`${s.voucher_type}_${s.voucher_id}`);
+                 const isManual = ref?.updatedAt ? new Date(s.created_at).getTime() > new Date(ref.updatedAt).getTime() + 5000 : true;
+                 return {
+                     id: s.id,
+                     date: ref?.date || transaction.bookingDate,
+                     voucherNo: ref?.no || '-',
+                     type: s.settlement_type === 'SETTLED_ADVANCE' ? 'Settled Advance' : (s.settlement_type === 'AGAINST_REFERENCE' ? 'Against Reference' : 'Settled On Account'),
+                     settlementType: s.settlement_type,
+                     narration: ref?.narration || '-',
+                     amount: Number(s.settled_amount),
+                     isManual
+                 };
+              });
+          } else {
+             unallocated = Number(transaction.amount);
+          }
+        } else if (transaction.transactionType === TransactionType.Payment || transaction.transactionType === TransactionType.Receipt) {
+          const vData = voucherIdMap.get(transaction.invoiceNumber);
+          if (vData) {
+             const vSettlements = allSettlements.filter(s => s.voucher_id === vData.id && s.voucher_type === vData.type);
+             
+             unallocated = Number(transaction.amount);
+             
+             // Map allocations for this voucher (SETTLED_ADVANCE, SETTLED_ON_ACCOUNT, and AGAINST_REFERENCE are visible)
+             allocations = vSettlements.filter(s => 
+               s.invoice_id !== null && 
+               (s.settlement_type === 'SETTLED_ADVANCE' || s.settlement_type === 'SETTLED_ON_ACCOUNT' || s.settlement_type === 'AGAINST_REFERENCE')
+             ).map(s => {
+                 const ref = settlementRefMap.get(`INVOICE_${s.invoice_id}`);
+                 const isManual = ref?.updatedAt ? new Date(s.created_at).getTime() > new Date(ref.updatedAt).getTime() + 5000 : true;
+                 return {
+                     id: s.id,
+                     date: ref?.date || transaction.bookingDate,
+                     voucherNo: ref?.no || '-',
+                     type: s.settlement_type === 'SETTLED_ADVANCE' ? 'Settled Advance' : (s.settlement_type === 'AGAINST_REFERENCE' ? 'Against Reference' : 'Settled On Account'),
+                     settlementType: s.settlement_type,
+                     narration: ref?.narration || '-',
+                     amount: Number(s.settled_amount),
+                     isManual
+                 };
+             });
+          }
+        }
+      }
+
       ledgerItems.push({
         id: transaction.id,
         date: transaction.bookingDate,
         particulars: this.mapParticulars(transaction.transactionType, transaction.invoiceNumber || undefined),
         narration: displayNarration,
+        voucherNo: transaction.invoiceNumber,
+        unallocated: unallocated,
+        allocations: allocations,
         debit,
         credit,
         balance: cumulativeBalance,
@@ -405,5 +548,56 @@ export class LedgerService {
       groupName: acc.groupName.length > 0 ? acc.groupName[acc.groupName.length - 1] : "Bank & Cash",
       accountType: acc.accountType?.toUpperCase() || "BANK"
     }));
+  }
+
+  async deleteAllocation(id: number) {
+    const settlement = await this.prisma.voucherSettlement.findUnique({ where: { id } });
+    if (!settlement) {
+      throw new NotFoundException('Allocation not found');
+    }
+
+    let targetType = 'ON_ACCOUNT';
+    if (settlement.settlement_type === 'SETTLED_ADVANCE') {
+      targetType = 'ADVANCE';
+    } else if (settlement.settlement_type === 'SETTLED_ON_ACCOUNT') {
+      targetType = 'ON_ACCOUNT';
+    } else if (settlement.settlement_type === 'AGAINST_REFERENCE') {
+      targetType = 'CANCELLED_SETTLEMENT';
+    }
+
+    // Convert back to original unallocated status
+    const updated = await this.prisma.voucherSettlement.update({
+      where: { id },
+      data: {
+        invoice_id: null,
+        settlement_type: targetType,
+        invoice_balance: null,
+        invoice_total: null
+      }
+    });
+
+    // If it was linked to an invoice, check if the invoice status needs updating
+    if (settlement.invoice_id) {
+      const invoiceType = settlement.voucher_type === 'PAYMENT' ? 'Purchase' : 'Sales';
+      if (invoiceType === 'Purchase') {
+        const inv = await this.prisma.purchaseInvoice.findUnique({ where: { id: settlement.invoice_id } });
+        if (inv && inv.status === 'COMPLETED') {
+          await this.prisma.purchaseInvoice.update({
+            where: { id: settlement.invoice_id },
+            data: { status: 'GENERATED' }
+          });
+        }
+      } else {
+        const inv = await this.prisma.salesInvoice.findUnique({ where: { id: settlement.invoice_id } });
+        if (inv && inv.status === 'COMPLETED') {
+          await this.prisma.salesInvoice.update({
+            where: { id: settlement.invoice_id },
+            data: { status: 'GENERATED' }
+          });
+        }
+      }
+    }
+
+    return updated;
   }
 }

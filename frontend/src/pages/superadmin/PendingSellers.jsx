@@ -170,8 +170,8 @@ const PendingSellers = () => {
             lastName: 'Last Name',
             email: 'Email Address',
             phone: 'Phone Number',
-            shopName: 'Shop Name',
-            address: 'Shop Address',
+            shopName: 'Business Name',
+            address: 'Business Address',
             pinCode: 'Pincode',
             village: 'Village/Area',
             district: 'District',
@@ -246,7 +246,7 @@ const PendingSellers = () => {
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider border-r border-white/10 last:border-r-0">Date</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider border-r border-white/10 last:border-r-0">Seller</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider border-r border-white/10 last:border-r-0">Contact</th>
-                                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider border-r border-white/10 last:border-r-0">Shop Name</th>
+                                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider border-r border-white/10 last:border-r-0">Business Name</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider border-r border-white/10 last:border-r-0">Location</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider border-r border-white/10 last:border-r-0">Status</th>
                                 <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider">Actions</th>
@@ -420,7 +420,7 @@ const PendingSellers = () => {
                             <div className="bg-gray-50 border-b border-gray-100 px-6 py-4 flex items-center justify-between shrink-0 select-none">
                                 {[
                                     { step: 1, label: 'Personal Details' },
-                                    { step: 2, label: 'Shop Details' },
+                                    { step: 2, label: 'Business Details' },
                                     { step: 3, label: 'Business Docs' },
                                     { step: 4, label: 'Action & Summary' }
                                 ].map((item) => (
@@ -495,24 +495,24 @@ const PendingSellers = () => {
                                     </div>
                                 )}
 
-                                {/* Step 2: Shop Details */}
+                                {/* Step 2: Business Details */}
                                 {reviewStep === 2 && (
                                     <div className="space-y-4 animate-in fade-in duration-300">
                                         <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-2 flex items-center gap-1">
                                             <Info size={14} className="text-emerald-600" />
-                                            Verify Shop & Address Details
+                                            Verify Business & Address Details
                                         </h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {/* Shop Name */}
+                                            {/* Business Name */}
                                             <ReviewFieldCard 
-                                                label="Shop Name" 
+                                                label="Business Name" 
                                                 value={seller.shopDetail?.shopName} 
                                                 isFlagged={flaggedFields.shopName}
                                                 onToggle={() => toggleFlagField('shopName')}
                                             />
-                                            {/* Shop Address */}
+                                            {/* Business Address */}
                                             <ReviewFieldCard 
-                                                label="Shop Address" 
+                                                label="Business Address" 
                                                 value={seller.shopDetail?.address} 
                                                 isFlagged={flaggedFields.address}
                                                 onToggle={() => toggleFlagField('address')}

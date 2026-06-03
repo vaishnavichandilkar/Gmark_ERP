@@ -679,7 +679,7 @@ const SignUp = () => {
                             onError={(e) => { e.target.style.display = 'none' }}
                         />
                         <div className="bg-[#F3F4F6] text-[#374151] px-[12px] py-[6px] rounded-full text-[12px] font-medium">
-                            {t('auth:step_label')} 0{step}/04
+                            {t('auth:step_label')} 0{step + 1}/04
                         </div>
                     </div>
 
@@ -822,7 +822,7 @@ const SignUp = () => {
                                 <div className="flex justify-between items-center mb-5 w-full">
                                     <img src={logo} alt="WeighPro Logo" className="h-18" onError={(e) => { e.target.style.display = 'none' }} />
                                     <div className="bg-[#F3F4F6] text-[#374151] px-[12px] py-[6px] rounded-full text-[12px] font-medium">
-                                        {t('auth:step_label')} 0{step}/04
+                                        {t('auth:step_label')} 0{step + 1}/04
                                     </div>
                                 </div>
 
@@ -997,7 +997,7 @@ const SignUp = () => {
                                 <div className="flex justify-between items-center mb-8 w-full relative">
                                     <img src={logo} alt="WeighPro Logo" className="h-18" onError={(e) => { e.target.style.display = 'none' }} />
                                     <div className="bg-[#F3F4F6] text-[#374151] px-[12px] py-[6px] rounded-full text-[12px] font-medium">
-                                        {t('auth:step_label')} 0{step}/04
+                                        {t('auth:step_label')} 0{step + 1}/04
                                     </div>
                                 </div>
 

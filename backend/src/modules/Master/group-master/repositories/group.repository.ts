@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
-import { MasterStatus } from '@prisma/client';
+import { MasterStatus, BalanceType } from '@prisma/client';
 import { syncBankCashAccounts } from '../../../../utils/sync-bank-cash';
 
 @Injectable()
@@ -179,74 +179,91 @@ export class GroupMasterRepository {
         }
     }
 
-    async createSubGroup(data: { subgroup_name: string; group_id: number; userId: number }) {
+    async createSubGroup(data: { subgroup_name: string; group_id: number; userId: number; opening_balance?: number | null; balance_type?: BalanceType | null }) {
         return this.prisma.subGroup.create({
             data: {
                 subgroup_name: data.subgroup_name,
                 group_id: data.group_id,
                 userId: data.userId,
                 status: MasterStatus.ACTIVE,
+                opening_balance: data.opening_balance !== undefined && data.opening_balance !== null ? Number(data.opening_balance) : null,
+                balance_type: data.balance_type || null,
             },
         });
     }
 
-    async createSubSubGroup(data: { name: string; sub_group_id: number; userId: number }) {
+    async createSubSubGroup(data: { name: string; sub_group_id: number; userId: number; opening_balance?: number | null; balance_type?: BalanceType | null }) {
         return this.prisma.subSubGroup.create({
             data: {
                 name: data.name,
                 sub_group_id: data.sub_group_id,
                 userId: data.userId,
                 status: MasterStatus.ACTIVE,
+                opening_balance: data.opening_balance !== undefined && data.opening_balance !== null ? Number(data.opening_balance) : null,
+                balance_type: data.balance_type || null,
             },
         });
     }
 
-    async createSubSubSubGroup(data: { name: string; sub_sub_group_id: number; userId: number }) {
+    async createSubSubSubGroup(data: { name: string; sub_sub_group_id: number; userId: number; opening_balance?: number | null; balance_type?: BalanceType | null }) {
         return this.prisma.subSubSubGroup.create({
             data: {
                 name: data.name,
                 sub_sub_group_id: data.sub_sub_group_id,
                 userId: data.userId,
                 status: MasterStatus.ACTIVE,
+                opening_balance: data.opening_balance !== undefined && data.opening_balance !== null ? Number(data.opening_balance) : null,
+                balance_type: data.balance_type || null,
             },
         });
     }
 
-    async createSubSubSubSubGroup(data: { name: string; sub_sub_sub_group_id: number; userId: number }) {
+    async createSubSubSubSubGroup(data: { name: string; sub_sub_sub_group_id: number; userId: number; opening_balance?: number | null; balance_type?: BalanceType | null }) {
         return this.prisma.subSubSubSubGroup.create({
             data: {
                 name: data.name,
                 sub_sub_sub_group_id: data.sub_sub_sub_group_id,
                 userId: data.userId,
                 status: MasterStatus.ACTIVE,
+                opening_balance: data.opening_balance !== undefined && data.opening_balance !== null ? Number(data.opening_balance) : null,
+                balance_type: data.balance_type || null,
             },
         });
     }
 
     // Temporary method for root level creation if ever needed (not requested but good to have)
-    async createPrimaryGroup(data: { group_name: string; userId: number }) {
+    async createPrimaryGroup(data: { group_name: string; userId: number; opening_balance?: number | null; balance_type?: BalanceType | null }) {
         return this.prisma.group.create({
             data: {
                 group_name: data.group_name,
                 userId: data.userId,
                 is_header: false,
                 status: MasterStatus.ACTIVE,
+                opening_balance: data.opening_balance !== undefined && data.opening_balance !== null ? Number(data.opening_balance) : null,
+                balance_type: data.balance_type || null,
             },
         });
     }
 
-    async updateGroupStatus(id: number, level: number, status: MasterStatus, userId: number) {
+    async updateGroupStatus(id: number, level: number, status: MasterStatus, userId: number, opening_balance?: number | null, balance_type?: BalanceType | null) {
         const where = { id, userId };
+        const data: any = { status };
+        if (opening_balance !== undefined) {
+            data.opening_balance = opening_balance !== null ? Number(opening_balance) : null;
+        }
+        if (balance_type !== undefined) {
+            data.balance_type = balance_type || null;
+        }
         switch (level) {
             case 1:
                 // Header groups cannot be updated
                 const g = await this.prisma.group.findUnique({ where: { id } });
                 if (g?.is_header) return null;
-                return this.prisma.group.update({ where: { id }, data: { status } });
-            case 2: return this.prisma.subGroup.update({ where, data: { status } });
-            case 3: return this.prisma.subSubGroup.update({ where, data: { status } });
-            case 4: return this.prisma.subSubSubGroup.update({ where, data: { status } });
-            case 5: return this.prisma.subSubSubSubGroup.update({ where, data: { status } });
+                return this.prisma.group.update({ where: { id }, data });
+            case 2: return this.prisma.subGroup.update({ where, data });
+            case 3: return this.prisma.subSubGroup.update({ where, data });
+            case 4: return this.prisma.subSubSubGroup.update({ where, data });
+            case 5: return this.prisma.subSubSubSubGroup.update({ where, data });
             default: return null;
         }
     }
@@ -261,33 +278,40 @@ export class GroupMasterRepository {
         }
     }
 
-    async updateGroupName(id: number, level: number, data: { group_name: string; parent_id: number }, userId: number) {
+    async updateGroupName(id: number, level: number, data: { group_name: string; parent_id: number; opening_balance?: number | null; balance_type?: BalanceType | null }, userId: number) {
         const where = { id, userId };
+        const updateData: any = {};
+        if (data.opening_balance !== undefined) {
+            updateData.opening_balance = data.opening_balance !== null ? Number(data.opening_balance) : null;
+        }
+        if (data.balance_type !== undefined) {
+            updateData.balance_type = data.balance_type || null;
+        }
         switch (level) {
             case 1:
                 return this.prisma.group.update({
                     where: { id },
-                    data: { group_name: data.group_name, parent_id: data.parent_id }
+                    data: { group_name: data.group_name, parent_id: data.parent_id, ...updateData }
                 });
             case 2:
                 return this.prisma.subGroup.update({
                     where,
-                    data: { subgroup_name: data.group_name, group_id: data.parent_id }
+                    data: { subgroup_name: data.group_name, group_id: data.parent_id, ...updateData }
                 });
             case 3:
                 return this.prisma.subSubGroup.update({
                     where,
-                    data: { name: data.group_name, sub_group_id: data.parent_id }
+                    data: { name: data.group_name, sub_group_id: data.parent_id, ...updateData }
                 });
             case 4:
                 return this.prisma.subSubSubGroup.update({
                     where,
-                    data: { name: data.group_name, sub_sub_group_id: data.parent_id }
+                    data: { name: data.group_name, sub_sub_group_id: data.parent_id, ...updateData }
                 });
             case 5:
                 return this.prisma.subSubSubSubGroup.update({
                     where,
-                    data: { name: data.group_name, sub_sub_sub_group_id: data.parent_id }
+                    data: { name: data.group_name, sub_sub_sub_group_id: data.parent_id, ...updateData }
                 });
             default:
                 return null;

@@ -276,6 +276,7 @@
     "customerLedgerDetails": "ग्राहक खाता विवरण",
     "supplierLedgerDetails": "आपूर्तिकर्ता खाता विवरण",
     "openingBalance": "ओपनिंग बैलेंस",
+    "balanceType": "बैलेंस प्रकार",
     "msme_id": "MSME ID",
     "customerType": "ग्राहक प्रकार",
     "selectCustomerType": "ग्राहक प्रकार चुनें",

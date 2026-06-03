@@ -244,6 +244,18 @@ export class SalesOrderService {
             throw new ForbiddenException(`Update forbidden in status ${so.status}`);
         }
 
+        // Check if SO is linked to any Sales Challan or Sales Invoice
+        const linkedChallans = await this.prisma.salesChallan.count({ 
+            where: { soId: id, status: { not: 'DELETED' } } 
+        });
+        const linkedInvoices = await this.prisma.salesInvoice.count({ 
+            where: { soId: id, status: { not: 'DELETED' } } 
+        });
+
+        if (linkedChallans > 0 || linkedInvoices > 0) {
+            throw new ForbiddenException(`Sales Order cannot be edited because it is linked to a Challan or Sales Invoice.`);
+        }
+
         return this.prisma.$transaction(async (tx) => {
             const data: any = {
                 creditDays: updateDto.creditDays ?? so.creditDays,
@@ -316,6 +328,19 @@ export class SalesOrderService {
     async softDelete(id: number, userId: number) {
         const so = await this.findOne(id, userId);
         if (so.status === 'DELETED') return so;
+
+        // Check if SO is linked to any Sales Challan or Sales Invoice
+        const linkedChallans = await this.prisma.salesChallan.count({ 
+            where: { soId: id, status: { not: 'DELETED' } } 
+        });
+        const linkedInvoices = await this.prisma.salesInvoice.count({ 
+            where: { soId: id, status: { not: 'DELETED' } } 
+        });
+
+        if (linkedChallans > 0 || linkedInvoices > 0) {
+            throw new ForbiddenException(`Sales Order cannot be deleted because it is linked to a Challan or Sales Invoice.`);
+        }
+
         return this.prisma.salesOrder.update({
             where: { id },
             data: { status: 'DELETED' },

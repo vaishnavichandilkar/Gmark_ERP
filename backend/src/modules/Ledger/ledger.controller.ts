@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Param, ParseIntPipe, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Query, Param, ParseIntPipe, UseGuards, Request, Delete } from '@nestjs/common';
 import { LedgerService } from './ledger.service';
 import { LedgerQueryDto } from './dto/ledger.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -56,5 +56,11 @@ export class LedgerController {
       page ? parseInt(page, 10) : 1, 
       limit ? parseInt(limit, 10) : 14
     );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('allocation/:id')
+  async deleteAllocation(@Param('id', ParseIntPipe) id: number) {
+    return this.ledgerService.deleteAllocation(id);
   }
 }

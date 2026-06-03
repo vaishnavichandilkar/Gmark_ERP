@@ -92,22 +92,13 @@ const Landing = () => {
                 </div>
 
                 <div className="flex flex-col gap-3 md:gap-4">
-                    <p className="text-[14px] font-['Plus_Jakarta_Sans'] font-semibold text-gray-900 mb-2 text-center block">
-                        {t('landing.question')}
-                    </p>
-
-                    <div className="flex flex-col gap-2 w-full">
-                        <p className="text-[14px] font-['Plus_Jakarta_Sans'] font-medium text-gray-500 m-0">
-                            {t('landing.yes_label')}
-                        </p>
-                        <Button
-                            variant="primary"
-                            onClick={() => navigate('/login')}
-                            className="text-[16px] font-['Plus_Jakarta_Sans'] py-3"
-                        >
-                            {t('landing.go_to_login')}
-                        </Button>
-                    </div>
+                    <Button
+                        variant="primary"
+                        onClick={() => navigate('/login')}
+                        className="text-[16px] font-['Plus_Jakarta_Sans'] py-3"
+                    >
+                        {t('landing.go_to_login')}
+                    </Button>
 
                     <div className="flex items-center my-3 md:my-4">
                         <div className="flex-1 border-t border-gray-200"></div>
@@ -117,18 +108,13 @@ const Landing = () => {
                         <div className="flex-1 border-t border-gray-200"></div>
                     </div>
 
-                    <div className="flex flex-col gap-2 w-full">
-                        <p className="text-[14px] font-['Plus_Jakarta_Sans'] font-medium text-gray-500 m-0">
-                            {t('landing.no_label')}
-                        </p>
-                        <Button
-                            variant="primary"
-                            onClick={() => navigate('/signup')}
-                            className="text-[16px] font-['Plus_Jakarta_Sans'] py-3"
-                        >
-                            {t('landing.go_to_signup')}
-                        </Button>
-                    </div>
+                    <Button
+                        variant="primary"
+                        onClick={() => navigate('/signup')}
+                        className="text-[16px] font-['Plus_Jakarta_Sans'] py-3"
+                    >
+                        {t('landing.go_to_signup')}
+                    </Button>
                 </div>
             </div>
         </AuthLayout>

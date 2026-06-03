@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsNumber, IsEnum, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsEnum, IsOptional, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { ProductType, MasterStatus } from '@prisma/client';
 
@@ -34,16 +34,21 @@ export class CreateProductDto {
     sub_sub_category_id?: number;
 
     @ApiProperty()
+    @IsUUID('4', { message: 'Please select a valid HSN Code.' })
+    @IsNotEmpty({ message: 'HSN Code is required.' })
+    hsnMasterId: string;
+
+    @ApiProperty({ required: false })
     @IsString()
-    @IsNotEmpty()
-    hsn_code: string;
+    @IsOptional()
+    hsn_code?: string;
 
-    @ApiProperty()
+    @ApiProperty({ required: false })
     @IsNumber()
-    @IsNotEmpty()
-    tax_rate: number;
+    @IsOptional()
+    tax_rate?: number;
 
-    @ApiProperty()
+    @ApiProperty({ required: false })
     @IsString()
     @IsOptional()
     hsn_description?: string;
@@ -85,17 +90,22 @@ export class UpdateProductDto {
     @IsOptional()
     sub_sub_category_id?: number;
 
-    @ApiProperty()
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsUUID('4', { message: 'Please select a valid HSN Code.' })
+    hsnMasterId?: string;
+
+    @ApiProperty({ required: false })
     @IsString()
     @IsOptional()
     hsn_code?: string;
 
-    @ApiProperty()
+    @ApiProperty({ required: false })
     @IsNumber()
     @IsOptional()
     tax_rate?: number;
 
-    @ApiProperty()
+    @ApiProperty({ required: false })
     @IsString()
     @IsOptional()
     hsn_description?: string;

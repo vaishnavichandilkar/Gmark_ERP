@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { isValidGst, determinePurchaseGst } from '../../../../common/utils/gst.helper';
 import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
 import { CreateGrnDto, UpdateGrnDto } from './dto/grn.dto';
@@ -492,8 +492,22 @@ export class GrnService {
       this.prisma.grn.count({ where })
     ]);
 
+    const invoices = await this.prisma.purchaseInvoice.findMany({
+      where: { userId: query.userId, status: { not: 'DELETED' } },
+      select: { challanNumber: true }
+    });
+
+    const mappedData = data.map(grn => {
+      const isLinked = invoices.some(inv => {
+        if (!inv.challanNumber) return false;
+        const challanIds = inv.challanNumber.split(',').map(idx => idx.trim());
+        return challanIds.includes(grn.id.toString()) || challanIds.includes(grn.challanNumber);
+      });
+      return { ...grn, isInvoiced: isLinked };
+    });
+
     return {
-      data,
+      data: mappedData,
       meta: {
         total,
         page,
@@ -509,12 +523,37 @@ export class GrnService {
       include: { items: true, expenses: true },
     });
     if (!grn) throw new NotFoundException(`GRN ID ${id} not found or access denied`);
-    return grn;
+
+    const invoices = await this.prisma.purchaseInvoice.findMany({
+      where: { userId, status: { not: 'DELETED' } },
+      select: { challanNumber: true }
+    });
+    const isLinked = invoices.some(inv => {
+      if (!inv.challanNumber) return false;
+      const challanIds = inv.challanNumber.split(',').map(idx => idx.trim());
+      return challanIds.includes(id.toString()) || challanIds.includes(grn.challanNumber);
+    });
+
+    return { ...grn, isInvoiced: isLinked };
   }
  
   async update(id: number, updateDto: any, userId: number, uploadedFilePath?: string) {
     const existing = await this.findOne(id, userId);
     if (!existing) throw new NotFoundException(`GRN ID ${id} not found`);
+
+    // Check if GRN is linked to any Purchase Invoice
+    const invoices = await this.prisma.purchaseInvoice.findMany({
+      where: { userId, status: { not: 'DELETED' } },
+      select: { challanNumber: true }
+    });
+    const isLinked = invoices.some(inv => {
+      if (!inv.challanNumber) return false;
+      const challanIds = inv.challanNumber.split(',').map(idx => idx.trim());
+      return challanIds.includes(id.toString()) || challanIds.includes(existing.challanNumber);
+    });
+    if (isLinked) {
+      throw new ForbiddenException(`GRN cannot be edited because it is linked to a Purchase Invoice.`);
+    }
 
     const mergedDto: CreateGrnDto = {
       ...existing,
@@ -577,6 +616,21 @@ export class GrnService {
   async remove(id: number, userId: number) {
     const existing = await this.prisma.grn.findUnique({ where: { id } });
     if (!existing || existing.userId !== userId) throw new NotFoundException('GRN not found');
+
+    // Check if GRN is linked to any Purchase Invoice
+    const invoices = await this.prisma.purchaseInvoice.findMany({
+      where: { userId, status: { not: 'DELETED' } },
+      select: { challanNumber: true }
+    });
+    const isLinked = invoices.some(inv => {
+      if (!inv.challanNumber) return false;
+      const challanIds = inv.challanNumber.split(',').map(idx => idx.trim());
+      return challanIds.includes(id.toString()) || challanIds.includes(existing.challanNumber);
+    });
+    if (isLinked) {
+      throw new ForbiddenException(`GRN cannot be deleted because it is linked to a Purchase Invoice.`);
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.grn.update({ 
         where: { id },

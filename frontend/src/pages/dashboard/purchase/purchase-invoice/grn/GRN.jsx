@@ -179,7 +179,8 @@ const GRN = () => {
     const mappedGRNs = useMemo(() => {
         return grns.map(item => {
             const itemStatus = (item.status || "").toUpperCase();
-            const statusLabel = itemStatus === 'DELETED' ? 'Deleted' : 'Generated';
+            let statusLabel = itemStatus === 'DELETED' ? 'Deleted' : 'Generated';
+            if (item.isInvoiced && statusLabel !== 'Deleted') statusLabel = 'Invoiced';
             
             // Calculate taxable and tax from items if not directly on item (though we just added them)
             const taxableAmount = item.items?.reduce((sum, i) => sum + (parseFloat(i.beforeTaxAmount) || 0), 0) || 0;
@@ -199,7 +200,7 @@ const GRN = () => {
                 taxAmount: taxAmount.toFixed(2),
                 grossAmount: grossAmount.toFixed(2),
                 status: statusLabel,
-                bgClass: statusLabel === 'Generated' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
+                bgClass: statusLabel === 'Deleted' ? 'bg-red-50 text-red-600 border border-red-100' : (statusLabel === 'Invoiced' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-blue-50 text-blue-600 border border-blue-100')
             };
         });
     }, [grns]);

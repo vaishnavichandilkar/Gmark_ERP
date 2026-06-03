@@ -8,6 +8,8 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
     const { t } = useTranslation(['common', 'modules']);
     const [groupName, setGroupName] = useState('');
     const [selectedGroup, setSelectedGroup] = useState(null);
+    const [openingBalance, setOpeningBalance] = useState('');
+    const [balanceType, setBalanceType] = useState('Dr');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [allGroups, setAllGroups] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -19,6 +21,8 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
         fetchDropdownGroups();
         if (mode === 'edit' && initialData) {
             setGroupName(initialData.group_name || '');
+            setOpeningBalance(initialData.opening_balance || '');
+            setBalanceType(initialData.balance_type || 'Dr');
         }
     }, [mode, initialData]);
 
@@ -61,6 +65,7 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
             return;
         }
 
+        const isExpenseParent = selectedGroup ? isExpenseGroup(selectedGroup, allGroups) : false;
         setIsLoading(true);
         setErrors({});
         try {
@@ -68,10 +73,17 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
             if (mode === 'add') {
                 response = await masterService.createGroup({
                     group_name: groupName,
-                    parent_id: selectedGroup.id
+                    parent_id: selectedGroup.id,
+                    opening_balance: (!isExpenseParent && openingBalance !== '') ? Number(openingBalance) : null,
+                    balance_type: !isExpenseParent ? balanceType : null
                 });
             } else {
-                // Update logic if needed
+                response = await masterService.updateGroup(initialData.id, {
+                    group_name: groupName,
+                    parent_id: selectedGroup.id,
+                    opening_balance: (!isExpenseParent && openingBalance !== '') ? Number(openingBalance) : null,
+                    balance_type: !isExpenseParent ? balanceType : null
+                });
             }
 
             if (response?.success) {
@@ -234,6 +246,46 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
                             </div>
                         )}
                     </div>
+
+                    {/* Opening Balance and Balance Type */}
+                    {!(selectedGroup ? isExpenseGroup(selectedGroup, allGroups) : false) && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full animate-in fade-in slide-in-from-top-2 duration-300">
+                            {/* Opening Balance */}
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[14px] font-bold text-[#374151]">
+                                    {t('modules:openingBalance', 'Opening Balance')}
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={openingBalance}
+                                    onChange={(e) => {
+                                        setOpeningBalance(e.target.value);
+                                        if (errors.opening_balance) setErrors(prev => ({ ...prev, opening_balance: '' }));
+                                    }}
+                                    placeholder={t('modules:enter_op_balance', 'Enter opening balance')}
+                                    className={`w-full h-[46px] border rounded-[10px] px-4 outline-none transition-all placeholder:text-gray-400 text-[14px] text-[#111827] bg-white
+                                        ${errors.opening_balance ? 'border-red-300 ring-1 ring-red-50' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10'}`}
+                                />
+                                {errors.opening_balance && <span className="text-red-500 text-[11px] mt-0.5 ml-1 animate-in fade-in slide-in-from-top-1 duration-200 font-medium">*{errors.opening_balance}</span>}
+                            </div>
+
+                            {/* Balance Type */}
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[14px] font-bold text-[#374151]">
+                                    {t('modules:balanceType', 'Balance Type')}
+                                </label>
+                                <select
+                                    value={balanceType}
+                                    onChange={(e) => setBalanceType(e.target.value)}
+                                    className="w-full h-[46px] border border-[#E5E7EB] rounded-[10px] px-4 outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all text-[14px] text-[#111827] bg-white cursor-pointer"
+                                >
+                                    <option value="Dr">Dr</option>
+                                    <option value="Cr">Cr</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer Buttons */}
@@ -272,6 +324,21 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
             `}</style>
         </div>
     );
+};
+
+const isExpenseGroup = (group, groupsList) => {
+    if (!group) return false;
+    const name = group.group_name;
+    if (name === 'Direct Expense' || name === 'Indirect Expense') {
+        return true;
+    }
+    if (group.parent_id) {
+        const parent = groupsList.find(g => g.id === group.parent_id);
+        if (parent) {
+            return isExpenseGroup(parent, groupsList);
+        }
+    }
+    return false;
 };
 
 export default GroupForm;

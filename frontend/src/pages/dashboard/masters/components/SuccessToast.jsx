@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle, X } from 'lucide-react';
 
 const SuccessToast = ({ message, type = 'success', onClose }) => {
     useEffect(() => {
+        if (!onClose) return;
         const timer = setTimeout(onClose, 3000);
         return () => clearTimeout(timer);
     }, [onClose]);
@@ -37,7 +38,7 @@ const SuccessToast = ({ message, type = 'success', onClose }) => {
                     </p>
                 </div>
                 <button 
-                    onClick={onClose}
+                    onClick={() => onClose?.()}
                     className={`shrink-0 rounded-full p-2 transition-colors ${isError ? 'hover:bg-red-50 text-red-400' : 'hover:bg-white/10 text-white/50'}`}
                 >
                     <X size={16} />

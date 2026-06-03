@@ -8,6 +8,8 @@ import toast from "react-hot-toast";
 import SuccessToast from "./SuccessToast";
 import AddCategoryModal from "./AddCategoryModal";
 import AddUomModal from "./AddUomModal";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchHsnLookup } from "../../../../redux/hsn/hsnLookupSlice";
 
 const CustomSelect = ({
   label,
@@ -151,6 +153,9 @@ const ProductForm = ({
   const [loading, setLoading] = useState(false);
   const isView = mode === "view";
 
+  const dispatch = useDispatch();
+  const { lookupData: hsnLookupList } = useSelector((state) => state.hsnLookup);
+
   const [uomList, setUomList] = useState([]);
   const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
@@ -165,8 +170,10 @@ const ProductForm = ({
     category: initialData?.category || null,
     subcategory: initialData?.sub_category || null,
     subsubcategory: initialData?.sub_sub_category || null,
+    hsnMaster: initialData?.hsnMaster || null,
+    hsnMasterId: initialData?.hsnMasterId || "",
     hsnCode: initialData?.hsn_code || "",
-    tax: initialData?.tax_rate ? initialData.tax_rate : "",
+    tax: initialData?.tax_rate !== undefined ? initialData.tax_rate : "",
     hsnDescription: initialData?.hsn_description || "",
     description: initialData?.description || "",
   };
@@ -235,6 +242,14 @@ const ProductForm = ({
     return () => clearTimeout(timer);
   }, [formData.productName, isView, initialData?.id]);
 
+  const handleHsnChange = (val) => {
+    handleInputChange("hsnMaster", val);
+    handleInputChange("hsnMasterId", val?.id || "");
+    handleInputChange("hsnCode", val?.code || "");
+    handleInputChange("tax", val ? val.taxRate : "");
+    handleInputChange("hsnDescription", val ? val.description : "");
+  };
+
   const validateField = (field, value) => {
     let error = "";
     if (field === "productName") {
@@ -245,9 +260,9 @@ const ProductForm = ({
       if (!value?.trim() || value.trim().length < 3) {
         error = "Enter valid product description";
       }
-    } else if (field === "hsnCode") {
-      if (!value || !/^\d{4,}$/.test(value.trim())) {
-        error = "Enter valid HSN Code (min 4 digits)";
+    } else if (field === "hsnMasterId") {
+      if (!value) {
+        error = "HSN Code is required.";
       }
     } else if (field === "uom") {
       if (!value) error = "Please select UOM";
@@ -280,7 +295,7 @@ const ProductForm = ({
     const fields = [
       "productName",
       "description",
-      "hsnCode",
+      "hsnMasterId",
       "uom",
       "productType",
       "category",
@@ -302,12 +317,13 @@ const ProductForm = ({
         formData.category !== initialFormData.category ||
         formData.subcategory !== initialFormData.subcategory ||
         formData.subsubcategory !== initialFormData.subsubcategory ||
-        formData.hsnCode !== initialFormData.hsnCode ||
+        formData.hsnMasterId !== initialFormData.hsnMasterId ||
         formData.tax !== initialFormData.tax ||
         formData.description !== initialFormData.description
       : true;
 
   useEffect(() => {
+    dispatch(fetchHsnLookup());
     const fetchInitialData = async () => {
       try {
         const [uoms, cats] = await Promise.all([
@@ -381,53 +397,7 @@ const ProductForm = ({
     }
   };
 
-  useEffect(() => {
-    if (isView) return;
-
-    if (!formData.hsnCode || formData.hsnCode.length < 4) {
-      setTaxList([]);
-      handleInputChange("tax", "");
-      handleInputChange("hsnDescription", "");
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      try {
-        const res = await productService.getTaxByHsn(formData.hsnCode);
-        const details = res.taxDetails || [];
-        setTaxList(details);
-
-        if (details.length === 1) {
-          const selected = details[0];
-          handleInputChange("tax", selected.rateOfTax);
-          handleInputChange("hsnDescription", selected.description);
-        } else if (details.length > 1) {
-          // If we have initial tax (e.g. in edit mode), keep it, otherwise clear it so user picks
-          if (!formData.tax) {
-            handleInputChange("tax", "");
-            handleInputChange("hsnDescription", "");
-          } else {
-            // Find description for existing tax if not present
-            const matched = details.find(d => String(d.rateOfTax) === String(formData.tax));
-            if (matched && !formData.hsnDescription) {
-                handleInputChange("hsnDescription", matched.description);
-            }
-          }
-        }
-      } catch (error) {
-        setTaxList([]);
-        handleInputChange("tax", "");
-        handleInputChange("hsnDescription", "");
-        if (error.response?.status === 404) {
-          toast.error(t("modules:invalid_hsn_code", "Invalid HSN Code"));
-        } else {
-          toast.error(t("common:error_fetching_data"));
-        }
-      }
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [formData.hsnCode, isView]);
+  // Auto-fetch logic via Redux state on selection change, no watch or api call needed
 
   const handleCategoryChange = async (val) => {
     handleInputChange("category", val);
@@ -483,9 +453,7 @@ const ProductForm = ({
         category_id: formData.category?.id,
         sub_category_id: formData.subcategory?.id,
         sub_sub_category_id: formData.subsubcategory?.id,
-        hsn_code: formData.hsnCode,
-        tax_rate: parseFloat(formData.tax) || 0,
-        hsn_description: formData.hsnDescription,
+        hsnMasterId: formData.hsnMasterId,
         description: formData.description,
       };
 
@@ -605,7 +573,11 @@ const ProductForm = ({
       {/* Content Table */}
       <div className="flex flex-col">
         {[
-          { label: t("modules:product_name"), value: formData.productName },
+          { label: t("modules:product_type"), value: formData.productType },
+          {
+            label: formData.productType === "SERVICES" ? t("modules:service_name", "Service Name") : t("modules:product_name"),
+            value: formData.productName,
+          },
           { label: t("modules:product_code"), value: formData.productCode },
           {
             label: t("modules:uom"),
@@ -613,7 +585,6 @@ const ProductForm = ({
               ? `${translateDynamic(formData.uom.gst_uom, t)} – ${translateDynamic(formData.uom.full_name_of_measurement, t)}`
               : "-",
           },
-          { label: t("modules:product_type"), value: formData.productType },
           {
             label: t("modules:sub_category"),
             value: formData.subcategory?.name,
@@ -715,11 +686,23 @@ const ProductForm = ({
         {/* Form Body */}
         <div className="p-8 md:p-10 flex flex-col gap-8 w-full">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8 w-full">
+            <CustomSelect
+              label={t("modules:product_type")}
+              placeholder={t("modules:selectProductType")}
+              options={PRODUCT_TYPES}
+              value={formData.productType}
+              onChange={(val) => handleInputChange("productType", val)}
+              showAsterisk={true}
+              disabled={isView}
+              error={errors.productType}
+            />
+
             {renderInput(
-              t("modules:product_name"),
+              formData.productType === "SERVICES" ? t("modules:service_name", "Service Name") : t("modules:product_name"),
               "productName",
-              t("modules:enter_product_name"),
+              formData.productType === "SERVICES" ? t("modules:enter_service_name", "Enter Service name") : t("modules:enter_product_name"),
             )}
+
             {renderInput(
               t("modules:product_code"),
               "productCode",
@@ -745,17 +728,6 @@ const ProductForm = ({
               footerLabel="+ Add UOM"
               onFooterClick={() => setIsAddUomModalOpen(true)}
               error={errors.uom}
-            />
-
-            <CustomSelect
-              label={t("modules:product_type")}
-              placeholder={t("modules:selectProductType")}
-              options={PRODUCT_TYPES}
-              value={formData.productType}
-              onChange={(val) => handleInputChange("productType", val)}
-              showAsterisk={true}
-              disabled={isView}
-              error={errors.productType}
             />
 
             <CustomSelect
@@ -811,50 +783,45 @@ const ProductForm = ({
               error={errors.subsubcategory}
             />
 
-            {renderInput(
-              t("modules:hsn_code"),
-              "hsnCode",
-              t("modules:enterHSNCode"),
-            )}
+            <CustomSelect
+              label="HSN Code"
+              placeholder="Select HSN/SAC Code"
+              options={hsnLookupList}
+              value={hsnLookupList.find(h => h.id === formData.hsnMasterId) || formData.hsnMaster}
+              onChange={(val) => handleHsnChange(val)}
+              getOptionLabel={(opt) => `${opt.code} (${opt.type})`}
+              isSearchable={true}
+              showAsterisk={true}
+              disabled={isView}
+              error={errors.hsnMasterId}
+            />
 
-            {taxList.length > 1 ? (
-              <CustomSelect
-                label={t("modules:tax_percent")}
-                placeholder={t("modules:select_tax")}
-                options={taxList}
-                value={taxList.find(t => String(t.rateOfTax) === String(formData.tax))}
-                onChange={(val) => {
-                  handleInputChange("tax", val.rateOfTax);
-                  handleInputChange("hsnDescription", val.description);
-                }}
-                getOptionLabel={(opt) => `${opt.rateOfTax}%`}
-                showAsterisk={true}
-                disabled={isView}
+            <div className="flex flex-col gap-1.5 w-full">
+              <label className="text-[13px] font-semibold text-[#4B5563]">
+                Tax %
+              </label>
+              <input
+                type="text"
+                readOnly
+                disabled={true}
+                placeholder="Tax will be auto fetched"
+                className="w-full h-[44px] border border-[#E5E7EB] rounded-[8px] px-4 text-[14px] text-gray-500 outline-none transition-all bg-gray-50 cursor-not-allowed"
+                value={formData.tax !== "" ? formData.tax + "%" : ""}
               />
-            ) : (
-              <div className="flex flex-col gap-1.5 w-full">
-                <label className="text-[13px] font-semibold text-[#4B5563]">
-                  {t("modules:tax_percent")}
-                </label>
-                <input
-                  type="text"
-                  readOnly
-                  disabled={true}
-                  placeholder={t("modules:tax_auto")}
-                  className="w-full h-[44px] border border-[#E5E7EB] rounded-[8px] px-4 text-[14px] text-gray-500 outline-none transition-all bg-gray-50 cursor-not-allowed"
-                  value={formData.tax ? formData.tax + "%" : ""}
-                />
-              </div>
-            )}
+            </div>
 
-            <div className="md:col-span-2">
-              {renderInput(
-                t("modules:hsn_desc", "HSN Description"),
-                "hsnDescription",
-                t("modules:hsn_desc_auto", "HSN Description (Auto)"),
-                false,
-                true,
-              )}
+            <div className="flex flex-col gap-1.5 w-full md:col-span-2">
+              <label className="text-[13px] font-semibold text-[#4B5563]">
+                HSN Description
+              </label>
+              <textarea
+                readOnly
+                disabled={true}
+                placeholder="HSN Description (Auto)"
+                rows={3}
+                className="w-full border border-[#E5E7EB] rounded-[8px] p-4 text-[14px] text-gray-500 outline-none transition-all bg-gray-50 cursor-not-allowed resize-none"
+                value={formData.hsnDescription || ""}
+              />
             </div>
 
             <div className="md:col-span-2">

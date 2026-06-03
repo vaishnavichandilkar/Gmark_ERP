@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { MoreVertical, X, Eye, Users, BookOpen, Download, Search, FileText, FileSpreadsheet, RotateCcw, ChevronLeft, ChevronRight, Plus, Landmark, Trash2, ChevronDown } from 'lucide-react';
+import { MoreVertical, X, Eye, Users, BookOpen, Download, Search, FileText, FileSpreadsheet, RotateCcw, ChevronLeft, ChevronRight, Plus, Landmark, Trash2, ChevronDown, XSquare } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import CustomSelect from '../../../components/common/CustomSelect';
 import jsPDF from 'jspdf';
@@ -14,6 +14,8 @@ import toast from 'react-hot-toast';
 import ledgerService from '../../../services/ledgerService';
 import voucherService from '../../../services/voucherService';
 import PaymentModal from '../../../components/common/PaymentModal';
+import OneTabSettlement from './OneTabSettlement';
+
 
 const Finance = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -124,9 +126,10 @@ const Finance = () => {
         return () => window.removeEventListener('voucherAdded', handleVoucherAdded);
     }, []);
 
-    const mainTabs = ['Ledger', 'Bank Reconciliation'];
+    const mainTabs = ['Ledger', 'Bank Reconciliation', 'Settlement'];
     const getSubTabs = (mainTab) => {
         if (mainTab === 'Bank Reconciliation') return ['Receipts', 'Payments', 'JV', 'Contra'];
+        if (mainTab === 'Settlement') return ['Sundry Creditors', 'Sundry Debtors'];
         return ['Sundry Creditors', 'Sundry Debtors', 'Bank', 'Cash'];
     };
     const subTabs = getSubTabs(activeMainTab);
@@ -199,6 +202,34 @@ const Finance = () => {
     const [detailedCurrentPage, setDetailedCurrentPage] = useState(1);
     const [detailedTotalPages, setDetailedTotalPages] = useState(1);
     const [detailedTotalTotal, setDetailedTotalTotal] = useState(0);
+    const [showAllocations, setShowAllocations] = useState(false);
+
+    const handleDeleteAllocation = async (allocationId) => {
+        if (!window.confirm('Are you sure you want to delete this allocation?')) return;
+        try {
+            await ledgerService.deleteAllocation(allocationId);
+            toast.success('Allocation deleted successfully');
+            
+            // Refresh detailed data
+            setDetailedLoading(true);
+            const params = { 
+                startDate, 
+                endDate, 
+                type: activeMainTab === 'Ledger' ? activeSubTab : undefined,
+                page: detailedCurrentPage,
+                limit: 14
+            };
+            const response = await ledgerService.getDetailedLedger(selectedAccount.id, params);
+            setDetailedLedger(response.data);
+            setDetailedTotalPages(response.data.totalPages || 1);
+            setDetailedTotalTotal(response.data.total || 0);
+            setDetailedLoading(false);
+        } catch (error) {
+            console.error('Error deleting allocation:', error);
+            toast.error('Failed to delete allocation');
+            setDetailedLoading(false);
+        }
+    };
 
     useEffect(() => {
         const fetchDetailed = async () => {
@@ -416,21 +447,22 @@ const Finance = () => {
         doc.setFontSize(16);
         doc.text(`Ledger Account: ${selectedAccount?.accountName || 'Account'}`, 14, 20);
         
-        const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "DR", "CR", "Cum Balance"];
+        const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "Unallocated", "DR", "CR", "Cum Balance"];
         const tableRows = filteredTransactions.map((tx, index) => [
             index + 1,
             new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
             tx.particulars,
             tx.narration || '-',
+            tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
             tx.debit > 0 ? tx.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
             tx.credit > 0 ? tx.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
             `${Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
         ]);
 
         const footerRows = [
-            ['', '', '', 'Page Total', pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(currentClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}`],
-            ['', '', '', 'Transactions (Ledger)', overallTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), overallTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}`],
-            ['', '', '', 'Closing Balance', '--', '--', `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}`]
+            ['', '', '', 'Page Total', '', pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(currentClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}`],
+            ['', '', '', 'Transactions (Ledger)', '', overallTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), overallTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}`],
+            ['', '', '', 'Closing Balance', '', '--', '--', `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}`]
         ];
 
         autoTable(doc, {
@@ -454,16 +486,17 @@ const Finance = () => {
             "Date": new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
             "Particular": tx.particulars,
             "Narration": tx.narration || '-',
-            "Debit (₹)": tx.debit,
-            "Credit (₹)": tx.credit,
+            "Unallocated (₹)": tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated) : null,
+            "Debit (₹)": tx.debit > 0 ? tx.debit : null,
+            "Credit (₹)": tx.credit > 0 ? tx.credit : null,
             "Balance": `${Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
         }));
 
         // Add summary rows to Excel
         exportData.push({}); 
-        exportData.push({ "Narration": "Page Total", "Debit (₹)": pageTotalDR, "Credit (₹)": pageTotalCR, "Balance": `${Math.abs(currentClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}` });
-        exportData.push({ "Narration": "Transactions (Ledger)", "Debit (₹)": overallTotalDR, "Credit (₹)": overallTotalCR, "Balance": `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}` });
-        exportData.push({ "Narration": "Closing Balance", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}` });
+        exportData.push({ "Narration": "Page Total", "Unallocated (₹)": "--", "Debit (₹)": pageTotalDR, "Credit (₹)": pageTotalCR, "Balance": `${Math.abs(currentClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}` });
+        exportData.push({ "Narration": "Transactions (Ledger)", "Unallocated (₹)": "--", "Debit (₹)": overallTotalDR, "Credit (₹)": overallTotalCR, "Balance": `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}` });
+        exportData.push({ "Narration": "Closing Balance", "Unallocated (₹)": "--", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}` });
 
         const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
@@ -517,100 +550,109 @@ const Finance = () => {
             </div>
 
             {/* Sub-tabs */}
-            <div className="flex overflow-x-auto whitespace-nowrap gap-6 md:gap-16 border-b border-[#E5E7EB] w-full mb-8 font-outfit px-1 sm:justify-center scrollbar-hide scroll-smooth">
-                {subTabs.map((tab) => {
-                    const isActive = activeSubTab === tab;
-                    return (
-                        <button
-                            key={tab}
-                            onClick={(e) => {
-                                setActiveSubTab(tab);
-                                e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                            }}
-                            className={`relative pb-4 text-[16px] md:text-[18px] font-bold transition-colors whitespace-nowrap shrink-0 ${isActive ? 'text-[#111827]' : 'text-[#6B7280]'}`}
-                        >
-                            {tab}
-                            {isActive && <motion.div layoutId="underlineSubTabFinance" className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#073318]" />}
-                        </button>
-                    );
-                })}
-            </div>
-
-            {/* Fiscal Year Switcher */}
-            <div className="flex justify-start mb-8">
-                <div className="inline-flex bg-white p-1 rounded-[16px] border border-[#E5E7EB] shadow-sm">
-                    {fiscalYears.map((year) => {
-                        const isActive = activeFiscalYear === year;
+            {subTabs.length > 0 && (
+                <div className="flex overflow-x-auto whitespace-nowrap gap-6 md:gap-16 border-b border-[#E5E7EB] w-full mb-8 font-outfit px-1 sm:justify-center scrollbar-hide scroll-smooth">
+                    {subTabs.map((tab) => {
+                        const isActive = activeSubTab === tab;
                         return (
                             <button
-                                key={year}
-                                onClick={() => handleFiscalYearChange(year)}
-                                className={`px-6 py-2 rounded-[12px] text-[14px] font-bold transition-all duration-300 whitespace-nowrap
-                                    ${isActive 
-                                        ? 'bg-[#073318] text-white shadow-lg' 
-                                        : 'text-[#6B7280] hover:text-[#111827]'
-                                    }`}
+                                key={tab}
+                                onClick={(e) => {
+                                    setActiveSubTab(tab);
+                                    e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                                }}
+                                className={`relative pb-4 text-[16px] md:text-[18px] font-bold transition-colors whitespace-nowrap shrink-0 ${isActive ? 'text-[#111827]' : 'text-[#6B7280]'}`}
                             >
-                                {year}
+                                {tab}
+                                {isActive && <motion.div layoutId="underlineSubTabFinance" className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#073318]" />}
                             </button>
                         );
                     })}
                 </div>
-            </div>
-            
-            {/* Filter Bar */}
-            <div className="bg-white p-6 rounded-[24px] border border-[#E5E7EB] shadow-sm mb-8">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                    {/* Left Side: Search */}
-                    <div className="relative w-full lg:w-auto">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                        <input 
-                            type="text" 
-                            placeholder={activeMainTab === 'Ledger' ? "Search Account..." : "Search transactions..."}
-                            className="h-[46px] pl-10 pr-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all w-full sm:w-[320px] font-medium"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                        />
-                    </div>
+            )}
 
-                    {/* Right Side: Custom Date Range */}
-                    <div className="flex flex-wrap items-center gap-6">
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2">
-                                <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">From</span>
-                                <input 
-                                    type="date" 
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all cursor-pointer"
-                                />
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">To</span>
-                                <input 
-                                    type="date" 
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all cursor-pointer"
-                                />
-                            </div>
-                            {(startDate || endDate) && (
-                                <button 
-                                    onClick={() => { setStartDate(''); setEndDate(''); setActiveFiscalYear(null); }}
-                                    className="p-2.5 text-[#9CA3AF] hover:bg-gray-100 rounded-lg transition-all"
-                                    title="Reset Dates"
-                                >
-                                    <RotateCcw size={18} />
-                                </button>
-                            )}
+            {/* Fiscal Year Switcher & Filter Bar */}
+            {activeMainTab !== 'Settlement' && (
+                <>
+                    {/* Fiscal Year Switcher */}
+                    <div className="flex justify-start mb-8">
+                        <div className="inline-flex bg-white p-1 rounded-[16px] border border-[#E5E7EB] shadow-sm">
+                            {fiscalYears.map((year) => {
+                                const isActive = activeFiscalYear === year;
+                                return (
+                                    <button
+                                        key={year}
+                                        onClick={() => handleFiscalYearChange(year)}
+                                        className={`px-6 py-2 rounded-[12px] text-[14px] font-bold transition-all duration-300 whitespace-nowrap
+                                            ${isActive 
+                                                ? 'bg-[#073318] text-white shadow-lg' 
+                                                : 'text-[#6B7280] hover:text-[#111827]'
+                                            }`}
+                                    >
+                                        {year}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
-                </div>
-            </div>
+                    
+                    {/* Filter Bar */}
+                    <div className="bg-white p-6 rounded-[24px] border border-[#E5E7EB] shadow-sm mb-8">
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                            {/* Left Side: Search */}
+                            <div className="relative w-full lg:w-auto">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                <input 
+                                    type="text" 
+                                    placeholder={activeMainTab === 'Ledger' ? "Search Account..." : "Search transactions..."}
+                                    className="h-[46px] pl-10 pr-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all w-full sm:w-[320px] font-medium"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                />
+                            </div>
+
+                            {/* Right Side: Custom Date Range */}
+                            <div className="flex flex-wrap items-center gap-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">From</span>
+                                        <input 
+                                            type="date" 
+                                            value={startDate}
+                                            onChange={(e) => setStartDate(e.target.value)}
+                                            className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all cursor-pointer"
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">To</span>
+                                        <input 
+                                            type="date" 
+                                            value={endDate}
+                                            onChange={(e) => setEndDate(e.target.value)}
+                                            className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all cursor-pointer"
+                                        />
+                                    </div>
+                                    {(startDate || endDate) && (
+                                        <button 
+                                            onClick={() => { setStartDate(''); setEndDate(''); setActiveFiscalYear(null); }}
+                                            className="p-2.5 text-[#9CA3AF] hover:bg-gray-100 rounded-lg transition-all"
+                                            title="Reset Dates"
+                                        >
+                                            <RotateCcw size={18} />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {/* Content Area */}
-            {currentData ? (
+            {activeMainTab === 'Settlement' ? (
+                <OneTabSettlement activeSubTab={activeSubTab} />
+            ) : currentData ? (
                 <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden mb-8 w-full">
                     <ScrollableTable>
                         <table className="w-full min-w-[800px] border-collapse text-left font-outfit">
@@ -876,8 +918,15 @@ const Finance = () => {
                                                     className="h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-4 text-[14px] text-[#4B5563] w-full sm:w-[300px] outline-none focus:border-[#9CA3AF] focus:ring-2 focus:ring-[#9CA3AF]/20 transition-all placeholder:text-[#9CA3AF] placeholder:font-normal" 
                                                 />
                                             </div>
-                                            <div className="relative w-full sm:w-auto">
+                                            <div className="flex items-center gap-3 w-full sm:w-auto">
                                                 <button 
+                                                    className={`h-[42px] px-5 w-full sm:w-auto justify-center rounded-[10px] font-medium text-[15px] transition-colors flex items-center shadow-lg ${showAllocations ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-[#073318] hover:bg-[#0a4422] text-white'}`}
+                                                    onClick={() => setShowAllocations(!showAllocations)}
+                                                >
+                                                    {showAllocations ? 'Hide Allocation' : 'Allocation'}
+                                                </button>
+                                                <div className="relative w-full sm:w-auto">
+                                                    <button 
                                                     className="h-[42px] px-5 w-full sm:w-auto justify-center bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] rounded-[10px] font-medium text-[15px] transition-colors flex items-center gap-2 shadow-sm"
                                                     onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}
                                                 >
@@ -909,6 +958,7 @@ const Finance = () => {
                                                     </>
                                                 )}
                                             </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -920,6 +970,7 @@ const Finance = () => {
                                                     <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">Date</th>
                                                     <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">Particular</th>
                                                     <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">Narration</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">Unallocated</th>
                                                     <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">DR</th>
                                                     <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">CR</th>
                                                     <th className="px-6 py-4 whitespace-nowrap text-right">Cum Balance</th>
@@ -928,7 +979,7 @@ const Finance = () => {
                                             <tbody className="text-[14px] text-[#111827]">
                                                 {detailedLoading ? (
                                                     <tr>
-                                                        <td colSpan="7" className="px-6 py-12 text-center">
+                                                        <td colSpan="8" className="px-6 py-12 text-center">
                                                             <div className="flex flex-col items-center gap-3">
                                                                 <div className="w-8 h-8 border-4 border-[#073318]/20 border-t-[#073318] rounded-full animate-spin"></div>
                                                                 <p className="font-medium text-[#6B7280]">Loading transaction history...</p>
@@ -938,28 +989,95 @@ const Finance = () => {
                                                 ) : filteredTransactions.length > 0 ? (
                                                     filteredTransactions.map((tx, index) => {
                                                         return (
-                                                            <tr key={tx.id || index} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
-                                                                <td className="px-6 py-4 text-center">
-                                                                    {(tx.isBalanceRow || tx.particulars.toLowerCase().includes('balance')) ? '-' : ((detailedCurrentPage - 1) * 14 + index)}
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                                    {new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}
-                                                                </td>
-                                                                <td className="px-6 py-4 font-bold">{tx.particulars}</td>
-                                                                <td className="px-6 py-4 text-[#6B7280]">
-                                                                    {tx.narration || '-'}
-                                                                </td>
-                                                                <td className="px-6 py-4 text-right font-medium">{tx.debit > 0 ? tx.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
-                                                                <td className="px-6 py-4 text-right font-medium">{tx.credit > 0 ? tx.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
-                                                                <td className="px-6 py-4 text-right font-bold text-[#111827]">
-                                                                    ₹ {Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}
-                                                                </td>
-                                                            </tr>
+                                                            <React.Fragment key={tx.id || index}>
+                                                                <tr className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
+                                                                    <td className="px-6 py-4 text-center">
+                                                                        {(tx.isBalanceRow || tx.particulars.toLowerCase().includes('balance')) ? '-' : ((detailedCurrentPage - 1) * 14 + index + 1)}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                                        {new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 font-bold">{tx.particulars}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-gray-500">
+                                                                        <div className="max-w-[250px] truncate" title={tx.narration || '-'}>
+                                                                            {tx.narration || '-'}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-gray-700">
+                                                                        {(() => {
+                                                                            if (tx.isBalanceRow || tx.particulars.toLowerCase().includes('balance')) return '-';
+                                                                            if (tx.unallocated === undefined || tx.unallocated === null) return '-';
+                                                                            const totalAllocated = tx.allocations ? tx.allocations.reduce((s, a) => s + a.amount, 0) : 0;
+                                                                            const remainingUnallocated = Math.max(0, tx.unallocated - totalAllocated);
+                                                                            const displayAmount = showAllocations ? tx.unallocated : remainingUnallocated;
+                                                                            const pType = tx.particulars || '';
+                                                                            const suffix = pType.includes('Purchase') || pType.includes('Receipt') ? 'Cr' : (pType.includes('Sales') || pType.includes('Payment') ? 'Dr' : '');
+                                                                            
+                                                                            if (displayAmount === 0) return `-- ${suffix}`.trim();
+                                                                            return `₹ ${displayAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${suffix}`.trim();
+                                                                        })()}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-emerald-600">{tx.debit > 0 ? `₹ ${tx.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-rose-600">{tx.credit > 0 ? `₹ ${tx.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                                                                    <td className="px-6 py-4 text-right font-bold text-[#111827]">
+                                                                        ₹ {Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}
+                                                                    </td>
+                                                                </tr>
+                                                                {showAllocations && tx.allocations && tx.allocations.length > 0 && (
+                                                                    <>
+                                                                        {tx.allocations.map((alloc) => (
+                                                                            <tr key={`alloc-${alloc.id}`} className="bg-[#FAFAFA] border-b border-[#F3F4F6]">
+                                                                                <td className="px-6 py-2"></td>
+                                                                                <td className="px-6 py-2 text-[13px] text-gray-500 font-medium">
+                                                                                    {new Date(alloc.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}
+                                                                                </td>
+                                                                                <td className="px-6 py-2 text-[13px] font-bold text-gray-700">{alloc.type}</td>
+                                                                                <td className="px-6 py-2">
+                                                                                    {alloc.voucherNo !== '-' ? (
+                                                                                        <div className="flex flex-col gap-0.5">
+                                                                                            <span className="text-[13px] font-bold text-gray-700">{alloc.voucherNo}</span>
+                                                                                            {alloc.narration && alloc.narration !== '-' && (
+                                                                                                <span className="text-[11.5px] font-medium text-gray-500 italic">{alloc.narration}</span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <span className="text-[13px] text-gray-500">{alloc.narration}</span>
+                                                                                    )}
+                                                                                </td>
+                                                                                <td className="px-6 py-2 text-right">
+                                                                                    <div className="flex items-center justify-end gap-3">
+                                                                                        <span className="text-[13px] font-bold text-gray-700">₹ {alloc.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {tx.particulars && (tx.particulars.includes('Purchase') || tx.particulars.includes('Receipt')) ? 'Dr' : (tx.particulars && (tx.particulars.includes('Sales') || tx.particulars.includes('Payment')) ? 'Cr' : '')}</span>
+                                                                                        <button 
+                                                                                            onClick={() => handleDeleteAllocation(alloc.id)}
+                                                                                            className="w-5 h-5 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                                                                                            title="Delete Allocation"
+                                                                                        >
+                                                                                            <XSquare size={12} />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td colSpan="3"></td>
+                                                                            </tr>
+                                                                        ))}
+                                                                        <tr className="bg-[#FAFAFA] border-b border-[#F3F4F6]">
+                                                                            <td colSpan="4" className="px-6 py-2 text-right text-[12px] font-medium text-gray-500">
+                                                                                Unallocated Balance:
+                                                                            </td>
+                                                                            <td className="px-6 py-2 text-right text-[13px] font-bold text-gray-700">
+                                                                                {(tx.unallocated ? Math.max(0, tx.unallocated - tx.allocations.reduce((s, a) => s + a.amount, 0)) : 0) > 0 
+                                                                                    ? `₹ ${(tx.unallocated - tx.allocations.reduce((s, a) => s + a.amount, 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${tx.particulars && (tx.particulars.includes('Purchase') || tx.particulars.includes('Receipt')) ? 'Cr' : (tx.particulars && (tx.particulars.includes('Sales') || tx.particulars.includes('Payment')) ? 'Dr' : '')}` 
+                                                                                    : `-- ${tx.particulars && (tx.particulars.includes('Purchase') || tx.particulars.includes('Receipt')) ? 'Cr' : (tx.particulars && (tx.particulars.includes('Sales') || tx.particulars.includes('Payment')) ? 'Dr' : '')}`}
+                                                                            </td>
+                                                                            <td colSpan="3"></td>
+                                                                        </tr>
+                                                                    </>
+                                                                )}
+                                                            </React.Fragment>
                                                         );
                                                     })
                                                 ) : (
                                                     <tr>
-                                                        <td colSpan="7" className="px-6 py-8 text-center text-[#6B7280]">
+                                                        <td colSpan="8" className="px-6 py-8 text-center text-[#6B7280]">
                                                             No transactions found matching "{searchQuery}"
                                                         </td>
                                                     </tr>
@@ -969,6 +1087,7 @@ const Finance = () => {
                                                 {/* Page Total Row */}
                                                 <tr className="border-b border-[#E2E8F0]">
                                                     <td colSpan="4" className="px-4 py-2.5 text-right bg-[#F1F5F9]/50">Page Total</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">-</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#111827]">₹ {pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#111827]">₹ {pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {Math.abs(pageTotalCR - pageTotalDR).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}</td>
@@ -977,6 +1096,7 @@ const Finance = () => {
                                                 {/* Transactions (Ledger) Row */}
                                                 <tr className="border-b border-[#E2E8F0]">
                                                     <td colSpan="4" className="px-4 py-2.5 text-right bg-[#F1F5F9]/50">Transactions (Ledger)</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">-</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {runningTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {runningTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {Math.abs(runningTotalCR - runningTotalDR).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {runningTotalCR >= runningTotalDR ? 'Cr' : 'Dr'}</td>
@@ -984,6 +1104,7 @@ const Finance = () => {
                                                 {/* Balance (Ledger) Row */}
                                                 <tr className="bg-[#F1F5F9]">
                                                     <td colSpan="4" className="px-4 py-2.5 text-right font-extrabold text-[#0F172A]">Closing Balance</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] font-extrabold text-[#111827]">₹ {Math.abs(currentClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {activeSubTab === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}</td>

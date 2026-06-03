@@ -94,7 +94,7 @@ const ViewChallan = () => {
                 <div className="flex flex-col sm:flex-row items-center justify-between px-8 py-6 border-b border-[#F3F4F6] gap-4">
                     <h2 className="text-[20px] font-bold text-[#111827]">View Sales Challan</h2>
                     <div className="flex items-center gap-3">
-                        {challan.status !== 'DELETED' && (
+                        {challan.status !== 'DELETED' && !challan.isInvoiced && (
                             <button 
                                 onClick={() => navigate(`/seller/sales/challan/edit/${id}`)}
                                 className="px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all flex items-center gap-2"
@@ -118,9 +118,9 @@ const ViewChallan = () => {
                         <div className="flex gap-2">
                             <span className="px-4 py-1.5 bg-[#4B5563] text-white rounded-full text-[13px] font-bold">CHALLAN DETAILS</span>
                             <span className={`px-4 py-1.5 rounded-full text-[13px] font-bold border ${
-                                challan.status === 'DELETED' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                challan.status === 'DELETED' ? 'bg-red-50 text-red-600 border-red-100' : (challan.isInvoiced ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100')
                             }`}>
-                                {challan.status === 'DELETED' ? 'DELETED' : 'GENERATED'}
+                                {challan.status === 'DELETED' ? 'DELETED' : (challan.isInvoiced ? 'INVOICED' : 'GENERATED')}
                             </span>
                         </div>
                     </div>
