@@ -26,6 +26,7 @@ model User {
   isBlocked            Boolean             @default(false)
   approvalStatus       ApprovalStatus      @default(PENDING)
   rejectionReason      String?
+  regType              RegType?
   isFirstApprovalLogin Boolean             @default(true)
   bankDetail           BankDetail?
   sellerDocuments      SellerDocument[]    @relation("UploadedByUser")
@@ -40,9 +41,7 @@ model User {
   salesChallans        SalesChallan[]
   salesInvoices        SalesInvoice[]
   salesOrders          SalesOrder[]
-  sub_categories       SubCategory[]
   subGroups            SubGroup[]
-  sub_sub_categories   SubSubCategory[]
   subSubGroups         SubSubGroup[]
   subSubSubGroups      SubSubSubGroup[]
   subSubSubSubGroups   SubSubSubSubGroup[]
@@ -380,79 +379,43 @@ model SubSubSubSubGroup {
 }
 
 model Category {
-  id             Int           @id @default(autoincrement())
-  name           String
-  user_id        Int
-  status         MasterStatus  @default(ACTIVE)
-  created_at     DateTime      @default(now())
-  updated_at     DateTime      @updatedAt
-  user           User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  products       Product[]
-  sub_categories SubCategory[]
+  id         String       @id @default(uuid()) @db.Uuid
+  name       String
+  user_id    Int
+  parent_id  String?      @db.Uuid
+  status     MasterStatus @default(ACTIVE)
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+  user       User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  parent     Category?    @relation("CategoryHierarchy", fields: [parent_id], references: [id], onDelete: Restrict)
+  children   Category[]   @relation("CategoryHierarchy")
+  products   Product[]    @relation("ProductCategory")
 
-  @@unique([name, user_id])
+  @@unique([name, parent_id, user_id])
   @@map("categories")
 }
 
-model SubCategory {
-  id                 Int              @id @default(autoincrement())
-  name               String
-  category_id        Int
-  user_id            Int
-  status             MasterStatus     @default(ACTIVE)
-  created_at         DateTime         @default(now())
-  updated_at         DateTime         @updatedAt
-  products           Product[]
-  category           Category         @relation(fields: [category_id], references: [id], onDelete: Cascade)
-  user               User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  sub_sub_categories SubSubCategory[]
-
-  @@unique([name, category_id, user_id])
-  @@map("sub_categories")
-}
-
-model SubSubCategory {
+model Product {
   id              Int          @id @default(autoincrement())
-  name            String
-  sub_category_id Int
-  user_id         Int
+  product_name    String
+  product_code    String
+  uom_id          Int
+  product_type    ProductType
+  category_id     String       @db.Uuid
+  hsn_code        String
+  tax_rate        Float
+  description     String?
+  hsn_description String?
   status          MasterStatus @default(ACTIVE)
+  is_deleted      Boolean      @default(false)
+  created_by      Int
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
-  products        Product[]
-  sub_category    SubCategory  @relation(fields: [sub_category_id], references: [id], onDelete: Cascade)
-  user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@unique([name, sub_category_id, user_id])
-  @@map("sub_sub_categories")
-}
-
-
-model Product {
-  id                  Int             @id @default(autoincrement())
-  product_name        String
-  product_code        String
-  uom_id              Int
-  product_type        ProductType
-  category_id         Int
-  sub_category_id     Int?
-  hsn_code            String
-  tax_rate            Float
-  description         String?
-  hsn_description     String?
-  status              MasterStatus    @default(ACTIVE)
-  is_deleted          Boolean         @default(false)
-  created_by          Int
-  created_at          DateTime        @default(now())
-  updated_at          DateTime        @updatedAt
-  sub_sub_category_id Int?
-  category            Category        @relation(fields: [category_id], references: [id])
-  creator             User            @relation(fields: [created_by], references: [id])
-  hsnMasterId         String?         @db.Uuid @map("hsn_master_id")
-  hsnMaster           HsnMaster?      @relation(fields: [hsnMasterId], references: [id])
-  sub_category        SubCategory?    @relation(fields: [sub_category_id], references: [id])
-  sub_sub_category    SubSubCategory? @relation(fields: [sub_sub_category_id], references: [id])
-  uom                 UnitMaster      @relation(fields: [uom_id], references: [id])
+  category        Category     @relation("ProductCategory", fields: [category_id], references: [id])
+  creator         User         @relation(fields: [created_by], references: [id])
+  hsnMasterId     String?      @db.Uuid @map("hsn_master_id")
+  hsnMaster       HsnMaster?   @relation(fields: [hsnMasterId], references: [id])
+  uom             UnitMaster   @relation(fields: [uom_id], references: [id])
 
   @@unique([product_code, created_by])
   @@map("products")
@@ -517,6 +480,7 @@ model SalesOrder {
   poDate           DateTime?
   poExpiryDate     DateTime?
   customerAmt      Float?
+  customerPoFile   String?
   gstNumber        String?
   panNumber        String?
   status         SOStatus         @default(PENDING)

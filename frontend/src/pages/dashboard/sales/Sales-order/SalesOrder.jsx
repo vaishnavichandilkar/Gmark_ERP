@@ -413,6 +413,11 @@ const SalesOrder = () => {
           { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } }  // Merge Timestamp
         ];
 
+        // Freeze top 4 rows
+        worksheet['!views'] = [
+          { state: 'frozen', ySplit: 4 }
+        ];
+
         // Apply Styles to Cells
         const range = XLSX.utils.decode_range(worksheet['!ref']);
         for (let R = range.s.r; R <= range.e.r; ++R) {
@@ -476,6 +481,7 @@ const SalesOrder = () => {
           head: head,
           body: body,
           startY: 32,
+          showHead: 'everyPage',
           styles: {
             fontSize: 8.5,
             font: 'helvetica',
@@ -586,6 +592,11 @@ const SalesOrder = () => {
           }
         }
       }
+
+      // Freeze first row (header row)
+      worksheet['!views'] = [
+        { state: 'frozen', ySplit: 1 }
+      ];
 
       // Setting column widths for better readability
       worksheet['!cols'] = [
@@ -764,7 +775,7 @@ const SalesOrder = () => {
                           {/* View Option (Always) */}
                           <button onClick={() => navigate(ROUTES.SALES_ORDER_VIEW.replace(':id', so.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50">
                             <Eye size={18} />
-                            {(so.computedStatusLabel === 'Pending' || so.computedStatusLabel === 'Expiring Soon') ? 'View / Edit SO' : 'View SO'}
+                            {((so.computedStatusLabel === 'Pending' || so.computedStatusLabel === 'Expiring Soon') && !(so.salesChallans?.length > 0 || so.salesInvoices?.length > 0)) ? 'View / Edit SO' : 'View SO'}
                           </button>
 
                           {/* Print Option (Not for Deleted) */}

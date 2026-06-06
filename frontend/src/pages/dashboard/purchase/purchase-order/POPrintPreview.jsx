@@ -55,6 +55,18 @@ const POPrintPreview = () => {
         fetchSellerInfo();
     }, []);
 
+    const isGstApplicable = useMemo(() => {
+        const gst = poData?.gstNumber || poData?.gst_number;
+        return Boolean(
+            gst && 
+            gst.trim() !== '-' && 
+            gst.trim() !== '' && 
+            gst.trim().toUpperCase() !== 'N/A' &&
+            gst.trim().toUpperCase() !== 'NOT AVAILABLE' &&
+            gst.trim().length >= 10
+        );
+    }, [poData]);
+
     if (!poData) {
         return (
             <div className="flex flex-col items-center justify-center h-screen gap-4">
@@ -120,15 +132,18 @@ const POPrintPreview = () => {
         return sum + (beforeTax || 0);
     }, 0);
 
-    const materialTax = items.reduce((sum, item) => {
+    const materialTax = isGstApplicable ? items.reduce((sum, item) => {
         const qty = parseFloat(item.quantity) || 0;
         const rate = parseFloat(item.rate) || 0;
         const discAmt = parseFloat(item.discountAmount || item.discount_amount || 0);
-        const taxPct = parseFloat(item.taxPercent || item.tax_percent || 0);
+        const taxPct = parseFloat(item.taxPercent ?? item.tax_percent ?? 0);
         const beforeTax = parseFloat(item.before_tax || item.beforeTaxAmount || (qty * rate - discAmt));
-        const taxAmt = parseFloat(item.tax_amount || item.taxAmount || (beforeTax * taxPct / 100));
+        const rawTaxAmt = item.tax_amount ?? item.taxAmount;
+        const taxAmt = (rawTaxAmt !== undefined && rawTaxAmt !== null && rawTaxAmt !== '') 
+            ? parseFloat(rawTaxAmt) 
+            : (beforeTax * taxPct / 100);
         return sum + (taxAmt || 0);
-    }, 0);
+    }, 0) : 0;
     
     // Read directly from the saved purchase order if available
     const savedCgst = parseFloat(poData.cgstAmount || poData.cgst_amount || poData.cgst || poData.accountSummary?.cgst || 0);
@@ -153,7 +168,7 @@ const POPrintPreview = () => {
         totalTaxOnCombined = cgst + sgst + igst;
     } else {
         // Fallback to calculation
-        const totalTaxOnCombinedCalculated = materialTax;
+        const totalTaxOnCombinedCalculated = isGstApplicable ? materialTax : 0;
         const sellerStateCode = sellerInfo?.gstNumber && /^\d{2}$/.test(sellerInfo.gstNumber.substring(0, 2)) ? sellerInfo.gstNumber.substring(0, 2) : "";
         const supplierStateCode = gst_number && /^\d{2}$/.test(gst_number.substring(0, 2)) ? gst_number.substring(0, 2) : "";
         

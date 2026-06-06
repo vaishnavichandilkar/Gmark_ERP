@@ -114,6 +114,7 @@ const AddPurchaseInvoice = () => {
 
     const [errors, setErrors] = useState({});
     const [companyInfo, setCompanyInfo] = useState(null);
+    const [businessProfile, setBusinessProfile] = useState(null);
     const [gstType, setGstType] = useState({ type: 'NONE' });
 
     const getFinancialYearStart = () => {
@@ -126,14 +127,19 @@ const AddPurchaseInvoice = () => {
         const fetchInitialData = async () => {
             setIsLoading(true);
             try {
-                const [accRes, prodRes, profileRes] = await Promise.all([
+                const [accRes, prodRes, profileRes, bizProfileRes] = await Promise.all([
                     accountService.getAllAccounts({ groupName: 'SUNDRY_CREDITORS', limit: 1000, status: 'ACTIVE' }),
                     productService.getProducts({ limit: 1000 }),
-                    getProfileApi()
+                    getProfileApi(),
+                    accountService.getBusinessProfile().catch(e => {
+                        console.error("Error fetching business profile:", e);
+                        return null;
+                    })
                 ]);
                 
                 setSuppliers(accRes.data || []);
                 setProducts(prodRes.products || []);
+                setBusinessProfile(bizProfileRes);
                 const companyGst = profileRes?.gstNumber || profileRes?.data?.gstNumber || "";
                 setCompanyInfo({
                     ...profileRes?.shopDetail,
@@ -345,6 +351,27 @@ const AddPurchaseInvoice = () => {
         fetchInitialData();
     }, [id, isEditMode]);
 
+    useEffect(() => {
+        if (!formData.supplier_id) return;
+        const supplier = suppliers.find(s => String(s.id) === String(formData.supplier_id));
+        if (!supplier) return;
+
+        const isSupplierMsmeActive = supplier.msmeEnabled;
+        const isSupplierMsmeType = supplier.regType === "Manufacturing" || supplier.regType === "Service";
+        const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType);
+
+        if (isSupplierMsme && formData.credit_days) {
+            const val = parseInt(formData.credit_days, 10);
+            if (!isNaN(val) && val > 45) {
+                setFormData(prev => ({ ...prev, credit_days: 45 }));
+                toast.error(
+                    "For MSME Manufacturing/Service suppliers,maximum credit period allowed is 45 days.Credit Days has been adjusted to 45.",
+                    { id: "msme-supplier-warning" }
+                );
+            }
+        }
+    }, [formData.supplier_id, formData.credit_days, suppliers]);
+
     const handleSupplierChange = async (supplierId) => {
         const supplier = suppliers.find(s => s.id === supplierId);
         if (!supplier) return;
@@ -401,8 +428,17 @@ const AddPurchaseInvoice = () => {
         const userState = (companyInfo?.state || "").trim().toLowerCase();
         const suppState = (supplierState || "").trim().toLowerCase();
 
+        // Strict validation helper
+        const isValidGstStr = (g) => Boolean(
+            g && 
+            String(g).trim().toUpperCase() !== 'N/A' && 
+            String(g).trim().toUpperCase() !== 'NOT AVAILABLE' && 
+            String(g).trim().toUpperCase() !== '-' && 
+            String(g).trim().length >= 10
+        );
+
         // Purchase Side Rule: Applicable if Supplier has GST
-        const applicable = Boolean(supplierGST);
+        const applicable = isValidGstStr(supplierGST);
 
         if (!applicable) {
             return { type: 'NONE', applicable: false, isRcm: false };
@@ -1063,6 +1099,7 @@ const AddPurchaseInvoice = () => {
                         linkedPoItems={items}
                         gstType={gstType}
                         supplierName={formData.supplier_name}
+                        isGrnSelected={formData.grn_ids && formData.grn_ids.length > 0}
                     />
                 </div>
 

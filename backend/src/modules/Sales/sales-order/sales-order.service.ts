@@ -10,6 +10,19 @@ import * as PDFDocument from 'pdfkit';
 export class SalesOrderService {
     constructor(private prisma: PrismaService) { }
 
+    private async isSellerMsme(userId: number): Promise<boolean> {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            include: { sellerDocuments: true }
+        });
+        if (!user) return false;
+        const isSellerMsmeActive = user.sellerDocuments.some(
+            d => d.category === 'UDYOG_AADHAR' && d.name && d.name.trim() !== '' && d.name.trim().toUpperCase() !== 'N/A'
+        );
+        const isSellerMsmeType = user.regType === 'Manufacturing' || user.regType === 'Service';
+        return Boolean(isSellerMsmeActive && isSellerMsmeType);
+    }
+
     async generateSONumber(userId: number, tx?: any): Promise<string> {
         const prisma = tx || this.prisma;
         const lastSO = await prisma.salesOrder.findFirst({
@@ -56,6 +69,8 @@ export class SalesOrderService {
             gstNumber: customer.gstNo,
             panNumber: customer.panNo,
             creditDays: customer.customerCreditDays || 0,
+            msmeEnabled: customer.msmeEnabled,
+            regType: customer.regType,
         }));
     }
 
@@ -75,6 +90,8 @@ export class SalesOrderService {
             gstNumber: customer.gstNo,
             panNumber: customer.panNo,
             creditDays: customer.customerCreditDays || 0,
+            msmeEnabled: customer.msmeEnabled,
+            regType: customer.regType,
         };
     }
 
@@ -107,7 +124,7 @@ export class SalesOrderService {
         };
     }
 
-    async create(createDto: CreateSalesOrderDto, userId: number) {
+    async create(createDto: CreateSalesOrderDto, userId: number, uploadedFilePath?: string) {
         const fullCustomer = await this.prisma.accountMaster.findUnique({
             where: { id: createDto.customerId }
         });
@@ -118,13 +135,28 @@ export class SalesOrderService {
             throw new BadRequestException('Customer is inactive. New sales transactions are not allowed.');
         }
 
+        const sellerMsme = await this.isSellerMsme(userId);
+        const customerMsmeActive = fullCustomer.msmeEnabled;
+        const customerMsmeType = fullCustomer.regType === 'Manufacturing' || fullCustomer.regType === 'Service';
+        const isCustomerMsme = Boolean(customerMsmeActive && customerMsmeType);
+
+        if ((sellerMsme || isCustomerMsme) && createDto.creditDays > 45) {
+            throw new BadRequestException('Maximum credit period allowed under MSME rules is 45 days.');
+        }
+
         const customer = await this._getCustomerDetails(createDto.customerId);
         
         const userGstDoc = await this.prisma.sellerDocument.findFirst({
             where: { uploadedByUserId: userId, type: 'GST' },
             select: { name: true }
         });
-        const isValidGst = (name?: string | null) => Boolean(name && name.trim().toUpperCase() !== 'N/A' && name.trim().length >= 10);
+        const isValidGst = (name?: string | null) => Boolean(
+            name && 
+            name.trim().toUpperCase() !== 'N/A' && 
+            name.trim().toUpperCase() !== 'NOT AVAILABLE' && 
+            name.trim().toUpperCase() !== '-' && 
+            name.trim().length >= 10
+        );
         const isGstApplicable = isValidGst(userGstDoc?.name);
 
         const processedItems = createDto.items.map(item => this.calculateItemValues(item, isGstApplicable));
@@ -150,6 +182,7 @@ export class SalesOrderService {
                         poDate: createDto.poDate ? new Date(createDto.poDate) : null,
                         poExpiryDate: createDto.poExpiryDate ? new Date(createDto.poExpiryDate) : null,
                         customerAmt: createDto.customerAmt !== undefined && createDto.customerAmt !== null ? Number(createDto.customerAmt) : null,
+                        customerPoFile: uploadedFilePath || null,
                         gstNumber: customer.gstNumber || createDto.gstNo || '',
                         panNumber: customer.panNumber || createDto.panNo || '',
                         totalAmount,
@@ -223,7 +256,17 @@ export class SalesOrderService {
 
         return this.prisma.salesOrder.findMany({
             where,
-            include: { items: true },
+            include: {
+                items: true,
+                salesChallans: {
+                    where: { status: { not: 'DELETED' } },
+                    select: { id: true }
+                },
+                salesInvoices: {
+                    where: { status: { not: 'DELETED' } },
+                    select: { id: true }
+                }
+            },
             orderBy: { createdAt: 'desc' },
         });
     }
@@ -231,14 +274,24 @@ export class SalesOrderService {
     async findOne(id: number, userId: number) {
         const so = await this.prisma.salesOrder.findFirst({
             where: { id, userId },
-            include: { items: true },
+            include: {
+                items: true,
+                salesChallans: {
+                    where: { status: { not: 'DELETED' } },
+                    select: { id: true }
+                },
+                salesInvoices: {
+                    where: { status: { not: 'DELETED' } },
+                    select: { id: true }
+                }
+            },
         });
 
         if (!so) throw new NotFoundException(`SO ID ${id} not found`);
         return so;
     }
 
-    async update(id: number, updateDto: UpdateSalesOrderDto, userId: number) {
+    async update(id: number, updateDto: UpdateSalesOrderDto, userId: number, uploadedFilePath?: string, removeAttachment: boolean = false) {
         const so = await this.findOne(id, userId);
         if (so.status === 'INVOICE_COMPLETED' || so.status === 'DELETED') {
             throw new ForbiddenException(`Update forbidden in status ${so.status}`);
@@ -256,6 +309,28 @@ export class SalesOrderService {
             throw new ForbiddenException(`Sales Order cannot be edited because it is linked to a Challan or Sales Invoice.`);
         }
 
+        const sellerMsme = await this.isSellerMsme(userId);
+        const customerId = updateDto.customerId;
+        let customer;
+        if (customerId) {
+            customer = await this.prisma.accountMaster.findUnique({ where: { id: customerId } });
+        } else {
+            customer = await this.prisma.accountMaster.findFirst({
+                where: { accountName: so.customerName, userId }
+            });
+        }
+
+        if (customer) {
+            const customerMsmeActive = customer.msmeEnabled;
+            const customerMsmeType = customer.regType === 'Manufacturing' || customer.regType === 'Service';
+            const isCustomerMsme = Boolean(customerMsmeActive && customerMsmeType);
+
+            const creditDays = updateDto.creditDays !== undefined ? updateDto.creditDays : so.creditDays;
+            if ((sellerMsme || isCustomerMsme) && creditDays > 45) {
+                throw new BadRequestException('Maximum credit period allowed under MSME rules is 45 days.');
+            }
+        }
+
         return this.prisma.$transaction(async (tx) => {
             const data: any = {
                 creditDays: updateDto.creditDays ?? so.creditDays,
@@ -264,6 +339,7 @@ export class SalesOrderService {
                 poDate: updateDto.poDate !== undefined ? (updateDto.poDate ? new Date(updateDto.poDate) : null) : so.poDate,
                 poExpiryDate: updateDto.poExpiryDate !== undefined ? (updateDto.poExpiryDate ? new Date(updateDto.poExpiryDate) : null) : so.poExpiryDate,
                 customerAmt: updateDto.customerAmt !== undefined ? (updateDto.customerAmt !== null ? Number(updateDto.customerAmt) : null) : so.customerAmt,
+                customerPoFile: removeAttachment ? null : (uploadedFilePath ?? so.customerPoFile),
                 status: updateDto.status ?? (so.status as any),
                 address: updateDto.address ?? so.address,
                 gstNumber: updateDto.gstNo ?? so.gstNumber,
@@ -289,7 +365,13 @@ export class SalesOrderService {
                     where: { uploadedByUserId: userId, type: 'GST' },
                     select: { name: true }
                 });
-                const isValidGst = (name?: string | null) => Boolean(name && name.trim().toUpperCase() !== 'N/A' && name.trim().length >= 10);
+                const isValidGst = (name?: string | null) => Boolean(
+                    name && 
+                    name.trim().toUpperCase() !== 'N/A' && 
+                    name.trim().toUpperCase() !== 'NOT AVAILABLE' && 
+                    name.trim().toUpperCase() !== '-' && 
+                    name.trim().length >= 10
+                );
                 const isGstApplicable = isValidGst(userGstDoc?.name);
 
                 const processedItems = updateDto.items.map(item => this.calculateItemValues(item, isGstApplicable));
@@ -556,6 +638,7 @@ export class SalesOrderService {
         if (format === 'xlsx') {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Sales Orders');
+            worksheet.views = [{ state: 'frozen', ySplit: 4 }];
 
             worksheet.columns = [
                 { header: 'SO No', key: 'soNumber', width: 15 },

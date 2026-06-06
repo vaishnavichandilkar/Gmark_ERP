@@ -5,6 +5,7 @@ import { ProductMasterService } from '../services/product-master.service';
 import { CreateProductDto, UpdateProductDto, ToggleProductStatusDto } from '../dto/product.dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { Response } from 'express';
+import { ProductType } from '@prisma/client';
 
 @ApiTags('Product Master')
 @Controller('products')
@@ -21,10 +22,11 @@ export class ProductMasterController {
     }
 
     @Get('generate-code')
-    @ApiOperation({ summary: 'Generate next available Product Code for the user' })
-    @ApiResponse({ status: 200, description: 'Product Code generated successfully' })
-    async generateCode(@Request() req) {
-        return this.service.generateCodeForUser(req.user.userId);
+    @ApiOperation({ summary: 'Generate next available Product Code/Service Code for the user' })
+    @ApiResponse({ status: 200, description: 'Code generated successfully' })
+    @ApiQuery({ name: 'type', required: false, enum: ProductType })
+    async generateCode(@Request() req, @Query('type') type?: ProductType) {
+        return this.service.generateCodeForUser(req.user.userId, type);
     }
 
     @Get('sample')
@@ -83,13 +85,13 @@ export class ProductMasterController {
 
     @Get('sub-categories/dropdown/:categoryId')
     @ApiOperation({ summary: 'Get active sub-categories for dropdown' })
-    async getSubCategories(@Request() req, @Param('categoryId', ParseIntPipe) categoryId: number) {
+    async getSubCategories(@Request() req, @Param('categoryId') categoryId: string) {
         return this.service.getActiveSubCategories(categoryId, req.user.userId);
     }
 
     @Get('sub-sub-categories/dropdown/:subCategoryId')
     @ApiOperation({ summary: 'Get active sub-sub-categories for dropdown' })
-    async getSubSubCategories(@Request() req, @Param('subCategoryId', ParseIntPipe) subCategoryId: number) {
+    async getSubSubCategories(@Request() req, @Param('subCategoryId') subCategoryId: string) {
         return this.service.getActiveSubSubCategories(subCategoryId, req.user.userId);
     }
 

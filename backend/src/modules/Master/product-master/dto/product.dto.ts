@@ -19,23 +19,13 @@ export class CreateProductDto {
     product_type: ProductType;
 
     @ApiProperty()
-    @IsNumber()
+    @IsUUID('4')
     @IsNotEmpty()
-    category_id: number;
-
-    @ApiProperty({ required: false })
-    @IsNumber()
-    @IsOptional()
-    sub_category_id?: number;
-
-    @ApiProperty({ required: false })
-    @IsNumber()
-    @IsOptional()
-    sub_sub_category_id?: number;
+    category_id: string;
 
     @ApiProperty()
-    @IsUUID('4', { message: 'Please select a valid HSN Code.' })
-    @IsNotEmpty({ message: 'HSN Code is required.' })
+    @IsUUID('4', { message: 'Please select a valid HSN/SAC Code.' })
+    @IsNotEmpty({ message: 'HSN/SAC Code is required.' })
     hsnMasterId: string;
 
     @ApiProperty({ required: false })
@@ -76,23 +66,13 @@ export class UpdateProductDto {
     product_type?: ProductType;
 
     @ApiProperty()
-    @IsNumber()
+    @IsUUID('4')
     @IsOptional()
-    category_id?: number;
-
-    @ApiProperty()
-    @IsNumber()
-    @IsOptional()
-    sub_category_id?: number;
-
-    @ApiProperty({ required: false })
-    @IsNumber()
-    @IsOptional()
-    sub_sub_category_id?: number;
+    category_id?: string;
 
     @ApiProperty({ required: false })
     @IsOptional()
-    @IsUUID('4', { message: 'Please select a valid HSN Code.' })
+    @IsUUID('4', { message: 'Please select a valid HSN/SAC Code.' })
     hsnMasterId?: string;
 
     @ApiProperty({ required: false })

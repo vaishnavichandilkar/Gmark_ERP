@@ -368,6 +368,7 @@ export class UnitMasterService {
     async getSampleExcel() {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Sample Data');
+        worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
         worksheet.columns = [
             { header: 'Unit Name', key: 'unit_name', width: 20 },
@@ -383,7 +384,10 @@ export class UnitMasterService {
             formulae: ['"active,inactive"'],
             showErrorMessage: true,
             errorTitle: 'Invalid Status',
-            error: 'Please select from the list (active, inactive)'
+            error: 'Please select from the list (active, inactive)',
+            showInputMessage: true,
+            promptTitle: 'Select Status',
+            prompt: 'Choose one of:\nactive,\ninactive'
         });
 
         const buffer = await workbook.xlsx.writeBuffer();
@@ -421,6 +425,7 @@ export class UnitMasterService {
         if (format === 'xlsx') {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Units');
+            worksheet.views = [{ state: 'frozen', ySplit: 5 }];
 
             worksheet.columns = [
                 { header: 'Unit Name', key: 'unitName', width: 25 },

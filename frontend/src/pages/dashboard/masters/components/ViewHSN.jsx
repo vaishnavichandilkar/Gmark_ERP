@@ -76,7 +76,7 @@ const ViewHSN = ({ initialData, onBack, onEdit }) => {
                         <SectionHeading title="HSN/SAC Information" />
                         <InfoTableRow 
                             label1="Type:" value1={data.type} 
-                            label2="Code:" value2={data.code} 
+                            label2={data.type === 'SAC' ? 'SAC Code:' : data.type === 'HSN' ? 'HSN Code:' : 'Code:'} value2={data.code} 
                         />
                         <InfoTableRow 
                             label1="Tax Rate:" value1={data.taxRate !== undefined ? `${parseFloat(data.taxRate)}%` : '-'} 
@@ -85,7 +85,7 @@ const ViewHSN = ({ initialData, onBack, onEdit }) => {
                         
                         <div className="flex flex-col sm:flex-row bg-[#F9FAFB]/30">
                             <div className="sm:w-1/4 py-3.5 px-4 md:px-6 text-[13px] text-[#6B7280] border-r border-[#E5E7EB] bg-white font-bold">
-                                Description:
+                                {data.type === 'SAC' ? 'SAC Description:' : data.type === 'HSN' ? 'HSN Description:' : 'Description:'}
                             </div>
                             <div className="flex-1 py-3.5 px-4 md:px-6 text-[13px] text-[#111827] bg-white font-medium">
                                 {data.description || '-'}

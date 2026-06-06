@@ -129,6 +129,11 @@ export class CreateSalesOrderDto {
     customerPoNumber?: string;
 
     @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    customerPoFile?: string;
+
+    @ApiPropertyOptional()
     @IsNumber()
     @IsOptional()
     customerAmt?: number;
@@ -199,6 +204,11 @@ export class UpdateSalesOrderDto {
     @IsOptional()
     @IsString()
     customerPoNumber?: string;
+
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsString()
+    customerPoFile?: string;
 
     @ApiProperty({ required: false })
     @IsOptional()

@@ -32,8 +32,10 @@ export const toggleStatus = async (id, status) => {
     return response.data;
 };
 
-export const generateProductCode = async () => {
-    const response = await axiosInstance.get(`${API_PATH}/generate-code`);
+export const generateProductCode = async (type) => {
+    const response = await axiosInstance.get(`${API_PATH}/generate-code`, {
+        params: type ? { type } : undefined
+    });
     return response.data;
 };
 

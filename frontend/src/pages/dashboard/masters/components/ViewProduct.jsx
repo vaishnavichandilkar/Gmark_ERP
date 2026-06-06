@@ -77,7 +77,7 @@ const ViewProduct = ({ initialData, onBack, onEdit }) => {
                         <SectionHeading title={t('modules:product_information')} />
                         <InfoTableRow 
                             label1={`${data.product_type === 'SERVICES' ? t('modules:service_name', 'Service Name') : t('modules:product_name')}:`} value1={translateDynamic(data.product_name, t)} 
-                            label2={`${t('modules:product_code')}:`} value2={data.product_code} 
+                            label2={`${data.product_type === 'SERVICES' ? t('modules:service_code') : t('modules:product_code')}:`} value2={data.product_code} 
                         />
                         <InfoTableRow 
                             label1={`${t('modules:product_type')}:`} value1={data.product_type} 
@@ -88,7 +88,7 @@ const ViewProduct = ({ initialData, onBack, onEdit }) => {
                             label2={`${t('modules:sub_category')}:`} value2={translateDynamic(data.sub_category?.name, t)} 
                         />
                         <InfoTableRow 
-                            label1={`${t('modules:hsn_code')}:`} value1={data.hsn_code} 
+                            label1={`${data.product_type === 'SERVICES' ? t('modules:sac_code', 'SAC Code') : t('modules:hsn_code')}:`} value1={data.hsn_code} 
                             label2={`${t('modules:tax_percent')}:`} value2={data.tax_rate ? `${data.tax_rate}%` : '-'} 
                         />
                         

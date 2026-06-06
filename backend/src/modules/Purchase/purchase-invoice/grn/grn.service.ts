@@ -55,7 +55,7 @@ export class GrnService {
         userId,
         accountName: { equals: dto.supplierName, mode: 'insensitive' }
       },
-      select: { state: true, gstNo: true, status: true, supplierStatus: true }
+      select: { state: true, gstNo: true, status: true, supplierStatus: true, msmeEnabled: true, regType: true, supplierCreditDays: true }
     });
 
     if (!company) throw new BadRequestException('Company shop details not found');
@@ -63,6 +63,16 @@ export class GrnService {
 
     if (supplier.status !== 'ACTIVE' || supplier.supplierStatus !== 'ACTIVE') {
       throw new BadRequestException('Supplier is inactive. New purchase transactions are not allowed.');
+    }
+
+    const supplierMsmeActive = supplier.msmeEnabled;
+    const supplierMsmeType = supplier.regType === 'Manufacturing' || supplier.regType === 'Service';
+    const isSupplierMsme = Boolean(supplierMsmeActive && supplierMsmeType);
+
+    const creditDays = dto.creditDays !== undefined && dto.creditDays !== null ? dto.creditDays : (supplier.supplierCreditDays || 0);
+
+    if (isSupplierMsme && creditDays > 45) {
+      throw new BadRequestException('Maximum credit period allowed for MSME suppliers is 45 days.');
     }
 
     // Fetch user's registered GST
@@ -664,6 +674,7 @@ export class GrnService {
     if (format === 'xlsx') {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('GRNs');
+      worksheet.views = [{ state: 'frozen', ySplit: 5 }];
       worksheet.columns = [
         { header: 'Supplier Name', key: 'supplierName', width: 30 },
         { header: 'Supplier Challan No', key: 'challanNumber', width: 22 },

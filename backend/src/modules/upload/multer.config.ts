@@ -25,6 +25,8 @@ export const multerConfig = {
                 }
             } else if (req.url.includes('/purchase-invoices')) {
                 finalPath = join(uploadBase, 'purchase-invoices');
+            } else if (req.url.includes('/sales-orders')) {
+                finalPath = join(uploadBase, 'sales-orders');
             } else {
                 // Fallback or other upload paths
                 finalPath = uploadBase;

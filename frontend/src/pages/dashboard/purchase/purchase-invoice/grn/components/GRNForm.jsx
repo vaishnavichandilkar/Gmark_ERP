@@ -185,10 +185,10 @@ const GRNForm = ({
                     <label className="text-[14px] font-semibold text-[#374151]">Address <span className="text-red-500">*</span></label>
                     <input
                         type="text"
-                        placeholder="Enter address"
+                        placeholder="Auto-fetched from Account Master"
                         value={formData.address || ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                        className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm ${errors.address ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                        readOnly
+                        className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed shadow-sm"
                     />
                     {errors.address && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.address}</p>}
                 </div>
@@ -198,10 +198,10 @@ const GRNForm = ({
                     <label className="text-[14px] font-semibold text-[#374151]">GST Number</label>
                     <input
                         type="text"
-                        placeholder="Optional"
+                        placeholder="Auto-fetched from Account Master"
                         value={formData.gst_no || ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, gst_no: e.target.value }))}
-                        className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm"
+                        readOnly
+                        className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed shadow-sm"
                     />
                 </div>
 

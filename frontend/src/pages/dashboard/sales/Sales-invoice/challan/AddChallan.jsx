@@ -27,6 +27,7 @@ const AddChallan = () => {
     const [challans, setChallans] = useState([]);
     const [companyInfo, setCompanyInfo] = useState(null);
     const [gstType, setGstType] = useState({ type: 'INTRA', applicable: true, isRcm: false });
+    const [businessProfile, setBusinessProfile] = useState(null);
 
     // Refs for date pickers
     const bookingDateRef = useRef(null);
@@ -59,10 +60,14 @@ const AddChallan = () => {
         const fetchInitialData = async () => {
             setIsLoading(true);
             try {
-                const [custRes, prodRes, profileRes] = await Promise.all([
+                const [custRes, prodRes, profileRes, bizProfileRes] = await Promise.all([
                     accountService.getAllAccounts({ limit: 1000, groupName: 'SUNDRY_DEBTORS', status: 'ACTIVE' }),
                     productService.getProducts({ limit: 1000 }),
-                    getProfileApi()
+                    getProfileApi(),
+                    accountService.getBusinessProfile().catch(e => {
+                        console.error("Error fetching business profile:", e);
+                        return null;
+                    })
                 ]);
 
                 const custData = custRes.data || [];
@@ -72,6 +77,7 @@ const AddChallan = () => {
                     ...profileRes?.shopDetail,
                     gstNumber: profileRes?.gstNumber
                 });
+                setBusinessProfile(bizProfileRes);
 
                 if (isEditMode) {
                     const challanRecord = await challanService.getChallanById(id);
@@ -162,8 +168,16 @@ const AddChallan = () => {
         const companyGST = companyInfo?.gstNumber || "";
         const companyState = (companyInfo?.state || "").trim().toLowerCase();
         
-        // Sales Side Rule: Applicable if User (Company) has GST
-        const applicable = Boolean(companyGST);
+        const isValidGstStr = (g) => Boolean(
+            g && 
+            String(g).trim().toUpperCase() !== 'N/A' && 
+            String(g).trim().toUpperCase() !== 'NOT AVAILABLE' && 
+            String(g).trim().toUpperCase() !== '-' && 
+            String(g).trim().length >= 10
+        );
+
+        // Sales Side Rule: GST applicable ONLY if User (Company) has a valid GST
+        const applicable = isValidGstStr(companyGST);
         
         if (!applicable) {
             return { type: 'INTRA', applicable: false, isRcm: false };
@@ -183,6 +197,45 @@ const AddChallan = () => {
         }
         return { type: isInterState ? 'INTER' : 'INTRA', applicable: true, isRcm: false };
     };
+
+    const isSellerMsme = useMemo(() => {
+        if (!businessProfile) return false;
+        const isSellerMsmeActive = (businessProfile.sellerDocuments || []).some(
+            doc => doc.type === 'UDYOG_AADHAR' && doc.name && doc.name.trim() !== ''
+        );
+        const isSellerMsmeType = businessProfile.regType === "Manufacturing" || businessProfile.regType === "Service";
+        return Boolean(isSellerMsmeActive && isSellerMsmeType);
+    }, [businessProfile]);
+
+    useEffect(() => {
+        if (!formData.customerId) return;
+        const customer = customers.find(c => String(c.id) === String(formData.customerId));
+        if (!customer) return;
+
+        const isCustomerMsmeActive = customer.msmeEnabled;
+        const isCustomerMsmeType = customer.regType === "Manufacturing" || customer.regType === "Service";
+        const isCustomerMsme = Boolean(isCustomerMsmeActive && isCustomerMsmeType);
+
+        const shouldCap = isSellerMsme || isCustomerMsme;
+
+        if (shouldCap && formData.creditDays) {
+            const val = parseInt(formData.creditDays, 10);
+            if (!isNaN(val) && val > 45) {
+                setFormData(prev => ({ ...prev, creditDays: 45 }));
+                if (isSellerMsme) {
+                    toast.error(
+                        "As you are registered under MSME/Udyam with Registration Type Manufacturing/Service, the maximum credit period allowed for your customers is 45 days. Credit Days has been adjusted to 45.",
+                        { id: "msme-customer-warning" }
+                    );
+                } else {
+                    toast.error(
+                        "This customer is registered under MSME/Udyam with Registration Type Manufacturing/Service. As per MSME rules, maximum credit period allowed is 45 days. Credit Days has been adjusted to 45.",
+                        { id: "msme-customer-warning" }
+                    );
+                }
+            }
+        }
+    }, [formData.customerId, formData.creditDays, customers, isSellerMsme]);
 
     // Auto-update GST Type whenever customer or company info changes
     useEffect(() => {
@@ -298,7 +351,10 @@ const AddChallan = () => {
             );
 
             const rate = parseFloat(item.rate || product?.sale_rate || product?.saleRate || 0);
-            const taxPercent = parseFloat(item.taxPercent || product?.tax_rate || product?.taxRate || 0);
+            const rawTaxPercent = item.taxPercent ?? item.tax_percent;
+            const taxPercent = (rawTaxPercent !== undefined && rawTaxPercent !== null && rawTaxPercent !== '')
+                ? parseFloat(rawTaxPercent)
+                : parseFloat(product?.tax_rate || product?.taxRate || 0);
             const discAmt = parseFloat(item.discountAmount || 0);
             const discPct = parseFloat(item.discountPercent || 0);
             const baseAmount = remainingQty * rate;

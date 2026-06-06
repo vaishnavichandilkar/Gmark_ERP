@@ -55,6 +55,16 @@ const SOPrintPreview = () => {
         fetchSellerInfo();
     }, []);
 
+    const isGstApplicable = useMemo(() => {
+        const gst = sellerInfo?.gstNumber;
+        return Boolean(
+            gst && 
+            gst.trim().toUpperCase() !== 'N/A' && 
+            gst.trim().toUpperCase() !== 'NOT AVAILABLE' && 
+            gst.trim().length >= 10
+        );
+    }, [sellerInfo]);
+
     if (!soData) {
         return (
             <div className="flex flex-col items-center justify-center h-screen gap-4">
@@ -132,15 +142,18 @@ const SOPrintPreview = () => {
         return sum + (beforeTax || 0);
     }, 0);
 
-    const materialTax = items.reduce((sum, item) => {
+    const materialTax = isGstApplicable ? items.reduce((sum, item) => {
         const qty = parseFloat(item.quantity) || 0;
         const rate = parseFloat(item.rate) || 0;
         const discAmt = parseFloat(item.discountAmount || item.discount_amount || 0);
         const taxPct = parseFloat(item.taxPercent ?? item.tax_percent ?? 0);
         const beforeTax = parseFloat(item.before_tax || item.beforeTaxAmount || (qty * rate - discAmt));
-        const taxAmt = parseFloat(item.tax_amount || item.taxAmount || (beforeTax * taxPct / 100));
+        const rawTaxAmt = item.tax_amount ?? item.taxAmount;
+        const taxAmt = (rawTaxAmt !== undefined && rawTaxAmt !== null && rawTaxAmt !== '') 
+            ? parseFloat(rawTaxAmt) 
+            : (beforeTax * taxPct / 100);
         return sum + (taxAmt || 0);
-    }, 0);
+    }, 0) : 0;
     
     // Read directly from the saved sales order if available
     const savedCgst = parseFloat(soData.cgstAmount || soData.cgst_amount || soData.cgst || soData.accountSummary?.cgst || 0);
@@ -165,7 +178,7 @@ const SOPrintPreview = () => {
         totalTaxOnCombined = cgst + sgst + igst;
     } else {
         // Fallback to calculation
-        const totalTaxOnCombinedCalculated = materialTax;
+        const totalTaxOnCombinedCalculated = isGstApplicable ? materialTax : 0;
         const sellerStateCode = sellerInfo?.gstNumber && /^\d{2}$/.test(sellerInfo.gstNumber.substring(0, 2)) ? sellerInfo.gstNumber.substring(0, 2) : "";
         const customerStateCode = final_gst_number && /^\d{2}$/.test(final_gst_number.substring(0, 2)) ? final_gst_number.substring(0, 2) : "";
         

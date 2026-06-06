@@ -203,7 +203,7 @@ const ProductMaster = () => {
           link.parentNode.removeChild(link);
         }}
         sampleFileName="Product_Master_Sample.xlsx"
-        sampleHeaders={['Product Name*', 'UOM*', 'Product Type*', 'Category*', 'Sub Category*', 'HSN Code*', 'Product Description', 'Status']}
+        sampleHeaders={['Type*', 'Product Name*', 'UOM*', 'Category*', 'Sub Category*', 'Sub Sub Category', 'HSN/SAC Code*', 'Product Description', 'Status']}
       />
 
       <button
@@ -565,7 +565,7 @@ const ProductMaster = () => {
                   <tr>
                     <th className="border-r border-white/10">
                       <div className="flex items-center gap-2">
-                        {t("product_code")}{" "}
+                        {appliedFilters.productType === "SERVICES" ? t("modules:service_code", "Service Code") : t("product_code")}{" "}
                         <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
@@ -607,7 +607,7 @@ const ProductMaster = () => {
                     </th>
                     <th className="border-r border-white/10">
                       <div className="flex items-center gap-2">
-                        {t("hsn_code")}{" "}
+                        {t("modules:hsn_sac_code", "HSN/SAC Code")}{" "}
                         <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
@@ -951,7 +951,7 @@ const ProductMaster = () => {
              link.parentNode.removeChild(link);
           }}
           sampleFileName="Product_Master_Sample.xlsx"
-          sampleHeaders={['Product Name*', 'UOM*', 'Product Type*', 'Category*', 'Sub Category*', 'HSN Code*', 'Product Description', 'Status']}
+          sampleHeaders={['Type*', 'Product Name*', 'UOM*', 'Category*', 'Sub Category*', 'Sub Sub Category', 'HSN/SAC Code*', 'Product Description', 'Status']}
         />
       )}
     </div>

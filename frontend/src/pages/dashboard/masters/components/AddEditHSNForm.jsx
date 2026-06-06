@@ -224,11 +224,11 @@ const AddEditHSNForm = ({ initialData = null, mode = 'add', onBack, onSubmit }) 
                 {/* Field 2: Code */}
                 <div className="flex flex-col gap-2 relative w-full">
                     <label className="text-[14px] font-bold text-[#374151]">
-                        Code {!isViewOnly && <span className="text-red-500">*</span>}
+                        {formData.type === 'SAC' ? 'SAC Code' : formData.type === 'HSN' ? 'HSN Code' : 'Code'} {!isViewOnly && <span className="text-red-500">*</span>}
                     </label>
                     <input
                         type="text"
-                        placeholder="Enter 6-8 digit code"
+                        placeholder={formData.type === 'SAC' ? 'Enter 6 digit code' : formData.type === 'HSN' ? 'Enter 6 or 8 digit code' : 'Enter 6-8 digit code'}
                         value={formData.code}
                         onChange={handleCodeChange}
                         disabled={isViewOnly || mode === 'edit'} // Lock code during edit
@@ -261,11 +261,11 @@ const AddEditHSNForm = ({ initialData = null, mode = 'add', onBack, onSubmit }) 
                 {/* Field 4: Description */}
                 <div className="flex flex-col gap-2 relative w-full md:col-span-2">
                     <label className="text-[14px] font-bold text-[#374151]">
-                        Description
+                        {formData.type === 'SAC' ? 'SAC Description' : formData.type === 'HSN' ? 'HSN Description' : 'Description'}
                     </label>
                     <textarea
                         rows={3}
-                        placeholder="Enter description (optional)"
+                        placeholder={formData.type === 'SAC' ? 'Enter SAC description (optional)' : formData.type === 'HSN' ? 'Enter HSN description (optional)' : 'Enter description (optional)'}
                         value={formData.description}
                         onChange={(e) => handleFieldChange('description', e.target.value)}
                         disabled={isViewOnly}

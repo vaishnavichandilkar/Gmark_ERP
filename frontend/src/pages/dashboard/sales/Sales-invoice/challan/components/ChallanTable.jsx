@@ -78,11 +78,21 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
         }
         item[field] = finalValue;
 
-        const qty       = parseFloat(field === 'quantity'       ? finalValue : item.quantity)       || 0;
+        let qty       = parseFloat(field === 'quantity'       ? finalValue : item.quantity)       || 0;
         const rate      = parseFloat(field === 'rate'           ? finalValue : item.rate)            || 0;
         const taxPct    = parseFloat(field === 'taxPercent'     ? finalValue : item.taxPercent)      || 0;
         const totalSO   = parseFloat(field === 'totalSoQty'     ? finalValue : item.totalSoQty)      || 0;
         const givenSO   = parseFloat(item.givenSoQty)                                           || 0;
+
+        const maxAllowed = totalSO - givenSO;
+        if (totalSO > 0 && qty > maxAllowed) {
+            toast.error(`Quantity cannot exceed remaining SO quantity of ${maxAllowed}`);
+            qty = Math.max(0, maxAllowed);
+            if (field === 'quantity') {
+                finalValue = qty;
+            }
+            item.quantity = qty;
+        }
 
         // Recalculate if any dependent field changed
         if (['quantity', 'rate', 'taxPercent', 'discountPercent', 'discountAmount', 'totalSoQty'].includes(field)) {
@@ -133,13 +143,8 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
     };
 
     const handleSelectProduct = async (product, rowIndex = null) => {
-        const qty = 1;
         const rate = parseFloat(product.sale_rate || product.saleRate || product.purchaseRate || 0);
         const taxPct = parseFloat(product.tax_rate ?? product.taxRate ?? product.hsn?.gst_rate ?? 0);
-        const baseAmount = qty * rate;
-        const isApplicable = gstType?.applicable !== false;
-        const taxAmt = isApplicable ? (baseAmount * taxPct) / 100 : 0;
-        const total = parseFloat((baseAmount + taxAmt).toFixed(2));
 
         let soQty = 0;
         let givenCount = 0;
@@ -162,6 +167,20 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                 console.error("Failed to fetch given history", e);
             }
         }
+
+        let qty = 1;
+        if (soQty > 0) {
+            const maxAllowed = soQty - givenCount;
+            if (qty > maxAllowed) {
+                qty = Math.max(0, maxAllowed);
+                toast.error(`Quantity adjusted to remaining SO quantity of ${qty}`);
+            }
+        }
+
+        const baseAmount = qty * rate;
+        const isApplicable = gstType?.applicable !== false;
+        const taxAmt = isApplicable ? (baseAmount * taxPct) / 100 : 0;
+        const total = parseFloat((baseAmount + taxAmt).toFixed(2));
 
         const updatedItems = [...items];
         let finalTargetIndex = rowIndex;

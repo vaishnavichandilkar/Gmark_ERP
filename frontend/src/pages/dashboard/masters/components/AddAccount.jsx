@@ -446,6 +446,111 @@ onUpdateAccount,
   const [msmeEnabled, setMsmeEnabled] = useState(
     Boolean(initialData?.msmeStatus || initialData?.msmeId),
   );
+
+  const [sellerProfile, setSellerProfile] = useState(null);
+  const [isProfileLoaded, setIsProfileLoaded] = useState(false);
+
+  useEffect(() => {
+    const fetchSellerProfile = async () => {
+      try {
+        const profile = await accountService.getBusinessProfile();
+        setSellerProfile(profile);
+      } catch (err) {
+        console.error("Failed to fetch seller profile", err);
+      } finally {
+        setIsProfileLoaded(true);
+      }
+    };
+    fetchSellerProfile();
+  }, []);
+
+  const isSellerMsme = React.useMemo(() => {
+    if (!sellerProfile) return false;
+    const isSellerMsmeActive = (sellerProfile.sellerDocuments || []).some(
+      d => d.category === 'UDYOG_AADHAR' && d.name && d.name.trim() !== '' && d.name.trim().toUpperCase() !== 'N/A'
+    );
+    const isSellerMsmeType = sellerProfile.regType === "Manufacturing" || sellerProfile.regType === "Service";
+    return Boolean(isSellerMsmeActive && isSellerMsmeType);
+  }, [sellerProfile]);
+
+  const isLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isProfileLoaded) return;
+
+    const isMSMEActive = msmeEnabled && formData.msmeId?.trim();
+    const isMSMEType = formData.regType === "Manufacturing" || formData.regType === "Service";
+
+    let adjusted = false;
+    let newVendorDays = formData.vendorCreditDays;
+    let newCustomerDays = formData.customerCreditDays;
+
+    if (isMSMEActive && isMSMEType) {
+      if (formData.isVendor && formData.vendorCreditDays) {
+        const val = parseInt(formData.vendorCreditDays, 10);
+        if (!isNaN(val) && val > 45) {
+          newVendorDays = "45";
+          adjusted = true;
+          if (isLoadedRef.current) {
+            toast.error(
+              "For MSME Manufacturing/Service suppliers,maximum credit period allowed is 45 days.Credit Days has been adjusted to 45.",
+              { id: "msme-supplier-warning" }
+            );
+          }
+        }
+      }
+    }
+
+    const shouldCapCustomer = (isMSMEActive && isMSMEType) || isSellerMsme;
+    if (shouldCapCustomer) {
+      if (formData.isCustomer && formData.customerCreditDays) {
+        const val = parseInt(formData.customerCreditDays, 10);
+        if (!isNaN(val) && val > 45) {
+          newCustomerDays = "45";
+          adjusted = true;
+          if (isLoadedRef.current) {
+            if (isSellerMsme) {
+              toast.error(
+                "As you are registered under MSME/Udyam with Registration Type Manufacturing/Service, the maximum credit period allowed for your customers is 45 days. Credit Days has been adjusted to 45.",
+                { id: "msme-customer-warning" }
+              );
+            } else {
+              toast.error(
+                "This customer is registered under MSME/Udyam with Registration Type Manufacturing/Service. As per MSME rules, maximum credit period allowed is 45 days. Credit Days has been adjusted to 45.",
+                { id: "msme-customer-warning" }
+              );
+            }
+          }
+        }
+      }
+    }
+
+    if (adjusted) {
+      setFormData((prev) => ({
+        ...prev,
+        vendorCreditDays: newVendorDays,
+        customerCreditDays: newCustomerDays,
+      }));
+
+      if (!isLoadedRef.current) {
+        toast.error(
+          "Credit Days exceeded MSME limit.Value has been adjusted to 45 days.",
+          { id: "msme-load-warning" }
+        );
+      }
+    }
+    isLoadedRef.current = true;
+  }, [
+    formData.vendorCreditDays,
+    formData.customerCreditDays,
+    formData.msmeId,
+    formData.regType,
+    formData.isVendor,
+    formData.isCustomer,
+    msmeEnabled,
+    isSellerMsme,
+    isProfileLoaded,
+  ]);
   const [areaOptions, setAreaOptions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingCustomerCode, setIsGeneratingCustomerCode] =
@@ -1292,7 +1397,100 @@ onUpdateAccount,
               </div>
 
 
-            {/* 3. Ledger Details */}
+            {/* 3. MSME Details */}
+            <div className="flex flex-col gap-6">
+              <div className="form-grid items-start">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-semibold text-[#4B5563]">
+                    {t("modules:msme")} ({t("common:optional")})
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <div
+                      className={`w-11 h-6 shrink-0 rounded-full flex items-center p-1 cursor-pointer transition-colors ${msmeEnabled ? "bg-[#014A36]" : "bg-gray-200"}`}
+                      onClick={() => {
+                        const newVal = !msmeEnabled;
+                        setMsmeEnabled(newVal);
+                        if (!newVal) {
+                          setFormData((prev) => ({
+                            ...prev,
+                            msmeId: "",
+                            regUnder: "",
+                            regType: "",
+                          }));
+                          setMsmeFile(null);
+                        }
+                      }}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${msmeEnabled ? "translate-x-5" : "translate-x-0"}`}
+                      />
+                    </div>
+                    {msmeEnabled && (
+                      <div className="flex-1 flex flex-col gap-1.5">
+                        <input
+                          type="text"
+                          placeholder={t("modules:enter_msme_id")}
+                          className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.msmeId ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
+                          value={formData.msmeId}
+                          onChange={(e) =>
+                            handleInputChange(
+                              "msmeId",
+                              e.target.value.toUpperCase(),
+                            )
+                          }
+                          onBlur={() =>
+                            validateField("msmeId", formData.msmeId)
+                          }
+                        />
+                        {errors.msmeId && (
+                          <p className="text-[12px] text-red-500 mt-0.5">
+                            {errors.msmeId}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {msmeEnabled && (
+                  <CustomSelect
+                    label={t("modules:reg_under")}
+                    placeholder={t("modules:select_reg_under")}
+                    options={REG_UNDER}
+                    renderValue={(val) => t(`modules:${val.toLowerCase()}`, val)}
+                    value={formData.regUnder}
+                    onChange={(val) => handleInputChange("regUnder", val)}
+                    onBlur={() => validateField("regUnder", formData.regUnder)}
+                    error={errors.regUnder}
+                  />
+                )}
+                {msmeEnabled && (
+                  <CustomSelect
+                    label={t("modules:reg_type")}
+                    placeholder={t("modules:select_reg_type")}
+                    options={REG_TYPE}
+                    renderValue={(val) => t(`modules:${val.toLowerCase()}`, val)}
+                    value={formData.regType}
+                    onChange={(val) => handleInputChange("regType", val)}
+                    onBlur={() => validateField("regType", formData.regType)}
+                    error={errors.regType}
+                  />
+                )}
+              </div>
+
+              {msmeEnabled && (
+                <div className="w-full md:w-1/2">
+                  <FileUploadField
+                    label={t("modules:msme_certificate")}
+                    accept=".pdf, .jpg, .jpeg, .png"
+                    maxMb={10}
+                    onFileSelect={setMsmeFile}
+                    onShowToast={onShowToast}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 4. Ledger Details */}
             <div className="flex flex-col gap-6">
               <h3 className="text-[16px] font-bold text-[#111827] border-b pb-2">
                 {t("modules:ledger_details")}
@@ -1494,7 +1692,7 @@ onUpdateAccount,
               )}
             </div>
 
-            {/* 4. Other Documents */}
+            {/* 5. Other Documents */}
             <div className="flex flex-col gap-4 w-full md:w-3/4">
               <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-2">
                 <h3 className="text-[16px] font-bold text-[#111827]">
@@ -1627,98 +1825,7 @@ onUpdateAccount,
               )}
             </div>
 
-            {/* 5. MSME Details */}
-            <div className="flex flex-col gap-6">
-              <div className="form-grid items-start">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-semibold text-[#4B5563]">
-                    {t("modules:msme")} ({t("common:optional")})
-                  </label>
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`w-11 h-6 shrink-0 rounded-full flex items-center p-1 cursor-pointer transition-colors ${msmeEnabled ? "bg-[#014A36]" : "bg-gray-200"}`}
-                      onClick={() => {
-                        const newVal = !msmeEnabled;
-                        setMsmeEnabled(newVal);
-                        if (!newVal) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            msmeId: "",
-                            regUnder: "",
-                            regType: "",
-                          }));
-                          setMsmeFile(null);
-                        }
-                      }}
-                    >
-                      <div
-                        className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${msmeEnabled ? "translate-x-5" : "translate-x-0"}`}
-                      />
-                    </div>
-                    {msmeEnabled && (
-                      <div className="flex-1 flex flex-col gap-1.5">
-                        <input
-                          type="text"
-                          placeholder={t("modules:enter_msme_id")}
-                          className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.msmeId ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
-                          value={formData.msmeId}
-                          onChange={(e) =>
-                            handleInputChange(
-                              "msmeId",
-                              e.target.value.toUpperCase(),
-                            )
-                          }
-                          onBlur={() =>
-                            validateField("msmeId", formData.msmeId)
-                          }
-                        />
-                        {errors.msmeId && (
-                          <p className="text-[12px] text-red-500 mt-0.5">
-                            {errors.msmeId}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {msmeEnabled && (
-                  <CustomSelect
-                    label={t("modules:reg_under")}
-                    placeholder={t("modules:select_reg_under")}
-                    options={REG_UNDER}
-                    renderValue={(val) => t(`modules:${val.toLowerCase()}`, val)}
-                    value={formData.regUnder}
-                    onChange={(val) => handleInputChange("regUnder", val)}
-                    onBlur={() => validateField("regUnder", formData.regUnder)}
-                    error={errors.regUnder}
-                  />
-                )}
-                {msmeEnabled && (
-                  <CustomSelect
-                    label={t("modules:reg_type")}
-                    placeholder={t("modules:select_reg_type")}
-                    options={REG_TYPE}
-                    renderValue={(val) => t(`modules:${val.toLowerCase()}`, val)}
-                    value={formData.regType}
-                    onChange={(val) => handleInputChange("regType", val)}
-                    onBlur={() => validateField("regType", formData.regType)}
-                    error={errors.regType}
-                  />
-                )}
-              </div>
 
-              {msmeEnabled && (
-                <div className="w-full md:w-1/2">
-                  <FileUploadField
-                    label={t("modules:msme_certificate")}
-                    accept=".pdf, .jpg, .jpeg, .png"
-                    maxMb={10}
-                    onFileSelect={setMsmeFile}
-                    onShowToast={onShowToast}
-                  />
-                </div>
-              )}
-            </div>
           </div>
 
             <div className="mt-10 flex flex-col sm:flex-row justify-end gap-3 md:gap-4 py-6 border-t border-[#E5E7EB]">

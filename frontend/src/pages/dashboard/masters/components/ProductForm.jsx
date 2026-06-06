@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import SuccessToast from "./SuccessToast";
 import AddCategoryModal from "./AddCategoryModal";
 import AddUomModal from "./AddUomModal";
+import AddHsnModal from "./AddHsnModal";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchHsnLookup } from "../../../../redux/hsn/hsnLookupSlice";
 
@@ -190,6 +191,7 @@ const ProductForm = ({
   const [isAddSubSubCategoryModalOpen, setIsAddSubSubCategoryModalOpen] =
     useState(false);
   const [isAddUomModalOpen, setIsAddUomModalOpen] = useState(false);
+  const [isAddHsnModalOpen, setIsAddHsnModalOpen] = useState(false);
   const suggestionsRef = useRef(null);
 
   useEffect(() => {
@@ -250,6 +252,11 @@ const ProductForm = ({
     handleInputChange("hsnDescription", val ? val.description : "");
   };
 
+  const handleHsnAdded = (newHsn) => {
+    dispatch(fetchHsnLookup());
+    handleHsnChange(newHsn);
+  };
+
   const validateField = (field, value) => {
     let error = "";
     if (field === "productName") {
@@ -262,7 +269,7 @@ const ProductForm = ({
       }
     } else if (field === "hsnMasterId") {
       if (!value) {
-        error = "HSN Code is required.";
+        error = formData.productType === "SERVICES" ? "SAC Code is required." : "HSN Code is required.";
       }
     } else if (field === "uom") {
       if (!value) error = "Please select UOM";
@@ -333,11 +340,6 @@ const ProductForm = ({
         setUomList(uoms);
         setCategories(cats);
 
-        if (mode === "add") {
-          const codeRes = await productService.generateProductCode();
-          handleInputChange("productCode", codeRes.product_code);
-        }
-
         if (initialData?.category_id) {
           const subs = await productService.getSubCategoriesDropdown(
             initialData.category_id,
@@ -359,6 +361,20 @@ const ProductForm = ({
 
     fetchInitialData();
   }, []);
+
+  useEffect(() => {
+    if (mode === "add") {
+      const fetchNextCode = async () => {
+        try {
+          const codeRes = await productService.generateProductCode(formData.productType || undefined);
+          handleInputChange("productCode", codeRes.product_code);
+        } catch (error) {
+          console.error("Error fetching product code:", error);
+        }
+      };
+      fetchNextCode();
+    }
+  }, [formData.productType, mode]);
 
   const fetchUomsDropdown = async () => {
     try {
@@ -446,13 +462,12 @@ const ProductForm = ({
     if (!validateAll()) return;
     setLoading(true);
     try {
+      const leafCategoryId = formData.subsubcategory?.id || formData.subcategory?.id || formData.category?.id;
       const payload = {
         product_name: formData.productName,
         uom_id: formData.uom?.id,
         product_type: formData.productType,
-        category_id: formData.category?.id,
-        sub_category_id: formData.subcategory?.id,
-        sub_sub_category_id: formData.subsubcategory?.id,
+        category_id: leafCategoryId,
         hsnMasterId: formData.hsnMasterId,
         description: formData.description,
       };
@@ -578,7 +593,7 @@ const ProductForm = ({
             label: formData.productType === "SERVICES" ? t("modules:service_name", "Service Name") : t("modules:product_name"),
             value: formData.productName,
           },
-          { label: t("modules:product_code"), value: formData.productCode },
+          { label: formData.productType === "SERVICES" ? t("modules:service_code") : t("modules:product_code"), value: formData.productCode },
           {
             label: t("modules:uom"),
             value: formData.uom
@@ -691,7 +706,18 @@ const ProductForm = ({
               placeholder={t("modules:selectProductType")}
               options={PRODUCT_TYPES}
               value={formData.productType}
-              onChange={(val) => handleInputChange("productType", val)}
+              onChange={(val) => {
+                handleInputChange("productType", val);
+                // Clear selected HSN/SAC code when Product Type changes
+                setFormData((prev) => ({
+                  ...prev,
+                  hsnMaster: null,
+                  hsnMasterId: "",
+                  hsnCode: "",
+                  tax: "",
+                  hsnDescription: "",
+                }));
+              }}
               showAsterisk={true}
               disabled={isView}
               error={errors.productType}
@@ -704,9 +730,9 @@ const ProductForm = ({
             )}
 
             {renderInput(
-              t("modules:product_code"),
+              formData.productType === "SERVICES" ? t("modules:service_code") : t("modules:product_code"),
               "productCode",
-              t("modules:product_code_auto"),
+              formData.productType === "SERVICES" ? t("modules:service_code_auto") : t("modules:product_code_auto"),
               true,
               true,
             )}
@@ -784,15 +810,23 @@ const ProductForm = ({
             />
 
             <CustomSelect
-              label="HSN Code"
-              placeholder="Select HSN/SAC Code"
-              options={hsnLookupList}
+              label={formData.productType === "SERVICES" ? t("modules:sac_code") : t("modules:hsn_code")}
+              placeholder={formData.productType === "SERVICES" ? t("modules:selectSacCode") : t("modules:selectHsnCode")}
+              options={
+                formData.productType === "SERVICES"
+                  ? hsnLookupList.filter((h) => h.type === "SAC")
+                  : formData.productType === "GOODS"
+                    ? hsnLookupList.filter((h) => h.type === "HSN")
+                    : hsnLookupList
+              }
               value={hsnLookupList.find(h => h.id === formData.hsnMasterId) || formData.hsnMaster}
               onChange={(val) => handleHsnChange(val)}
               getOptionLabel={(opt) => `${opt.code} (${opt.type})`}
               isSearchable={true}
               showAsterisk={true}
               disabled={isView}
+              footerLabel={formData.productType === "SERVICES" ? "+ Add SAC Code" : formData.productType === "GOODS" ? "+ Add HSN Code" : "+ Add HSN/SAC Code"}
+              onFooterClick={() => setIsAddHsnModalOpen(true)}
               error={errors.hsnMasterId}
             />
 
@@ -812,12 +846,12 @@ const ProductForm = ({
 
             <div className="flex flex-col gap-1.5 w-full md:col-span-2">
               <label className="text-[13px] font-semibold text-[#4B5563]">
-                HSN Description
+                {formData.productType === "SERVICES" ? t("modules:sac_description") : t("modules:hsn_description")}
               </label>
               <textarea
                 readOnly
                 disabled={true}
-                placeholder="HSN Description (Auto)"
+                placeholder={formData.productType === "SERVICES" ? "SAC Description (Auto)" : "HSN Description (Auto)"}
                 rows={3}
                 className="w-full border border-[#E5E7EB] rounded-[8px] p-4 text-[14px] text-gray-500 outline-none transition-all bg-gray-50 cursor-not-allowed resize-none"
                 value={formData.hsnDescription || ""}
@@ -927,6 +961,17 @@ const ProductForm = ({
             handleInputChange("uom", newUom);
           }
         }}
+        onShowToast={(msg, type) => {
+          if (type === "error") toast.error(msg);
+          else toast.success(msg);
+        }}
+      />
+
+      <AddHsnModal
+        isOpen={isAddHsnModalOpen}
+        onClose={() => setIsAddHsnModalOpen(false)}
+        presetType={formData.productType}
+        onSuccess={handleHsnAdded}
         onShowToast={(msg, type) => {
           if (type === "error") toast.error(msg);
           else toast.success(msg);

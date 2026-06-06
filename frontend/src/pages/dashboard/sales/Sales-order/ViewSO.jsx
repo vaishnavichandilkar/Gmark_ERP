@@ -10,11 +10,13 @@ import {
     X,
     Edit3,
     Printer,
-    ChevronsUpDown
+    ChevronsUpDown,
+    FileText
 } from 'lucide-react';
 
 import salesOrderService from '../../../../services/salesOrderService';
 import { getStandardGstUom } from '@/utils/uomUtils';
+import { BASE_URL } from '@/constants/apiConstants';
 
 const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1, renderEdit2 }) => (
     <div className={`flex flex-col sm:flex-row border-[#E5E7EB] border-b last:border-0 font-outfit`}>
@@ -54,7 +56,8 @@ const ViewSO = () => {
         customer_po_number: '',
         po_date: '',
         po_expiry_date: '',
-        customer_amt: ''
+        customer_amt: '',
+        customer_po_file: ''
     });
     const [items, setItems] = useState([]);
 
@@ -79,7 +82,8 @@ const ViewSO = () => {
                     customer_po_number: so.customerPoNumber,
                     po_date: so.poDate,
                     po_expiry_date: so.poExpiryDate,
-                    customer_amt: so.customerAmt
+                    customer_amt: so.customerAmt,
+                    customer_po_file: so.customerPoFile || ''
                 });
                 setItems(so.items || []);
             } catch (error) {
@@ -115,7 +119,7 @@ const ViewSO = () => {
                         View Sales Order
                     </h2>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
-                        {!isLoading && (
+                        {!isLoading && salesOrder && salesOrder.status === 'PENDING' && !(salesOrder.salesChallans?.length > 0 || salesOrder.salesInvoices?.length > 0) && (
                             <button
                                 onClick={() => navigate(ROUTES.SALES_ORDER_EDIT.replace(':id', id))}
                                 className="flex-1 sm:flex-none px-6 md:px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] md:text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-md flex items-center justify-center gap-2"
@@ -181,6 +185,25 @@ const ViewSO = () => {
                                         label2="Customer PO Amount:" 
                                         value2={formData.customer_amt !== null && formData.customer_amt !== undefined && formData.customer_amt !== '' ? `₹ ${parseFloat(formData.customer_amt).toFixed(2)}` : '-'} 
                                     />
+                                    {formData.customer_po_file && (
+                                        <InfoTableRow 
+                                            label1="Customer PO Document:" 
+                                            value1={
+                                                <button
+                                                    onClick={() => {
+                                                        const root = BASE_URL.split('/api')[0];
+                                                        const normalizedPath = formData.customer_po_file.replace(/\\/g, '/');
+                                                        window.open(`${root}/${normalizedPath}`, '_blank');
+                                                    }}
+                                                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 text-emerald-800 rounded-md font-bold text-[12px] hover:bg-emerald-100 transition-colors border border-emerald-200 cursor-pointer shadow-sm active:scale-95 shrink-0"
+                                                >
+                                                    <FileText size={14} /> View Document
+                                                </button>
+                                            }
+                                            label2="" 
+                                            value2="" 
+                                        />
+                                    )}
                                 </>
                             )}
                         </div>

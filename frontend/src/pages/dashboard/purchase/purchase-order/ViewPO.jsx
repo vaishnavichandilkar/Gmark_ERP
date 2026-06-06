@@ -137,7 +137,8 @@ const ViewPO = () => {
                     </h2>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                         {(() => {
-                            if (isLoading || (formData.status !== 'PENDING' && formData.status !== 'Approved')) return null;
+                            const hasLinkedDocs = (purchaseOrder?.grn?.length > 0) || (purchaseOrder?.purchaseInvoices?.length > 0);
+                            if (isLoading || (formData.status !== 'PENDING' && formData.status !== 'Approved') || hasLinkedDocs) return null;
 
                             const parseDate = (d) => {
                                 if (!d) return new Date();

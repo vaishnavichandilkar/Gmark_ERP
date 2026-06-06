@@ -43,6 +43,8 @@ export class PurchaseOrderService {
       address: supplier.addressLine1 + (supplier.addressLine2 ? ', ' + supplier.addressLine2 : ''),
       gstNumber: supplier.gstNo,
       creditDays: supplier.supplierCreditDays || 0,
+      msmeEnabled: supplier.msmeEnabled,
+      regType: supplier.regType,
     };
   }
 
@@ -84,6 +86,14 @@ export class PurchaseOrderService {
     }
     if (fullSupplier.status !== 'ACTIVE' || fullSupplier.supplierStatus !== 'ACTIVE') {
       throw new BadRequestException('Supplier is inactive. New purchase transactions are not allowed.');
+    }
+
+    const isSupplierMsmeActive = fullSupplier.msmeEnabled;
+    const isSupplierMsmeType = fullSupplier.regType === 'Manufacturing' || fullSupplier.regType === 'Service';
+    const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType);
+
+    if (isSupplierMsme && createDto.creditDays > 45) {
+      throw new BadRequestException('Maximum credit period allowed for MSME suppliers is 45 days.');
     }
 
     const supplier = await this.getSupplierDetails(createDto.supplierId, userId);
@@ -187,7 +197,17 @@ export class PurchaseOrderService {
 
     return this.prisma.purchaseOrder.findMany({
       where,
-      include: { items: true },
+      include: { 
+        items: true,
+        grn: {
+          where: { status: { not: 'DELETED' } },
+          select: { id: true }
+        },
+        purchaseInvoices: {
+          where: { status: { not: 'DELETED' } },
+          select: { id: true }
+        }
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -198,7 +218,12 @@ export class PurchaseOrderService {
       include: { 
         items: true,
         grn: {
+          where: { status: { not: 'DELETED' } },
           include: { items: true }
+        },
+        purchaseInvoices: {
+          where: { status: { not: 'DELETED' } },
+          select: { id: true }
         }
       },
     });
@@ -245,6 +270,27 @@ export class PurchaseOrderService {
 
     if (linkedGrns > 0 || linkedInvoices > 0) {
       throw new ForbiddenException(`Purchase Order cannot be edited because it is linked to a GRN or Purchase Invoice.`);
+    }
+
+    const supplierId = updateDto.supplierId;
+    let supplier;
+    if (supplierId) {
+      supplier = await this.prisma.accountMaster.findUnique({ where: { id: supplierId } });
+    } else {
+      supplier = await this.prisma.accountMaster.findFirst({
+        where: { accountName: po.supplierName, userId }
+      });
+    }
+
+    if (supplier) {
+      const isSupplierMsmeActive = supplier.msmeEnabled;
+      const isSupplierMsmeType = supplier.regType === 'Manufacturing' || supplier.regType === 'Service';
+      const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType);
+
+      const creditDays = updateDto.creditDays !== undefined ? updateDto.creditDays : po.creditDays;
+      if (isSupplierMsme && creditDays > 45) {
+        throw new BadRequestException('Maximum credit period allowed for MSME suppliers is 45 days.');
+      }
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -570,6 +616,7 @@ export class PurchaseOrderService {
     if (format === 'xlsx') {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Purchase Orders');
+      worksheet.views = [{ state: 'frozen', ySplit: 5 }];
       
       worksheet.columns = [
         { header: 'PO No', key: 'poNumber', width: 15 },
@@ -792,16 +839,24 @@ export class PurchaseOrderService {
         if (!product) {
           // Get first available defaults for mandatory master refs
           const firstUom = await this.prisma.unitMaster.findFirst();
-          const firstCat = await this.prisma.category.findFirst();
-          const firstSub = await this.prisma.subCategory.findFirst();
+          let defaultCat = await this.prisma.category.findFirst({
+            where: { user_id: userId }
+          });
+          if (!defaultCat) {
+            defaultCat = await this.prisma.category.create({
+              data: {
+                name: "Default Category",
+                user_id: userId
+              }
+            });
+          }
 
           product = await this.prisma.product.create({
             data: {
               product_name: productName,
               product_code: productCode,
               uom_id: firstUom?.id || 1,
-              category_id: firstCat?.id || 1,
-              sub_category_id: firstSub?.id || 1,
+              category_id: defaultCat.id,
               product_type: "GOODS",
               hsn_code: "0000",
               tax_rate: parseFloat(String(getVal(row, 'taxPercent') || 0)),
@@ -863,6 +918,7 @@ export class PurchaseOrderService {
   async downloadSample() {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Purchase Order Sample');
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
     const headers = [
       'Supplier Name*', 'Credit Days', 'Expiry Date (YYYY-MM-DD)*', 'Product Code*', 'Quantity*', 'Rate*', 'Discount %', 'Discount Amount', 'Tax %', 'Print Description'

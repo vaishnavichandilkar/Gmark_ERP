@@ -276,13 +276,43 @@ const AddGRN = () => {
         }
     };
 
+    useEffect(() => {
+        if (!formData.supplier_id) return;
+        const supplier = suppliers.find(s => String(s.id) === String(formData.supplier_id));
+        if (!supplier) return;
+
+        const isSupplierMsmeActive = supplier.msmeEnabled;
+        const isSupplierMsmeType = supplier.regType === "Manufacturing" || supplier.regType === "Service";
+        const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType);
+
+        if (isSupplierMsme && formData.credit_days) {
+            const val = parseInt(formData.credit_days, 10);
+            if (!isNaN(val) && val > 45) {
+                setFormData(prev => ({ ...prev, credit_days: 45 }));
+                toast.error(
+                    "For MSME Manufacturing/Service suppliers,maximum credit period allowed is 45 days.Credit Days has been adjusted to 45.",
+                    { id: "msme-supplier-warning" }
+                );
+            }
+        }
+    }, [formData.supplier_id, formData.credit_days, suppliers]);
+
     const calculateGST = (supplierGST, supplierState) => {
         const userGst = companyInfo?.gstNumber || "";
         const userState = (companyInfo?.state || "").trim().toLowerCase();
         const suppState = (supplierState || "").trim().toLowerCase();
 
+        // Strict validation helper
+        const isValidGstStr = (g) => Boolean(
+            g && 
+            String(g).trim().toUpperCase() !== 'N/A' && 
+            String(g).trim().toUpperCase() !== 'NOT AVAILABLE' && 
+            String(g).trim().toUpperCase() !== '-' && 
+            String(g).trim().length >= 10
+        );
+
         // Purchase Side Rule: Applicable if Supplier has GST
-        const applicable = Boolean(supplierGST);
+        const applicable = isValidGstStr(supplierGST);
 
         if (!applicable) {
             return { type: 'NONE', applicable: false, isRcm: false };

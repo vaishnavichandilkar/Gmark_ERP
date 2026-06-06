@@ -35,6 +35,7 @@ export const exportToPDF = (title, columns, data, filename, customDoc = null) =>
         head: columns ? [columns] : undefined,
         body: data,
         theme: 'grid',
+        showHead: 'everyPage',
         headStyles: { fillColor: '#4472C4', textColor: '#FFFFFF', fontStyle: 'bold' },
         alternateRowStyles: { fillColor: '#F2F2F2' },
         styles: { fontSize: 8, font: 'helvetica' }
@@ -55,6 +56,11 @@ export const exportToExcel = (data, sheetName, filename) => {
 
     // Create Worksheet and inject Data at Row 5
     const ws = XLSX.utils.json_to_sheet(data, { origin: "A5" });
+
+    // Freeze top 5 rows (ERP Title, Report subtitle, Timestamp, spacing, and header row)
+    ws['!views'] = [
+        { state: 'frozen', ySplit: 5 }
+    ];
 
     // Prepend Titles & Timestamps
     XLSX.utils.sheet_add_aoa(ws, [

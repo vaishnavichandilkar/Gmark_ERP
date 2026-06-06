@@ -355,6 +355,14 @@ export class OnboardingService {
             await this.saveFile(userId, 'OTHER', files.businessProof[0], 'BUSINESS_PROOF');
         }
 
+        // Save regType on User model
+        if (dto.regType) {
+            await this.prisma.user.update({
+                where: { id: userId },
+                data: { regType: dto.regType }
+            });
+        }
+
         await this.validateAndAdvanceStep(userId, 6, 6, dto);
 
         return { message: 'Business details saved successfully' };
@@ -461,6 +469,7 @@ export class OnboardingService {
             gstFile: gstCert ? { name: gstCert.name, url: gstCert.url } : null,
             shopActLicense: shopActLicense ? { name: shopActLicense.name, url: shopActLicense.url } : null,
             businessProof: businessProof ? { name: businessProof.name, url: businessProof.url } : null,
+            regType: user.regType || '',
             rejectionReason: user.rejectionReason,
             approvalStatus: user.approvalStatus
         };

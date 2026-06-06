@@ -199,7 +199,7 @@ const CategoryMaster = () => {
     // Optimistic UI update
     setMasterData((prev) =>
       prev.map((cat) => {
-        if (type === "category" && Number(cat.id) === Number(id)) {
+        if (type === "category" && String(cat.id) === String(id)) {
           const updatedCat = { ...cat, status: newStatus };
           if (newStatus === "INACTIVE") {
             updatedCat.sub_categories = (cat.sub_categories || []).map(
@@ -215,14 +215,14 @@ const CategoryMaster = () => {
           return updatedCat;
         } else if (type === "sub_category") {
           const subExists = (cat.sub_categories || []).some(
-            (s) => Number(s.id) === Number(id),
+            (s) => String(s.id) === String(id),
           );
           if (!subExists) return cat;
 
           return {
             ...cat,
             sub_categories: (cat.sub_categories || []).map((sub) => {
-              if (Number(sub.id) === Number(id)) {
+              if (String(sub.id) === String(id)) {
                 const updatedSub = { ...sub, status: newStatus };
                 if (newStatus === "INACTIVE") {
                   updatedSub.sub_sub_categories = (
@@ -237,7 +237,7 @@ const CategoryMaster = () => {
         } else if (type === "sub_sub_category") {
           const subSubExists = (cat.sub_categories || []).some((s) =>
             (s.sub_sub_categories || []).some(
-              (ss) => Number(ss.id) === Number(id),
+              (ss) => String(ss.id) === String(id),
             ),
           );
           if (!subSubExists) return cat;
@@ -247,7 +247,7 @@ const CategoryMaster = () => {
             sub_categories: (cat.sub_categories || []).map((sub) => ({
               ...sub,
               sub_sub_categories: (sub.sub_sub_categories || []).map((ss) =>
-                Number(ss.id) === Number(id)
+                String(ss.id) === String(id)
                   ? { ...ss, status: newStatus }
                   : ss,
               ),
@@ -341,6 +341,10 @@ const CategoryMaster = () => {
   // Export Logic
   const handleExportPDF = async () => {
     setIsExportOpen(false);
+    if (filteredData().length === 0) {
+      showToast("No data available to export", "error");
+      return;
+    }
     try {
       const response = await categoryService.exportCategories("pdf");
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -353,12 +357,26 @@ const CategoryMaster = () => {
       showToast("PDF Exported Successfully");
     } catch (error) {
       console.error("Export failed", error);
-      showToast("Failed to export PDF", "error");
+      let message = "Failed to export PDF";
+      if (error.response && error.response.data instanceof Blob) {
+        const text = await error.response.data.text();
+        try {
+          const errorData = JSON.parse(text);
+          message = errorData.message || message;
+        } catch (err) {}
+      } else if (error.response?.data?.message) {
+        message = error.response.data.message;
+      }
+      showToast(message, "error");
     }
   };
 
   const handleExportExcel = async () => {
     setIsExportOpen(false);
+    if (filteredData().length === 0) {
+      showToast("No data available to export", "error");
+      return;
+    }
     try {
       const response = await categoryService.exportCategories("xlsx");
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -371,7 +389,17 @@ const CategoryMaster = () => {
       showToast("Excel Exported Successfully");
     } catch (error) {
       console.error("Export failed", error);
-      showToast("Failed to export Excel", "error");
+      let message = "Failed to export Excel";
+      if (error.response && error.response.data instanceof Blob) {
+        const text = await error.response.data.text();
+        try {
+          const errorData = JSON.parse(text);
+          message = errorData.message || message;
+        } catch (err) {}
+      } else if (error.response?.data?.message) {
+        message = error.response.data.message;
+      }
+      showToast(message, "error");
     }
   };
 

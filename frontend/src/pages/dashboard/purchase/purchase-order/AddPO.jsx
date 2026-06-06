@@ -229,6 +229,12 @@ const AddPO = () => {
                 try {
                     const poToEdit = await purchaseOrderService.getPurchaseOrderById(id);
                     if (poToEdit) {
+                        const hasLinkedDocs = (poToEdit.grn?.length > 0) || (poToEdit.purchaseInvoices?.length > 0);
+                        if (hasLinkedDocs || (poToEdit.status !== 'PENDING' && poToEdit.status !== 'Approved')) {
+                            toast.error("This Purchase Order cannot be edited because it is linked to a GRN or Purchase Invoice.");
+                            navigate(ROUTES.PURCHASE_ORDER);
+                            return;
+                        }
                         setFormData({
                             supplier_id: poToEdit.supplierId,
                             supplier_name: poToEdit.supplierName,
@@ -369,6 +375,27 @@ const AddPO = () => {
         if (!sellerGst || !supplierGst) return true; // Default to true (CGST/SGST)
         return sellerGst.substring(0, 2) === supplierGst.substring(0, 2);
     }, [businessProfile, formData.gst_number]);
+
+    useEffect(() => {
+        if (!formData.supplier_id) return;
+        const supplier = suppliers.find(s => String(s.id) === String(formData.supplier_id));
+        if (!supplier) return;
+
+        const isSupplierMsmeActive = supplier.msmeEnabled;
+        const isSupplierMsmeType = supplier.regType === "Manufacturing" || supplier.regType === "Service";
+        const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType);
+
+        if (isSupplierMsme && formData.credit_days) {
+            const val = parseInt(formData.credit_days, 10);
+            if (!isNaN(val) && val > 45) {
+                setFormData(prev => ({ ...prev, credit_days: '45' }));
+                toast.error(
+                    "For MSME Manufacturing/Service suppliers,maximum credit period allowed is 45 days.Credit Days has been adjusted to 45.",
+                    { id: "msme-supplier-warning" }
+                );
+            }
+        }
+    }, [formData.supplier_id, formData.credit_days, suppliers]);
 
     const handleSelectSupplier = async (supplier) => {
         try {
@@ -908,10 +935,10 @@ const AddPO = () => {
                             <label className="text-[14px] font-semibold text-[#374151]">Address</label>
                             <input
                                 type="text"
-                                placeholder="Enter address"
-                                value={formData.address}
-                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                                className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] transition-all ${errors.address ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                                placeholder="Auto-fetched from Account Master"
+                                value={formData.address || ''}
+                                readOnly
+                                className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium shadow-sm"
                             />
                             {errors.address && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.address}</p>}
                         </div>
@@ -990,10 +1017,10 @@ const AddPO = () => {
                             <label className="text-[14px] font-semibold text-[#374151]">GST Number</label>
                             <input
                                 type="text"
-                                placeholder="Optional"
-                                value={formData.gst_number}
-                                onChange={(e) => setFormData({ ...formData, gst_number: e.target.value })}
-                                className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none transition-all ${errors.gst_number ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
+                                placeholder="Auto-fetched from Account Master"
+                                value={formData.gst_number || ''}
+                                readOnly
+                                className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium shadow-sm"
                             />
                             {errors.gst_number && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.gst_number}</p>}
                         </div>

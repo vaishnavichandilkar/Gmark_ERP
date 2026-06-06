@@ -210,7 +210,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                 case 'PO':
                     return [
                         {
-                            label: ['pending', 'expiring soon'].includes(itemStatus) ? 'View and Edit PO' : 'View PO',
+                            label: (['pending', 'expiring soon'].includes(itemStatus) && !(item.grn?.length > 0 || item.purchaseInvoices?.length > 0)) ? 'View and Edit PO' : 'View PO',
                             icon: <Eye size={16} />,
                             onClick: () => navigate(`${ROUTES.PURCHASE_ORDER}/view/${item.id}`)
                         },
@@ -230,7 +230,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                 case 'SO':
                     return [
                         {
-                            label: ['pending', 'expiring soon'].includes(itemStatus) ? 'View / Edit SO' : 'View SO',
+                            label: (['pending', 'expiring soon'].includes(itemStatus) && !(item.salesChallans?.length > 0 || item.salesInvoices?.length > 0)) ? 'View / Edit SO' : 'View SO',
                             icon: <Eye size={16} />,
                             onClick: () => navigate(`${ROUTES.SALES_ORDER}/view/${item.id}`)
                         },

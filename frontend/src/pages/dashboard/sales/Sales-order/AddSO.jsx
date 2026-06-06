@@ -19,11 +19,13 @@ import {
     Percent,
     Hash,
     ChevronsUpDown,
-    AlertCircle
+    AlertCircle,
+    Eye
 } from 'lucide-react';
 import salesOrderService from '../../../../services/salesOrderService';
 import accountService from '../../../../services/accountService';
 import productService from '../../../../services/productService';
+import { BASE_URL } from '@/constants/apiConstants';
 
 const AddSO = () => {
     const navigate = useNavigate();
@@ -40,6 +42,7 @@ const AddSO = () => {
     const [customerSearch, setCustomerSearch] = useState('');
     const [customers, setCustomers] = useState([]);
     const [poType, setPoType] = useState('');
+    const [previewUrl, setPreviewUrl] = useState('');
     const [formData, setFormData] = useState({
         customer_id: '',
         customer_name: '',
@@ -54,7 +57,9 @@ const AddSO = () => {
         customer_po_number: '',
         po_date: '',
         po_expiry_date: '',
-        customer_amt: ''
+        customer_amt: '',
+        attachment: null,
+        removeAttachment: false
     });
 
     const [errors, setErrors] = useState({});
@@ -89,9 +94,35 @@ const AddSO = () => {
     const [showDropdownRight, setShowDropdownRight] = useState(false);
 
     const [showValidationPopup, setShowValidationPopup] = useState(false);
+    const [validationPopupMessage, setValidationPopupMessage] = useState("");
+    const [validationPopupTitle, setValidationPopupTitle] = useState("Missing Required Fields");
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [businessProfile, setBusinessProfile] = useState(null);
+
+    useEffect(() => {
+        if (!formData.attachment) {
+            setPreviewUrl('');
+            return;
+        }
+
+        if (typeof formData.attachment === 'string') {
+            const root = BASE_URL.split('/api')[0];
+            const normalizedPath = formData.attachment.replace(/\\/g, '/');
+            setPreviewUrl(`${root}/${normalizedPath}`);
+            return;
+        }
+
+        try {
+            const objectUrl = URL.createObjectURL(formData.attachment);
+            setPreviewUrl(objectUrl);
+
+            return () => URL.revokeObjectURL(objectUrl);
+        } catch (e) {
+            console.error("Error creating object URL:", e);
+            setPreviewUrl('');
+        }
+    }, [formData.attachment]);
 
     // Fetch Customers and Handle Draft Recovery
     useEffect(() => {
@@ -237,6 +268,12 @@ const AddSO = () => {
                 try {
                     const soToEdit = await salesOrderService.getSalesOrderById(id);
                     if (soToEdit) {
+                        const hasLinkedDocs = (soToEdit.salesChallans?.length > 0) || (soToEdit.salesInvoices?.length > 0);
+                        if (hasLinkedDocs || soToEdit.status !== 'PENDING') {
+                            toast.error("This Sales Order cannot be edited because it is linked to a Challan or Sales Invoice.");
+                            navigate(ROUTES.SALES_ORDER);
+                            return;
+                        }
                         setFormData({
                             customer_id: soToEdit.customerId,
                             customer_name: soToEdit.customerName,
@@ -251,7 +288,9 @@ const AddSO = () => {
                             customer_po_number: soToEdit.customerPoNumber || '',
                             po_date: soToEdit.poDate ? soToEdit.poDate.split('T')[0] : '',
                             po_expiry_date: soToEdit.poExpiryDate ? soToEdit.poExpiryDate.split('T')[0] : '',
-                            customer_amt: soToEdit.customerAmt || ''
+                            customer_amt: soToEdit.customerAmt || '',
+                            attachment: soToEdit.customerPoFile || null,
+                            removeAttachment: false
                         });
                         if (soToEdit.customerPoNumber === 'verbal') {
                             setPoType('verbal');
@@ -359,6 +398,45 @@ const AddSO = () => {
         }
         return true; // Default to Intra if can't determine
     }, [businessProfile, formData.gst_number]);
+
+    const isSellerMsme = useMemo(() => {
+        if (!businessProfile) return false;
+        const isSellerMsmeActive = (businessProfile.sellerDocuments || []).some(
+            d => d.category === 'UDYOG_AADHAR' && d.name && d.name.trim() !== '' && d.name.trim().toUpperCase() !== 'N/A'
+        );
+        const isSellerMsmeType = businessProfile.regType === "Manufacturing" || businessProfile.regType === "Service";
+        return Boolean(isSellerMsmeActive && isSellerMsmeType);
+    }, [businessProfile]);
+
+    useEffect(() => {
+        if (!formData.customer_id) return;
+        const customer = customers.find(c => String(c.id) === String(formData.customer_id));
+        if (!customer) return;
+
+        const isCustomerMsmeActive = customer.msmeEnabled;
+        const isCustomerMsmeType = customer.regType === "Manufacturing" || customer.regType === "Service";
+        const isCustomerMsme = Boolean(isCustomerMsmeActive && isCustomerMsmeType);
+
+        const shouldCap = isSellerMsme || isCustomerMsme;
+
+        if (shouldCap && formData.credit_days) {
+            const val = parseInt(formData.credit_days, 10);
+            if (!isNaN(val) && val > 45) {
+                setFormData(prev => ({ ...prev, credit_days: '45' }));
+                if (isSellerMsme) {
+                    toast.error(
+                        "As you are registered under MSME/Udyam with Registration Type Manufacturing/Service, the maximum credit period allowed for your customers is 45 days. Credit Days has been adjusted to 45.",
+                        { id: "msme-customer-warning" }
+                    );
+                } else {
+                    toast.error(
+                        "This customer is registered under MSME/Udyam with Registration Type Manufacturing/Service. As per MSME rules, maximum credit period allowed is 45 days. Credit Days has been adjusted to 45.",
+                        { id: "msme-customer-warning" }
+                    );
+                }
+            }
+        }
+    }, [formData.customer_id, formData.credit_days, customers, isSellerMsme]);
 
     const handleSelectCustomer = async (customer) => {
         setFormData(prev => ({
@@ -551,6 +629,9 @@ const AddSO = () => {
 
     const validateForm = () => {
         const newErrors = {};
+        let popupMsg = "";
+        let popupTitle = "Missing Required Fields";
+
         if (!formData.customer_name) newErrors.customer_name = "Customer name is required";
         if (!formData.so_number) newErrors.so_number = "SO number is required";
         if (!formData.expiry_date) {
@@ -567,12 +648,38 @@ const AddSO = () => {
 
         const validItems = items.filter(item => item.product_name);
         if (validItems.length === 0) newErrors.items = true;
+
+        if (poType === 'written') {
+            if (!formData.customer_amt) {
+                newErrors.customer_amt = "Customer PO Amount is required";
+                popupMsg = "Customer PO Amount is required for Written PO Type.";
+            } else {
+                const poAmt = parseFloat(formData.customer_amt) || 0;
+                const grandTotal = tableTotals.total || 0;
+                if (Math.abs(poAmt - grandTotal) >= 0.01) {
+                    newErrors.customer_amt = `Customer PO Amount must match Grand Total (₹${grandTotal.toFixed(2)})`;
+                    popupMsg = `Customer PO Amount (₹${poAmt.toFixed(2)}) and Grand Total (₹${grandTotal.toFixed(2)}) must match in Sales Order.`;
+                    popupTitle = "Amount Mismatch";
+                }
+            }
+        }
+
+        if (Object.keys(newErrors).length > 0 && !popupMsg) {
+            popupMsg = "Please ensure all mandatory fields (marked with *) are filled correctly before proceeding.";
+            popupTitle = "Missing Required Fields";
+        }
+
         setErrors(newErrors);
+        setValidationPopupMessage(popupMsg);
+        setValidationPopupTitle(popupTitle);
         return Object.keys(newErrors).length === 0;
     };
 
     const handleSave = async () => {
-        if (!validateForm()) return;
+        if (!validateForm()) {
+            setShowValidationPopup(true);
+            return;
+        }
         setIsSaving(true);
         const payload = {
             customerId: Number(formData.customer_id),
@@ -600,12 +707,18 @@ const AddSO = () => {
             }))
         };
 
+        const fileToUpload = (formData.attachment instanceof File) ? formData.attachment : null;
+        const finalPayload = {
+            ...payload,
+            removeAttachment: formData.removeAttachment
+        };
+
         try {
             if (isEditMode) {
-                await salesOrderService.updateSalesOrder(id, payload);
+                await salesOrderService.updateSalesOrder(id, finalPayload, fileToUpload);
                 toast.success("Sales Order updated successfully");
             } else {
-                await salesOrderService.createSalesOrder(payload);
+                await salesOrderService.createSalesOrder(finalPayload, fileToUpload);
                 toast.success("Sales Order created successfully");
             }
             sessionStorage.removeItem('add_so_draft');
@@ -956,9 +1069,10 @@ const AddSO = () => {
                                     min="0"
                                     value={formData.customer_amt || ''}
                                     onChange={(e) => setFormData({ ...formData, customer_amt: e.target.value })}
-                                    className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] font-medium text-[#073318]"
+                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none font-medium ${errors.customer_amt ? 'border-red-500 focus:border-red-500 text-red-600' : 'border-[#E5E7EB] focus:border-[#073318] text-[#073318]'}`}
                                     placeholder="Enter Customer PO Amount"
                                 />
+                                {errors.customer_amt && <p className="text-red-500 text-[12px] mt-1 italic font-medium">*{errors.customer_amt}</p>}
                             </div>
                         )}
 
@@ -974,6 +1088,86 @@ const AddSO = () => {
                         </div>
                     </div>
                 </div>
+
+                {poType === 'written' && (
+                    <div className="px-8 py-6 flex items-center gap-6 border-t border-[#F3F4F6] bg-gray-50/10 font-outfit">
+                        <span className="text-[15px] font-bold text-[#374151]">Upload Customer PO :</span>
+                        <div className="flex items-center gap-3">
+                            <label className="relative cursor-pointer px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all flex items-center justify-center gap-2 shadow-sm group active:scale-95">
+                                {formData.attachment ? (
+                                    <span className="flex items-center gap-2">
+                                        <FileText size={18} />
+                                        <span className="max-w-[200px] truncate">
+                                            {typeof formData.attachment === 'string' ? 'Existing PO File' : formData.attachment.name}
+                                        </span>
+                                        <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded text-emerald-100">Change</span>
+                                    </span>
+                                ) : (
+                                    <>
+                                        <FileText size={18} />
+                                        <span>Upload Customer PO</span>
+                                    </>
+                                )}
+                                <input 
+                                    type="file" 
+                                    className="hidden" 
+                                    onChange={(e) => setFormData({...formData, attachment: e.target.files[0], removeAttachment: false})} 
+                                    accept="application/pdf,image/jpeg,image/png" 
+                                />
+                            </label>
+
+                            {formData.attachment && (
+                                <div className="flex items-center gap-2">
+                                    <div className="relative group/preview">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (previewUrl) {
+                                                    window.open(previewUrl, '_blank');
+                                                }
+                                            }}
+                                            className="p-2.5 bg-blue-50 text-blue-600 rounded-[10px] hover:bg-blue-100 transition-all shadow-sm border border-blue-100"
+                                            title="View Customer PO (Hover to preview, Click to open in new tab)"
+                                        >
+                                            <Eye size={18} />
+                                        </button>
+                                        {previewUrl && (
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover/preview:flex flex-col w-[380px] h-[480px] bg-white border border-gray-200 rounded-[16px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] z-[100] p-3 animate-in fade-in slide-in-from-bottom-2 duration-200 pointer-events-none">
+                                                <div className="text-[12px] font-bold text-gray-500 mb-2 border-b pb-1.5 flex items-center justify-between">
+                                                    <span>Customer PO Preview</span>
+                                                    <span className="text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-black uppercase">Live View</span>
+                                                </div>
+                                                <div className="flex-1 w-full bg-gray-50 rounded-[8px] overflow-hidden border border-gray-100">
+                                                    {typeof formData.attachment === 'string' || (formData.attachment instanceof File && formData.attachment.type?.includes('pdf')) ? (
+                                                        <iframe
+                                                            src={`${previewUrl}#toolbar=0&navpanes=0`}
+                                                            className="w-full h-full border-none"
+                                                            title="Customer PO File Preview"
+                                                        />
+                                                    ) : (
+                                                        <img
+                                                            src={previewUrl}
+                                                            alt="Customer PO Preview"
+                                                            className="w-full h-full object-contain"
+                                                        />
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({...formData, attachment: null, removeAttachment: true})}
+                                        className="p-2.5 bg-red-50 text-red-500 rounded-[10px] hover:bg-red-100 transition-all shadow-sm border border-red-100"
+                                        title="Remove Customer PO"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 <div className="p-8 pb-3 border-b border-gray-100 bg-white sticky top-0 z-40">
                     <div className="flex items-center gap-6">
@@ -1592,7 +1786,7 @@ const AddSO = () => {
                                 <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
                                     <AlertCircle className="text-white" size={19} />
                                 </div>
-                                <h3 className="text-[17px] font-bold text-white tracking-tight font-outfit">Missing Required Fields</h3>
+                                <h3 className="text-[17px] font-bold text-white tracking-tight font-outfit">{validationPopupTitle}</h3>
                             </div>
                             <button 
                                 onClick={() => setShowValidationPopup(false)} 
@@ -1606,7 +1800,7 @@ const AddSO = () => {
                         <div className="p-7 font-outfit">
                             <div className="min-h-[60px] flex items-center">
                                 <p className="text-[15px] text-[#475569] leading-[1.6] font-medium">
-                                    Please ensure all mandatory fields (marked with <span className='text-red-600 font-bold'>*</span>) are filled correctly before proceeding to preview.
+                                    {validationPopupMessage}
                                 </p>
                             </div>
 

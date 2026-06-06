@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Param, Patch, Post, ParseIntPipe, Query, UseGuards, Request, Res, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, Request, Res, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CategoryMasterService } from '../services/category-master.service';
-import { CreateCategoryDto, CreateSubCategoryDto, CreateSubSubCategoryDto, ToggleStatusDto, UpdateCategoryDto, UpdateSubCategoryDto, UpdateSubSubCategoryDto } from '../dto/category.dto';
+import { CreateCategoryDto, CreateSubCategoryDto, CreateSubSubCategoryDto, ToggleStatusDto, UpdateCategoryDto, UpdateSubCategoryDto, UpdateSubSubCategoryDto, MoveCategoryDto } from '../dto/category.dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 
 @ApiTags('Category Master')
@@ -43,7 +43,7 @@ export class CategoryMasterController {
     ) {
         return this.service.getCategoriesForDropdown(
             req.user.userId,
-            excludeId ? parseInt(excludeId) : undefined,
+            excludeId,
         );
     }
 
@@ -59,7 +59,7 @@ export class CategoryMasterController {
     @ApiResponse({ status: 200, description: 'Category status updated' })
     async toggleCategoryStatus(
         @Request() req,
-        @Param('id', ParseIntPipe) id: number,
+        @Param('id') id: string,
         @Body() dto: ToggleStatusDto,
     ) {
         return this.service.toggleCategoryStatus(id, dto, req.user.userId);
@@ -70,7 +70,7 @@ export class CategoryMasterController {
     @ApiResponse({ status: 200, description: 'Sub Category status updated' })
     async toggleSubCategoryStatus(
         @Request() req,
-        @Param('id', ParseIntPipe) id: number,
+        @Param('id') id: string,
         @Body() dto: ToggleStatusDto,
     ) {
         return this.service.toggleSubCategoryStatus(id, dto, req.user.userId);
@@ -81,7 +81,7 @@ export class CategoryMasterController {
     @ApiResponse({ status: 200, description: 'Sub Sub Category status updated' })
     async toggleSubSubCategoryStatus(
         @Request() req,
-        @Param('id', ParseIntPipe) id: number,
+        @Param('id') id: string,
         @Body() dto: ToggleStatusDto,
     ) {
         return this.service.toggleSubSubCategoryStatus(id, dto, req.user.userId);
@@ -92,7 +92,7 @@ export class CategoryMasterController {
     @ApiResponse({ status: 200, description: 'Category updated' })
     async updateCategory(
         @Request() req,
-        @Param('id', ParseIntPipe) id: number,
+        @Param('id') id: string,
         @Body() dto: UpdateCategoryDto,
     ) {
         return this.service.updateCategory(id, dto, req.user.userId);
@@ -103,7 +103,7 @@ export class CategoryMasterController {
     @ApiResponse({ status: 200, description: 'Sub Category updated' })
     async updateSubCategory(
         @Request() req,
-        @Param('id', ParseIntPipe) id: number,
+        @Param('id') id: string,
         @Body() dto: UpdateSubCategoryDto,
     ) {
         return this.service.updateSubCategory(id, dto, req.user.userId);
@@ -114,7 +114,7 @@ export class CategoryMasterController {
     @ApiResponse({ status: 200, description: 'Sub Sub Category updated' })
     async updateSubSubCategory(
         @Request() req,
-        @Param('id', ParseIntPipe) id: number,
+        @Param('id') id: string,
         @Body() dto: UpdateSubSubCategoryDto,
     ) {
         return this.service.updateSubSubCategory(id, dto, req.user.userId);
@@ -145,11 +145,30 @@ export class CategoryMasterController {
         return this.service.importCategories(file.buffer, req.user.userId);
     }
 
+    @Patch(':id/move')
+    @ApiOperation({ summary: 'Relocate category and entire subtree' })
+    async moveCategory(
+        @Request() req,
+        @Param('id') id: string,
+        @Body() dto: MoveCategoryDto,
+    ) {
+        return this.service.moveCategory(id, dto, req.user.userId);
+    }
+
+    @Get(':id/move-options')
+    @ApiOperation({ summary: 'Get eligible parent destinations' })
+    async getMoveOptions(
+        @Request() req,
+        @Param('id') id: string,
+    ) {
+        return this.service.getMoveOptions(id, req.user.userId);
+    }
+
     @Post('sub-category/:id/promote')
     @ApiOperation({ summary: 'Promote Sub Category to main Category' })
     async promoteSubCategory(
         @Request() req,
-        @Param('id', ParseIntPipe) id: number,
+        @Param('id') id: string,
     ) {
         return this.service.promoteSubCategory(id, req.user.userId);
     }
@@ -159,8 +178,8 @@ export class CategoryMasterController {
     @ApiResponse({ status: 200, description: 'Category demoted to Sub Category' })
     async demoteCategory(
         @Request() req,
-        @Param('id', ParseIntPipe) id: number,
-        @Param('newParentId', ParseIntPipe) newParentId: number,
+        @Param('id') id: string,
+        @Param('newParentId') newParentId: string,
     ) {
         return this.service.demoteCategory(id, newParentId, req.user.userId);
     }
@@ -170,8 +189,8 @@ export class CategoryMasterController {
     @ApiResponse({ status: 200, description: 'Category demoted to Sub Sub Category' })
     async demoteCategoryToSubSub(
         @Request() req,
-        @Param('id', ParseIntPipe) id: number,
-        @Param('subId', ParseIntPipe) subId: number,
+        @Param('id') id: string,
+        @Param('subId') subId: string,
     ) {
         return this.service.demoteCategoryToSubSubCategory(id, subId, req.user.userId);
     }
@@ -181,8 +200,8 @@ export class CategoryMasterController {
     @ApiResponse({ status: 200, description: 'Sub Category demoted to Sub Sub Category' })
     async demoteSubCategoryToSubSub(
         @Request() req,
-        @Param('id', ParseIntPipe) id: number,
-        @Param('subId', ParseIntPipe) subId: number,
+        @Param('id') id: string,
+        @Param('subId') subId: string,
     ) {
         return this.service.demoteSubCategoryToSubSub(id, subId, req.user.userId);
     }
@@ -192,10 +211,10 @@ export class CategoryMasterController {
     @ApiResponse({ status: 200, description: 'Sub Sub Category promoted to Sub Category' })
     async promoteSubSubToSub(
         @Request() req,
-        @Param('id', ParseIntPipe) id: number,
-        @Param('newParentCatId', ParseIntPipe) newParentCatId: number,
+        @Param('id') id: string,
+        @Param('newParentCatId') newParentCatId: string,
     ) {
-        return this.service.promoteSubSubCategoryToSub(id, newParentCatId, req.user.userId);
+        return this.service.promoteSubSubToSub(id, newParentCatId, req.user.userId);
     }
 
     @Post('sub-sub-category/:id/promote-to-category')
@@ -203,9 +222,21 @@ export class CategoryMasterController {
     @ApiResponse({ status: 200, description: 'Sub Sub Category promoted to Category' })
     async promoteSubSubToCategory(
         @Request() req,
-        @Param('id', ParseIntPipe) id: number,
+        @Param('id') id: string,
     ) {
         return this.service.promoteSubSubToCategory(id, req.user.userId);
+    }
+
+    @Get('sample')
+    @ApiOperation({ summary: 'Download Sample Excel file for Categories' })
+    async downloadSample(@Res() res: Response) {
+        const file = await this.service.downloadSample();
+        res.set({
+            'Content-Type': file.mimetype,
+            'Content-Disposition': `attachment; filename="${file.filename}"`,
+            'Content-Length': file.buffer.length,
+        });
+        res.send(file.buffer);
     }
 
     @Get('export')

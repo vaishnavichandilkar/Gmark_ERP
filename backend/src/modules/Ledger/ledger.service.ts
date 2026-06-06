@@ -198,9 +198,38 @@ export class LedgerService {
         ? [TransactionType.Purchase, TransactionType.Payment]
         : [TransactionType.Sales, TransactionType.Receipt];
 
-    const baseOpeningBalance = isCreditorLedger
-      ? (account.supplierBalanceType === BalanceType.Dr ? -Number(account.supplierOpeningBalance || 0) : Number(account.supplierOpeningBalance || 0))
-      : (account.customerBalanceType === BalanceType.Cr ? -Number(account.customerOpeningBalance || 0) : Number(account.customerOpeningBalance || 0));
+    let baseOpeningBalance = 0;
+    if (isBankOrCash) {
+      let bal = Number(account.supplierOpeningBalance || account.customerOpeningBalance || 0);
+      let balType = account.supplierBalanceType || account.customerBalanceType || BalanceType.Dr;
+
+      if (bal === 0) {
+        // Fallback to SubSubSubGroup under Bank & Cash parent group
+        const bankCashGroup = await this.prisma.subSubGroup.findFirst({
+          where: { name: { equals: 'Bank & Cash', mode: 'insensitive' } }
+        });
+        if (bankCashGroup) {
+          const groupInfo = await this.prisma.subSubSubGroup.findFirst({
+            where: {
+              sub_sub_group_id: bankCashGroup.id,
+              userId,
+              name: { equals: account.accountName, mode: 'insensitive' }
+            }
+          });
+          if (groupInfo) {
+            bal = Number(groupInfo.opening_balance || 0);
+            balType = groupInfo.balance_type || BalanceType.Dr;
+          }
+        }
+      }
+
+      baseOpeningBalance = balType === BalanceType.Cr ? -bal : bal;
+    } else {
+      baseOpeningBalance = isCreditorLedger
+        ? (account.supplierBalanceType === BalanceType.Dr ? -Number(account.supplierOpeningBalance || 0) : Number(account.supplierOpeningBalance || 0))
+        : (account.customerBalanceType === BalanceType.Cr ? -Number(account.customerOpeningBalance || 0) : Number(account.customerOpeningBalance || 0));
+    }
+
 
 
     let effectiveOpeningBalance = baseOpeningBalance;

@@ -64,8 +64,8 @@ export const GST_STATE_CODES: Record<string, string> = {
  */
 export function isValidGst(gst: string | null | undefined): boolean {
   if (!gst) return false;
-  const trimmed = gst.trim();
-  if (trimmed.toUpperCase() === 'N/A') return false;
+  const trimmed = gst.trim().toUpperCase();
+  if (trimmed === 'N/A' || trimmed === 'NOT AVAILABLE' || trimmed === '-') return false;
   if (trimmed.length < 10) return false;
   return true;
 }

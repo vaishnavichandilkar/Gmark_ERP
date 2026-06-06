@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import grnService from '@/services/grnService';
 import { getStandardGstUom } from '@/utils/uomUtils';
 
-const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isPoSelected, poNumber, linkedPoItems, type = 'GRN', supplierName }) => {
+const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isPoSelected, poNumber, linkedPoItems, type = 'GRN', supplierName, isGrnSelected }) => {
     const isGRN = type === 'GRN';
     const [tableSearch, setTableSearch] = useState('');
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
@@ -51,11 +51,21 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
 
         // Recalculate
         if (['quantity', 'rate', 'taxPercent', 'discountPercent', 'discountAmount', 'totalPoQty'].includes(field)) {
-            const qty      = parseFloat(field === 'quantity'        ? finalValue : item.quantity)        || 0;
+            let qty        = parseFloat(field === 'quantity'        ? finalValue : item.quantity)        || 0;
             const rate     = parseFloat(field === 'rate'            ? finalValue : item.rate)            || 0;
             const taxPct   = parseFloat(field === 'taxPercent'      ? finalValue : item.taxPercent)      || 0;
             const totalPO  = parseFloat(field === 'totalPoQty'      ? finalValue : item.totalPoQty)      || 0;
             const receivedPO = parseFloat(item.receivedPoQty)                                          || 0;
+
+            const maxAllowed = totalPO - receivedPO;
+            if (totalPO > 0 && qty > maxAllowed) {
+                toast.error(`Quantity cannot exceed remaining PO quantity of ${maxAllowed}`);
+                qty = Math.max(0, maxAllowed);
+                if (field === 'quantity') {
+                    finalValue = qty;
+                }
+                item.quantity = qty;
+            }
 
             const baseAmount = qty * rate;
 
@@ -97,12 +107,8 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
     };
 
     const handleSelectProduct = async (product, rowIndex = null) => {
-        const qty = 1;
         const rate = parseFloat(product.purchaseRate) || 0;
         const taxPct = (parseFloat(product.tax_rate) || (product.hsn?.gst_rate ? parseFloat(product.hsn.gst_rate) : 0));
-        const baseAmount = qty * rate;
-        const taxAmt = gstType?.type === 'NONE' ? 0 : (baseAmount * taxPct) / 100;
-        const total = parseFloat((baseAmount + taxAmt).toFixed(2));
 
         let poQty = 0;
         let receivedCount = 0;
@@ -125,6 +131,19 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                 console.error("Failed to fetch received history", e);
             }
         }
+
+        let qty = 1;
+        if (poQty > 0) {
+            const maxAllowed = poQty - receivedCount;
+            if (qty > maxAllowed) {
+                qty = Math.max(0, maxAllowed);
+                toast.error(`Quantity adjusted to remaining PO quantity of ${qty}`);
+            }
+        }
+
+        const baseAmount = qty * rate;
+        const taxAmt = gstType?.type === 'NONE' ? 0 : (baseAmount * taxPct) / 100;
+        const total = parseFloat((baseAmount + taxAmt).toFixed(2));
 
         const updatedItems = [...items];
         let finalTargetIndex = rowIndex;
@@ -370,7 +389,8 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                                 min="0"
                                                 value={item.quantity === 0 ? '' : item.quantity}
                                                 onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                                className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
+                                                readOnly={isGrnSelected || isPoSelected}
+                                                className={`w-full h-[36px] border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none transition-all shadow-sm ${(isGrnSelected || isPoSelected) ? 'bg-gray-50 text-gray-500 cursor-not-allowed border-[#E5E7EB]' : 'bg-white text-[#111827] focus:border-[#073318] border-[#E5E7EB]'} ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : ''}`}
                                             />
                                         </td>
                                     )}

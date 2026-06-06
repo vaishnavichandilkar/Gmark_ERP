@@ -19,7 +19,11 @@ export class BusinessService {
         // Extract GST Number from documents
         // A valid GST number is 15 characters. We reject placeholder values like 'N/A'.
         const isValidGst = (name: string | null | undefined) =>
-            name && name.trim().toUpperCase() !== 'N/A' && name.trim().length >= 10;
+            name && 
+            name.trim().toUpperCase() !== 'N/A' && 
+            name.trim().toUpperCase() !== 'NOT AVAILABLE' && 
+            name.trim().toUpperCase() !== '-' && 
+            name.trim().length >= 10;
 
         const gstDoc = user.sellerDocuments.find(
             doc => doc.type === 'GST' && isValidGst(doc.name)

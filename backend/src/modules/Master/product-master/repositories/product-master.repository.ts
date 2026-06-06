@@ -10,9 +10,12 @@ export class ProductMasterRepository {
         return this.prisma.product.create({ data });
     }
 
-    async getLastProductCode(userId: number): Promise<string | null> {
+    async getLastProductCode(userId: number, prefix: string): Promise<string | null> {
         const product = await this.prisma.product.findFirst({
-            where: { created_by: userId },
+            where: { 
+                created_by: userId,
+                product_code: { startsWith: prefix }
+            },
             orderBy: { id: 'desc' },
             select: { product_code: true }
         });
@@ -22,7 +25,19 @@ export class ProductMasterRepository {
     async findProductById(id: number) {
         return this.prisma.product.findUnique({
             where: { id, is_deleted: false },
-            include: { uom: true, category: true, sub_category: true, sub_sub_category: true, hsnMaster: true }
+            include: {
+                uom: true,
+                category: {
+                    include: {
+                        parent: {
+                            include: {
+                                parent: true
+                            }
+                        }
+                    }
+                },
+                hsnMaster: true
+            }
         });
     }
 
@@ -47,8 +62,6 @@ export class ProductMasterRepository {
                 { hsn_code: { contains: searchTerm, mode: 'insensitive' } },
                 { uom: { unit_name: { contains: searchTerm, mode: 'insensitive' } } },
                 { category: { name: { contains: searchTerm, mode: 'insensitive' } } },
-                { sub_category: { name: { contains: searchTerm, mode: 'insensitive' } } },
-                { sub_sub_category: { name: { contains: searchTerm, mode: 'insensitive' } } },
             ];
 
             // Add enum searches
@@ -76,7 +89,19 @@ export class ProductMasterRepository {
         const findOptions: Prisma.ProductFindManyArgs = {
             where,
             orderBy: { created_at: 'desc' },
-            include: { uom: true, category: true, sub_category: true, sub_sub_category: true, hsnMaster: true }
+            include: {
+                uom: true,
+                category: {
+                    include: {
+                        parent: {
+                            include: {
+                                parent: true
+                            }
+                        }
+                    }
+                },
+                hsnMaster: true
+            }
         };
 
         if (!isExport) {
@@ -108,16 +133,16 @@ export class ProductMasterRepository {
         return this.prisma.unitMaster.findUnique({ where: { id } });
     }
 
-    async getCategoryById(id: number) {
+    async getCategoryById(id: string) {
         return this.prisma.category.findUnique({ where: { id } });
     }
 
-    async getSubCategoryById(id: number) {
-        return this.prisma.subCategory.findUnique({ where: { id } });
+    async getSubCategoryById(id: string) {
+        return this.prisma.category.findUnique({ where: { id } });
     }
 
-    async getSubSubCategoryById(id: number) {
-        return this.prisma.subSubCategory.findUnique({ where: { id } });
+    async getSubSubCategoryById(id: string) {
+        return this.prisma.category.findUnique({ where: { id } });
     }
 
     async getActiveUomsForDropdown(userId: number) {
@@ -130,23 +155,23 @@ export class ProductMasterRepository {
 
     async getActiveCategoriesForDropdown(userId: number) {
         return this.prisma.category.findMany({
-            where: { user_id: userId, status: 'ACTIVE' },
+            where: { user_id: userId, status: 'ACTIVE', parent_id: null },
             select: { id: true, name: true },
             orderBy: { name: 'asc' }
         });
     }
 
-    async getActiveSubCategoriesForDropdown(categoryId: number, userId: number) {
-        return this.prisma.subCategory.findMany({
-            where: { category_id: categoryId, user_id: userId, status: 'ACTIVE' },
+    async getActiveSubCategoriesForDropdown(categoryId: string, userId: number) {
+        return this.prisma.category.findMany({
+            where: { parent_id: categoryId, user_id: userId, status: 'ACTIVE' },
             select: { id: true, name: true },
             orderBy: { name: 'asc' }
         });
     }
 
-    async getActiveSubSubCategoriesForDropdown(subCategoryId: number, userId: number) {
-        return this.prisma.subSubCategory.findMany({
-            where: { sub_category_id: subCategoryId, user_id: userId, status: 'ACTIVE' },
+    async getActiveSubSubCategoriesForDropdown(subCategoryId: string, userId: number) {
+        return this.prisma.category.findMany({
+            where: { parent_id: subCategoryId, user_id: userId, status: 'ACTIVE' },
             select: { id: true, name: true },
             orderBy: { name: 'asc' }
         });

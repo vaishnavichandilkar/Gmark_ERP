@@ -158,6 +158,7 @@ export class GroupMasterService {
     async getSampleExcel() {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Sample Data');
+        worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
         worksheet.columns = [
             { header: 'Group Name', key: 'group_name', width: 30 },
@@ -174,7 +175,10 @@ export class GroupMasterService {
             formulae: ['"Dr,Cr"'],
             showErrorMessage: true,
             errorTitle: 'Invalid Balance Type',
-            error: 'Please select from the list (Dr, Cr)'
+            error: 'Please select from the list (Dr, Cr)',
+            showInputMessage: true,
+            promptTitle: 'Select Balance Type',
+            prompt: 'Choose one of:\nDr,\nCr'
         });
 
         // Add validation for status (now in column E)
@@ -184,7 +188,10 @@ export class GroupMasterService {
             formulae: ['"active,inactive"'],
             showErrorMessage: true,
             errorTitle: 'Invalid Status',
-            error: 'Please select from the list (active, inactive)'
+            error: 'Please select from the list (active, inactive)',
+            showInputMessage: true,
+            promptTitle: 'Select Status',
+            prompt: 'Choose one of:\nactive,\ninactive'
         });
 
         const buffer = await workbook.xlsx.writeBuffer();
@@ -403,6 +410,7 @@ export class GroupMasterService {
         if (format === 'xlsx') {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Groups');
+            worksheet.views = [{ state: 'frozen', ySplit: 5 }];
 
             worksheet.columns = [
                 { header: 'Group Name', key: 'groupName', width: 40 },

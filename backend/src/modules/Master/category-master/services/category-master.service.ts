@@ -1,13 +1,40 @@
 import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { MasterStatus } from '@prisma/client';
 import { CategoryMasterRepository } from '../repositories/category-master.repository';
-import { CreateCategoryDto, CreateSubCategoryDto, CreateSubSubCategoryDto, ToggleStatusDto, UpdateCategoryDto, UpdateSubCategoryDto, UpdateSubSubCategoryDto } from '../dto/category.dto';
+import { CreateCategoryDto, CreateSubCategoryDto, CreateSubSubCategoryDto, ToggleStatusDto, UpdateCategoryDto, UpdateSubCategoryDto, UpdateSubSubCategoryDto, MoveCategoryDto } from '../dto/category.dto';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 
 @Injectable()
 export class CategoryMasterService {
     constructor(private repository: CategoryMasterRepository) { }
+
+    async calculateLevel(category: any): Promise<number> {
+        let level = 1;
+        let current = category;
+        while (current.parent_id) {
+            const parent = await this.repository.findCategoryById(current.parent_id);
+            if (!parent) break;
+            level++;
+            current = parent;
+        }
+        return level;
+    }
+
+    async maxSubtreeDepth(categoryId: string): Promise<number> {
+        const category = await this.repository.findCategoryById(categoryId);
+        if (!category || !category.children || category.children.length === 0) {
+            return 1;
+        }
+        let maxChildDepth = 0;
+        for (const child of category.children) {
+            const depth = await this.maxSubtreeDepth(child.id);
+            if (depth > maxChildDepth) {
+                maxChildDepth = depth;
+            }
+        }
+        return 1 + maxChildDepth;
+    }
 
     async createCategory(dto: CreateCategoryDto, userId: number) {
         const name = dto.name.trim();
@@ -20,9 +47,21 @@ export class CategoryMasterService {
             throw new ConflictException('Category with this name already exists for this user');
         }
 
+        if (dto.parent_id) {
+            const parent = await this.repository.findCategoryById(dto.parent_id);
+            if (!parent || parent.user_id !== userId) {
+                throw new NotFoundException('Parent category not found');
+            }
+            const parentLevel = await this.calculateLevel(parent);
+            if (parentLevel >= 3) {
+                throw new BadRequestException('Cannot add child. Maximum hierarchy depth of 3 levels exceeded.');
+            }
+        }
+
         return this.repository.createCategory({
             name,
             user_id: userId,
+            parent_id: dto.parent_id,
             status: dto.status,
         });
     }
@@ -33,15 +72,18 @@ export class CategoryMasterService {
             throw new BadRequestException('Sub Category name cannot be empty');
         }
 
-        // Check if category exists and belongs to user
         const category = await this.repository.findCategoryById(dto.category_id);
         if (!category || category.user_id !== userId) {
             throw new NotFoundException('Category not found or does not belong to you');
         }
 
-        // Check if category is ACTIVE
         if (category.status === MasterStatus.INACTIVE) {
             throw new BadRequestException('Cannot create Sub Category under an INACTIVE Category');
+        }
+
+        const parentLevel = await this.calculateLevel(category);
+        if (parentLevel >= 3) {
+            throw new BadRequestException('Cannot add child. Maximum hierarchy depth of 3 levels exceeded.');
         }
 
         const existing = await this.repository.findSubCategoryByName(name, dto.category_id, userId);
@@ -63,15 +105,18 @@ export class CategoryMasterService {
             throw new BadRequestException('Sub Sub Category name cannot be empty');
         }
 
-        // Check if sub category exists and belongs to user
         const subCategory = await this.repository.findSubCategoryById(dto.sub_category_id);
         if (!subCategory || subCategory.user_id !== userId) {
             throw new NotFoundException('Sub Category not found or does not belong to you');
         }
 
-        // Check if sub category is ACTIVE
         if (subCategory.status === MasterStatus.INACTIVE) {
             throw new BadRequestException('Cannot create Sub Sub Category under an INACTIVE Sub Category');
+        }
+
+        const parentLevel = await this.calculateLevel(subCategory);
+        if (parentLevel >= 3) {
+            throw new BadRequestException('Cannot add child. Maximum hierarchy depth of 3 levels exceeded.');
         }
 
         const existing = await this.repository.findSubSubCategoryByName(name, dto.sub_category_id, userId);
@@ -87,8 +132,7 @@ export class CategoryMasterService {
         });
     }
 
-    async getCategoriesForDropdown(userId: number, excludeId?: number) {
-        // As per instructions, only Categories (from categories table) are shown
+    async getCategoriesForDropdown(userId: number, excludeId?: string) {
         return this.repository.getCategoriesForDropdown(userId, excludeId);
     }
 
@@ -96,7 +140,7 @@ export class CategoryMasterService {
         return this.repository.getCategoryWithSubCategories(userId);
     }
 
-    async toggleCategoryStatus(id: number, dto: ToggleStatusDto, userId: number) {
+    async toggleCategoryStatus(id: string, dto: ToggleStatusDto, userId: number) {
         const category = await this.repository.findCategoryById(id);
         if (!category || category.user_id !== userId) {
             throw new NotFoundException('Category not found or does not belong to you');
@@ -104,7 +148,6 @@ export class CategoryMasterService {
 
         const updatedCategory = await this.repository.toggleCategoryStatus(id, dto.status);
 
-        // If Category is set to INACTIVE, set all its Sub Categories to INACTIVE
         if (dto.status === MasterStatus.INACTIVE) {
             await this.repository.updateSubCategoriesStatusByCategory(id, MasterStatus.INACTIVE);
         }
@@ -112,50 +155,15 @@ export class CategoryMasterService {
         return updatedCategory;
     }
 
-    async toggleSubCategoryStatus(id: number, dto: ToggleStatusDto, userId: number) {
-        const subCategory = await this.repository.findSubCategoryById(id);
-
-        if (!subCategory || subCategory.user_id !== userId) {
-            throw new NotFoundException('Sub Category not found or does not belong to you');
-        }
-
-        // If activating Sub Category, check if parent Category is ACTIVE
-        if (dto.status === MasterStatus.ACTIVE) {
-            const category = await this.repository.findCategoryById(subCategory.category_id);
-            if (!category || category.status === MasterStatus.INACTIVE) {
-                throw new BadRequestException('Cannot activate Sub Category while parent Category is INACTIVE');
-            }
-        }
-
-        const updatedSubCategory = await this.repository.toggleSubCategoryStatus(id, dto.status);
-
-        // If Sub Category is set to INACTIVE, set all its Sub Sub Categories to INACTIVE
-        if (dto.status === MasterStatus.INACTIVE) {
-            await this.repository.updateSubSubCategoriesStatusBySubCategory(id, MasterStatus.INACTIVE);
-        }
-
-        return updatedSubCategory;
+    async toggleSubCategoryStatus(id: string, dto: ToggleStatusDto, userId: number) {
+        return this.toggleCategoryStatus(id, dto, userId);
     }
 
-    async toggleSubSubCategoryStatus(id: number, dto: ToggleStatusDto, userId: number) {
-        const subSubCategory = await this.repository.findSubSubCategoryById(id);
-
-        if (!subSubCategory || subSubCategory.user_id !== userId) {
-            throw new NotFoundException('Sub Sub Category not found or does not belong to you');
-        }
-
-        // If activating Sub Sub Category, check if parent Sub Category is ACTIVE
-        if (dto.status === MasterStatus.ACTIVE) {
-            const subCategory = await this.repository.findSubCategoryById(subSubCategory.sub_category_id);
-            if (!subCategory || subCategory.status === MasterStatus.INACTIVE) {
-                throw new BadRequestException('Cannot activate Sub Sub Category while parent Sub Category is INACTIVE');
-            }
-        }
-
-        return this.repository.toggleSubSubCategoryStatus(id, dto.status);
+    async toggleSubSubCategoryStatus(id: string, dto: ToggleStatusDto, userId: number) {
+        return this.toggleCategoryStatus(id, dto, userId);
     }
 
-    async updateCategory(id: number, dto: { name: string }, userId: number) {
+    async updateCategory(id: string, dto: { name: string }, userId: number) {
         const name = dto.name.trim();
         if (!name) throw new BadRequestException('Category name cannot be empty');
 
@@ -170,23 +178,24 @@ export class CategoryMasterService {
         return this.repository.updateCategoryData(id, { name });
     }
 
-    async updateSubCategory(id: number, dto: UpdateSubCategoryDto, userId: number) {
+    async updateSubCategory(id: string, dto: UpdateSubCategoryDto, userId: number) {
         const name = dto.name.trim();
         if (!name) throw new BadRequestException('Sub Category name cannot be empty');
 
         const subCategory = await this.repository.findSubCategoryById(id);
         if (!subCategory || subCategory.user_id !== userId) throw new NotFoundException('Sub Category not found or does not belong to you');
 
-        // Check if category_id is being changed
-        const newCategoryId = dto.category_id || subCategory.category_id;
-        if (newCategoryId !== subCategory.category_id) {
-            const newCategory = await this.repository.findCategoryById(newCategoryId);
-            if (!newCategory || newCategory.user_id !== userId) {
-                throw new BadRequestException('Selected category is invalid');
+        const newCategoryId = dto.category_id || subCategory.parent_id;
+        if (newCategoryId !== subCategory.parent_id) {
+            if (newCategoryId) {
+                const newCategory = await this.repository.findCategoryById(newCategoryId);
+                if (!newCategory || newCategory.user_id !== userId) {
+                    throw new BadRequestException('Selected category is invalid');
+                }
             }
         }
 
-        const existing = await this.repository.findSubCategoryByName(name, newCategoryId, userId);
+        const existing = await this.repository.findSubCategoryByName(name, newCategoryId!, userId);
         if (existing && existing.id !== id) {
             throw new ConflictException('Sub Category with this name already exists in this category');
         }
@@ -194,28 +203,159 @@ export class CategoryMasterService {
         return this.repository.updateSubCategoryContent(id, name, dto.category_id);
     }
 
-    async updateSubSubCategory(id: number, dto: UpdateSubSubCategoryDto, userId: number) {
+    async updateSubSubCategory(id: string, dto: UpdateSubSubCategoryDto, userId: number) {
         const name = dto.name.trim();
         if (!name) throw new BadRequestException('Sub Sub Category name cannot be empty');
 
         const subSubCategory = await this.repository.findSubSubCategoryById(id);
         if (!subSubCategory || subSubCategory.user_id !== userId) throw new NotFoundException('Sub Sub Category not found or does not belong to you');
 
-        // Check if sub_category_id is being changed
-        const newSubCategoryId = dto.sub_category_id || subSubCategory.sub_category_id;
-        if (newSubCategoryId !== subSubCategory.sub_category_id) {
-            const newSubCategory = await this.repository.findSubCategoryById(newSubCategoryId);
-            if (!newSubCategory || newSubCategory.user_id !== userId) {
-                throw new BadRequestException('Selected sub category is invalid');
+        const newSubCategoryId = dto.sub_category_id || subSubCategory.parent_id;
+        if (newSubCategoryId !== subSubCategory.parent_id) {
+            if (newSubCategoryId) {
+                const newSubCategory = await this.repository.findSubCategoryById(newSubCategoryId);
+                if (!newSubCategory || newSubCategory.user_id !== userId) {
+                    throw new BadRequestException('Selected sub category is invalid');
+                }
             }
         }
 
-        const existing = await this.repository.findSubSubCategoryByName(name, newSubCategoryId, userId);
+        const existing = await this.repository.findSubSubCategoryByName(name, newSubCategoryId!, userId);
         if (existing && existing.id !== id) {
             throw new ConflictException('Sub Sub Category with this name already exists in this sub category');
         }
 
         return this.repository.updateSubSubCategoryContent(id, name, dto.sub_category_id);
+    }
+
+    async moveCategory(id: string, dto: MoveCategoryDto, userId: number) {
+        const category = await this.repository.findCategoryById(id);
+        if (!category || category.user_id !== userId) {
+            throw new NotFoundException('Category not found');
+        }
+
+        const targetParentId = dto.targetParentId || null;
+
+        // Rule 1: Self-parenting
+        if (id === targetParentId) {
+            throw new BadRequestException('Category cannot become its own parent.');
+        }
+
+        let oldParentName = 'NULL';
+        if (category.parent_id) {
+            const oldParent = await this.repository.findCategoryById(category.parent_id);
+            oldParentName = oldParent?.name || 'NULL';
+        }
+
+        let newParentName = 'NULL';
+        let newLevel = 1;
+
+        if (targetParentId) {
+            // Rule 2: Circular reference check
+            let currentParentId = targetParentId;
+            while (currentParentId) {
+                if (currentParentId === id) {
+                    throw new BadRequestException('Cannot move category inside its own descendant.');
+                }
+                const pNode = await this.repository.findCategoryById(currentParentId);
+                currentParentId = pNode?.parent_id || null;
+            }
+
+            const targetParent = await this.repository.findCategoryById(targetParentId);
+            if (!targetParent || targetParent.user_id !== userId) {
+                throw new BadRequestException('Target parent category not found.');
+            }
+            newParentName = targetParent.name;
+
+            const targetParentLevel = await this.calculateLevel(targetParent);
+            newLevel = targetParentLevel + 1;
+        }
+
+        // Rule 3 & 4: Depth validation
+        const subtreeHeight = await this.maxSubtreeDepth(id);
+        if (newLevel + subtreeHeight - 1 > 3) {
+            throw new BadRequestException('Move exceeds maximum hierarchy depth of 3.');
+        }
+
+        const oldLevel = await this.calculateLevel(category);
+        const updated = await this.repository.moveCategory(id, targetParentId);
+
+        // Audit log
+        await this.repository.createAuditLog(userId, 'CATEGORY_MOVED', 'Category', {
+            action: 'CATEGORY_MOVED',
+            category: category.name,
+            oldParent: oldParentName,
+            newParent: newParentName,
+            oldLevel,
+            newLevel
+        });
+
+        return updated;
+    }
+
+    async getMoveOptions(id: string, userId: number) {
+        const category = await this.repository.findCategoryById(id);
+        if (!category || category.user_id !== userId) {
+            throw new NotFoundException('Category not found');
+        }
+
+        const currentLevel = await this.calculateLevel(category);
+        const subtreeHeight = await this.maxSubtreeDepth(id);
+
+        const moveToLevel1 = (1 + subtreeHeight - 1) <= 3;
+        const moveToLevel2 = (2 + subtreeHeight - 1) <= 3;
+        const moveToLevel3 = (3 + subtreeHeight - 1) <= 3;
+
+        const allCategories = await this.repository.getCategoriesForMoveOptions(userId, id);
+
+        const descendantIds = new Set<string>();
+        await this.collectDescendantIds(id, descendantIds);
+
+        const eligibleLevel1: any[] = [];
+        const eligibleLevel2: any[] = [];
+
+        for (const cat of allCategories) {
+            if (descendantIds.has(cat.id)) {
+                continue;
+            }
+
+            const catLevel = await this.calculateLevel(cat);
+
+            if (catLevel === 1 && moveToLevel2) {
+                eligibleLevel1.push({ id: cat.id, name: cat.name });
+            }
+
+            if (catLevel === 2 && moveToLevel3) {
+                const parentNode = await this.repository.findCategoryById(cat.parent_id);
+                const parentName = parentNode ? parentNode.name : 'Root';
+                eligibleLevel2.push({
+                    id: cat.id,
+                    name: cat.name,
+                    categoryName: parentName
+                });
+            }
+        }
+
+        return {
+            currentLevel,
+            moveToLevel1,
+            moveToLevel2,
+            moveToLevel3,
+            eligibleParents: {
+                level1: eligibleLevel1,
+                level2: eligibleLevel2
+            }
+        };
+    }
+
+    private async collectDescendantIds(id: string, ids: Set<string>) {
+        const category = await this.repository.findCategoryById(id);
+        if (category && category.children) {
+            for (const child of category.children) {
+                ids.add(child.id);
+                await this.collectDescendantIds(child.id, ids);
+            }
+        }
     }
 
     async importCategories(buffer: Buffer, userId: number) {
@@ -234,6 +374,7 @@ export class CategoryMasterService {
 
         let importedCategories = 0;
         let importedSubCategories = 0;
+        let importedSubSubCategories = 0;
         let failed = 0;
         const errors: string[] = [];
 
@@ -247,6 +388,7 @@ export class CategoryMasterService {
                 const val = String(cell.value || '').trim().toLowerCase();
                 if (val === 'category' || val === 'category name') { colMap['categoryName'] = colNumber; foundHeaders = true; }
                 if (val === 'sub category' || val === 'sub category name') colMap['subCategoryName'] = colNumber;
+                if (val === 'sub sub category' || val === 'sub sub category name') colMap['subSubCategoryName'] = colNumber;
             });
 
             if (foundHeaders) {
@@ -265,19 +407,20 @@ export class CategoryMasterService {
             return row.getCell(colIdx).value;
         };
 
-        let currentCategoryId: number | null = null;
+        let currentCategoryId: string | null = null;
+        let currentSubCategoryId: string | null = null;
 
         for (let i = headerRowIndex + 1; i <= rowCount; i++) {
             const row = worksheet.getRow(i);
             const rawCategoryName = String(getVal(row, 'categoryName')).trim();
             const rawSubCategoryName = String(getVal(row, 'subCategoryName')).trim();
+            const rawSubSubCategoryName = String(getVal(row, 'subSubCategoryName')).trim();
 
-            if (!rawCategoryName && !rawSubCategoryName) continue; // Empty row
-            if (rawCategoryName === '-' && rawSubCategoryName === '-') continue;
+            if (!rawCategoryName && !rawSubCategoryName && !rawSubSubCategoryName) continue;
+            if (rawCategoryName === '-' && rawSubCategoryName === '-' && rawSubSubCategoryName === '-') continue;
 
             try {
                 if (rawCategoryName) {
-                    // Try to find or create category
                     let category = await this.repository.findCategoryByName(rawCategoryName, userId);
                     if (!category) {
                         category = await this.repository.createCategory({
@@ -288,15 +431,16 @@ export class CategoryMasterService {
                         importedCategories++;
                     }
                     currentCategoryId = category.id;
+                    currentSubCategoryId = null; // reset subcategory context
                 }
 
                 if (rawSubCategoryName) {
                     if (!currentCategoryId) {
                         throw new BadRequestException('Sub category found without a parent category preceding it');
                     }
-                    const existingSub = await this.repository.findSubCategoryByName(rawSubCategoryName, currentCategoryId, userId);
-                    if (!existingSub) {
-                        await this.repository.createSubCategory({
+                    let subCategory = await this.repository.findSubCategoryByName(rawSubCategoryName, currentCategoryId, userId);
+                    if (!subCategory) {
+                        subCategory = await this.repository.createSubCategory({
                             name: rawSubCategoryName,
                             category_id: currentCategoryId,
                             user_id: userId,
@@ -304,74 +448,67 @@ export class CategoryMasterService {
                         });
                         importedSubCategories++;
                     }
+                    currentSubCategoryId = subCategory.id;
+                }
+
+                if (rawSubSubCategoryName) {
+                    if (!currentSubCategoryId) {
+                        throw new BadRequestException('Sub sub category found without a parent sub category preceding it');
+                    }
+                    const existingSubSub = await this.repository.findSubSubCategoryByName(rawSubSubCategoryName, currentSubCategoryId, userId);
+                    if (!existingSubSub) {
+                        await this.repository.createSubSubCategory({
+                            name: rawSubSubCategoryName,
+                            sub_category_id: currentSubCategoryId,
+                            user_id: userId,
+                            status: MasterStatus.ACTIVE,
+                        });
+                        importedSubSubCategories++;
+                    }
                 }
             } catch (error) {
                 failed++;
-                errors.push(`Row ${i} (${rawCategoryName || rawSubCategoryName}): ${error.message}`);
+                errors.push(`Row ${i} (${[rawCategoryName, rawSubCategoryName, rawSubSubCategoryName].filter(Boolean).join(' > ')}): ${error.message}`);
             }
         }
 
-        if (importedCategories === 0 && importedSubCategories === 0 && failed > 0) {
+        if (importedCategories === 0 && importedSubCategories === 0 && importedSubSubCategories === 0 && failed > 0) {
             throw new BadRequestException(`Import failed: ${errors[0]}`);
         }
 
-        if (importedCategories === 0 && importedSubCategories === 0 && failed === 0) {
+        if (importedCategories === 0 && importedSubCategories === 0 && importedSubSubCategories === 0 && failed === 0) {
             throw new BadRequestException('No data found to import');
         }
 
         return {
             success: true,
-            message: `Imported ${importedCategories} categories and ${importedSubCategories} sub-categories. ${failed > 0 ? failed + ' rows failed.' : ''}`,
+            message: `Imported ${importedCategories} categories, ${importedSubCategories} sub-categories, and ${importedSubSubCategories} sub-sub-categories. ${failed > 0 ? failed + ' rows failed.' : ''}`,
             errors: failed > 0 ? errors : undefined,
         };
     }
 
-    async promoteSubCategory(id: number, userId: number) {
-        try {
-            return await this.repository.promoteSubCategoryToCategory(id, userId);
-        } catch (error) {
-            throw new BadRequestException(error.message);
-        }
+    async promoteSubCategory(id: string, userId: number) {
+        return this.moveCategory(id, { targetParentId: null }, userId);
     }
 
-    async promoteSubSubCategoryToSub(id: number, newParentCatId: number, userId: number) {
-        try {
-            return await this.repository.promoteSubSubCategoryToSubCategory(id, newParentCatId, userId);
-        } catch (error) {
-            throw new BadRequestException(error.message);
-        }
+    async promoteSubSubToSub(id: string, newParentCatId: string, userId: number) {
+        return this.moveCategory(id, { targetParentId: newParentCatId }, userId);
     }
 
-    async promoteSubSubToCategory(id: number, userId: number) {
-        try {
-            return await this.repository.promoteSubSubCategoryToCategory(id, userId);
-        } catch (error) {
-            throw new BadRequestException(error.message);
-        }
+    async promoteSubSubToCategory(id: string, userId: number) {
+        return this.moveCategory(id, { targetParentId: null }, userId);
     }
 
-    async demoteCategory(id: number, newParentId: number, userId: number) {
-        try {
-            return await this.repository.demoteCategoryToSubCategory(id, newParentId, userId);
-        } catch (error) {
-            throw new BadRequestException(error.message);
-        }
+    async demoteCategory(id: string, newParentId: string, userId: number) {
+        return this.moveCategory(id, { targetParentId: newParentId }, userId);
     }
 
-    async demoteCategoryToSubSubCategory(id: number, newParentSubId: number, userId: number) {
-        try {
-            return await this.repository.demoteCategoryToSubSubCategory(id, newParentSubId, userId);
-        } catch (error) {
-            throw new BadRequestException(error.message);
-        }
+    async demoteCategoryToSubSubCategory(id: string, newParentSubId: string, userId: number) {
+        return this.moveCategory(id, { targetParentId: newParentSubId }, userId);
     }
 
-    async demoteSubCategoryToSubSub(id: number, newParentSubId: number, userId: number) {
-        try {
-            return await this.repository.demoteSubCategoryToSubSubCategory(id, newParentSubId, userId);
-        } catch (error) {
-            throw new BadRequestException(error.message);
-        }
+    async demoteSubCategoryToSubSub(id: string, newParentSubId: string, userId: number) {
+        return this.moveCategory(id, { targetParentId: newParentSubId }, userId);
     }
 
     async exportCategories(format: string, userId: number) {
@@ -381,7 +518,7 @@ export class CategoryMasterService {
             throw new BadRequestException('No data available to export');
         }
 
-        const flattenedData = [];
+        const flattenedData: any[] = [];
         categories.forEach(cat => {
             flattenedData.push({
                 name: cat.name,
@@ -390,7 +527,7 @@ export class CategoryMasterService {
                 status: cat.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive'
             });
 
-            (cat.sub_categories || []).forEach(sub => {
+            (cat.sub_categories || []).forEach((sub: any) => {
                 flattenedData.push({
                     name: sub.name,
                     level: 'Sub Category',
@@ -398,7 +535,7 @@ export class CategoryMasterService {
                     status: sub.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive'
                 });
 
-                (sub.sub_sub_categories || []).forEach(ss => {
+                (sub.sub_sub_categories || []).forEach((ss: any) => {
                     flattenedData.push({
                         name: ss.name,
                         level: 'Sub-SubCategory',
@@ -416,6 +553,7 @@ export class CategoryMasterService {
         if (format === 'xlsx') {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Categories');
+            worksheet.views = [{ state: 'frozen', ySplit: 5 }];
 
             worksheet.columns = [
                 { header: 'Sr. No', key: 'srNo', width: 10 },
@@ -514,5 +652,31 @@ export class CategoryMasterService {
         }
 
         throw new BadRequestException('Invalid export format. Use xlsx or pdf.');
+    }
+
+    async downloadSample() {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Sample Data');
+        worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+        const headers = ['Category Name*', 'Sub Category', 'Sub Sub Category'];
+        worksheet.addRow(headers);
+
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true };
+        headerRow.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFD3D3D3' }
+        };
+
+        worksheet.columns = headers.map(() => ({ width: 22 }));
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        return {
+            buffer: Buffer.from(buffer),
+            filename: 'Category_Master_Sample.xlsx',
+            mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        };
     }
 }

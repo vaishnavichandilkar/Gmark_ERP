@@ -189,6 +189,10 @@ const GroupMaster = () => {
     // Export Logic
     const handleExportPDF = async () => {
         setIsExportOpen(false);
+        if (filteredData.length === 0) {
+            showToast("No data available to export", "error");
+            return;
+        }
         try {
             const response = await masterService.exportGroups({ format: 'pdf' });
             const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -201,12 +205,26 @@ const GroupMaster = () => {
             showToast('PDF Exported Successfully');
         } catch (e) {
             console.error('Export failed', e);
-            showToast('Failed to export PDF', 'error');
+            let message = 'Failed to export PDF';
+            if (e.response && e.response.data instanceof Blob) {
+                const text = await e.response.data.text();
+                try {
+                    const errorData = JSON.parse(text);
+                    message = errorData.message || message;
+                } catch (err) {}
+            } else if (e.response?.data?.message) {
+                message = e.response.data.message;
+            }
+            showToast(message, 'error');
         }
     };
 
     const handleExportExcel = async () => {
         setIsExportOpen(false);
+        if (filteredData.length === 0) {
+            showToast("No data available to export", "error");
+            return;
+        }
         try {
             const response = await masterService.exportGroups({ format: 'xlsx' });
             const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -219,7 +237,17 @@ const GroupMaster = () => {
             showToast('Excel Exported Successfully');
         } catch (e) {
             console.error('Export failed', e);
-            showToast('Failed to export Excel', 'error');
+            let message = 'Failed to export Excel';
+            if (e.response && e.response.data instanceof Blob) {
+                const text = await e.response.data.text();
+                try {
+                    const errorData = JSON.parse(text);
+                    message = errorData.message || message;
+                } catch (err) {}
+            } else if (e.response?.data?.message) {
+                message = e.response.data.message;
+            }
+            showToast(message, 'error');
         }
     };
 

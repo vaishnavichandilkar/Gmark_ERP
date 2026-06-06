@@ -5,6 +5,7 @@ import { CreateSalesOrderDto, UpdateSalesOrderDto } from './dto/sales-order.dto'
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { multerConfig } from '../../upload/multer.config';
 
 @ApiTags('Sales Orders')
 @Controller('sales-orders')
@@ -15,9 +16,22 @@ export class SalesOrderController {
 
     @Post()
     @ApiOperation({ summary: 'Create a new Sales Order' })
-    @ApiResponse({ status: 201, description: 'SO created' })
-    async create(@Body() createDto: CreateSalesOrderDto, @Request() req) {
-        return this.service.create(createDto, req.user.userId);
+    @ApiConsumes('multipart/form-data')
+    @UseInterceptors(FileInterceptor('file', multerConfig))
+    async create(
+        @UploadedFile() file: any,
+        @Body() body: any,
+        @Request() req
+    ) {
+        const items = typeof body.items === 'string' ? JSON.parse(body.items) : body.items;
+        const parsedDto: CreateSalesOrderDto = {
+            ...body,
+            items,
+            customerId: body.customerId ? parseInt(body.customerId, 10) : undefined,
+            creditDays: body.creditDays ? parseInt(body.creditDays, 10) : 0,
+            customerAmt: (body.customerAmt !== undefined && body.customerAmt !== null && body.customerAmt !== '') ? parseFloat(body.customerAmt) : null,
+        };
+        return this.service.create(parsedDto, req.user.userId, file?.path);
     }
 
     @Get('next-number')
@@ -107,8 +121,23 @@ export class SalesOrderController {
 
     @Patch(':id')
     @ApiOperation({ summary: 'Update SO' })
-    async update(@Param('id', ParseIntPipe) id: number, @Body() updateDto: UpdateSalesOrderDto, @Request() req) {
-        return this.service.update(id, updateDto, req.user.userId);
+    @ApiConsumes('multipart/form-data')
+    @UseInterceptors(FileInterceptor('file', multerConfig))
+    async update(
+        @Param('id', ParseIntPipe) id: number,
+        @UploadedFile() file: any,
+        @Body() body: any,
+        @Request() req
+    ) {
+        const items = body.items ? (typeof body.items === 'string' ? JSON.parse(body.items) : body.items) : undefined;
+        const parsedDto: UpdateSalesOrderDto = {
+            ...body,
+            items,
+            customerId: body.customerId ? parseInt(body.customerId, 10) : undefined,
+            creditDays: (body.creditDays !== undefined && body.creditDays !== null && body.creditDays !== '') ? parseInt(body.creditDays, 10) : undefined,
+            customerAmt: (body.customerAmt !== undefined && body.customerAmt !== null && body.customerAmt !== '') ? parseFloat(body.customerAmt) : undefined,
+        };
+        return this.service.update(id, parsedDto, req.user.userId, file?.path, body.removeAttachment === 'true');
     }
 
     @Delete(':id')

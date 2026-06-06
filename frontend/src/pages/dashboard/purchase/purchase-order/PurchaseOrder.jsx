@@ -501,7 +501,7 @@ const PurchaseOrder = () => {
                       {activeDropdown === po.id && (
                         <div className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= currentItems.length - 2 ? 'bottom-0' : 'top-0'}`}>
                           {/* VIEW / VIEW & EDIT */}
-                          {['Pending', 'Expiring Soon'].includes(po.computedStatusLabel) ? (
+                          {((['Pending', 'Expiring Soon'].includes(po.computedStatusLabel)) && !(po.grn?.length > 0 || po.purchaseInvoices?.length > 0)) ? (
                             <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50 underline-offset-4 decoration-emerald-500 hover:text-emerald-700"><Eye size={18} /> View and Edit PO</button>
                           ) : (
                             <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Eye size={18} /> View PO</button>

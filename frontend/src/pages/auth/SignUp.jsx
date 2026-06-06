@@ -269,6 +269,7 @@ const SignUp = () => {
         lastName: '',
         email: '',
         udyogAadhar: '',
+        regType: '',
         gstNumber: '',
         udyogAadharFile: null,
         gstFile: null,
@@ -310,6 +311,7 @@ const SignUp = () => {
                         district: data.district || '',
                         state: data.state || '',
                         udyogAadhar: data.udyogAadhar || '',
+                        regType: data.regType || '',
                         gstNumber: data.gstNumber || '',
                         udyogAadharFile: data.udyogAadharFile || null,
                         gstFile: data.gstFile || null,
@@ -359,6 +361,7 @@ const SignUp = () => {
         district: 'district',
         state: 'state',
         udyogAadharNumber: 'udyogAadhar',
+        regType: 'regType',
         gstNumber: 'gstNumber',
         udyogAadharCert: 'udyogAadharFile',
         gstCert: 'gstFile',
@@ -393,7 +396,7 @@ const SignUp = () => {
     const getCurrentStepFields = () => {
         if (step === 1) return ['firstName', 'lastName', 'email'];
         if (step === 2) return ['shopName', 'address', 'pinCode', 'village', 'district', 'state'];
-        if (step === 3) return ['udyogAadhar', 'gstNumber', 'udyogAadharFile', 'gstFile', 'otherDocFile'];
+        if (step === 3) return ['udyogAadhar', 'regType', 'gstNumber', 'udyogAadharFile', 'gstFile', 'otherDocFile'];
         return [];
     };
 
@@ -597,7 +600,8 @@ const SignUp = () => {
                 const { saveBusinessDetailsApi, completeOnboardingApi } = await import('../../services/onboardingService');
                 await saveBusinessDetailsApi({
                     udyogAadhar: formData.udyogAadhar,
-                    gstNumber: formData.gstNumber
+                    gstNumber: formData.gstNumber,
+                    regType: formData.regType
                 }, {
                     udyogAadharFile: formData.udyogAadharFile,
                     gstFile: formData.gstFile,
@@ -642,6 +646,7 @@ const SignUp = () => {
                 errors.forEach(err => {
                     const lowErr = err.toLowerCase();
                     if (lowErr.includes('udyog') || lowErr.includes('aadhar')) newFieldErrors.udyogAadhar = err;
+                    else if (lowErr.includes('reg') || lowErr.includes('type')) newFieldErrors.regType = err;
                     else if (lowErr.includes('gst')) newFieldErrors.gstNumber = err;
                 });
             }
@@ -1012,7 +1017,9 @@ const SignUp = () => {
 
                                 <form noValidate onSubmit={(e) => e.preventDefault()} className="w-full">
                                     {error && <div className="mb-4 text-red-500 text-[13px] font-medium animate-in fade-in slide-in-from-top-1 duration-300">{error}</div>}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px] w-full">
+                                    
+                                    {/* Text/Select Inputs - 3 Columns on desktop */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-[24px] w-full mb-[24px]">
                                         <CustomInput
                                             label={t('auth:udyog_aadhar')}
                                             optional={true}
@@ -1025,6 +1032,22 @@ const SignUp = () => {
                                             status={getFieldStatus('udyogAadhar')}
                                         />
                                         <CustomInput
+                                            label={t('auth:reg_type')}
+                                            optional={true}
+                                            select={true}
+                                            name="regType"
+                                            value={formData.regType}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            error={fieldErrors.regType || getFieldRejectionReason('regType')}
+                                            status={getFieldStatus('regType')}
+                                        >
+                                            <option value="">{t('auth:placeholder_reg_type')}</option>
+                                            <option value="Manufacturing">Manufacturing</option>
+                                            <option value="Service">Service</option>
+                                            <option value="Trading">Trading</option>
+                                        </CustomInput>
+                                        <CustomInput
                                             label={t('auth:gst')}
                                             optional={true}
                                             placeholder={t('auth:placeholder_gst')}
@@ -1035,6 +1058,10 @@ const SignUp = () => {
                                             error={fieldErrors.gstNumber || getFieldRejectionReason('gstNumber')}
                                             status={getFieldStatus('gstNumber')}
                                         />
+                                    </div>
+
+                                    {/* Document File Uploads - 2 Columns */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px] w-full">
                                         <FileUploadBox
                                             title={t('auth:upload_udyog')}
                                             optional={true}
@@ -1073,7 +1100,7 @@ const SignUp = () => {
 
                                     <div className="col-span-1 md:col-span-2 w-full flex justify-center mt-[12px]">
                                         <button
-                                            disabled={isLoading || !!fieldErrors.udyogAadhar || !!fieldErrors.gstNumber || isAnyUploading}
+                                            disabled={isLoading || !!fieldErrors.udyogAadhar || !!fieldErrors.regType || !!fieldErrors.gstNumber || isAnyUploading}
                                             onClick={handleNext}
                                             className="w-full mt-6 mb-6 md:w-[calc(50%-12px)] h-[56px] bg-[#0F3D2E] text-white text-[16px] font-['Plus_Jakarta_Sans'] font-medium rounded-[8px] hover:bg-[#0a291f] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                                         >

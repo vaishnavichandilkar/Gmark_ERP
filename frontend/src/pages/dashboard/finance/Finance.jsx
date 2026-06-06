@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { MoreVertical, X, Eye, Users, BookOpen, Download, Search, FileText, FileSpreadsheet, RotateCcw, ChevronLeft, ChevronRight, Plus, Landmark, Trash2, ChevronDown, XSquare } from 'lucide-react';
+import { MoreVertical, X, Eye, Users, BookOpen, Download, Search, FileText, FileSpreadsheet, RotateCcw, ChevronLeft, ChevronRight, Plus, Landmark, Trash2, ChevronDown, XSquare, Upload, UploadCloud } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import CustomSelect from '../../../components/common/CustomSelect';
 import jsPDF from 'jspdf';
@@ -19,7 +19,7 @@ import OneTabSettlement from './OneTabSettlement';
 
 const Finance = () => {
     const { t } = useTranslation(['modules', 'common']);
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
     const [activeMainTab, setActiveMainTab] = useState('Ledger');
     const [activeSubTab, setActiveSubTab] = useState('Sundry Creditors');
@@ -29,6 +29,7 @@ const Finance = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [showExportMenu, setShowExportMenu] = useState(false);
+    const [showMainExportMenu, setShowMainExportMenu] = useState(false);
     const [rowsPerPage, setRowsPerPage] = useState(5);
     const [currentPage, setCurrentPage] = useState(1);
     
@@ -36,6 +37,10 @@ const Finance = () => {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editVoucherData, setEditVoucherData] = useState(null);
     const [editVoucherType, setEditVoucherType] = useState('Receipt');
+
+    // Import Modal States
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [selectedImportFile, setSelectedImportFile] = useState(null);
     const getCurrentFiscalYear = () => {
         const now = new Date();
         const year = now.getFullYear();
@@ -111,6 +116,13 @@ const Finance = () => {
     }, [searchParams]);
 
     useEffect(() => {
+        const validSubTabs = getSubTabs(activeMainTab);
+        if (validSubTabs.length > 0 && !validSubTabs.includes(activeSubTab)) {
+            setActiveSubTab(validSubTabs[0]);
+        }
+    }, [activeMainTab, activeSubTab]);
+
+    useEffect(() => {
         const handleVoucherAdded = (e) => {
             // Trigger refresh by updating state or just relying on the useEffect dependencies
             setLoading(true);
@@ -152,17 +164,24 @@ const Finance = () => {
             }
             
             // Map backend data to table format
-            const mappedData = response.map(v => ({
-                id: v.id,
-                date: new Date(v.voucherDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
-                vchNo: v.voucherNumber,
-                account: v.items?.map(i => i.account?.accountName).join(', ') || 'Unknown',
-                bank: v.bankCashLedger?.accountName || '-',
-                narration: v.narration,
-                amount: v.totalAmount,
-                status: 'Pending',
-                originalVoucher: v
-            }));
+            const mappedData = response.map(v => {
+                const dateObj = new Date(v.voucherDate);
+                const rawDateStr = !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : '';
+                return {
+                    id: v.id,
+                    date: !isNaN(dateObj.getTime()) 
+                        ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')
+                        : '-',
+                    rawDate: rawDateStr,
+                    vchNo: v.voucherNumber,
+                    account: v.items?.map(i => i.account?.accountName).join(', ') || 'Unknown',
+                    bank: v.bankCashLedger?.accountName || '-',
+                    narration: v.narration,
+                    amount: v.totalAmount,
+                    status: 'Pending',
+                    originalVoucher: v
+                };
+            });
             
             setBankData(mappedData);
         } catch (error) {
@@ -267,10 +286,12 @@ const Finance = () => {
         if (parts.length !== 3) return null;
         const [day, month, year] = parts;
         const months = {
-            'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
-            'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+            'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06',
+            'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
         };
-        return `${year}-${months[month]}-${day.padStart(2, '0')}`;
+        const monthKey = String(month).toLowerCase().replace('.', '');
+        const monthVal = months[monthKey] || '01';
+        return `${year}-${monthVal}-${day.padStart(2, '0')}`;
     };
 
     const currentData = activeMainTab === 'Ledger'
@@ -293,10 +314,12 @@ const Finance = () => {
 
             // Date match
             let matchesDate = true;
-            if ((startDate || endDate) && item.date) {
-                const itemDateStr = normalizeDate(item.date);
-                if (startDate && itemDateStr < startDate) matchesDate = false;
-                if (endDate && itemDateStr > endDate) matchesDate = false;
+            if (startDate || endDate) {
+                const itemDateStr = item.rawDate || normalizeDate(item.date);
+                if (itemDateStr) {
+                    if (startDate && itemDateStr < startDate) matchesDate = false;
+                    if (endDate && itemDateStr > endDate) matchesDate = false;
+                }
             }
             
             // Filter empty bank/cash accounts
@@ -471,6 +494,7 @@ const Finance = () => {
             foot: footerRows,
             startY: 30,
             theme: 'grid',
+            showHead: 'everyPage',
             headStyles: { fillColor: [17, 24, 39], textColor: [255, 255, 255] },
             footStyles: { fillColor: [249, 250, 251], textColor: [17, 24, 39], fontStyle: 'bold' },
             styles: { fontSize: 8, font: 'helvetica' }
@@ -499,10 +523,372 @@ const Finance = () => {
         exportData.push({ "Narration": "Closing Balance", "Unallocated (₹)": "--", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}` });
 
         const ws = XLSX.utils.json_to_sheet(exportData);
+        ws['!views'] = [{ state: 'frozen', ySplit: 1 }];
+        ws['!cols'] = [
+            { wch: 8 },  // Sr.No
+            { wch: 15 }, // Date
+            { wch: 25 }, // Particular
+            { wch: 35 }, // Narration
+            { wch: 18 }, // Unallocated (₹)
+            { wch: 15 }, // Debit (₹)
+            { wch: 15 }, // Credit (₹)
+            { wch: 20 }  // Balance
+        ];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Ledger");
-        XLSX.utils.writeFile(wb, `${selectedAccount?.accountName || 'Account'}_ledger.xlsx`);
+        XLSX.writeFile(wb, `${selectedAccount?.accountName || 'Account'}_ledger.xlsx`);
         setShowExportMenu(false);
+    };
+
+    const handleExportMainLedgerPDF = () => {
+        const doc = new jsPDF();
+        
+        doc.setFontSize(16);
+        doc.text(`Ledger Summary - ${activeSubTab}`, 14, 20);
+        doc.setFontSize(10);
+        doc.text(`Period: ${startDate || 'All'} to ${endDate || 'All'}`, 14, 26);
+        
+        const tableColumn = ["Account", "Opening Balance", "Debit", "Credit", "Closing Balance"];
+        const tableRows = filteredMainData.map(item => [
+            item.accountName || '-',
+            item.openingBalance != null ? `${Math.abs(Number(item.openingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.openingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.openingBalance) >= 0 ? 'Dr' : 'Cr')}` : '0.00',
+            Number(item.debit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            Number(item.credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            item.closingBalance != null ? `${Math.abs(Number(item.closingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.closingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.closingBalance) >= 0 ? 'Dr' : 'Cr')}` : '0.00'
+        ]);
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 32,
+            theme: 'grid',
+            showHead: 'everyPage',
+            headStyles: { fillColor: [7, 51, 24], textColor: [255, 255, 255] },
+            styles: { fontSize: 9, font: 'helvetica' }
+        });
+
+        doc.save(`Ledger_Summary_${activeSubTab.replace(/\s+/g, '_')}.pdf`);
+        setShowMainExportMenu(false);
+    };
+
+    const handleExportMainLedgerExcel = () => {
+        const exportData = filteredMainData.map((item, index) => ({
+            "Sr.No": index + 1,
+            "Account": item.accountName || '-',
+            "Opening Balance": item.openingBalance != null ? `${Math.abs(Number(item.openingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.openingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.openingBalance) >= 0 ? 'Dr' : 'Cr')}` : '0.00',
+            "Debit": Number(item.debit || 0),
+            "Credit": Number(item.credit || 0),
+            "Closing Balance": item.closingBalance != null ? `${Math.abs(Number(item.closingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.closingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.closingBalance) >= 0 ? 'Dr' : 'Cr')}` : '0.00'
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        ws['!views'] = [{ state: 'frozen', ySplit: 1 }];
+        ws['!cols'] = [
+            { wch: 8 },  // Sr.No
+            { wch: 30 }, // Account
+            { wch: 20 }, // Opening Balance
+            { wch: 15 }, // Debit
+            { wch: 15 }, // Credit
+            { wch: 20 }  // Closing Balance
+        ];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Summary");
+        XLSX.writeFile(wb, `Ledger_Summary_${activeSubTab.replace(/\s+/g, '_')}.xlsx`);
+        setShowMainExportMenu(false);
+    };
+
+    const handleExportBankReconPDF = () => {
+        const doc = new jsPDF();
+        
+        doc.setFontSize(16);
+        let titleSuffix = '';
+        if (activeSubTab === 'Receipts') {
+            titleSuffix = ' (Sundry Debtors)';
+        } else if (activeSubTab === 'Payments') {
+            titleSuffix = ' (Sundry Creditors)';
+        }
+        doc.text(`Bank Reconciliation - ${activeSubTab}${titleSuffix}`, 14, 20);
+        doc.setFontSize(10);
+        doc.text(`Period: ${startDate || 'All'} to ${endDate || 'All'}`, 14, 26);
+        
+        const tableColumn = ["Date", "Vch No.", "Account", "Bank/Cash", "Narration", "Amount"];
+        const tableRows = filteredMainData.map(item => [
+            item.date,
+            item.vchNo,
+            item.account,
+            item.bank,
+            item.narration || '-',
+            `Rs. ${item.amount}`
+        ]);
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 32,
+            theme: 'grid',
+            showHead: 'everyPage',
+            headStyles: { fillColor: [7, 51, 24], textColor: [255, 255, 255] },
+            styles: { fontSize: 9, font: 'helvetica' }
+        });
+
+        doc.save(`Bank_Reconciliation_${activeSubTab.replace(/\s+/g, '_')}${titleSuffix.replace(/\s+/g, '_')}.pdf`);
+        setShowMainExportMenu(false);
+    };
+
+    const handleExportBankReconExcel = () => {
+        const exportData = filteredMainData.map((item, index) => ({
+            "Sr.No": index + 1,
+            "Date": item.date,
+            "Voucher Number": item.vchNo,
+            "Account": item.account,
+            "Bank/Cash": item.bank,
+            "Narration": item.narration || '-',
+            "Amount (Rs.)": Number(item.amount)
+        }));
+
+        let titleSuffix = '';
+        if (activeSubTab === 'Receipts') {
+            titleSuffix = ' (Sundry Debtors)';
+        } else if (activeSubTab === 'Payments') {
+            titleSuffix = ' (Sundry Creditors)';
+        }
+
+        // Create sheet with Title and Period first
+        const ws = XLSX.utils.aoa_to_sheet([
+            [`Bank Reconciliation - ${activeSubTab}${titleSuffix}`],
+            [`Period: ${startDate || 'All'} to ${endDate || 'All'}`],
+            [] // Spacing row
+        ]);
+
+        // Add headers and rows starting from A4
+        XLSX.utils.sheet_add_json(ws, exportData, { origin: 'A4' });
+
+        // Freeze top 4 rows (includes Title, Period, Space, and Table Headers)
+        ws['!views'] = [{ state: 'frozen', ySplit: 4 }];
+
+        ws['!cols'] = [
+            { wch: 8 },  // Sr.No
+            { wch: 15 }, // Date
+            { wch: 18 }, // Voucher Number
+            { wch: 30 }, // Account
+            { wch: 25 }, // Bank/Cash
+            { wch: 35 }, // Narration
+            { wch: 15 }  // Amount
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, activeSubTab);
+        XLSX.writeFile(wb, `Bank_Reconciliation_${activeSubTab.replace(/\s+/g, '_')}${titleSuffix.replace(/\s+/g, '_')}.xlsx`);
+        setShowMainExportMenu(false);
+    };
+
+    const handleDownloadTemplate = () => {
+        const isReceipt = activeSubTab === 'Receipts';
+        const fileName = isReceipt ? 'Bank_Reconciliation_Receipt_Template.xlsx' : 'Bank_Reconciliation_Payment_Template.xlsx';
+        const link = document.createElement('a');
+        link.href = `/${fileName}`;
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const parseExcelDate = (dateVal) => {
+        if (typeof dateVal === 'number') {
+            // Excel serial date number
+            const dateObj = new Date(Math.round((dateVal - 25569) * 86400 * 1000));
+            return dateObj.toISOString().split('T')[0];
+        }
+        
+        if (dateVal instanceof Date) {
+            return dateVal.toISOString().split('T')[0];
+        }
+
+        const dateStr = String(dateVal).trim();
+        
+        // Try YYYY-MM-DD or YYYY/MM/DD
+        const ymdMatch = dateStr.match(/^(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})$/);
+        if (ymdMatch) {
+            const [, year, month, day] = ymdMatch;
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+
+        // Try DD/MM/YYYY or DD-MM-YYYY
+        const dmyMatch = dateStr.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$/);
+        if (dmyMatch) {
+            const [, day, month, year] = dmyMatch;
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+
+        // Try standard parsing
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+            return d.toISOString().split('T')[0];
+        }
+
+        throw new Error("Invalid date format");
+    };
+
+    const handleSubmitImport = async () => {
+        if (!selectedImportFile) return;
+
+        setLoading(true);
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const data = evt.target.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet);
+
+                if (activeSubTab === 'Receipts' && sheetName === 'Payments Template') {
+                    toast.error("You are attempting to import a Payments template under the Receipts section. Please upload the Receipts template.");
+                    setLoading(false);
+                    return;
+                }
+
+                if (activeSubTab === 'Payments' && sheetName === 'Receipts Template') {
+                    toast.error("You are attempting to import a Receipts template under the Payments section. Please upload the Payments template.");
+                    setLoading(false);
+                    return;
+                }
+
+                if (json.length === 0) {
+                    toast.error("Excel sheet is empty.");
+                    setLoading(false);
+                    return;
+                }
+
+                // Fetch reference lists for matching names to IDs
+                const [bankCashRes, customersRes, suppliersRes] = await Promise.all([
+                    voucherService.getBankCashAccounts(),
+                    voucherService.getCustomers(),
+                    voucherService.getSuppliers()
+                ]);
+
+                const allAccounts = [...customersRes, ...suppliersRes];
+
+                let successCount = 0;
+                let errorCount = 0;
+                const errors = [];
+
+                for (let i = 0; i < json.length; i++) {
+                    const row = json[i];
+                    
+                    const dateVal = row['Date (DD/MM/YYYY)'] || row['date (dd/mm/yyyy)'] || row['Date'] || row['date'];
+                    const accountNameVal = row['Account Name'] || row['account name'] || row['Account'] || row['account'];
+                    const bankCashNameVal = row['Bank/Cash Account'] || row['bank/cash account'] || row['Bank/Cash'] || row['bank/cash'] || row['Bank'] || row['bank'] || row['Cash'] || row['cash'];
+                    const amountVal = row['Amount'] || row['amount'];
+                    const paymentModeVal = row['Payment Mode'] || row['payment mode'] || row['Mode'] || row['mode'];
+                    const narrationVal = row['Narration'] || row['narration'] || '';
+
+                    if (!dateVal || !accountNameVal || !bankCashNameVal || !amountVal) {
+                        errorCount++;
+                        errors.push(`Row ${i + 2}: Missing required fields (Date, Account Name, Bank/Cash, or Amount)`);
+                        continue;
+                    }
+
+                    // 1. Match Bank/Cash Account
+                    const matchedBank = bankCashRes.find(b => 
+                        (b.ledgerName || b.accountName || '').toLowerCase().trim() === String(bankCashNameVal).toLowerCase().trim()
+                    );
+                    if (!matchedBank) {
+                        errorCount++;
+                        errors.push(`Row ${i + 2}: Bank/Cash account '${bankCashNameVal}' not found`);
+                        continue;
+                    }
+
+                    // 2. Match Supplier/Customer Account
+                    const matchedAccount = allAccounts.find(a => 
+                        (a.accountName || a.ledgerName || '').toLowerCase().trim() === String(accountNameVal).toLowerCase().trim()
+                    );
+                    if (!matchedAccount) {
+                        errorCount++;
+                        errors.push(`Row ${i + 2}: Account '${accountNameVal}' not found`);
+                        continue;
+                    }
+
+                    // 3. Format Date
+                    let formattedDate;
+                    try {
+                        formattedDate = parseExcelDate(dateVal);
+                    } catch {
+                        errorCount++;
+                        errors.push(`Row ${i + 2}: Invalid date format '${dateVal}'`);
+                        continue;
+                    }
+
+                    // 4. Validate Amount
+                    const amt = parseFloat(amountVal);
+                    if (isNaN(amt) || amt <= 0) {
+                        errorCount++;
+                        errors.push(`Row ${i + 2}: Amount must be a positive number`);
+                        continue;
+                    }
+
+                    // 5. Payment Mode mapping
+                    let mode = 'NET_BANKING';
+                    const rawMode = String(paymentModeVal || '').toUpperCase().replace(' ', '_');
+                    if (['DEBIT_CARD', 'CREDIT_CARD', 'NET_BANKING', 'CHEQUE', 'UPI', 'CASH'].includes(rawMode)) {
+                        mode = rawMode;
+                    } else if (rawMode === 'NETBANKING') {
+                        mode = 'NET_BANKING';
+                    } else if (rawMode === 'CREDITCARD') {
+                        mode = 'CREDIT_CARD';
+                    } else if (rawMode === 'DEBITCARD') {
+                        mode = 'DEBIT_CARD';
+                    }
+
+                    // 6. Create Payload
+                    const payload = {
+                        voucherDate: formattedDate,
+                        bankCashLedgerId: matchedBank.id,
+                        paymentMode: mode,
+                        narration: String(narrationVal).trim(),
+                        items: [{
+                            accountId: matchedAccount.id,
+                            amount: amt,
+                            accountType: matchedAccount.accountType || (activeSubTab === 'Receipts' ? 'CUSTOMER' : 'SUPPLIER'),
+                            settlements: []
+                        }]
+                    };
+
+                    try {
+                        if (activeSubTab === 'Receipts') {
+                            await voucherService.createReceiptVoucher(payload);
+                        } else if (activeSubTab === 'Payments') {
+                            await voucherService.createPaymentVoucher(payload);
+                        } else {
+                            throw new Error(`Unsupported tab for import: ${activeSubTab}`);
+                        }
+                        successCount++;
+                    } catch (err) {
+                        errorCount++;
+                        const errMsg = err.response?.data?.message || err.message;
+                        errors.push(`Row ${i + 2}: ${Array.isArray(errMsg) ? errMsg[0] : errMsg}`);
+                    }
+                }
+
+                if (successCount > 0) {
+                    toast.success(`Successfully imported ${successCount} vouchers!`);
+                    fetchVouchers();
+                    setShowImportModal(false);
+                    setSelectedImportFile(null);
+                }
+                if (errorCount > 0) {
+                    console.error("Import errors:", errors);
+                    toast.error(`Import failed for ${errorCount} rows. See console for details.`);
+                }
+
+            } catch (err) {
+                console.error("Failed to import Excel:", err);
+                toast.error("Failed to parse Excel file.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        reader.readAsBinaryString(selectedImportFile);
     };
 
     return (
@@ -527,7 +913,9 @@ const Finance = () => {
                                 key={tab}
                                 onClick={() => {
                                     setActiveMainTab(tab);
-                                    setActiveSubTab(getSubTabs(tab)[0]);
+                                    const firstSubTab = getSubTabs(tab)[0];
+                                    setActiveSubTab(firstSubTab);
+                                    setSearchParams({ tab, subTab: firstSubTab });
                                 }}
                                 className={`relative text-[14px] md:text-[15px] font-bold transition-colors duration-300 ease-in-out whitespace-nowrap px-6 py-2.5 rounded-[12px]
                                     ${isActive
@@ -559,6 +947,7 @@ const Finance = () => {
                                 key={tab}
                                 onClick={(e) => {
                                     setActiveSubTab(tab);
+                                    setSearchParams({ tab: activeMainTab, subTab: tab });
                                     e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
                                 }}
                                 className={`relative pb-4 text-[16px] md:text-[18px] font-bold transition-colors whitespace-nowrap shrink-0 ${isActive ? 'text-[#111827]' : 'text-[#6B7280]'}`}
@@ -641,6 +1030,92 @@ const Finance = () => {
                                         >
                                             <RotateCcw size={18} />
                                         </button>
+                                    )}
+                                </div>
+
+                                {/* Export & Import Actions */}
+                                <div className="flex items-center gap-3">
+                                    {activeMainTab === 'Ledger' && (
+                                        <div className="relative">
+                                            <button 
+                                                className="h-[44px] px-5 bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] rounded-[10px] font-medium text-[15px] transition-colors flex items-center gap-2 shadow-sm animate-fade-in"
+                                                onClick={(e) => { e.stopPropagation(); setShowMainExportMenu(!showMainExportMenu); }}
+                                            >
+                                                <Download size={18} className="text-[#6B7280]" />
+                                                Export
+                                            </button>
+                                            
+                                            {showMainExportMenu && (
+                                                <>
+                                                    <div className="fixed inset-0 z-40" onClick={() => setShowMainExportMenu(false)} />
+                                                    <div className="absolute right-0 top-12 w-48 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-50 flex flex-col py-2 font-outfit">
+                                                        <button 
+                                                            className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
+                                                            onClick={handleExportMainLedgerPDF}
+                                                        >
+                                                            <FileText size={18} className="text-red-500" />
+                                                            Export as PDF
+                                                        </button>
+                                                        <button 
+                                                            className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
+                                                            onClick={handleExportMainLedgerExcel}
+                                                        >
+                                                            <FileSpreadsheet size={18} className="text-emerald-500" />
+                                                            Export as Excel
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {activeMainTab === 'Bank Reconciliation' && (
+                                        <>
+                                            {/* Import Button */}
+                                            <button 
+                                                className="h-[40px] px-4 bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#374151] rounded-[8px] font-bold text-[14px] transition-colors flex items-center gap-2 shadow-sm animate-fade-in"
+                                                onClick={() => {
+                                                    setShowImportModal(true);
+                                                    setSelectedImportFile(null);
+                                                }}
+                                            >
+                                                <Download size={16} className="text-[#475569]" />
+                                                Import
+                                            </button>
+
+                                            {/* Export Button */}
+                                            <div className="relative">
+                                                <button 
+                                                    className="h-[40px] px-4 bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#374151] rounded-[8px] font-bold text-[14px] transition-colors flex items-center gap-2 shadow-sm animate-fade-in"
+                                                    onClick={(e) => { e.stopPropagation(); setShowMainExportMenu(!showMainExportMenu); }}
+                                                >
+                                                    <Upload size={16} className="text-[#475569]" />
+                                                    Export
+                                                </button>
+                                                
+                                                {showMainExportMenu && (
+                                                    <>
+                                                        <div className="fixed inset-0 z-40" onClick={() => setShowMainExportMenu(false)} />
+                                                        <div className="absolute right-0 top-12 w-48 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-50 flex flex-col py-2 font-outfit">
+                                                            <button 
+                                                                className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
+                                                                onClick={handleExportBankReconPDF}
+                                                            >
+                                                                <FileText size={18} className="text-red-500" />
+                                                                Export as PDF
+                                                            </button>
+                                                            <button 
+                                                                className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
+                                                                onClick={handleExportBankReconExcel}
+                                                            >
+                                                                <FileSpreadsheet size={18} className="text-emerald-500" />
+                                                                Export as Excel
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </>
                                     )}
                                 </div>
                             </div>
@@ -1175,6 +1650,82 @@ const Finance = () => {
                     type={editVoucherType}
                     initialData={editVoucherData}
                 />
+            )}
+
+            {showImportModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-[20px] w-full max-w-[480px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] overflow-hidden font-['Plus_Jakarta_Sans'] animate-scale-up">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                            <h3 className="text-[18px] font-bold text-[#111827]">Import Data</h3>
+                            <button 
+                                onClick={() => {
+                                    setShowImportModal(false);
+                                    setSelectedImportFile(null);
+                                }}
+                                className="p-1.5 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600 cursor-pointer"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-6 flex flex-col items-center">
+                            {/* Download Sample Section */}
+                            <button
+                                onClick={handleDownloadTemplate}
+                                className="flex items-center gap-2 bg-[#ECFDF5] hover:bg-[#D1FAE5] text-[#137333] font-bold text-[14px] px-5 py-2.5 rounded-[8px] transition-colors cursor-pointer"
+                            >
+                                <Download size={18} />
+                                Download Sample
+                            </button>
+
+                            {/* Divider */}
+                            <div className="w-full border-t border-gray-100 my-6"></div>
+
+                            {/* Upload File Section */}
+                            <span className="text-[15px] font-bold text-[#374151] mb-4">Upload File</span>
+
+                            <div className="w-full flex items-center gap-4">
+                                <span className="text-[14px] font-semibold text-[#6B7280] min-w-[80px]">Select File</span>
+                                <div className="flex-1 flex items-center border border-dashed border-[#CBD5E1] rounded-[8px] bg-gray-50/20 overflow-hidden text-[14px] h-[40px]">
+                                    <label className="bg-[#E5E7EB]/50 hover:bg-[#E5E7EB] text-[#374151] font-bold px-4 h-full flex items-center border-r border-[#CBD5E1] border-dashed cursor-pointer transition-colors">
+                                        Choose File
+                                        <input 
+                                            type="file" 
+                                            accept=".xlsx,.xls" 
+                                            onChange={(e) => {
+                                                if (e.target.files && e.target.files[0]) {
+                                                    setSelectedImportFile(e.target.files[0]);
+                                                }
+                                            }} 
+                                            className="hidden" 
+                                        />
+                                    </label>
+                                    <span className="px-3 text-gray-500 truncate flex-1 text-left">
+                                        {selectedImportFile ? selectedImportFile.name : "No file chosen"}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer / Submit */}
+                        <div className="px-6 pb-6 pt-4 flex justify-center border-t border-gray-50">
+                            <button
+                                onClick={handleSubmitImport}
+                                disabled={!selectedImportFile || loading}
+                                className={`flex items-center gap-2 px-8 py-2.5 font-bold text-white rounded-[8px] transition-all shadow-sm ${
+                                    selectedImportFile && !loading
+                                        ? 'bg-[#7C8D82] hover:bg-[#6C7D72] active:scale-95 cursor-pointer' 
+                                        : 'bg-[#A3B3A8] opacity-60 cursor-not-allowed'
+                                }`}
+                            >
+                                <UploadCloud size={18} />
+                                {loading ? 'Submitting...' : 'Submit'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

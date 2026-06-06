@@ -177,6 +177,7 @@ const PendingSellers = () => {
             district: 'District',
             state: 'State',
             udyogAadharNumber: 'Udyog Aadhar Number',
+            regType: 'Registration Type',
             udyogAadharCert: 'Udyog Aadhar Certificate File',
             gstNumber: 'GST Number',
             gstCert: 'GST Certificate File',
@@ -391,7 +392,7 @@ const PendingSellers = () => {
                 const isStepFlagged = (stepNumber) => {
                     if (stepNumber === 1) return flaggedFields.firstName || flaggedFields.lastName || flaggedFields.email || flaggedFields.phone;
                     if (stepNumber === 2) return flaggedFields.shopName || flaggedFields.address || flaggedFields.pinCode || flaggedFields.village || flaggedFields.district || flaggedFields.state;
-                    if (stepNumber === 3) return flaggedFields.udyogAadharNumber || flaggedFields.udyogAadharCert || flaggedFields.gstNumber || flaggedFields.gstCert || flaggedFields.businessProof || flaggedFields.shopActLicense;
+                    if (stepNumber === 3) return flaggedFields.udyogAadharNumber || flaggedFields.regType || flaggedFields.udyogAadharCert || flaggedFields.gstNumber || flaggedFields.gstCert || flaggedFields.businessProof || flaggedFields.shopActLicense;
                     return false;
                 };
 
@@ -563,6 +564,13 @@ const PendingSellers = () => {
                                                 value={(!docs.udyogAadharNumber?.name || docs.udyogAadharNumber?.name === 'N/A') ? 'Not Added' : docs.udyogAadharNumber.name} 
                                                 isFlagged={flaggedFields.udyogAadharNumber}
                                                 onToggle={() => toggleFlagField('udyogAadharNumber')}
+                                            />
+                                            {/* Registration Type */}
+                                            <ReviewFieldCard 
+                                                label="Registration Type" 
+                                                value={seller.regType || 'Not Added'} 
+                                                isFlagged={flaggedFields.regType}
+                                                onToggle={() => toggleFlagField('regType')}
                                             />
                                             {/* GST Number */}
                                             <ReviewFieldCard 

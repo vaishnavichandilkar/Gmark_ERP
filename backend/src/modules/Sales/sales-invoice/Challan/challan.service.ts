@@ -57,6 +57,17 @@ export class ChallanService {
       throw new BadRequestException('Customer is inactive. New sales transactions are not allowed.');
     }
 
+    const sellerMsme = await this.isSellerMsme(userId);
+    const customerMsmeActive = customer.msmeEnabled;
+    const customerMsmeType = customer.regType === 'Manufacturing' || customer.regType === 'Service';
+    const isCustomerMsme = Boolean(customerMsmeActive && customerMsmeType);
+
+    const creditDays = dto.creditDays !== undefined && dto.creditDays !== null ? dto.creditDays : (customer.customerCreditDays || 0);
+
+    if ((sellerMsme || isCustomerMsme) && creditDays > 45) {
+      throw new BadRequestException('Maximum credit period allowed under MSME rules is 45 days.');
+    }
+
     const userGstDoc = await this.prisma.sellerDocument.findFirst({
       where: { uploadedByUserId: userId, type: 'GST' },
       select: { name: true }
@@ -67,7 +78,13 @@ export class ChallanService {
     const companyState = (company.state || "").trim().toLowerCase();
     const customerState = (customer.state || "").trim().toLowerCase();
 
-    const isValidGst = (name?: string | null) => Boolean(name && name.trim().toUpperCase() !== 'N/A' && name.trim().length >= 10);
+    const isValidGst = (name?: string | null) => Boolean(
+      name && 
+      name.trim().toUpperCase() !== 'N/A' && 
+      name.trim().toUpperCase() !== 'NOT AVAILABLE' && 
+      name.trim().toUpperCase() !== '-' && 
+      name.trim().length >= 10
+    );
     let isGstApplicable = isValidGst(userGst);
     let isRcm = false;
     let isInterState = false;
@@ -602,6 +619,7 @@ export class ChallanService {
   async downloadSample() {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Sales Challan Sample');
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
     const headers = [
       'Customer Name*', 'Challan No*', 'Challan Date (YYYY-MM-DD)*', 'Booking Date (YYYY-MM-DD)',
       'Address*', 'Credit Days*', 'SO No', 'Product Code*', 'Quantity*', 'Rate*', 'UOM*'
@@ -635,6 +653,7 @@ export class ChallanService {
     if (format === 'xlsx') {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Sales Challans');
+      worksheet.views = [{ state: 'frozen', ySplit: 5 }];
       worksheet.columns = [
         { header: 'Challan No', key: 'challanNumber', width: 15 },
         { header: 'Customer Name', key: 'customerName', width: 30 },
@@ -819,5 +838,18 @@ export class ChallanService {
   async printChallan(id: number, userId: number) {
     const challan = await this.findOne(id, userId);
     return { buffer: Buffer.from(''), filename: 'challan.pdf', mimetype: 'application/pdf' };
+  }
+
+  private async isSellerMsme(userId: number): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { sellerDocuments: true }
+    });
+    if (!user) return false;
+    const isSellerMsmeActive = user.sellerDocuments.some(
+      doc => doc.category === 'UDYOG_AADHAR' && doc.name && doc.name.trim() !== '' && doc.name.trim().toUpperCase() !== 'N/A'
+    );
+    const isSellerMsmeType = user.regType === 'Manufacturing' || user.regType === 'Service';
+    return Boolean(isSellerMsmeActive && isSellerMsmeType);
   }
 }

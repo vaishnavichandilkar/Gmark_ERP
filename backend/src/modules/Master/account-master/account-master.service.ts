@@ -13,6 +13,19 @@ export class AccountMasterService {
 
   constructor(private prisma: PrismaService) {}
 
+  private async isSellerMsme(userId: number): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { sellerDocuments: true }
+    });
+    if (!user) return false;
+    const isSellerMsmeActive = user.sellerDocuments.some(
+      d => d.category === 'UDYOG_AADHAR' && d.name && d.name.trim() !== '' && d.name.trim().toUpperCase() !== 'N/A'
+    );
+    const isSellerMsmeType = user.regType === 'Manufacturing' || user.regType === 'Service';
+    return Boolean(isSellerMsmeActive && isSellerMsmeType);
+  }
+
   async generateCustomerCode(userId: number): Promise<string> {
     const prefix = 'CT';
     const lastAccount = await this.prisma.accountMaster.findFirst({
@@ -207,6 +220,37 @@ export class AccountMasterService {
     if (!state) state = 'Unknown';
     if (!country) country = 'India';
 
+    let supplierCreditDays = createDto.supplierCreditDays;
+    let customerCreditDays = createDto.customerCreditDays;
+
+    const msmeEnabledVal = Boolean(createDto.msmeEnabled);
+    const msmeIdVal = msmeEnabledVal ? createDto.msmeId : null;
+    const regTypeVal = msmeEnabledVal ? createDto.regType : null;
+
+    const isMsmeActive = msmeEnabledVal && msmeIdVal && msmeIdVal.trim() !== '';
+    const isMsmeType = regTypeVal === 'Manufacturing' || regTypeVal === 'Service';
+
+    const sellerMsme = await this.isSellerMsme(userId);
+
+    if (isMsmeActive && isMsmeType) {
+      if (supplierCreditDays !== undefined && supplierCreditDays !== null) {
+        const val = Number(supplierCreditDays);
+        if (val > 45) {
+          supplierCreditDays = 45;
+        }
+      }
+    }
+
+    const shouldCapCustomer = (isMsmeActive && isMsmeType) || sellerMsme;
+    if (shouldCapCustomer) {
+      if (customerCreditDays !== undefined && customerCreditDays !== null) {
+        const val = Number(customerCreditDays);
+        if (val > 45) {
+          customerCreditDays = 45;
+        }
+      }
+    }
+
     const account = await this.prisma.accountMaster.create({
       data: {
         accountName: createDto.accountName,
@@ -231,12 +275,12 @@ export class AccountMasterService {
         userId: userId,
 
         supplierCode,
-        supplierCreditDays: createDto.supplierCreditDays,
+        supplierCreditDays: supplierCreditDays,
         supplierOpeningBalance: createDto.supplierOpeningBalance,
         supplierBalanceType: createDto.supplierBalanceType,
 
         customerCode,
-        customerCreditDays: createDto.customerCreditDays,
+        customerCreditDays: customerCreditDays,
         customerOpeningBalance: createDto.customerOpeningBalance,
         customerBalanceType: createDto.customerBalanceType,
         customerType: createDto.customerType,
@@ -656,6 +700,39 @@ export class AccountMasterService {
         throw new BadRequestException('account name should be unique');
       }
     }
+
+    let supplierCreditDays = updateDto.supplierCreditDays;
+    let customerCreditDays = updateDto.customerCreditDays;
+
+    const msmeEnabledVal = updateDto.msmeEnabled !== undefined ? Boolean(updateDto.msmeEnabled) : Boolean(existingOriginal.msmeEnabled);
+    const msmeIdVal = msmeEnabledVal ? (updateDto.msmeId !== undefined ? updateDto.msmeId : existingOriginal.msmeId) : null;
+    const regTypeVal = msmeEnabledVal ? (updateDto.regType !== undefined ? updateDto.regType : existingOriginal.regType) : null;
+
+    const isMsmeActive = msmeEnabledVal && msmeIdVal && msmeIdVal.trim() !== '';
+    const isMsmeType = regTypeVal === 'Manufacturing' || regTypeVal === 'Service';
+
+    const sellerMsme = await this.isSellerMsme(userId);
+
+    if (isMsmeActive && isMsmeType) {
+      let finalSupplierCreditDays = supplierCreditDays !== undefined ? supplierCreditDays : existingOriginal.supplierCreditDays;
+      if (finalSupplierCreditDays !== undefined && finalSupplierCreditDays !== null) {
+        const val = Number(finalSupplierCreditDays);
+        if (val > 45) {
+          supplierCreditDays = 45;
+        }
+      }
+    }
+
+    const shouldCapCustomer = (isMsmeActive && isMsmeType) || sellerMsme;
+    if (shouldCapCustomer) {
+      let finalCustomerCreditDays = customerCreditDays !== undefined ? customerCreditDays : existingOriginal.customerCreditDays;
+      if (finalCustomerCreditDays !== undefined && finalCustomerCreditDays !== null) {
+        const val = Number(finalCustomerCreditDays);
+        if (val > 45) {
+          customerCreditDays = 45;
+        }
+      }
+    }
     
     // Convert nested properties back for update if needed. We'll simplify Update strategy.
     const data: Prisma.AccountMasterUpdateInput = {
@@ -676,23 +753,23 @@ export class AccountMasterService {
       emailId: updateDto.emailId,
       mobileNo: updateDto.mobileNo,
       supplierCode: updateDto.supplierCode,
-      supplierCreditDays: updateDto.supplierCreditDays,
+      supplierCreditDays: supplierCreditDays,
       supplierOpeningBalance: updateDto.supplierOpeningBalance,
       supplierBalanceType: updateDto.supplierBalanceType,
       customerCode: updateDto.customerCode,
-      customerCreditDays: updateDto.customerCreditDays,
+      customerCreditDays: customerCreditDays,
       customerOpeningBalance: updateDto.customerOpeningBalance,
       customerBalanceType: updateDto.customerBalanceType,
       customerType: updateDto.customerType,
       msmeEnabled: updateDto.msmeEnabled,
     };
     
-    if (updateDto.msmeEnabled === true) {
-       data.msmeId = updateDto.msmeId;
-       data.regUnder = updateDto.regUnder;
-       data.regType = updateDto.regType;
-       if (updateDto.msmeCertificateUrl) data.msmeCertificateUrl = updateDto.msmeCertificateUrl;
-    } else if (updateDto.msmeEnabled === false) {
+    if (msmeEnabledVal === true) {
+       if (updateDto.msmeId !== undefined) data.msmeId = updateDto.msmeId;
+       if (updateDto.regUnder !== undefined) data.regUnder = updateDto.regUnder;
+       if (updateDto.regType !== undefined) data.regType = updateDto.regType;
+       if (updateDto.msmeCertificateUrl !== undefined) data.msmeCertificateUrl = updateDto.msmeCertificateUrl;
+    } else {
        data.msmeId = null;
        data.regUnder = null;
        data.regType = null;
@@ -877,6 +954,7 @@ export class AccountMasterService {
     if (format === 'xlsx') {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Accounts');
+      worksheet.views = [{ state: 'frozen', ySplit: 5 }];
 
       // Mandatory Column Sequence
       worksheet.columns = [
@@ -1087,12 +1165,13 @@ export class AccountMasterService {
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Sample Data');
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
     const headers = [
       'Account Name*', 'Group Name*', 'GST NO', 'PAN NO*', 'Address1*', 'Address2',
       'Pincode*', 'Area', 'Sub District', 'District', 'State', 'Country', 
-      'Supplier Credit Days', 'Supplier Opening Balance', 
-      'Customer Credit Days', 'Customer Opening Balance', 'Customer Type', 
+      'Supplier Credit Days', 'Supplier Opening Balance', 'Supplier Balance Type',
+      'Customer Credit Days', 'Customer Opening Balance', 'Customer Balance Type', 'Customer Type', 
       'MSME Enabled', 'MSME ID', 'Reg.Under', 'Reg.Type', 'Status'
     ];
     worksheet.addRow(headers);
@@ -1105,108 +1184,85 @@ export class AccountMasterService {
       fgColor: { argb: 'FFD3D3D3' }
     };
 
-    // Fetch all pincodes from the database to build reference sheet
-    const pincodes = await this.prisma.pincode.findMany({
-      orderBy: { pincode: 'asc' }
-    });
-
-    const refSheet = workbook.addWorksheet('PostalRef');
-    refSheet.columns = [
-        { header: 'Pincode', key: 'pincode', width: 15 },
-        { header: 'Country', key: 'country', width: 15 },
-        { header: 'Sub District', key: 'subDistrict', width: 20 },
-        { header: 'District', key: 'district', width: 20 },
-        { header: 'State', key: 'state', width: 20 }
-    ];
-
-    pincodes.forEach(p => {
-        const pincodeNum = Number(p.pincode);
-        refSheet.addRow({
-            pincode: isNaN(pincodeNum) ? p.pincode : pincodeNum,
-            country: p.country || 'India',
-            subDistrict: p.subDistrict || '',
-            district: p.district || '',
-            state: p.state || ''
-        });
-    });
-
-    // Populate dynamic Area mappings in a separate worksheet 'AreaRef' to avoid column limits
-    const areaSheet = workbook.addWorksheet('AreaRef');
-    areaSheet.columns = [
-        { header: 'Pincode', key: 'pincode', width: 15 },
-        { header: 'Area', key: 'area', width: 25 }
-    ];
-
-    pincodes.forEach(p => {
-        const areas = p.areas || [];
-        const pincodeNum = Number(p.pincode);
-        areas.forEach(area => {
-            if (area) {
-                areaSheet.addRow({
-                    pincode: isNaN(pincodeNum) ? p.pincode : pincodeNum,
-                    area: area
-                });
-            }
-        });
-    });
-
     // Data validations for dropdowns (limit to 200 rows to ensure blazing fast generation under 200ms)
     for (let i = 2; i <= 200; i++) {
         // Group Name
         worksheet.getCell(`B${i}`).dataValidation = {
             type: 'list', allowBlank: true,
             formulae: ['"SUNDRY_CREDITORS (Supplier),SUNDRY_DEBTORS (Customer),SUNDRY_CREDITORS (Supplier) & SUNDRY_DEBTORS (Customer)"'],
-            showErrorMessage: true
-        };
-        // Area (dynamic dropdown based on Pincode in column G) using vertical OFFSET+MATCH+COUNTIF with graceful IFERROR handling
-        worksheet.getCell(`H${i}`).dataValidation = {
-            type: 'list', allowBlank: true,
-            formulae: [`=IF(ISNUMBER(MATCH(G${i}, AreaRef!$A$1:$A$150000, 0)), OFFSET(AreaRef!$B$1, MATCH(G${i}, AreaRef!$A$1:$A$150000, 0) - 1, 0, COUNTIF(AreaRef!$A$1:$A$150000, G${i}), 1), AreaRef!$B$1)`],
             showErrorMessage: true,
-            errorTitle: 'Invalid Area',
-            error: 'Please select an area corresponding to the entered Pincode.'
+            showInputMessage: true,
+            promptTitle: 'Select Group Name',
+            prompt: 'Choose one of:\nSUNDRY_CREDITORS (Supplier),\nSUNDRY_DEBTORS (Customer),\nSUNDRY_CREDITORS (Supplier) & SUNDRY_DEBTORS (Customer)'
         };
-        
-        // Auto-fill formulas using IFERROR + VLOOKUP on Column G (Pincode) supporting both text and number types
-        worksheet.getCell(`I${i}`).value = { formula: `IFERROR(VLOOKUP(G${i}, PostalRef!$A$1:$E$150000, 3, FALSE), IFERROR(VLOOKUP(TEXT(G${i}, "0"), PostalRef!$A$1:$E$150000, 3, FALSE), ""))`, result: undefined }; // Sub District
-        worksheet.getCell(`J${i}`).value = { formula: `IFERROR(VLOOKUP(G${i}, PostalRef!$A$1:$E$150000, 4, FALSE), IFERROR(VLOOKUP(TEXT(G${i}, "0"), PostalRef!$A$1:$E$150000, 4, FALSE), ""))`, result: undefined }; // District
-        worksheet.getCell(`K${i}`).value = { formula: `IFERROR(VLOOKUP(G${i}, PostalRef!$A$1:$E$150000, 5, FALSE), IFERROR(VLOOKUP(TEXT(G${i}, "0"), PostalRef!$A$1:$E$150000, 5, FALSE), ""))`, result: undefined }; // State
-        worksheet.getCell(`L${i}`).value = { formula: `IFERROR(VLOOKUP(G${i}, PostalRef!$A$1:$E$150000, 2, FALSE), IFERROR(VLOOKUP(TEXT(G${i}, "0"), PostalRef!$A$1:$E$150000, 2, FALSE), ""))`, result: undefined }; // Country
 
-        // Customer Type
-        worksheet.getCell(`Q${i}`).dataValidation = {
+        // Supplier Balance Type (Column O)
+        worksheet.getCell(`O${i}`).dataValidation = {
             type: 'list', allowBlank: true,
-            formulae: ['"Industrial,Institutional,Retailer,Dealer"']
+            formulae: ['"Cr,Dr"'],
+            showInputMessage: true,
+            promptTitle: 'Select Balance Type',
+            prompt: 'Choose one of:\nCr,\nDr'
         };
-        // MSME Enabled
+
+        // Customer Balance Type (Column R)
         worksheet.getCell(`R${i}`).dataValidation = {
             type: 'list', allowBlank: true,
-            formulae: ['"Yes,No"']
+            formulae: ['"Cr,Dr"'],
+            showInputMessage: true,
+            promptTitle: 'Select Balance Type',
+            prompt: 'Choose one of:\nCr,\nDr'
         };
-        // Reg Under
+
+        // Customer Type (Column S)
+        worksheet.getCell(`S${i}`).dataValidation = {
+            type: 'list', allowBlank: true,
+            formulae: ['"Industrial,Institutional,Retailer,Dealer"'],
+            showInputMessage: true,
+            promptTitle: 'Select Customer Type',
+            prompt: 'Choose one of:\nIndustrial,\nInstitutional,\nRetailer,\nDealer'
+        };
+        // MSME Enabled (Column T)
         worksheet.getCell(`T${i}`).dataValidation = {
             type: 'list', allowBlank: true,
-            formulae: ['"Micro,Small,Medium"']
+            formulae: ['"Yes,No"'],
+            showInputMessage: true,
+            promptTitle: 'Select MSME Status',
+            prompt: 'Choose one of:\nYes,\nNo'
         };
-        // Reg Type
-        worksheet.getCell(`U${i}`).dataValidation = {
-            type: 'list', allowBlank: true,
-            formulae: ['"Manufacturing,Service,Trading"']
-        };
-        // Status
+        // Reg Under (Column V)
         worksheet.getCell(`V${i}`).dataValidation = {
             type: 'list', allowBlank: true,
-            formulae: ['"ACTIVE,INACTIVE"']
+            formulae: ['"Micro,Small,Medium"'],
+            showInputMessage: true,
+            promptTitle: 'Select MSME Category',
+            prompt: 'Choose one of:\nMicro,\nSmall,\nMedium'
+        };
+        // Reg Type (Column W)
+        worksheet.getCell(`W${i}`).dataValidation = {
+            type: 'list', allowBlank: true,
+            formulae: ['"Manufacturing,Service,Trading"'],
+            showInputMessage: true,
+            promptTitle: 'Select Industry Type',
+            prompt: 'Choose one of:\nManufacturing,\nService,\nTrading'
+        };
+        // Status (Column X)
+        worksheet.getCell(`X${i}`).dataValidation = {
+            type: 'list', allowBlank: true,
+            formulae: ['"ACTIVE,INACTIVE"'],
+            showInputMessage: true,
+            promptTitle: 'Select Status',
+            prompt: 'Choose one of:\nACTIVE,\nINACTIVE'
         };
     }
 
     worksheet.columns = headers.map((h, i) => {
         let width = 22;
         if (i === 1) width = 60; // Group Name
-        if (i === 17) width = 15; // MSME Enabled
-        if (i === 19) width = 15; // Reg.Under
-        if (i === 20) width = 18; // Reg.Type
-        if (i === 21) width = 12; // Status
+        if (i === 19) width = 15; // MSME Enabled
+        if (i === 21) width = 15; // Reg.Under
+        if (i === 22) width = 18; // Reg.Type
+        if (i === 23) width = 12; // Status
         return { width };
     });
 
@@ -1261,8 +1317,10 @@ export class AccountMasterService {
             
             if (val.includes('supplier credit days')) colMap['supplierCreditDays'] = colNumber;
             if (val.includes('supplier opening balance')) colMap['supplierOpBalance'] = colNumber;
+            if (val.includes('supplier balance type')) colMap['supplierBalanceType'] = colNumber;
             if (val.includes('customer credit days')) colMap['customerCreditDays'] = colNumber;
             if (val.includes('customer opening balance')) colMap['customerOpBalance'] = colNumber;
+            if (val.includes('customer balance type')) colMap['customerBalanceType'] = colNumber;
             if (val === 'customer type' || val === 'c. type') colMap['customerType'] = colNumber;
             
             if (val.includes('msme enabled')) colMap['msmeEnabled'] = colNumber;
@@ -1320,10 +1378,12 @@ export class AccountMasterService {
             if (groupName.length === 0) groupName.push(GroupNameEnum.SUNDRY_CREDITORS);
 
             const customerOpeningBalance = parseFloat(String(getVal(row, 'customerOpBalance', '0'))) || 0;
-            const customerBalanceType = 'Dr';
+            const rawCustomerBalanceType = String(getVal(row, 'customerBalanceType', '')).trim().toUpperCase();
+            const customerBalanceType = rawCustomerBalanceType === 'CR' ? 'Cr' : 'Dr';
 
             const supplierOpeningBalance = parseFloat(String(getVal(row, 'supplierOpBalance', '0'))) || 0;
-            const supplierBalanceType = 'Cr';
+            const rawSupplierBalanceType = String(getVal(row, 'supplierBalanceType', '')).trim().toUpperCase();
+            const supplierBalanceType = rawSupplierBalanceType === 'DR' ? 'Dr' : 'Cr';
 
             const addressLine1Raw = String(getVal(row, 'addressLine1')).trim();
             const addressLine1 = (addressLine1Raw && addressLine1Raw !== '-') ? addressLine1Raw : 'Unknown';

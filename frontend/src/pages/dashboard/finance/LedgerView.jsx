@@ -213,6 +213,7 @@ const LedgerView = () => {
                 foot: footerRows,
                 startY: 30,
                 theme: 'grid',
+                showHead: 'everyPage',
                 headStyles: { fillColor: [17, 24, 39], textColor: [255, 255, 255] },
                 footStyles: { fillColor: [249, 250, 251], textColor: [17, 24, 39], fontStyle: 'bold' },
                 styles: { fontSize: 8, font: 'helvetica' }
@@ -253,6 +254,7 @@ const LedgerView = () => {
             exportData.push({ "Narration": "Closing Balance", "Unallocated (₹)": "--", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}` });
 
             const ws = XLSX.utils.json_to_sheet(exportData);
+            ws['!views'] = [{ state: 'frozen', ySplit: 1 }];
             
             // Set column widths
             const wscols = [

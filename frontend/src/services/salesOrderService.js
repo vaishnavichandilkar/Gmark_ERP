@@ -17,13 +17,47 @@ export const getSalesOrderById = async (id) => {
     return response.data;
 };
 
-export const createSalesOrder = async (data) => {
-    const response = await axiosInstance.post(API_PATH, data);
+export const createSalesOrder = async (data, file) => {
+    const formData = new FormData();
+    Object.keys(data).forEach(key => {
+        if (key === 'items') {
+            formData.append(key, JSON.stringify(data[key]));
+        } else if (data[key] !== undefined && data[key] !== null) {
+            formData.append(key, data[key]);
+        }
+    });
+
+    if (file) {
+        formData.append('file', file);
+    }
+
+    const response = await axiosInstance.post(API_PATH, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
     return response.data;
 };
 
-export const updateSalesOrder = async (id, data) => {
-    const response = await axiosInstance.patch(`${API_PATH}/${id}`, data);
+export const updateSalesOrder = async (id, data, file) => {
+    const formData = new FormData();
+    Object.keys(data).forEach(key => {
+        if (key === 'items') {
+            formData.append(key, JSON.stringify(data[key]));
+        } else if (data[key] !== undefined && data[key] !== null) {
+            formData.append(key, data[key]);
+        }
+    });
+
+    if (file) {
+        formData.append('file', file);
+    }
+
+    const response = await axiosInstance.patch(`${API_PATH}/${id}`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
     return response.data;
 };
 

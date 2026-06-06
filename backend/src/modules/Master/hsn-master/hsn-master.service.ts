@@ -253,6 +253,7 @@ export class HsnMasterService {
     async getSampleExcel() {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('HSN Master Template');
+        worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
         worksheet.columns = [
             { header: 'Type*', key: 'type', width: 15 },
@@ -264,14 +265,29 @@ export class HsnMasterService {
         // Format code as text
         worksheet.getColumn('code').numFmt = '@';
 
-        // Add validation for type (column A) and taxRate (column C)
+        // Add validation for type (column A), code length (column B), and taxRate (column C)
         (worksheet as any).dataValidations.add('A2:A1000', {
             type: 'list',
             allowBlank: false,
             formulae: ['"HSN,SAC"'],
             showErrorMessage: true,
             errorTitle: 'Invalid Type',
-            error: 'Please select HSN or SAC'
+            error: 'Please select HSN or SAC',
+            showInputMessage: true,
+            promptTitle: 'Select Type',
+            prompt: 'Choose one of:\nHSN,\nSAC'
+        });
+
+        (worksheet as any).dataValidations.add('B2:B1000', {
+            type: 'custom',
+            allowBlank: true,
+            formulae: ['AND(ISNUMBER(VALUE(B2)), ISERR(FIND(".", B2)), ISERR(FIND("-", B2)), ISERR(FIND("+", B2)), ISERR(FIND("e", B2)), ISERR(FIND("E", B2)), LEN(B2)>=6, LEN(B2)<=8)'],
+            showErrorMessage: true,
+            errorTitle: 'Invalid HSN/SAC Code',
+            error: 'Code must be a numerical value with a length between 6 and 8 digits (Min 6, Max 8).',
+            showInputMessage: true,
+            inputTitle: 'Code Length Requirements',
+            input: 'Enter numerical value: HSN must be 6 or 8 digits, SAC must be 6 digits (Min 6, Max 8).'
         });
 
         (worksheet as any).dataValidations.add('C2:C1000', {
@@ -280,7 +296,10 @@ export class HsnMasterService {
             formulae: ['"0,5,12,18,28"'],
             showErrorMessage: true,
             errorTitle: 'Invalid Tax Rate',
-            error: 'Tax rate must be one of: 0, 5, 12, 18, 28'
+            error: 'Tax rate must be one of: 0, 5, 12, 18, 28',
+            showInputMessage: true,
+            promptTitle: 'Select Tax Rate %',
+            prompt: 'Choose one of:\n0,\n5,\n12,\n18,\n28'
         });
 
         const buffer = await workbook.xlsx.writeBuffer();
@@ -330,6 +349,7 @@ export class HsnMasterService {
         if (format.toLowerCase() === 'xlsx') {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('HSN Master');
+            worksheet.views = [{ state: 'frozen', ySplit: 5 }];
 
             worksheet.columns = [
                 { header: 'Type', key: 'type', width: 15 },

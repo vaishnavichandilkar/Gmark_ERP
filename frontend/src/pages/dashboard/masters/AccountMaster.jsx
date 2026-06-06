@@ -229,6 +229,10 @@ const AccountMaster = () => {
 
     const handleExportPDF = async () => {
         setIsExportOpen(false);
+        if (totalItems === 0) {
+            showToast('No data available to export', 'error');
+            return;
+        }
         try {
             const response = await accountService.exportAccounts({ format: 'pdf', search: searchQuery, ...appliedFilters });
             const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -241,12 +245,26 @@ const AccountMaster = () => {
             showToast('PDF Exported Successfully');
         } catch (e) {
             console.error('Export failed', e);
-            showToast('Failed to export PDF', 'error');
+            let message = 'Failed to export PDF';
+            if (e.response && e.response.data instanceof Blob) {
+                const text = await e.response.data.text();
+                try {
+                    const errorData = JSON.parse(text);
+                    message = errorData.message || message;
+                } catch (err) {}
+            } else if (e.response?.data?.message) {
+                message = e.response.data.message;
+            }
+            showToast(message, 'error');
         }
     };
 
     const handleExportExcel = async () => {
         setIsExportOpen(false);
+        if (totalItems === 0) {
+            showToast('No data available to export', 'error');
+            return;
+        }
         try {
             const response = await accountService.exportAccounts({ format: 'xlsx', search: searchQuery, ...appliedFilters });
             const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -259,7 +277,17 @@ const AccountMaster = () => {
             showToast('Excel Exported Successfully');
         } catch (e) {
             console.error('Export failed', e);
-            showToast('Failed to export Excel', 'error');
+            let message = 'Failed to export Excel';
+            if (e.response && e.response.data instanceof Blob) {
+                const text = await e.response.data.text();
+                try {
+                    const errorData = JSON.parse(text);
+                    message = errorData.message || message;
+                } catch (err) {}
+            } else if (e.response?.data?.message) {
+                message = e.response.data.message;
+            }
+            showToast(message, 'error');
         }
     };
 
@@ -922,7 +950,7 @@ const AccountMaster = () => {
                         link.parentNode.removeChild(link);
                     }}
                     sampleFileName="Account_Master_Sample.xlsx"
-                    sampleHeaders={['Account Name*', 'Group Name*', 'GST NO', 'PAN NO*', 'Address1*', 'Address2', 'Pincode*', 'Area', 'Sub District', 'District', 'State', 'Country', 'Supplier Credit Days', 'Supplier Opening Balance', 'Customer Credit Days', 'Customer Opening Balance', 'Customer Type', 'MSME Enabled', 'MSME ID', 'Reg.Under', 'Reg.Type', 'Status']}
+                    sampleHeaders={['Account Name*', 'Group Name*', 'GST NO', 'PAN NO*', 'Address1*', 'Address2', 'Pincode*', 'Area', 'Sub District', 'District', 'State', 'Country', 'Supplier Credit Days', 'Supplier Opening Balance', 'Supplier Balance Type', 'Customer Credit Days', 'Customer Opening Balance', 'Customer Balance Type', 'Customer Type', 'MSME Enabled', 'MSME ID', 'Reg.Under', 'Reg.Type', 'Status']}
                 />
             )}
             

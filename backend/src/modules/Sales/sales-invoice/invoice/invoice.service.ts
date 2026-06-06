@@ -16,6 +16,19 @@ export class SalesInvoiceService {
     private transactionService: TransactionService
   ) { }
 
+  private async isSellerMsme(userId: number): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { sellerDocuments: true }
+    });
+    if (!user) return false;
+    const isSellerMsmeActive = user.sellerDocuments.some(
+      d => d.category === 'UDYOG_AADHAR' && d.name && d.name.trim() !== '' && d.name.trim().toUpperCase() !== 'N/A'
+    );
+    const isSellerMsmeType = user.regType === 'Manufacturing' || user.regType === 'Service';
+    return Boolean(isSellerMsmeActive && isSellerMsmeType);
+  }
+
   async getCustomers(userId: number) {
     return this.prisma.accountMaster.findMany({
       where: {
@@ -33,6 +46,8 @@ export class SalesInvoiceService {
         panNo: true,
         state: true,
         customerType: true,
+        msmeEnabled: true,
+        regType: true,
       },
       orderBy: { accountName: 'asc' },
     });
@@ -278,8 +293,18 @@ export class SalesInvoiceService {
       throw new BadRequestException('Customer is inactive. New sales transactions are not allowed.');
     }
 
+    const sellerMsme = await this.isSellerMsme(userId);
+    const customerMsmeActive = customer.msmeEnabled;
+    const customerMsmeType = customer.regType === 'Manufacturing' || customer.regType === 'Service';
+    const isCustomerMsme = Boolean(customerMsmeActive && customerMsmeType);
+
+    const creditDays = createDto.creditDays !== undefined && createDto.creditDays !== null ? createDto.creditDays : (customer.customerCreditDays || 0);
+
+    if ((sellerMsme || isCustomerMsme) && creditDays > 45) {
+      throw new BadRequestException('Maximum credit period allowed under MSME rules is 45 days.');
+    }
+
     const address = createDto.address || customer.addressLine1;
-    const creditDays = createDto.creditDays || customer.customerCreditDays || 0;
     const gstNo = createDto.gstNumber || customer.gstNo;
 
     const company = await this.prisma.shopDetail.findUnique({ where: { userId } });
@@ -605,6 +630,18 @@ export class SalesInvoiceService {
     const company = await this.prisma.shopDetail.findUnique({ where: { userId: existing.userId } });
     const customer = await this.prisma.accountMaster.findUnique({ where: { id: updateDto.customerId || existing.customerId } });
     
+    if (customer) {
+      const sellerMsme = await this.isSellerMsme(userId);
+      const customerMsmeActive = customer.msmeEnabled;
+      const customerMsmeType = customer.regType === 'Manufacturing' || customer.regType === 'Service';
+      const isCustomerMsme = Boolean(customerMsmeActive && customerMsmeType);
+
+      const creditDays = updateDto.creditDays !== undefined ? updateDto.creditDays : existing.creditDays;
+      if ((sellerMsme || isCustomerMsme) && creditDays > 45) {
+        throw new BadRequestException('Maximum credit period allowed under MSME rules is 45 days.');
+      }
+    }
+    
     // Fetch Company GST
     const companyGstDoc = await this.prisma.sellerDocument.findFirst({
       where: { uploadedByUserId: existing.userId, type: 'GST' },
@@ -804,6 +841,7 @@ export class SalesInvoiceService {
   async downloadSample() {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Sales Invoice Sample');
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
     const headers = [
       'Customer Name*', 'Customer Invoice No*', 'Customer Invoice Date (YYYY-MM-DD)*', 'Booking Date (YYYY-MM-DD)',
       'Address*', 'Credit Days*', 'Challan Nos', 'SO Nos', 'Product Code*', 'Quantity*', 'Rate*', 'UOM*'
@@ -837,6 +875,7 @@ export class SalesInvoiceService {
     if (format === 'xlsx') {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Sales Invoices');
+      worksheet.views = [{ state: 'frozen', ySplit: 5 }];
       worksheet.columns = [
         { header: 'Inv No', key: 'invoiceNumber', width: 15 },
         { header: 'Customer Name', key: 'customerName', width: 30 },

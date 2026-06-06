@@ -133,6 +133,8 @@ export class PurchaseInvoiceService {
         addressLine2: true,
         gstNo: true,
         panNo: true,
+        msmeEnabled: true,
+        regType: true,
       },
       orderBy: { accountName: 'asc' },
     });
@@ -353,6 +355,15 @@ export class PurchaseInvoiceService {
     // Auto-fill from supplier
     const address = supplier.addressLine1 || createDto.address;
     const creditDays = (createDto.creditDays !== undefined && createDto.creditDays !== null) ? createDto.creditDays : (supplier.supplierCreditDays || 0);
+
+    const isSupplierMsmeActive = supplier.msmeEnabled;
+    const isSupplierMsmeType = supplier.regType === 'Manufacturing' || supplier.regType === 'Service';
+    const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType);
+
+    if (isSupplierMsme && creditDays > 45) {
+      throw new BadRequestException('Maximum credit period allowed for MSME suppliers is 45 days.');
+    }
+
     const gstNo = supplier.gstNo || createDto.gstNumber;
 
     const company = await this.prisma.shopDetail.findUnique({
@@ -785,6 +796,16 @@ export class PurchaseInvoiceService {
     const supplierInfo = await this.prisma.accountMaster.findFirst({
       where: { id: existing.supplierId, userId: existing.userId }
     });
+    if (supplierInfo) {
+      const isSupplierMsmeActive = supplierInfo.msmeEnabled;
+      const isSupplierMsmeType = supplierInfo.regType === 'Manufacturing' || supplierInfo.regType === 'Service';
+      const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType);
+
+      const creditDays = updateDto.creditDays !== undefined ? updateDto.creditDays : existing.creditDays;
+      if (isSupplierMsme && creditDays > 45) {
+        throw new BadRequestException('Maximum credit period allowed for MSME suppliers is 45 days.');
+      }
+    }
     const supplierState = (supplierInfo?.state || "").trim();
 
     let isRcm = false;
@@ -928,6 +949,7 @@ export class PurchaseInvoiceService {
   async downloadSample() {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Purchase Invoice Sample');
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
     const headers = [
       'Supplier Name*', 'Supplier Invoice No*', 'Supplier Invoice Date (YYYY-MM-DD)*', 'Booking Date (YYYY-MM-DD)',
       'Address*', 'Credit Days*', 'CH No', 'PO No', 'Product Code*', 'Quantity*', 'Rate*', 'UOM*'
@@ -979,6 +1001,7 @@ export class PurchaseInvoiceService {
     if (format === 'xlsx') {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Purchase Invoices');
+      worksheet.views = [{ state: 'frozen', ySplit: 5 }];
       worksheet.columns = [
         { header: 'Inv No', key: 'invoiceNumber', width: 15 },
         { header: 'Supplier Name', key: 'supplierName', width: 30 },

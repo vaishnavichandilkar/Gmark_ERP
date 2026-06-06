@@ -1,5 +1,6 @@
-import { IsEmail, IsNotEmpty, IsString, IsOptional, Length, IsBoolean, ValidateIf, Matches, IsInt } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, IsOptional, Length, IsBoolean, ValidateIf, Matches, IsInt, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { RegType } from '@prisma/client';
 
 export class Step1LanguageDto {
     @ApiProperty({ example: 'English', description: 'Selected language' })
@@ -77,6 +78,11 @@ export class Step5BusinessDto {
     @IsString()
     @IsOptional()
     gstNumber: string;
+
+    @ApiProperty({ example: 'Manufacturing', required: false, enum: RegType })
+    @IsEnum(RegType)
+    @IsOptional()
+    regType?: RegType;
 }
 
 export class Step6ShopDto {

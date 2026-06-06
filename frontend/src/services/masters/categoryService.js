@@ -86,6 +86,14 @@ const categoryService = {
         const response = await axiosInstance.post(`/category-master/sub-sub-category/${id}/promote-to-category`);
         return response.data;
     },
+    moveCategory: async (id, targetParentId) => {
+        const response = await axiosInstance.patch(`/category-master/${id}/move`, { targetParentId });
+        return response.data;
+    },
+    getMoveOptions: async (id) => {
+        const response = await axiosInstance.get(`/category-master/${id}/move-options`);
+        return response.data;
+    },
     exportCategories: async (format) => {
         const response = await axiosInstance.get(`/category-master/export?format=${format}`, {
             responseType: 'blob'
@@ -96,7 +104,13 @@ const categoryService = {
         const response = await axiosInstance.get('/category-master/sample', {
             responseType: 'blob'
         });
-        return response;
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'Category_Master_Sample.xlsx');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
     }
 };
 

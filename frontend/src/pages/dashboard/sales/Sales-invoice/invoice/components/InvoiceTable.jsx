@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Trash2, Plus } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { getStandardGstUom } from '@/utils/uomUtils';
 
-const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isLinked }) => {
+const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isLinked, isChallanSelected }) => {
     const [tableSearch, setTableSearch] = useState('');
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
     const [activeRowIndex, setActiveRowIndex] = useState(null);
@@ -89,6 +90,17 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             let qty = parseFloat(field === 'quantity' ? finalValue : item.quantity) || 0;
             const rate = parseFloat(field === 'rate' ? finalValue : item.rate) || 0;
             const taxPct = parseFloat(field === 'taxPercent' ? finalValue : item.taxPercent) || 0;
+
+            const totalSO = parseFloat(item.totalSoQty) || 0;
+            if (totalSO > 0 && qty > totalSO) {
+                toast.error(`Quantity cannot exceed remaining SO quantity of ${totalSO}`);
+                qty = totalSO;
+                if (field === 'quantity') {
+                    finalValue = qty;
+                }
+                item.quantity = qty;
+            }
+
             let discPct = parseFloat(field === 'discountPercent' ? finalValue : item.discountPercent) || 0;
             let discAmt = parseFloat(field === 'discountAmount' ? finalValue : item.discountAmount) || 0;
 
@@ -345,7 +357,8 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                                 min="0"
                                                 value={item.quantity === 0 ? '' : item.quantity}
                                                 onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                                className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                                                readOnly={isLinked}
+                                                className={`w-full h-[36px] border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none transition-all shadow-sm ${isLinked ? 'bg-gray-50 text-gray-500 cursor-not-allowed border-[#E5E7EB]' : 'bg-white text-[#111827] focus:border-[#073318] border-[#E5E7EB]'} ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : ''}`}
                                             />
                                             {/* Max quantity label removed for unlimited entry */}
                                         </div>

@@ -51,6 +51,7 @@ export const saveBusinessDetailsApi = async (data, files) => {
     const formData = new FormData();
     formData.append('udyogAadharNumber', data.udyogAadhar || 'N/A');
     formData.append('gstNumber', data.gstNumber || 'N/A');
+    formData.append('regType', data.regType || '');
     if (files.udyogAadharFile && files.udyogAadharFile instanceof File) {
         formData.append('udyogAadharCertificate', files.udyogAadharFile);
     }
