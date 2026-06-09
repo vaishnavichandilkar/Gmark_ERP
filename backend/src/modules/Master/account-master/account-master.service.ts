@@ -26,6 +26,39 @@ export class AccountMasterService {
     return Boolean(isSellerMsmeActive && isSellerMsmeType);
   }
 
+  private async isCustomerMsme(mobileNo?: string, emailId?: string, gstNo?: string): Promise<boolean> {
+    const conditions = [];
+    if (mobileNo && mobileNo.trim() !== '') {
+      conditions.push({ phone: mobileNo.trim() });
+    }
+    if (emailId && emailId.trim() !== '') {
+      conditions.push({ email: emailId.trim() });
+    }
+    if (gstNo && gstNo.trim() !== '') {
+      const gstDoc = await this.prisma.sellerDocument.findFirst({
+        where: { type: 'GST', name: gstNo.trim() }
+      });
+      if (gstDoc && gstDoc.uploadedByUserId) {
+        conditions.push({ id: gstDoc.uploadedByUserId });
+      }
+    }
+    if (conditions.length === 0) return false;
+    const user = await this.prisma.user.findFirst({
+      where: { OR: conditions },
+      include: { sellerDocuments: true }
+    });
+    if (!user) return false;
+    const isMsmeActive = user.sellerDocuments.some(
+      d => d.category === 'UDYOG_AADHAR' && d.name && d.name.trim() !== '' && d.name.trim().toUpperCase() !== 'N/A'
+    );
+    const isMsmeType = user.regType === 'Manufacturing' || user.regType === 'Service';
+    return Boolean(isMsmeActive && isMsmeType);
+  }
+
+  async checkMsmeUser(phone?: string, email?: string, gst?: string): Promise<boolean> {
+    return this.isCustomerMsme(phone, email, gst);
+  }
+
   async generateCustomerCode(userId: number): Promise<string> {
     const prefix = 'CT';
     const lastAccount = await this.prisma.accountMaster.findFirst({
@@ -227,26 +260,52 @@ export class AccountMasterService {
     const msmeIdVal = msmeEnabledVal ? createDto.msmeId : null;
     const regTypeVal = msmeEnabledVal ? createDto.regType : null;
 
-    const isMsmeActive = msmeEnabledVal && msmeIdVal && msmeIdVal.trim() !== '';
-    const isMsmeType = regTypeVal === 'Manufacturing' || regTypeVal === 'Service';
+    const isSupplierMsmeActive = msmeEnabledVal && msmeIdVal && msmeIdVal.trim() !== '';
+    const isSupplierMsmeType = regTypeVal === 'Manufacturing' || regTypeVal === 'Service';
 
-    const sellerMsme = await this.isSellerMsme(userId);
-
-    if (isMsmeActive && isMsmeType) {
+    if (isSupplierMsmeActive && isSupplierMsmeType) {
       if (supplierCreditDays !== undefined && supplierCreditDays !== null) {
         const val = Number(supplierCreditDays);
         if (val > 45) {
           supplierCreditDays = 45;
+          await this.prisma.auditLog.create({
+            data: {
+              userId,
+              action: 'MSME_AUTO_CORRECT',
+              resource: 'AccountMaster',
+              details: {
+                entered: val,
+                final: 45,
+                reason: 'MSME Compliance Rule',
+                comment: 'MSME Manufacturing/Service Credit Limit',
+                type: 'Supplier'
+              }
+            }
+          });
         }
       }
     }
 
-    const shouldCapCustomer = (isMsmeActive && isMsmeType) || sellerMsme;
-    if (shouldCapCustomer) {
+    const sellerMsme = await this.isSellerMsme(userId);
+    if (sellerMsme) {
       if (customerCreditDays !== undefined && customerCreditDays !== null) {
         const val = Number(customerCreditDays);
         if (val > 45) {
           customerCreditDays = 45;
+          await this.prisma.auditLog.create({
+            data: {
+              userId,
+              action: 'MSME_AUTO_CORRECT',
+              resource: 'AccountMaster',
+              details: {
+                entered: val,
+                final: 45,
+                reason: 'MSME Compliance Rule',
+                comment: 'MSME Manufacturing/Service Credit Limit',
+                type: 'Customer'
+              }
+            }
+          });
         }
       }
     }
@@ -442,11 +501,15 @@ export class AccountMasterService {
          where,
          orderBy: { createdAt: 'desc' },
        });
+       const mappedData = await Promise.all(data.map(async (item) => {
+         const isMsmeUser = await this.isCustomerMsme(item.mobileNo, item.emailId, item.gstNo);
+         return { ...item, isMsmeUser };
+       }));
        return {
-           data,
-           total: data.length,
+           data: mappedData,
+           total: mappedData.length,
            page: 1,
-           limit: data.length,
+           limit: mappedData.length,
            totalPages: 1
        };
     }
@@ -465,8 +528,13 @@ export class AccountMasterService {
       this.prisma.accountMaster.count({ where })
     ]);
 
+    const mappedData = await Promise.all(data.map(async (item) => {
+      const isMsmeUser = await this.isCustomerMsme(item.mobileNo, item.emailId, item.gstNo);
+      return { ...item, isMsmeUser };
+    }));
+
     return {
-      data,
+      data: mappedData,
       total,
       page,
       limit,
@@ -484,15 +552,19 @@ export class AccountMasterService {
       },
       orderBy: { accountName: 'asc' },
     });
-    return customers.map(acc => ({
-      id: acc.id,
-      accountName: acc.accountName,
-      customerCreditDays: acc.customerCreditDays || 0,
-      address: acc.addressLine1 + (acc.addressLine2 ? ', ' + acc.addressLine2 : ''),
-      gstNumber: acc.gstNo,
-      panNumber: acc.panNo,
-      state: acc.state,
-      customerType: acc.customerType,
+    return Promise.all(customers.map(async (acc) => {
+      const isMsmeUser = await this.isCustomerMsme(acc.mobileNo, acc.emailId, acc.gstNo);
+      return {
+        id: acc.id,
+        accountName: acc.accountName,
+        customerCreditDays: acc.customerCreditDays || 0,
+        address: acc.addressLine1 + (acc.addressLine2 ? ', ' + acc.addressLine2 : ''),
+        gstNumber: acc.gstNo,
+        panNumber: acc.panNo,
+        state: acc.state,
+        customerType: acc.customerType,
+        isMsmeUser,
+      };
     }));
   }
 
@@ -681,7 +753,11 @@ export class AccountMasterService {
       throw new NotFoundException(`Account with ID ${id} not found or access denied`);
     }
 
-    return account;
+    const isMsmeUser = await this.isCustomerMsme(account.mobileNo, account.emailId, account.gstNo);
+    return {
+      ...account,
+      isMsmeUser
+    };
   }
 
   async update(id: number, updateDto: UpdateAccountMasterDto, userId: number, files?: any) {
@@ -708,28 +784,59 @@ export class AccountMasterService {
     const msmeIdVal = msmeEnabledVal ? (updateDto.msmeId !== undefined ? updateDto.msmeId : existingOriginal.msmeId) : null;
     const regTypeVal = msmeEnabledVal ? (updateDto.regType !== undefined ? updateDto.regType : existingOriginal.regType) : null;
 
-    const isMsmeActive = msmeEnabledVal && msmeIdVal && msmeIdVal.trim() !== '';
-    const isMsmeType = regTypeVal === 'Manufacturing' || regTypeVal === 'Service';
+    const isSupplierMsmeActive = msmeEnabledVal && msmeIdVal && msmeIdVal.trim() !== '';
+    const isSupplierMsmeType = regTypeVal === 'Manufacturing' || regTypeVal === 'Service';
 
     const sellerMsme = await this.isSellerMsme(userId);
 
-    if (isMsmeActive && isMsmeType) {
+    if (isSupplierMsmeActive && isSupplierMsmeType) {
       let finalSupplierCreditDays = supplierCreditDays !== undefined ? supplierCreditDays : existingOriginal.supplierCreditDays;
       if (finalSupplierCreditDays !== undefined && finalSupplierCreditDays !== null) {
         const val = Number(finalSupplierCreditDays);
         if (val > 45) {
           supplierCreditDays = 45;
+          await this.prisma.auditLog.create({
+            data: {
+              userId,
+              action: 'MSME_AUTO_CORRECT',
+              resource: 'AccountMaster',
+              details: {
+                entered: val,
+                final: 45,
+                reason: 'MSME Compliance Rule',
+                comment: 'MSME Manufacturing/Service Credit Limit',
+                type: 'Supplier'
+              }
+            }
+          });
         }
       }
     }
 
-    const shouldCapCustomer = (isMsmeActive && isMsmeType) || sellerMsme;
-    if (shouldCapCustomer) {
+    const mob = updateDto.mobileNo !== undefined ? updateDto.mobileNo : existingOriginal.mobileNo;
+    const em = updateDto.emailId !== undefined ? updateDto.emailId : existingOriginal.emailId;
+    const gst = updateDto.gstNo !== undefined ? updateDto.gstNo : existingOriginal.gstNo;
+
+    if (sellerMsme) {
       let finalCustomerCreditDays = customerCreditDays !== undefined ? customerCreditDays : existingOriginal.customerCreditDays;
       if (finalCustomerCreditDays !== undefined && finalCustomerCreditDays !== null) {
         const val = Number(finalCustomerCreditDays);
         if (val > 45) {
           customerCreditDays = 45;
+          await this.prisma.auditLog.create({
+            data: {
+              userId,
+              action: 'MSME_AUTO_CORRECT',
+              resource: 'AccountMaster',
+              details: {
+                entered: val,
+                final: 45,
+                reason: 'MSME Compliance Rule',
+                comment: 'MSME Manufacturing/Service Credit Limit',
+                type: 'Customer'
+              }
+            }
+          });
         }
       }
     }

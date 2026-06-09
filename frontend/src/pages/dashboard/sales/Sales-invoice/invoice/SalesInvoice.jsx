@@ -29,7 +29,7 @@ import ScrollableTable from "@/components/common/ScrollableTable";
 import ImportModal from "./components/ImportModal";
 import CustomSelect from "@/components/common/CustomSelect";
 
-const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
+const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting, t }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
@@ -39,12 +39,12 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
           <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <Trash2 size={32} className="text-red-500" />
           </div>
-          <h3 className="text-[20px] font-bold text-[#111827] mb-2 uppercase tracking-tight">Delete Invoice</h3>
-          <p className="text-[#6B7280] text-[15px] font-medium mb-8">Are you sure you want to delete this Sales Invoice? This action will mark its status as deleted.</p>
+          <h3 className="text-[20px] font-bold text-[#111827] mb-2 uppercase tracking-tight">{t('modules:delete_si')}</h3>
+          <p className="text-[#6B7280] text-[15px] font-medium mb-8">{t('modules:delete_si_confirm')}</p>
           <div className="flex gap-4">
-            <button onClick={onCancel} disabled={isDeleting} className="flex-1 h-[52px] rounded-[14px] border border-[#E5E7EB] text-[14px] font-bold text-[#4B5563] uppercase tracking-widest hover:bg-gray-50 transition-all">No, Keep it</button>
+            <button onClick={onCancel} disabled={isDeleting} className="flex-1 h-[52px] rounded-[14px] border border-[#E5E7EB] text-[14px] font-bold text-[#4B5563] uppercase tracking-widest hover:bg-gray-50 transition-all">{t('common:no_keep_it')}</button>
             <button onClick={onConfirm} disabled={isDeleting} className="flex-1 h-[52px] rounded-[14px] bg-red-600 text-white text-[14px] font-bold uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 hover:bg-red-700 transition-all">
-              {isDeleting ? <RefreshCw size={18} className="animate-spin" /> : "Yes, Delete"}
+              {isDeleting ? <RefreshCw size={18} className="animate-spin" /> : t('common:yes_delete')}
             </button>
           </div>
         </div>
@@ -94,7 +94,7 @@ const SalesInvoice = () => {
             setTotalItemsCount(response.meta?.total || data.length);
         } catch (error) {
             console.error("Error fetching invoices:", error);
-            toast.error("Failed to load invoices");
+            toast.error(t('modules:failed_to_load_invoices'));
         } finally {
             setIsLoading(false);
         }
@@ -140,9 +140,9 @@ const SalesInvoice = () => {
             document.body.appendChild(link);
             link.click();
             link.parentNode.removeChild(link);
-            toast.success('PDF Exported Successfully');
+            toast.success(t('common:export_pdf_success'));
         } catch (e) {
-            toast.error('Failed to export PDF');
+            toast.error(t('common:export_failed'));
         }
     };
 
@@ -157,9 +157,9 @@ const SalesInvoice = () => {
             document.body.appendChild(link);
             link.click();
             link.parentNode.removeChild(link);
-            toast.success('Excel Exported Successfully');
+            toast.success(t('common:export_excel_success'));
         } catch (e) {
-            toast.error('Failed to export Excel');
+            toast.error(t('common:export_failed'));
         }
     };
 
@@ -174,22 +174,22 @@ const SalesInvoice = () => {
             link.click();
             link.parentNode.removeChild(link);
         } catch (e) {
-            toast.error('Failed to download sample file');
+            toast.error(t('common:failed_to_load'));
         }
     };
 
     const handleImportExcel = async (file) => {
-        const loadingToast = toast.loading('Importing invoices...');
-        try {
+            const loadingToast = toast.loading(t('common:processing'));
+    try {
             const formData = new FormData();
             formData.append('file', file);
             await salesInvoiceService.importInvoices(formData);
             toast.dismiss(loadingToast);
-            toast.success('Invoices imported successfully');
+            toast.success(t('modules:data_imported'));
             fetchData();
         } catch (error) {
             toast.dismiss(loadingToast);
-            toast.error(error?.response?.data?.message || 'Failed to import invoices');
+            toast.error(error?.response?.data?.message || t('common:import_failed'));
         }
     };
 
@@ -203,10 +203,10 @@ const SalesInvoice = () => {
         setIsDeleting(true);
         try {
             await salesInvoiceService.deleteInvoice(invToDelete);
-            toast.success("Invoice deleted successfully");
+            toast.success(t('modules:invoice_deleted'));
             fetchData();
         } catch (error) {
-            toast.error("Failed to delete invoice");
+            toast.error(t('modules:failed_to_delete_invoice'));
         } finally {
             setIsDeleting(false);
             setIsDeleteModalOpen(false);
@@ -237,7 +237,7 @@ const SalesInvoice = () => {
             });
         } catch (error) {
             console.error("Print error:", error);
-            toast.error("Failed to load print preview");
+                toast.error(t('modules:failed_to_load_print'));
         } finally {
             setIsLoading(false);
         }
@@ -278,7 +278,7 @@ const SalesInvoice = () => {
         <div className="flex flex-col w-full relative font-outfit">
             {/* Header */}
             <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between items-center">
-                <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">Sales Invoice</h1>
+                <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('modules:sales_invoice_title')}</h1>
                 <button
                     onClick={() => {
                         sessionStorage.removeItem('add_si_draft');
@@ -286,7 +286,7 @@ const SalesInvoice = () => {
                     }}
                     className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all flex items-center gap-2 active:scale-95"
                 >
-                    <Plus size={18} /> Add Invoice
+                    <Plus size={18} /> {t('modules:add_invoice_btn')}
                 </button>
             </div>
 
@@ -298,7 +298,7 @@ const SalesInvoice = () => {
                         onClick={() => navigate(tab === 'Challan' ? '/seller/sales/challan' : '/seller/sales/invoice')}
                         className={`relative pb-4 text-[18px] font-bold transition-colors ${tab === 'Invoice' ? 'text-[#073318]' : 'text-[#6B7280]'}`}
                     >
-                        {tab}
+                        {tab === 'Challan' ? t('modules:challan_tab', 'Challan') : t('modules:invoice_tab', 'Invoice')}
                         {tab === 'Invoice' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#073318]" />}
                     </button>
                 ))}
@@ -313,7 +313,7 @@ const SalesInvoice = () => {
                             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                             <input
                                 type="text"
-                                placeholder="Search by anything..."
+                                placeholder={t('common:search')}
                                 value={searchQuery}
                                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                                 className="w-full h-[42px] border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none focus:border-[#073318]"
@@ -324,7 +324,7 @@ const SalesInvoice = () => {
                             onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
                             className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-[#E5E7EB] text-[#4B5563]'}`}
                         >
-                            <Filter size={18} /> {isFilterApplied ? "Clear" : "Filter"}
+                            <Filter size={18} /> {isFilterApplied ? t('common:clear_filter') : t('common:filter')}
                         </button>
                         <button onClick={fetchData} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] flex items-center justify-center bg-white hover:bg-gray-50 transition-colors">
                             <RefreshCw size={18} className={`text-gray-400 ${isLoading ? 'animate-spin' : ''}`} />
@@ -333,14 +333,14 @@ const SalesInvoice = () => {
 
                     <div className="flex items-center gap-3">
                         <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all">
-                            <Download size={18} className="text-gray-400" /> Import
+                            <Download size={18} className="text-gray-400" /> {t('common:import')}
                         </button>
                         <div className="relative" ref={exportRef}>
                             <button
                                 onClick={() => setIsExportOpen(!isExportOpen)}
                                 className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563]'}`}
                             >
-                                <Upload size={18} /> Export
+                                <Upload size={18} /> {t('common:export')}
                             </button>
                             {isExportOpen && (
                                 <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -361,9 +361,12 @@ const SalesInvoice = () => {
                     <table className="w-full min-w-[1200px] border-collapse text-left">
                         <thead>
                             <tr className="bg-emerald-900 text-white font-bold text-[15px]">
-                                {["Customer Name", "Invoice Number", "Date", "Cust. Inv. No", "Grand Total", "Status", "Action"].map(h => (
-                                    <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
-                                ))}
+                                {[
+                                t('modules:customerName'), t('modules:invoice_number_col'), t('modules:date_col'),
+                                t('modules:cust_inv_no'), t('modules:grand_total_col'), t('common:status'), t('common:action')
+                            ].map(h => (
+                                <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
+                            ))}
                             </tr>
                         </thead>
                         <tbody className={`text-[14px] text-[#111827] ${isLoading ? 'opacity-40' : 'opacity-100'}`}>
@@ -376,7 +379,7 @@ const SalesInvoice = () => {
                                         <td className="px-6 py-4 font-bold text-gray-500">{row.customerInvNo}</td>
                                         <td className="px-6 py-4 font-bold text-[#073318]">₹{row.grandTotal}</td>
                                         <td className="px-6 py-5">
-                                            <span className={`px-4 py-1.5 ${row.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{row.status}</span>
+                                            <span className={`px-4 py-1.5 ${row.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{t(`common:status_${row.status.toLowerCase()}`, row.status)}</span>
                                         </td>
                                         <td className="px-6 py-5 text-center relative">
                                             <button
@@ -399,7 +402,7 @@ const SalesInvoice = () => {
                                                 >
                                                     <button onClick={() => { setActiveDropdown(null); navigate(`view/${row.id}`); }} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50">
                                                         <Eye size={18} className="text-emerald-600" /> 
-                                                        {row.status === 'Deleted' ? 'View Invoice' : 'View/Edit Invoice'}
+                                                        {row.status === 'Deleted' ? t('modules:view_invoice_action') : t('modules:view_edit_invoice')}
                                                     </button>
                                                     {row.status !== 'Deleted' && (
                                                         <>
@@ -407,10 +410,10 @@ const SalesInvoice = () => {
                                                                 onClick={() => { setActiveDropdown(null); handlePrint(row); }} 
                                                                 className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"
                                                             >
-                                                                <Printer size={18} className="text-[#073318]" /> Print Invoice
+                                                                <Printer size={18} className="text-[#073318]" /> {t('modules:print_invoice')}
                                                             </button>
                                                             <button onClick={() => { setActiveDropdown(null); handleDeleteClick(row.id); }} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50">
-                                                                <Trash2 size={18} /> Delete
+                                                                <Trash2 size={18} /> {t('modules:delete_action')}
                                                             </button>
                                                         </>
                                                     )}
@@ -421,7 +424,7 @@ const SalesInvoice = () => {
                                     </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan="7" className="px-6 py-24 text-center text-gray-400 font-bold uppercase tracking-widest">No results found</td></tr>
+                                <tr><td colSpan="7" className="px-6 py-24 text-center text-gray-400 font-bold uppercase tracking-widest">{t('common:no_results_found')}</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -430,7 +433,7 @@ const SalesInvoice = () => {
                 {/* Pagination */}
                 <div className="px-8 py-5 border-t border-[#F3F4F6] bg-[#F9FAFB] flex items-center justify-between font-bold text-[#6B7280]">
                     <div className="flex items-center gap-2">
-                        <span>Show</span>
+                        <span>{t('common:show')}</span>
                         <CustomSelect 
                             value={itemsPerPage}
                             onChange={(val) => {
@@ -442,7 +445,7 @@ const SalesInvoice = () => {
                         />
                     </div>
                     <div className="flex items-center gap-4">
-                        <span className="text-[14px]">Page {currentPage} of {totalPages || 1}</span>
+                        <span className="text-[14px]">{t('common:page_of', { current: currentPage, total: totalPages || 1 })}</span>
                         <div className="flex gap-2">
                             <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowLeft size={18} /></button>
                             <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowRight size={18} /></button>
@@ -454,37 +457,37 @@ const SalesInvoice = () => {
             {/* Modals via Portal */}
             {createPortal(
                 <>
-                    <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} />
+                    <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} t={t} />
                     <ImportModal
                         isOpen={isImportModalOpen}
                         onClose={() => setIsImportModalOpen(false)}
                         onImport={handleImportExcel}
                         onDownloadSample={handleDownloadSample}
-                        title="Import Sales Invoices"
+                        title={t('modules:import_sales_invoices')}
                     />
 
                     {/* Filter Sidebar */}
                     {isFilterOpen && <div className="fixed inset-0 z-[100] bg-slate-900/20 backdrop-blur-[2px]" onClick={() => setIsFilterOpen(false)} />}
                     <div className={`fixed top-0 right-0 h-full w-[400px] bg-white shadow-2xl z-[110] transform transition-all duration-300 ${isFilterOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                         <div className="flex items-center justify-between px-6 py-5 border-b border-[#04200f] bg-emerald-900 text-white font-bold">
-                            <h2>Apply Filters</h2>
+                            <h2>{t('modules:apply_filters_title')}</h2>
                             <button onClick={() => setIsFilterOpen(false)}><X size={20} /></button>
                         </div>
                         <div className="p-8 space-y-6">
                             <div className="space-y-2">
-                                <label className="text-[13px] font-bold text-[#374151]">Status</label>
+                                <label className="text-[13px] font-bold text-[#374151]">{t('common:status')}</label>
                                 <select
                                     value={filterInputs.status}
                                     onChange={(e) => setFilterInputs(prev => ({ ...prev, status: e.target.value }))}
                                     className="w-full h-[44px] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318]"
                                 >
-                                    {["All", "Generated", "Deleted"].map(s => <option key={s} value={s}>{s}</option>)}
+                                    {["All", "Generated", "Deleted"].map(s => <option key={s} value={s}>{t(`common:status_${s.toLowerCase()}`, s)}</option>)}
                                 </select>
                             </div>
                         </div>
                         <div className="absolute bottom-0 left-0 right-0 p-8 border-t flex gap-4 bg-white">
-                            <button onClick={handleClearFilter} className="flex-1 h-[46px] border border-[#E5E7EB] rounded-[10px] font-bold">Clear</button>
-                            <button onClick={handleApplyFilter} className="flex-1 h-[46px] bg-[#073318] text-white rounded-[10px] font-bold">Apply</button>
+                            <button onClick={handleClearFilter} className="flex-1 h-[46px] border border-[#E5E7EB] rounded-[10px] font-bold">{t('common:clear')}</button>
+                            <button onClick={handleApplyFilter} className="flex-1 h-[46px] bg-[#073318] text-white rounded-[10px] font-bold">{t('common:apply')}</button>
                         </div>
                     </div>
                 </>,

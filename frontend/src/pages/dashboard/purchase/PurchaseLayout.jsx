@@ -28,10 +28,10 @@ const PurchaseLayout = () => {
             {!isDetailView && (
                 <div className="mb-0">
                     <h1 className="text-[28px] md:text-[32px] font-bold text-[#111827] mb-2 tracking-tight">
-                        Purchase
+                        {t('modules:purchase', 'Purchase')}
                     </h1>
                     <p className="text-[#6B7280] text-[15px] font-medium max-w-[800px] leading-relaxed mb-8">
-                        Create and monitor purchase orders, supplier invoices, and stock procurement activities.
+                        {t('modules:purchase_description', 'Create and monitor purchase orders, supplier invoices, and stock procurement activities.')}
                     </p>
                 </div>
             )}
@@ -44,6 +44,7 @@ const PurchaseLayout = () => {
                             const isActive = tab.name === 'Purchase Invoice' 
                                 ? (location.pathname === '/seller/purchase/invoice' || location.pathname === '/seller/purchase/grn')
                                 : location.pathname === tab.path;
+                            const tabKey = tab.name === 'Purchase Invoice' ? 'purchase_invoice' : 'purchase_order';
                             return (
                                 <NavLink
                                     key={tab.path}
@@ -61,7 +62,7 @@ const PurchaseLayout = () => {
                                             transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                         />
                                     )}
-                                    <span className="relative z-10">{tab.name}</span>
+                                    <span className="relative z-10">{t(`modules:${tabKey}`, tab.name)}</span>
                                 </NavLink>
                             );
                         })}

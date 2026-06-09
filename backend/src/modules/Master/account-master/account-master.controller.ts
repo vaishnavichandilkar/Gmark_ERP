@@ -302,6 +302,20 @@ export class AccountMasterController {
     return this.accountMasterService.importAccounts(file.buffer, req.user.id);
   }
 
+  @Get('check-msme-user')
+  @ApiOperation({ summary: 'Check if a customer user is registered as MSME at signup' })
+  @ApiQuery({ name: 'phone', required: false, type: String })
+  @ApiQuery({ name: 'email', required: false, type: String })
+  @ApiQuery({ name: 'gst', required: false, type: String })
+  async checkMsmeUser(
+    @Query('phone') phone?: string,
+    @Query('email') email?: string,
+    @Query('gst') gst?: string
+  ) {
+    const isMsmeUser = await this.accountMasterService.checkMsmeUser(phone, email, gst);
+    return { isMsmeUser };
+  }
+
   @Get('generate-customer-code')
   @ApiOperation({ summary: 'Generate next available customer code' })
   async generateCustomerCode(@Req() req: any) {

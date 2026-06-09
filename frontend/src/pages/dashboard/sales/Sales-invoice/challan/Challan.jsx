@@ -27,7 +27,7 @@ import ScrollableTable from "@/components/common/ScrollableTable";
 import ImportModal from "./components/ImportModal";
 import CustomSelect from "@/components/common/CustomSelect";
 
-const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
+const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting, t }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
@@ -38,10 +38,10 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
             <Trash2 size={32} className="text-red-500" />
           </div>
           <h3 className="text-[20px] font-bold text-[#111827] mb-2 uppercase tracking-tight">
-            Delete Challan
+            {t('modules:delete_challan')}
           </h3>
           <p className="text-[#6B7280] text-[15px] font-medium mb-8">
-            Are you sure you want to delete this Sales Challan? This action will mark its status as deleted.
+            {t('modules:delete_challan_confirm')}
           </p>
           <div className="flex gap-4">
             <button
@@ -49,14 +49,14 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
               disabled={isDeleting}
               className="flex-1 h-[52px] rounded-[14px] border border-[#E5E7EB] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all uppercase tracking-widest"
             >
-              No, Keep it
+              {t('common:no_keep_it')}
             </button>
             <button
               onClick={onConfirm}
               disabled={isDeleting}
               className="flex-1 h-[52px] rounded-[14px] bg-red-600 hover:bg-red-700 text-white text-[14px] font-bold transition-all shadow-lg flex items-center justify-center gap-2 uppercase tracking-widest"
             >
-              {isDeleting ? <RefreshCw size={18} className="animate-spin" /> : "Yes, Delete"}
+              {isDeleting ? <RefreshCw size={18} className="animate-spin" /> : t('common:yes_delete')}
             </button>
           </div>
         </div>
@@ -110,7 +110,7 @@ const Challan = () => {
             setTotalItemsCount(response.meta?.total || data.length);
         } catch (error) {
             console.error("Error fetching challans:", error);
-            toast.error("Failed to load challans");
+            toast.error(t('common:failed_to_load'));
         } finally {
             setIsLoading(false);
         }
@@ -161,9 +161,9 @@ const Challan = () => {
             document.body.appendChild(link);
             link.click();
             link.parentNode.removeChild(link);
-            toast.success('PDF Exported Successfully');
+            toast.success(t('common:export_pdf_success'));
         } catch (e) {
-            toast.error('Failed to export PDF');
+            toast.error(t('common:failed_to_export_pdf'));
         }
     };
 
@@ -178,9 +178,9 @@ const Challan = () => {
             document.body.appendChild(link);
             link.click();
             link.parentNode.removeChild(link);
-            toast.success('Excel Exported Successfully');
+            toast.success(t('common:export_excel_success'));
         } catch (e) {
-            toast.error('Failed to export Excel');
+            toast.error(t('common:failed_to_export_excel'));
         }
     };
 
@@ -195,22 +195,22 @@ const Challan = () => {
             link.click();
             link.parentNode.removeChild(link);
         } catch (e) {
-            toast.error('Failed to download sample file');
+            toast.error(t('modules:sample_download_failed', 'Failed to download sample file.'));
         }
     };
 
     const handleImportExcel = async (file) => {
-        const loadingToast = toast.loading('Importing challans...');
+        const loadingToast = toast.loading(t('common:processing'));
         try {
             const formData = new FormData();
             formData.append('file', file);
             await challanService.importChallans(formData);
             toast.dismiss(loadingToast);
-            toast.success('Challans imported successfully');
+            toast.success(t('common:import_success'));
             fetchData();
         } catch (error) {
             toast.dismiss(loadingToast);
-            toast.error(error?.response?.data?.message || 'Failed to import challans');
+            toast.error(error?.response?.data?.message || t('common:import_failed'));
         }
     };
 
@@ -237,10 +237,10 @@ const Challan = () => {
         setIsDeleting(true);
         try {
             await challanService.deleteChallan(challanToDelete);
-            toast.success("Challan deleted successfully");
+            toast.success(t('common:delete_success'));
             fetchData();
         } catch (error) {
-            toast.error("Failed to delete challan");
+            toast.error(t('common:failed_to_delete'));
         } finally {
             setIsDeleting(false);
             setIsDeleteModalOpen(false);
@@ -272,7 +272,7 @@ const Challan = () => {
     return (
         <div className="flex flex-col w-full relative font-outfit">
             <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between items-center">
-                <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">Sales Challan</h1>
+                <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('modules:sales') + ' ' + t('modules:challan')}</h1>
                 <button
                     onClick={() => {
                         sessionStorage.removeItem('add_challan_draft');
@@ -280,7 +280,7 @@ const Challan = () => {
                     }}
                     className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all flex items-center gap-2 active:scale-95"
                 >
-                    <Plus size={18} /> Add Challan
+                    <Plus size={18} /> {t('modules:add_challan')}
                 </button>
             </div>
 
@@ -291,7 +291,7 @@ const Challan = () => {
                         onClick={() => navigate(tab === 'Challan' ? '/seller/sales/challan' : '/seller/sales/invoice')}
                         className={`relative pb-4 text-[18px] font-bold transition-colors ${tab === 'Challan' ? 'text-[#073318]' : 'text-[#6B7280]'}`}
                     >
-                        {tab}
+                        {tab === 'Challan' ? t('modules:challan_tab', 'Challan') : t('modules:invoice_tab', 'Invoice')}
                         {tab === 'Challan' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#073318]" />}
                     </button>
                 ))}
@@ -305,7 +305,7 @@ const Challan = () => {
                             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                             <input
                                 type="text"
-                                placeholder="Search by anything..."
+                                placeholder={t('common:search_by_anything', 'Search by anything...')}
                                 value={searchQuery}
                                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                                 className="w-full h-[42px] border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none focus:border-[#073318]"
@@ -316,7 +316,7 @@ const Challan = () => {
                             onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)}
                             className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-[#E5E7EB] text-[#4B5563]'}`}
                         >
-                            <Filter size={18} /> {isFilterApplied ? "Clear" : "Filter"}
+                            <Filter size={18} /> {isFilterApplied ? t('common:clear') : t('common:filter')}
                         </button>
                         <button onClick={fetchData} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] flex items-center justify-center bg-white hover:bg-gray-50 transition-colors">
                             <RefreshCw size={18} className={`text-gray-400 ${isLoading ? 'animate-spin' : ''}`} />
@@ -325,14 +325,14 @@ const Challan = () => {
 
                     <div className="flex items-center gap-3">
                         <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all">
-                            <Download size={18} className="text-gray-400" /> Import
+                            <Download size={18} className="text-gray-400" /> {t('common:import')}
                         </button>
                         <div className="relative" ref={exportRef}>
                             <button
                                 onClick={() => setIsExportOpen(!isExportOpen)}
                                 className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563]'}`}
                             >
-                                <Upload size={18} /> Export
+                                <Upload size={18} /> {t('common:export')}
                             </button>
                             {isExportOpen && (
                                 <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -352,15 +352,15 @@ const Challan = () => {
                     <table className="w-full min-w-[1500px] border-collapse text-left">
                         <thead>
                             <tr className="bg-emerald-900 text-white font-bold text-[14px] uppercase tracking-wider">
-                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">Customer Name</th>
-                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">Challan Number</th>
-                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">Challan Date</th>
-                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">Booking Date</th>
-                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">SO No</th>
-                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">Gst No</th>
-                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap text-right">Grand Total</th>
-                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap text-center">Status</th>
-                                <th className="px-6 py-5 whitespace-nowrap text-center">Action</th>
+                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{t('modules:customerName')}</th>
+                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{t('modules:challanNo')}</th>
+                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{t('modules:challanDate')}</th>
+                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{t('modules:bookingDate')}</th>
+                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{t('modules:soNo')}</th>
+                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{t('modules:gst_no')}</th>
+                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap text-right">{t('modules:grand_total_col')}</th>
+                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap text-center">{t('common:status')}</th>
+                                <th className="px-6 py-5 whitespace-nowrap text-center">{t('common:action')}</th>
                             </tr>
                         </thead>
                         <tbody className={`text-[14px] text-[#111827] font-medium ${isLoading ? 'opacity-40' : 'opacity-100'}`}>
@@ -375,7 +375,9 @@ const Challan = () => {
                                         <td className="px-6 py-4 font-medium uppercase">{row.gstNo}</td>
                                         <td className="px-6 py-4 text-right font-bold text-[#073318]">₹{row.grandTotal}</td>
                                         <td className="px-6 py-5 text-center">
-                                            <span className={`px-4 py-1.5 ${row.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{row.status}</span>
+                                            <span className={`px-4 py-1.5 ${row.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>
+                                                {t(`common:status_${row.status.toLowerCase()}`, row.status)}
+                                            </span>
                                         </td>
                                         <td className="px-6 py-5 text-center relative">
                                             <button
@@ -398,11 +400,11 @@ const Challan = () => {
                                                 >
                                                     <button onClick={() => { setActiveDropdown(null); navigate(`view/${row.id}`); }} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50">
                                                         <Eye size={18} className="text-emerald-600" /> 
-                                                        {row.status === 'Generated' ? 'View/Edit Challan' : 'View Challan'}
+                                                        {row.status === 'Generated' ? t('modules:view_edit_challan') : t('modules:view_challan')}
                                                     </button>
                                                     {row.status === 'Generated' && (
                                                         <button onClick={() => { setActiveDropdown(null); handleDeleteClick(row.id); }} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50">
-                                                            <Trash2 size={18} /> Delete
+                                                            <Trash2 size={18} /> {t('common:delete')}
                                                         </button>
                                                     )}
                                                 </div>,
@@ -412,7 +414,7 @@ const Challan = () => {
                                     </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan="9" className="px-6 py-24 text-center text-gray-400 font-bold uppercase tracking-widest">No results found</td></tr>
+                                <tr><td colSpan="9" className="px-6 py-24 text-center text-gray-400 font-bold uppercase tracking-widest">{t('common:no_results_found')}</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -421,7 +423,7 @@ const Challan = () => {
                 {/* Pagination */}
                 <div className="px-8 py-5 border-t border-[#F3F4F6] bg-[#F9FAFB] flex items-center justify-between font-bold text-[#6B7280]">
                     <div className="flex items-center gap-2">
-                        <span>Show</span>
+                        <span>{t('common:show')}</span>
                         <CustomSelect 
                             value={itemsPerPage}
                             onChange={(val) => {
@@ -433,7 +435,7 @@ const Challan = () => {
                         />
                     </div>
                     <div className="flex items-center gap-4">
-                        <span className="text-[14px]">Page {currentPage} of {totalPages || 1}</span>
+                        <span className="text-[14px]">{t('common:page_of', { current: currentPage, total: totalPages || 1, defaultValue: `Page ${currentPage} of ${totalPages || 1}` })}</span>
                         <div className="flex gap-2">
                             <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowLeft size={18} /></button>
                             <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowRight size={18} /></button>
@@ -444,37 +446,37 @@ const Challan = () => {
 
             {createPortal(
                 <>
-                    <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} />
+                    <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} t={t} />
                     <ImportModal
                         isOpen={isImportModalOpen}
                         onClose={() => setIsImportModalOpen(false)}
                         onImport={handleImportExcel}
                         onDownloadSample={handleDownloadSample}
-                        title="Import Sales Challans"
+                        title={t('modules:import_sales_challans')}
                     />
 
                     {/* Filter Sidebar */}
                     {isFilterOpen && <div className="fixed inset-0 z-[100] bg-slate-900/20 backdrop-blur-[2px]" onClick={() => setIsFilterOpen(false)} />}
                     <div className={`fixed top-0 right-0 h-full w-[400px] bg-white shadow-2xl z-[110] transform transition-all duration-300 ${isFilterOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                         <div className="flex items-center justify-between px-6 py-5 border-b border-[#04200f] bg-emerald-900 text-white font-bold">
-                            <h2>Apply Filters</h2>
+                            <h2>{t('modules:apply_filters_title')}</h2>
                             <button onClick={() => setIsFilterOpen(false)}><X size={20} /></button>
                         </div>
                         <div className="p-8 space-y-6">
                             <div className="space-y-2">
-                                <label className="text-[13px] font-bold text-[#374151]">Status</label>
+                                <label className="text-[13px] font-bold text-[#374151]">{t('common:status')}</label>
                                 <select
                                     value={filterInputs.status}
                                     onChange={(e) => setFilterInputs(prev => ({ ...prev, status: e.target.value }))}
                                     className="w-full h-[44px] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318]"
                                 >
-                                    {["All", "Generated", "Deleted"].map(s => <option key={s} value={s}>{s}</option>)}
+                                    {["All", "Generated", "Deleted"].map(s => <option key={s} value={s}>{t(`common:status_${s.toLowerCase()}`, s)}</option>)}
                                 </select>
                             </div>
                         </div>
                         <div className="absolute bottom-0 left-0 right-0 p-8 border-t flex gap-4 bg-white">
-                            <button onClick={handleClearFilter} className="flex-1 h-[46px] border border-[#E5E7EB] rounded-[10px] font-bold">Clear</button>
-                            <button onClick={handleApplyFilter} className="flex-1 h-[46px] bg-[#073318] text-white rounded-[10px] font-bold">Apply</button>
+                            <button onClick={handleClearFilter} className="flex-1 h-[46px] border border-[#E5E7EB] rounded-[10px] font-bold">{t('common:clear')}</button>
+                            <button onClick={handleApplyFilter} className="flex-1 h-[46px] bg-[#073318] text-white rounded-[10px] font-bold">{t('common:apply')}</button>
                         </div>
                     </div>
                 </>,

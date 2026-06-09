@@ -55,8 +55,33 @@ export class AuthService {
         // Cleanup OTP after success
         await this.smsService.deleteOtp(dto.phone);
 
+        // Ensure default UOMs are seeded for the user if they don't have any
+        await this.ensureDefaultUnits(user.id);
+
         // 5. Generate tokens and manage session in DB
         return this.generateTokens(user, roleType);
+    }
+
+    private async ensureDefaultUnits(userId: number) {
+        const count = await this.prisma.unitMaster.count({
+            where: { user_id: userId }
+        });
+
+        if (count === 0) {
+            const systemUnits = await this.prisma.systemUomLibrary.findMany();
+            if (systemUnits.length > 0) {
+                await this.prisma.unitMaster.createMany({
+                    data: systemUnits.map(uom => ({
+                        user_id: userId,
+                        unit_name: uom.unit_name,
+                        gst_uom: uom.uom_code,
+                        full_name_of_measurement: uom.full_name_of_measurement,
+                        source: 'SYSTEM',
+                        status: 'ACTIVE'
+                    }))
+                });
+            }
+        }
     }
 
     private async findUserByPhone(phone: string): Promise<any> {

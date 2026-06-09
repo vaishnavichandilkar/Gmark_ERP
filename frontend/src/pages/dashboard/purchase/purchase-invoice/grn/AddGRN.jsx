@@ -9,12 +9,15 @@ import purchaseOrderService from '@/services/purchaseOrderService';
 import accountService from '@/services/accountService';
 import productService from '@/services/productService';
 import { getProfileApi } from '@/services/authService';
+import { determinePurchaseGst } from '@/utils/gstUtils';
+import { useTranslation } from 'react-i18next';
 
 import GRNForm from './components/GRNForm';
 import GRNTable from './components/GRNTable';
 import AccountTable from './components/AccountTable';
 
 const AddGRN = () => {
+    const { t } = useTranslation(['modules', 'common']);
     const navigate = useNavigate();
     const { id } = useParams();
     const isEditMode = Boolean(id);
@@ -70,7 +73,7 @@ const AddGRN = () => {
 
     const [errors, setErrors] = useState({});
     const [companyInfo, setCompanyInfo] = useState(null);
-    const [gstType, setGstType] = useState({ type: 'NONE' });
+    const [gstType, setGstType] = useState({ gstType: 'NONE' });
     const getFinancialYearStart = () => {
         const now = new Date();
         const year = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
@@ -143,7 +146,8 @@ const AddGRN = () => {
                             beforeTaxAmount: befTax,
                             taxAmount: taxAmt,
                             totalAmount: befTax + taxAmt,
-                            printDescription: item.printDescription || item.productName,
+                            printDescription: item.printDescription || item.productName || '',
+                            originalPrintDescription: item.printDescription || item.productName || '',
                             totalPoQty: item.totalPoQty || 0,
                             receivedPoQty: item.receivedPoQty || 0,
                             remainingQty: (item.totalPoQty || 0) - (item.receivedPoQty || 0) - qty
@@ -213,7 +217,8 @@ const AddGRN = () => {
                                         beforeTaxAmount: newProduct.purchaseRate || 0,
                                         taxAmount: ((newProduct.purchaseRate || 0) * (newProduct.tax_rate || 0)) / 100,
                                         totalAmount: (newProduct.purchaseRate || 0) * (1 + (newProduct.tax_rate || 0) / 100),
-                                        printDescription: newProduct.description || newProduct.product_name,
+                                        printDescription: newProduct.description || newProduct.product_name || '',
+                                        originalPrintDescription: newProduct.description || newProduct.product_name || '',
                                         totalPoQty: 0,
                                         receivedPoQty: 0,
                                         remainingQty: 0
@@ -283,14 +288,15 @@ const AddGRN = () => {
 
         const isSupplierMsmeActive = supplier.msmeEnabled;
         const isSupplierMsmeType = supplier.regType === "Manufacturing" || supplier.regType === "Service";
-        const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType);
+        const hasSupplierMsmeId = supplier.msmeId && supplier.msmeId.trim() !== '' && supplier.msmeId.trim().toUpperCase() !== 'N/A';
+        const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType && hasSupplierMsmeId);
 
         if (isSupplierMsme && formData.credit_days) {
             const val = parseInt(formData.credit_days, 10);
             if (!isNaN(val) && val > 45) {
                 setFormData(prev => ({ ...prev, credit_days: 45 }));
                 toast.error(
-                    "For MSME Manufacturing/Service suppliers,maximum credit period allowed is 45 days.Credit Days has been adjusted to 45.",
+                    "For MSME Manufacturing/Service suppliers, maximum credit period allowed is 45 days. Credit Days has been adjusted to 45.",
                     { id: "msme-supplier-warning" }
                 );
             }
@@ -298,41 +304,13 @@ const AddGRN = () => {
     }, [formData.supplier_id, formData.credit_days, suppliers]);
 
     const calculateGST = (supplierGST, supplierState) => {
-        const userGst = companyInfo?.gstNumber || "";
-        const userState = (companyInfo?.state || "").trim().toLowerCase();
-        const suppState = (supplierState || "").trim().toLowerCase();
-
-        // Strict validation helper
-        const isValidGstStr = (g) => Boolean(
-            g && 
-            String(g).trim().toUpperCase() !== 'N/A' && 
-            String(g).trim().toUpperCase() !== 'NOT AVAILABLE' && 
-            String(g).trim().toUpperCase() !== '-' && 
-            String(g).trim().length >= 10
+        return determinePurchaseGst(
+            supplierGST,
+            companyInfo?.gstNumber,
+            companyInfo?.state || "",
+            supplierState,
+            0, 0, 0
         );
-
-        // Purchase Side Rule: Applicable if Supplier has GST
-        const applicable = isValidGstStr(supplierGST);
-
-        if (!applicable) {
-            return { type: 'NONE', applicable: false, isRcm: false };
-        }
-
-        const userCode = userGst ? userGst.substring(0, 2) : null;
-        const supplierCode = supplierGST ? supplierGST.substring(0, 2) : null;
-
-        let isInterState = false;
-        if (userGst && supplierGST && /^\d{2}$/.test(userCode) && /^\d{2}$/.test(supplierCode)) {
-            isInterState = userCode !== supplierCode;
-        } else {
-            isInterState = userState !== suppState;
-        }
-        
-        return { 
-            type: isInterState ? 'INTER' : 'INTRA', 
-            applicable: true, 
-            isRcm: false 
-        };
     };
 
     const handlePOChange = async (poId) => {
@@ -396,7 +374,7 @@ const AddGRN = () => {
                 
                 const type = calculateGST(formData.gst_no || poDetails.gstNumber, formData.supplier_state);
                 let taxAmt = 0;
-                if (type.type !== 'NONE') {
+                if (type.gstType !== 'NONE') {
                     taxAmt = (befTax * taxPct) / 100;
                 }
 
@@ -415,7 +393,8 @@ const AddGRN = () => {
                     beforeTaxAmount: befTax,
                     taxAmount: taxAmt,
                     totalAmount: befTax + taxAmt,
-                    printDescription: item.printDescription || item.productName,
+                    printDescription: item.printDescription || item.productName || item.product_name || '',
+                    originalPrintDescription: item.printDescription || item.productName || item.product_name || '',
                     totalPoQty: qty,
                     receivedPoQty: receivedCount,
                     remainingQty: 0 // Will be calc in table
@@ -432,6 +411,19 @@ const AddGRN = () => {
         if (!formData.address) newErrors.address = "Address is required";
         if (formData.credit_days === "" || formData.credit_days === undefined) newErrors.credit_days = "Credit days is required";
         if (!formData.supplier_challan_number) newErrors.supplier_challan_number = "Challan number is required";
+
+        const supplier = suppliers.find(s => String(s.id) === String(formData.supplier_id));
+        if (supplier) {
+            const isSupplierMsmeActive = supplier.msmeEnabled;
+            const isSupplierMsmeType = supplier.regType === "Manufacturing" || supplier.regType === "Service";
+            const hasSupplierMsmeId = supplier.msmeId && supplier.msmeId.trim() !== '' && supplier.msmeId.trim().toUpperCase() !== 'N/A';
+            const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType && hasSupplierMsmeId);
+
+            if (isSupplierMsme && Number(formData.credit_days) > 45) {
+                newErrors.credit_days = "MSME supplier payment terms cannot exceed 45 days as per MSME compliance rules.";
+                toast.error("MSME supplier payment terms cannot exceed 45 days as per MSME compliance rules.", { id: "msme-supplier-error" });
+            }
+        }
         if (!formData.document_date) {
             newErrors.document_date = "Challan date is required";
         } else {
@@ -449,17 +441,17 @@ const AddGRN = () => {
             } else {
                 // Condition 2A: Supplier Challan Date Validation (Without PO)
                 // Allowed: Financial Year Start Date to Today
-                // Validation Message: Supplier Challan Date must be within current financial year.
+                // Validation Message: Supplier Challan Date must be between Financial Year Start and Current Date.
                 const fyStart = getFinancialYearStart();
                 if (formData.document_date > today || formData.document_date < fyStart) {
-                    newErrors.document_date = "Supplier Challan Date must be within current financial year.";
+                    newErrors.document_date = "Supplier Challan Date must be between Financial Year Start and Current Date.";
                 }
             }
         }
 
         const validItems = items.filter(item => item.productCode);
         if (validItems.length === 0) {
-            newErrors.items = true;
+            newErrors.items = "At least one product is required";
         } else {
             const itemErrors = [];
             items.forEach((item, index) => {
@@ -475,6 +467,24 @@ const AddGRN = () => {
                 }
             });
             if (itemErrors.length > 0) newErrors.itemErrors = itemErrors;
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+            if (newErrors.document_date) {
+                toast.error(newErrors.document_date);
+            } else if (newErrors.supplier_name) {
+                toast.error(newErrors.supplier_name);
+            } else if (newErrors.supplier_challan_number) {
+                toast.error(newErrors.supplier_challan_number);
+            } else if (newErrors.credit_days) {
+                toast.error(newErrors.credit_days);
+            } else if (newErrors.items) {
+                toast.error(newErrors.items);
+            } else if (newErrors.itemErrors) {
+                toast.error("Please fill all product details correctly");
+            } else {
+                toast.error("Please fill all required fields correctly");
+            }
         }
 
         setErrors(newErrors);
@@ -524,20 +534,20 @@ const AddGRN = () => {
                 };
             });
 
-            const finalTaxTotal = gstResult.applicable ? (materialTax + expenseTax) : 0;
+            const finalTaxTotal = gstResult.gstType !== 'NONE' ? (materialTax + expenseTax) : 0;
             let cgst = 0, sgst = 0, igst = 0;
 
-            if (gstResult.applicable) {
-                if (gstResult.type === 'INTRA') {
+            if (gstResult.gstType !== 'NONE') {
+                if (gstResult.gstType === 'CGST_SGST') {
                     cgst = finalTaxTotal / 2;
                     sgst = finalTaxTotal / 2;
-                } else if (gstResult.type === 'INTER') {
+                } else if (gstResult.gstType === 'IGST') {
                     igst = finalTaxTotal;
                 }
             }
 
             // Case 2 RCM: Tax is calculated but not added to grandTotal payable to supplier
-            const taxInGrandTotal = gstResult.isRcm ? 0 : finalTaxTotal;
+            const taxInGrandTotal = finalTaxTotal;
             const grandTotal = materialTotal + expenseTotal + taxInGrandTotal;
 
             const payload = {
@@ -551,7 +561,7 @@ const AddGRN = () => {
                 poId: formData.po_id ? parseInt(formData.po_id) : undefined,
                 poNumber: formData.po_number || undefined,
                 gstNumber: formData.gst_no,
-                isRcm: gstResult.isRcm,
+                isRcm: false,
                 items: validItems.map(i => ({
                     productId: i.productId?.toString() || undefined,
                     productCode: i.productCode,
@@ -564,8 +574,8 @@ const AddGRN = () => {
                     uom: i.uom,
                     discountAmt: parseFloat(i.discountAmount) || 0,
                     discountPercent: parseFloat(i.discountPercent) || 0,
-                    taxPercent: gstResult.applicable ? (parseFloat(i.taxPercent) || 0) : 0,
-                    taxAmount: gstResult.applicable ? (parseFloat(i.taxAmount) || 0) : 0,
+                    taxPercent: gstResult.gstType !== 'NONE' ? (parseFloat(i.taxPercent) || 0) : 0,
+                    taxAmount: gstResult.gstType !== 'NONE' ? (parseFloat(i.taxAmount) || 0) : 0,
                     beforeTaxAmount: parseFloat(i.beforeTaxAmount) || 0,
                     hsnCode: i.hsnCode,
                     amount: (parseFloat(i.totalAmount) || 0),
@@ -635,12 +645,12 @@ const AddGRN = () => {
         <div className="flex flex-col gap-8 pb-20 font-outfit">
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
                 <div className="px-8 py-6 border-b border-[#F3F4F6] bg-white flex items-center justify-between">
-                    <h2 className="text-[20px] font-bold text-[#111827]">Add GRN</h2>
+                    <h2 className="text-[20px] font-bold text-[#111827]">{isEditMode ? t('common:edit_grn', 'Edit GRN') : t('common:add_grn', 'Add GRN')}</h2>
                     <button 
                         onClick={() => navigate(-1)}
                         className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all shadow-sm"
                     >
-                        <ArrowLeft size={18} /> Back
+                        <ArrowLeft size={18} /> {t('common:back')}
                     </button>
                 </div>
 
@@ -685,7 +695,7 @@ const AddGRN = () => {
                 <div className="p-8">
                     <h2 className="text-[18px] font-bold text-[#111827] mb-6 flex items-center gap-2 tracking-tight uppercase">
                          <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
-                        Account Summary
+                        {t('modules:account_summary')}
                     </h2>
                     <AccountTable 
                         items={items} 
@@ -701,13 +711,13 @@ const AddGRN = () => {
                         disabled={isSaving}
                         className="px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] shadow-[0_4px_15px_rgba(7,51,24,0.15)] transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70"
                     >
-                        Save GRN
+                        {t('modules:save_grn', 'Save GRN')}
                     </button>
                     <button 
                         onClick={() => navigate(-1)}
                         className="px-8 h-[48px] bg-white border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[15px] font-bold hover:bg-gray-100 transition-all flex items-center justify-center gap-2 shadow-sm"
                     >
-                        Cancel
+                        {t('common:cancel')}
                     </button>
                 </div>
             </div>

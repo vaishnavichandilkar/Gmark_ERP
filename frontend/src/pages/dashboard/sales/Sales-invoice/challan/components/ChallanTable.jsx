@@ -3,8 +3,10 @@ import { Search, Trash2, Plus, AlertCircle, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import challanService from '@/services/challanService';
 import { getStandardGstUom } from '@/utils/uomUtils';
+import { useTranslation } from 'react-i18next';
 
-const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isSoSelected, soNumber, linkedSoItems, type = 'Challan', customerName }) => {
+const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isSoSelected, soNumber, linkedSoItems = [], type = 'Challan', customerName }) => {
+    const { t } = useTranslation(['modules', 'common']);
     const isChallan = type === 'Challan';
     const [tableSearch, setTableSearch] = useState('');
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
@@ -269,7 +271,7 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input
                         type="text"
-                        placeholder="Search By Anything..."
+                        placeholder={t('modules:search_by_anything', 'Search By Anything...')}
                         value={tableSearch}
                         onFocus={() => { setActiveRowIndex(null); setIsProductSearchOpen(true); }}
                         onChange={(e) => { setTableSearch(e.target.value); setActiveRowIndex(null); setIsProductSearchOpen(true); }}
@@ -323,30 +325,30 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                         <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
                             <th className="px-4 py-4 w-[50px] text-center text-[13px] font-bold text-[#4B5563]">#</th>
                             <th className="px-4 py-4 w-[60px] text-center text-[13px] font-bold text-[#4B5563] border-l border-[#F3F4F6]">Select</th>
-                            <th className="px-4 py-4 w-[160px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Product Code</th>
-                            <th className="px-4 py-4 w-[350px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Product Name</th>
-                            <th className="px-4 py-4 w-[300px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Print Description</th>
+                            <th className="px-4 py-4 w-[160px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:product_code', 'Product Code')}</th>
+                            <th className="px-4 py-4 w-[350px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:product_name', 'Product Name')}</th>
+                            <th className="px-4 py-4 w-[300px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:print_description', 'Print Description')}</th>
                             {isChallan && (
                                 <>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">total so qty</th>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">given so qty</th>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">challan qty</th>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">remaining qty</th>
+                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:total_so_qty', 'total so qty')}</th>
+                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:given_so_qty', 'given so qty')}</th>
+                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:challan_qty', 'challan qty')}</th>
+                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:remaining_qty', 'remaining qty')}</th>
                                 </>
                             )}
                             {!isChallan && (
                                 <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Qty</th>
                             )}
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Rate</th>
-                            <th className="px-4 py-4 w-[120px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">UOM</th>
-                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Discount (₹)</th>
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Discount (%)</th>
-                            <th className="px-4 py-4 w-[140px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">HSN Code</th>
-                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Tax (%)</th>
-                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Bef. Tax Amount</th>
-                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Tax Amount</th>
-                            <th className="px-4 py-4 w-[150px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Amount</th>
-                            <th className="px-4 py-4 w-[80px] text-center text-[13px] font-bold text-gray-500 border-l border-[#F3F4F6] sticky right-0 bg-white z-10">Action</th>
+                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:rate', 'Rate')}</th>
+                            <th className="px-4 py-4 w-[120px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:uom', 'UOM')}</th>
+                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:discount_rupee', 'Discount (₹)')}</th>
+                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:discount_percent', 'Discount (%)')}</th>
+                            <th className="px-4 py-4 w-[140px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:hsn_code', 'HSN Code')}</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:tax_percent_col', 'Tax (%)')}</th>
+                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:bef_tax_amount', 'Bef. Tax Amount')}</th>
+                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:tax_amount', 'Tax Amount')}</th>
+                            <th className="px-4 py-4 w-[150px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:amount', 'Amount')}</th>
+                            <th className="px-4 py-4 w-[80px] text-center text-[13px] font-bold text-gray-500 border-l border-[#F3F4F6] sticky right-0 bg-white z-10">{t('common:action', 'Action')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -504,7 +506,7 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                             value={item.hsnCode} 
                                             readOnly={!!item.productId} 
                                             onFocus={() => { if (!item.productId) { setActiveRowIndex(index); setIsProductSearchOpen(true); } }}
-                                            placeholder="HSN"
+                                            placeholder={t('modules:hsn', 'HSN')}
                                             className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-gray-500 outline-none" 
                                         />
                                     </td>

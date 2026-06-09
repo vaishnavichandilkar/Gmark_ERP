@@ -58,14 +58,27 @@ export class ChallanService {
     }
 
     const sellerMsme = await this.isSellerMsme(userId);
-    const customerMsmeActive = customer.msmeEnabled;
-    const customerMsmeType = customer.regType === 'Manufacturing' || customer.regType === 'Service';
-    const isCustomerMsme = Boolean(customerMsmeActive && customerMsmeType);
 
-    const creditDays = dto.creditDays !== undefined && dto.creditDays !== null ? dto.creditDays : (customer.customerCreditDays || 0);
+    let creditDays = dto.creditDays !== undefined && dto.creditDays !== null ? dto.creditDays : (customer.customerCreditDays || 0);
 
-    if ((sellerMsme || isCustomerMsme) && creditDays > 45) {
-      throw new BadRequestException('Maximum credit period allowed under MSME rules is 45 days.');
+    if (sellerMsme && creditDays > 45) {
+      const entered = creditDays;
+      creditDays = 45;
+      dto.creditDays = 45;
+      await this.prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'MSME_AUTO_CORRECT',
+          resource: 'SalesChallan',
+          details: {
+            entered,
+            final: 45,
+            reason: 'MSME Compliance Rule',
+            comment: 'MSME Manufacturing/Service Credit Limit',
+            type: 'Customer'
+          }
+        }
+      });
     }
 
     const userGstDoc = await this.prisma.sellerDocument.findFirst({
@@ -197,7 +210,7 @@ export class ChallanService {
     const sgstAmount = gstResult.sgstAmount;
     const igstAmount = gstResult.igstAmount;
     const finalTaxTotal = gstResult.totalGstAmount;
-    isInterState = gstResult.isInterState;
+    isInterState = gstResult.gstType === 'IGST';
     isGstApplicable = gstResult.gstType !== 'NONE';
 
     const grandTotal = taxableAmount + expenseTotal + (isRcm ? 0 : finalTaxTotal) + postGstChargeTotal;
@@ -223,7 +236,8 @@ export class ChallanService {
       isRcm,
       isGstApplicable,
       itemsToCreate,
-      expensesToCreate
+      expensesToCreate,
+      creditDays
     };
   }
 
@@ -351,7 +365,7 @@ export class ChallanService {
           gstNumber: createDto.gstNumber || totals.customerGst || null,
           soNumber: createDto.soNumber,
           challanNumber: createDto.challanNumber,
-          creditDays: createDto.creditDays || 0,
+          creditDays: totals.creditDays || 0,
           totalQuantity: totals.totalQuantity,
           taxableAmount: totals.taxableAmount,
           cgstAmount: totals.cgstAmount,
@@ -554,7 +568,7 @@ export class ChallanService {
           customerName: updateDto.customerName,
           address: updateDto.address,
           gstNumber: updateDto.gstNumber,
-          creditDays: updateDto.creditDays,
+          creditDays: totals.creditDays,
           soId: updateDto.soId ?? existing.soId,
           soNumber: updateDto.soNumber,
           challanNumber: updateDto.challanNumber,
@@ -851,5 +865,34 @@ export class ChallanService {
     );
     const isSellerMsmeType = user.regType === 'Manufacturing' || user.regType === 'Service';
     return Boolean(isSellerMsmeActive && isSellerMsmeType);
+  }
+
+  private async isCustomerMsme(mobileNo?: string, emailId?: string, gstNo?: string): Promise<boolean> {
+    const conditions = [];
+    if (mobileNo && mobileNo.trim() !== '') {
+      conditions.push({ phone: mobileNo.trim() });
+    }
+    if (emailId && emailId.trim() !== '') {
+      conditions.push({ email: emailId.trim() });
+    }
+    if (gstNo && gstNo.trim() !== '') {
+      const gstDoc = await this.prisma.sellerDocument.findFirst({
+        where: { type: 'GST', name: gstNo.trim() }
+      });
+      if (gstDoc && gstDoc.uploadedByUserId) {
+        conditions.push({ id: gstDoc.uploadedByUserId });
+      }
+    }
+    if (conditions.length === 0) return false;
+    const user = await this.prisma.user.findFirst({
+      where: { OR: conditions },
+      include: { sellerDocuments: true }
+    });
+    if (!user) return false;
+    const isMsmeActive = user.sellerDocuments.some(
+      d => d.category === 'UDYOG_AADHAR' && d.name && d.name.trim() !== '' && d.name.trim().toUpperCase() !== 'N/A'
+    );
+    const isMsmeType = user.regType === 'Manufacturing' || user.regType === 'Service';
+    return Boolean(isMsmeActive && isMsmeType);
   }
 }

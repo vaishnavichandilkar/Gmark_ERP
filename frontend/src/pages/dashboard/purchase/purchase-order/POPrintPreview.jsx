@@ -3,10 +3,13 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import html2pdf from "html2pdf.js";
 import { toast } from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
+import { determinePurchaseGst } from '@/utils/gstUtils';
 import axiosInstance from '../../../../services/axiosInstance';
 import { getStandardGstUom } from '../../../../utils/uomUtils';
 
 const POPrintPreview = () => {
+    const { t } = useTranslation(['modules', 'common']);
     const location = useLocation();
     const navigate = useNavigate();
     const poData = location.state?.poData;
@@ -15,7 +18,7 @@ const POPrintPreview = () => {
     const [sellerInfo, setSellerInfo] = useState(null);
 
     const getStateName = (gstin) => {
-        if (!gstin || gstin.length < 2) return "Not Available";
+        if (!gstin || gstin.length < 2) return t('common:not_available', "Not Available");
         const code = gstin.substring(0, 2);
         const states = {
             "01": "JK", "02": "HP", "03": "PB", "04": "CH", "05": "UK",
@@ -27,7 +30,7 @@ const POPrintPreview = () => {
             "31": "LD", "32": "KL", "33": "TN", "34": "PY", "35": "AN",
             "36": "TS", "37": "AD", "38": "LA"
         };
-        return states[code] || "Not Available";
+        return states[code] || t('common:not_available', "Not Available");
     };
 
     useEffect(() => {
@@ -43,9 +46,9 @@ const POPrintPreview = () => {
                         phone: phone || "+91 2855943035",
                         email: email || "ardhya123@gmail.com",
                         website: websiteUrl || "",
-                        gstNumber: fullGst || "Not Available",
-                        panNumber: fullGst.length >= 12 ? fullGst.substring(2, 12) : "Not Available",
-                        stateInfo: fullGst.length >= 2 ? `${fullGst.substring(0, 2)} - ${getStateName(fullGst)}` : "Not Available"
+                        gstNumber: fullGst || t('common:not_available', "Not Available"),
+                        panNumber: fullGst.length >= 12 ? fullGst.substring(2, 12) : t('common:not_available', "Not Available"),
+                        stateInfo: fullGst.length >= 2 ? `${fullGst.substring(0, 2)} - ${getStateName(fullGst)}` : t('common:not_available', "Not Available")
                     });
                 }
             } catch (error) {
@@ -169,14 +172,19 @@ const POPrintPreview = () => {
     } else {
         // Fallback to calculation
         const totalTaxOnCombinedCalculated = isGstApplicable ? materialTax : 0;
-        const sellerStateCode = sellerInfo?.gstNumber && /^\d{2}$/.test(sellerInfo.gstNumber.substring(0, 2)) ? sellerInfo.gstNumber.substring(0, 2) : "";
-        const supplierStateCode = gst_number && /^\d{2}$/.test(gst_number.substring(0, 2)) ? gst_number.substring(0, 2) : "";
-        
-        isIntraState = !sellerStateCode || !supplierStateCode || sellerStateCode === supplierStateCode;
+        const gstResult = determinePurchaseGst(
+            gst_number || "",
+            sellerInfo?.gstNumber || "",
+            sellerInfo?.state || "",
+            poData?.state || poData?.supplierState || poData?.supplier_state || "",
+            0, 0, totalTaxOnCombinedCalculated
+        );
+
+        isIntraState = gstResult.gstType === 'CGST_SGST';
         totalTaxOnCombined = totalTaxOnCombinedCalculated;
-        cgst = isIntraState ? totalTaxOnCombinedCalculated / 2 : 0;
-        sgst = isIntraState ? totalTaxOnCombinedCalculated / 2 : 0;
-        igst = isIntraState ? 0 : totalTaxOnCombinedCalculated;
+        cgst = gstResult.cgstAmount;
+        sgst = gstResult.sgstAmount;
+        igst = gstResult.igstAmount;
     }
 
     const totalAmount = subTotal + totalTaxOnCombined;
@@ -286,16 +294,16 @@ const POPrintPreview = () => {
                 <div className="flex items-center gap-2 text-[12px] font-bold text-gray-400">
                     <span onClick={() => navigate('/seller/purchase/order')} className="cursor-pointer hover:text-black">PURCHASE</span>
                     <span>&gt;</span>
-                    <span onClick={() => navigate('/seller/purchase/order')} className="cursor-pointer hover:text-black">PURCHASE ORDER</span>
+                    <span onClick={() => navigate('/seller/purchase/order')} className="cursor-pointer hover:text-black">{t('modules:purchase_order', 'PURCHASE ORDER')}</span>
                     <span>&gt;</span>
                     <span className="text-[#073318]">PRINT</span>
                 </div>
                 <div className="flex items-center gap-3">
                     <button onClick={handleDownloadPDF} disabled={isDownloading} className="px-6 h-[40px] bg-[#073318] text-white rounded-[10px] font-bold text-[14px] flex items-center justify-center transition-colors disabled:opacity-70 disabled:cursor-not-allowed">
-                        {isDownloading ? 'Downloading...' : 'Download PDF'}
+                        {isDownloading ? t('modules:downloading', 'Downloading...') : t('modules:download_pdf', 'Download PDF')}
                     </button>
                     <button onClick={() => window.print()} className="px-6 h-[40px] bg-[#073318] text-white rounded-[10px] font-bold text-[14px] flex items-center justify-center">
-                        Print PO
+                        {t('modules:print_po', 'Print PO')}
                     </button>
                     <button 
                          onClick={() => {
@@ -321,51 +329,51 @@ const POPrintPreview = () => {
                             {sellerInfo?.address || "Near Mahalaxmi Temple, Hitani"}
                         </div>
                         <div className="border-b border-black py-2.5 text-center text-[11px] font-semibold tracking-wide">
-                            Phone No.: {sellerInfo?.phone || "+91 2855943035"} &nbsp; Email Id: {sellerInfo?.email || "ardhya123@gmail.com"} {sellerInfo?.website && ` &nbsp; Website: ${sellerInfo.website}`}
+                            {t('modules:phone_no', 'Phone No.')}: {sellerInfo?.phone || "+91 2855943035"} &nbsp; {t('modules:email_id', 'Email Id')}: {sellerInfo?.email || "ardhya123@gmail.com"} {sellerInfo?.website && ` &nbsp; ${t('modules:website', 'Website')}: ${sellerInfo.website}`}
                         </div>
                         <div className="border-b border-black py-3 text-center font-black text-[15px] uppercase tracking-[3px]">
-                            PURCHASE ORDER
+                            {t('modules:purchase_order', 'PURCHASE ORDER')}
                         </div>
 
                         <div className="flex border-b border-black text-[12px] font-black uppercase">
-                            <div className="w-[38%] py-3 px-4">GSTIN : {sellerInfo?.gstNumber}</div>
-                            <div className="w-[30%] py-3 px-4 text-center">State Code : {sellerInfo?.stateInfo}</div>
-                            <div className="flex-1 py-3 px-4 text-right pr-6 whitespace-nowrap">PAN No : {sellerInfo?.panNumber}</div>
+                            <div className="w-[38%] py-3 px-4">{t('modules:gstin', 'GSTIN')} : {sellerInfo?.gstNumber}</div>
+                            <div className="w-[30%] py-3 px-4 text-center">{t('modules:state_code', 'State Code')} : {sellerInfo?.stateInfo}</div>
+                            <div className="flex-1 py-3 px-4 text-right pr-6 whitespace-nowrap">{t('modules:pan_no', 'PAN No')} : {sellerInfo?.panNumber}</div>
                         </div>
 
                         <div className="flex border-b border-black min-h-[160px]">
                             <div className="w-1/2 flex flex-col border-r border-black">
                                 <div className="border-b border-black flex items-center px-4 h-[44px] gap-4">
-                                    <span className="font-black text-[12px] min-w-[30px]">M/S.</span>
+                                    <span className="font-black text-[12px] min-w-[30px]">{t('modules:ms', 'M/S.')}</span>
                                     <span className="font-black text-[12px] uppercase">{supplier_name}</span>
                                 </div>
                                 <div className="flex-1 px-4 py-3 text-[11.5px] leading-relaxed font-semibold overflow-hidden">{address}</div>
                                 <div className="border-t border-black flex items-center px-4 h-[44px] gap-4">
-                                    <span className="font-black text-[12px] min-w-[70px]">Supplier Code</span>
-                                    <span className="font-black text-[12px]">SP00001</span>
+                                    <span className="font-black text-[12px] min-w-[70px]">{t('modules:supplier_code', 'Supplier Code')}</span>
+                                    <span className="font-black text-[12px]">{poData?.supplierCode || poData?.supplier_code || "SP00001"}</span>
                                 </div>
                             </div>
                             <div className="w-1/2 flex flex-col">
                                 <div className="flex border-b border-black h-[44px]">
                                     <div className="w-[43%] flex items-center px-4 gap-4">
-                                        <span className="font-black text-[11px] whitespace-nowrap">PO No. :</span>
+                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:po_no_colon', 'PO No.')} :</span>
                                         <span className="font-semibold text-[11px] whitespace-nowrap">{po_no}</span>
                                     </div>
                                     <div className="flex-1 flex items-center px-4 gap-4 border-l" style={{ borderColor: 'rgba(0, 0, 0, 0.1)' }}>
-                                        <span className="font-black text-[11px] whitespace-nowrap">PO Creation Date :</span>
+                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:po_creation_date', 'PO Creation Date')} :</span>
                                         <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(po_creation_date)}</span>
                                     </div>
                                 </div>
                                 <div className="flex-1 border-b border-black flex items-center px-4 py-2.5 gap-4">
-                                    <span className="font-black text-[12px] min-w-[80px]">Pay. Terms</span>
-                                    <span className="font-semibold text-[12px]">{credit_days} Days</span>
+                                    <span className="font-black text-[12px] min-w-[80px]">{t('modules:pay_terms', 'Pay. Terms')}</span>
+                                    <span className="font-semibold text-[12px]">{credit_days} {t('modules:days', 'Days')}</span>
                                 </div>
                                 <div className="flex items-center px-4 h-[44px] gap-4 border-b border-black">
-                                    <span className="font-black text-[12px] min-w-[80px]">Expiry Date:</span>
+                                    <span className="font-black text-[12px] min-w-[80px]">{t('modules:expiry_date', 'Expiry Date')}:</span>
                                     <span className="font-semibold text-[12px]">{formatDate(expiry_date)}</span>
                                 </div>
                                 <div className="flex items-center px-4 h-[44px] gap-4">
-                                    <span className="font-black text-[12px] min-w-[80px]">GST No:</span>
+                                    <span className="font-black text-[12px] min-w-[80px]">{t('modules:gst_no', 'GST No')}:</span>
                                     <span className="font-semibold text-[12px] uppercase">{gst_number || "N/A"}</span>
                                 </div>
                             </div>
@@ -374,15 +382,15 @@ const POPrintPreview = () => {
                         <table className="w-full border-none m-0">
                             <thead>
                                 <tr className="text-[11px] font-black h-[40px]">
-                                    <th className="w-[45px] border-b border-r border-black">Sn.</th>
-                                    <th className="border-b border-r border-black px-4 text-left">Description</th>
-                                    <th className="w-[85px] border-b border-r border-black">HSN/SAC</th>
-                                    <th className="w-[50px] border-b border-r border-black text-center">Tax%</th>
-                                    <th className="w-[65px] border-b border-r border-black text-center">Quantity</th>
-                                    <th className="w-[65px] border-b border-r border-black text-center">Units</th>
-                                    <th className="w-[85px] border-b border-r border-black text-center">Rate</th>
-                                    <th className="w-[55px] border-b border-r border-black text-center">Dis%</th>
-                                    <th className="w-[110px] border-b border-black text-right px-4">Amount</th>
+                                    <th className="w-[45px] border-b border-r border-black">{t('modules:sn', 'Sn.')}</th>
+                                    <th className="border-b border-r border-black px-4 text-left">{t('modules:description', 'Description')}</th>
+                                    <th className="w-[85px] border-b border-r border-black">{t('modules:hsn_sac', 'HSN/SAC')}</th>
+                                    <th className="w-[50px] border-b border-r border-black text-center">{t('modules:tax_percent', 'Tax%')}</th>
+                                    <th className="w-[65px] border-b border-r border-black text-center">{t('modules:quantity', 'Quantity')}</th>
+                                    <th className="w-[65px] border-b border-r border-black text-center">{t('modules:units', 'Units')}</th>
+                                    <th className="w-[85px] border-b border-r border-black text-center">{t('modules:rate', 'Rate')}</th>
+                                    <th className="w-[55px] border-b border-r border-black text-center">{t('modules:dis_percent', 'Dis%')}</th>
+                                    <th className="w-[110px] border-b border-black text-right px-4">{t('modules:amount', 'Amount')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -412,7 +420,7 @@ const POPrintPreview = () => {
 
                         <div className="w-full border-t border-black bg-white">
                             <div className="flex border-b border-black h-[30px]">
-                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">Material Sub Total</div>
+                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('modules:material_sub_total', 'Material Sub Total')}</div>
                                 <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(subTotal || 0).toFixed(2)}</div>
                             </div>
                             {isIntraState ? (
@@ -434,17 +442,17 @@ const POPrintPreview = () => {
                             )}
                             <div className="flex h-[45px]">
                                 <div className="flex-1 border-r border-black p-4 py-2 font-black text-[10px] flex items-center">
-                                    <span className="mr-2">Amount In Words :</span>
+                                    <span className="mr-2">{t('modules:amount_in_words', 'Amount In Words')} :</span>
                                     <span className="uppercase underline leading-none">{numberToWords(totalAmount)}</span>
                                 </div>
-                                <div className="w-[100px] border-r border-black flex items-center justify-center font-black text-[11px] uppercase">Grand Total</div>
+                                <div className="w-[100px] border-r border-black flex items-center justify-center font-black text-[11px] uppercase">{t('modules:grand_total', 'Grand Total')}</div>
                                 <div className="w-[110px] flex items-center justify-end px-4 font-black text-[14px]">₹ {Number(totalAmount || 0).toFixed(2)}</div>
                             </div>
                         </div>
 
                         <div className="w-full border-t border-black p-6 flex flex-col justify-between min-h-[140px] bg-white text-right">
-                            <p className="font-black text-[11px]">For <span className="uppercase">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</span></p>
-                            <p className="font-black text-[10px] uppercase underline underline-offset-4">authorised Signatory</p>
+                            <p className="font-black text-[11px]">{t('modules:for', 'For')} <span className="uppercase">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</span></p>
+                            <p className="font-black text-[10px] uppercase underline underline-offset-4">{t('modules:authorised_signatory', 'authorised Signatory')}</p>
                         </div>
                     </div>
                 </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDown, Search, X, Check } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const GRNMultiSelect = ({ 
     challans = [], 
@@ -7,6 +8,7 @@ const GRNMultiSelect = ({
     onChange, 
     isLoading = false 
 }) => {
+    const { t } = useTranslation(['common', 'modules']);
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const containerRef = useRef(null);
@@ -65,14 +67,14 @@ const GRNMultiSelect = ({
                     </div>
                 ) : (
                     <span className="text-gray-400 text-[14px] px-1">
-                        {isLoading ? "Loading Challans..." : (challans.length > 0 ? `Select Challan (${challans.length} found)` : "No Challans Found")}
+                        {isLoading ? t('common:loading', 'Loading Challans...') : (challans.length > 0 ? t('modules:select_challan_count', 'Select Challan ({{count}} found)', { count: challans.length }) : t('modules:no_challans_found', 'No Challans Found'))}
                     </span>
                 )}
                 
                 <div className="flex items-center gap-2 ml-auto pr-1">
                     {selectedIds.length > 0 && (
                         <span className="text-[11px] font-black bg-[#073318] text-white px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                            {selectedIds.length} Selected
+                            {t('modules:selected_count', '{{count}} Selected', { count: selectedIds.length })}
                         </span>
                     )}
                     <ChevronDown className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} size={18} />
@@ -87,7 +89,7 @@ const GRNMultiSelect = ({
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                             <input
                                 type="text"
-                                placeholder="Search challan number..."
+                                placeholder={t('modules:search_challan_number', 'Search challan number...')}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full h-[38px] bg-white border border-[#E5E7EB] rounded-[8px] pl-10 pr-4 text-[13px] font-medium outline-none focus:border-[#073318] transition-all"
@@ -109,7 +111,7 @@ const GRNMultiSelect = ({
                                     }}
                                     className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 uppercase tracking-tight transition-colors flex items-center gap-1"
                                 >
-                                    Select All {searchTerm && `(${filteredChallans.filter(c => (c.remainingQty ?? 1) > 0).length})`}
+                                    {t('common:select_all', 'Select All')} {searchTerm && `(${filteredChallans.filter(c => (c.remainingQty ?? 1) > 0).length})`}
                                 </button>
                                 <button
                                     type="button"
@@ -124,7 +126,7 @@ const GRNMultiSelect = ({
                                     }}
                                     className="text-[11px] font-bold text-red-600 hover:text-red-800 uppercase tracking-tight transition-colors flex items-center gap-1"
                                 >
-                                    Deselect All
+                                    {t('common:deselect_all', 'Deselect All')}
                                 </button>
                             </div>
                         )}
@@ -167,7 +169,7 @@ const GRNMultiSelect = ({
                             })
                         ) : (
                             <div className="px-5 py-8 text-[13px] text-gray-400 italic text-center">
-                                {searchTerm ? `No results for "${searchTerm}"` : "No challans available"}
+                                {searchTerm ? t('common:no_results_for', 'No results for "{{term}}"', { term: searchTerm }) : t('modules:no_challans_available', 'No challans available')}
                             </div>
                         )}
                     </div>

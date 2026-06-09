@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { ChevronDown, Calendar, Plus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from "@/constants/routes";
+import { useTranslation } from 'react-i18next';
 
 const ChallanForm = ({
     formData,
@@ -16,9 +17,10 @@ const ChallanForm = ({
     type = 'Challan',
     onAddCustomer
 }) => {
+    const { t } = useTranslation(['modules', 'common']);
     const isChallan = type === 'Challan';
-    const numLabel = isChallan ? 'Challan' : 'Invoice';
-    const dateLabel = isChallan ? 'Challan' : 'Invoice';
+    const numLabel = isChallan ? t('modules:challan', 'Challan') : t('modules:invoice', 'Invoice');
+    const dateLabel = isChallan ? t('modules:challan', 'Challan') : t('modules:invoice', 'Invoice');
     const navigate = useNavigate();
     const [customerSearch, setCustomerSearch] = useState(formData.customerName || '');
     const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
@@ -71,11 +73,11 @@ const ChallanForm = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 {/* 1. Customer Name */}
                 <div className="space-y-2 relative">
-                    <label className="text-[14px] font-semibold text-[#374151]">Customer Name <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:customer_name', 'Customer Name')} <span className="text-red-500">*</span></label>
                     <div className="relative">
                         <input
                             type="text"
-                            placeholder="Select customer name"
+                            placeholder={t('modules:select_customer_name', 'Select customer name')}
                             value={customerSearch}
                             onFocus={() => setIsCustomerDropdownOpen(true)}
                             onChange={(e) => {
@@ -158,24 +160,24 @@ const ChallanForm = ({
 
                 {/* 2. Customer Type — Auto-fetched from Account Master */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Customer Type</label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:customer_type', 'Customer Type')}</label>
                     <input
                         type="text"
                         readOnly
                         value={formData.customerType || ''}
-                        placeholder="Auto-fetched on customer select"
+                        placeholder={t('modules:auto_fetched_on_customer_select', 'Auto-fetched on customer select')}
                         className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-600 cursor-not-allowed"
                     />
                 </div>
 
                 {/* 3. Credit Days — Auto-fetched from Account Master, editable */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Credit Days</label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:credit_days', 'Credit Days')}</label>
                     <input
                         type="number"
                         min="0"
                         value={formData.creditDays !== undefined && formData.creditDays !== '' ? formData.creditDays : ''}
-                        placeholder="Auto-fetched on customer select"
+                        placeholder={t('modules:auto_fetched_on_customer_select', 'Auto-fetched on customer select')}
                         onChange={(e) => setFormData(prev => ({ ...prev, creditDays: e.target.value }))}
                         className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-[#111827] focus:border-[#073318] transition-all"
                     />
@@ -183,19 +185,19 @@ const ChallanForm = ({
 
                 {/* 4. Address — Auto-fetched from Account Master */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Address</label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:address', 'Address')}</label>
                     <input
                         type="text"
                         readOnly
                         value={formData.address || ''}
-                        placeholder="Auto-fetched on customer select"
+                        placeholder={t('modules:auto_fetched_on_customer_select', 'Auto-fetched on customer select')}
                         className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-600 cursor-not-allowed"
                     />
                 </div>
 
                 {/* 5. Booking Date — Default today, non-editable */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Booking Date (Current Date) <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:booking_date', 'Booking Date')} (Current Date) <span className="text-red-500">*</span></label>
                     <div className="relative">
                         <input
                             type="text"
@@ -212,26 +214,26 @@ const ChallanForm = ({
 
                 {/* 6. GST Number — Auto-fetched from Account Master */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">GST Number</label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:gst_number_col', 'GST Number')}</label>
                     <input
                         type="text"
                         readOnly
                         value={formData.gstNo || ''}
-                        placeholder="Auto-fetched on customer select"
+                        placeholder={t('modules:auto_fetched_on_customer_select', 'Auto-fetched on customer select')}
                         className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-600 cursor-not-allowed"
                     />
                 </div>
 
                 {/* 7. SO Number (Optional) */}
-                <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">SO Number (Optional)</label>
+                <div className="space-y-2 relative">
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:so_number_optional', 'SO Number (Optional)')}</label>
                     <div className="relative">
                         <select
                             className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-10 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
                             value={formData.soId || ""}
                             onChange={(e) => handleSOChange(e.target.value)}
                         >
-                            <option value="">Select SO Number</option>
+                            <option value="">{t('modules:select_so_number', 'Select SO Number')}</option>
                             {sos.map(p => <option key={p.id} value={p.id}>{p.soNumber}</option>)}
                         </select>
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
@@ -240,7 +242,7 @@ const ChallanForm = ({
 
                 {/* 8. Customer Challan Number */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Customer {numLabel} Number <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:customer', 'Customer')} {numLabel} {t('modules:number', 'Number')} <span className="text-red-500">*</span></label>
                     <input
                         type="text"
                         readOnly
@@ -252,7 +254,7 @@ const ChallanForm = ({
 
                 {/* 9. Challan Date */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">{dateLabel} Date <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{dateLabel} {t('modules:date', 'Date')} <span className="text-red-500">*</span></label>
                     <div className="relative">
                         <input
                             type="date"

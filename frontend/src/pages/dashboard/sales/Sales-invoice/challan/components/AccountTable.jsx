@@ -1,8 +1,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronsUpDown, ChevronDown, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import masterService from '@/services/masterService';
 
 const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel = "Material Purchase (Excl. G.S.T.)" }) => {
+    const { t } = useTranslation();
     const [groups, setGroups] = useState([]);
 
     useEffect(() => {
@@ -118,7 +120,7 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
         // Calculate total tax based on the combined subtotal and the effective material tax rate
         // This implements: tax = (Material + Expense) * (Material Tax %)
         const effectiveTaxRate = materialValues.subtotal > 0 ? (materialValues.taxTotal / materialValues.subtotal) : 0;
-        const totalTaxOnCombined = !gstType.applicable ? 0 : (materialValues.taxTotal + (taxableExpenseSubtotal * effectiveTaxRate));
+        const totalTaxOnCombined = (!gstType?.gstType || gstType.gstType === 'NONE') ? 0 : (materialValues.taxTotal + (taxableExpenseSubtotal * effectiveTaxRate));
 
         const taxInTotalValue = gstType.isRcm ? 0 : totalTaxOnCombined;
         const grandTotal = subtotalWithBeforeGstExpenses + taxInTotalValue + postGstExpenseSubtotal;
@@ -130,7 +132,7 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
             const groupExpenseTax = taxableExpenseSubtotal * groupRatio * (group.rate / 100);
             return {
                 ...group,
-                tax: group.tax + (!gstType.applicable ? 0 : groupExpenseTax)
+                tax: group.tax + ((!gstType?.gstType || gstType.gstType === 'NONE') ? 0 : groupExpenseTax)
             };
         }).sort((a, b) => b.rate - a.rate);
 
@@ -155,20 +157,20 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
                 <thead>
                     <tr className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
                         <th className="px-6 py-4 text-left text-[13px] font-bold text-[#64748B] uppercase tracking-wider w-[50%]">
-                            <div className="flex items-center gap-2">Accounts Summary <ChevronsUpDown size={14} className="text-gray-300" /></div>
+                            <div className="flex items-center gap-2">{t('modules:accounts_summary_col')} <ChevronsUpDown size={14} className="text-gray-300" /></div>
                         </th>
                         <th className="px-6 py-4 text-right text-[13px] font-bold text-[#64748B] uppercase tracking-wider border-l border-[#F1F5F9]">
-                            <div className="flex items-center justify-end gap-2">Amount <ChevronsUpDown size={14} className="text-gray-300" /></div>
+                            <div className="flex items-center justify-end gap-2">{t('modules:amount_col')} <ChevronsUpDown size={14} className="text-gray-300" /></div>
                         </th>
                         <th className="px-6 py-4 text-right text-[13px] font-bold text-[#64748B] uppercase tracking-wider border-l border-[#F1F5F9]">
-                            <div className="flex items-center justify-end gap-2">Cum. Balance <ChevronsUpDown size={14} className="text-gray-300" /></div>
+                            <div className="flex items-center justify-end gap-2">{t('modules:cumulative_balance')} <ChevronsUpDown size={14} className="text-gray-300" /></div>
                         </th>
                     </tr>
                 </thead>
                 <tbody className="text-[14px]">
                     <tr className="border-b border-[#F1F5F9] transition-all duration-200 hover:bg-gray-50">
                         <td className="px-6 py-6 font-bold text-[#334155] uppercase text-[12px] tracking-wide">
-                            {mainAccountLabel}
+                            {mainAccountLabel === "Sales Account" ? t('modules:sales_account') : mainAccountLabel === "Material Purchase (Excl. G.S.T.)" ? t('modules:material_purchase') : mainAccountLabel}
                         </td>
                         <td className="px-6 py-6 text-right font-black text-[#0F172A] border-l border-[#F1F5F9]">
                             {materialValues.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -191,7 +193,7 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
                                                 onChange={(e) => handleExpenseChange(exp.id, 'groupName', e.target.value)}
                                                 className="w-full h-[40px] bg-white border border-[#E5E7EB] rounded-[10px] pl-4 pr-10 text-[13px] font-bold text-[#4B5563] outline-none focus:border-[#073318] appearance-none cursor-pointer"
                                             >
-                                                <option value="">Select group</option>
+                                                <option value="">{t('modules:select_group_placeholder')}</option>
                                                 {flatGroups.map(g => (
                                                     <option key={g.id} value={g.group_name}>{g.group_name}</option>
                                                 ))}
@@ -233,7 +235,7 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
                                 onClick={() => handleAddExpense(false)}
                                 className="flex items-center gap-2 text-[11px] font-bold text-emerald-800 hover:text-emerald-900 transition-colors uppercase py-1"
                             >
-                                <Plus size={14} /> Add Direct Expense (Taxable)
+                                <Plus size={14} /> {t('modules:add_direct_expense')}
                             </button>
                         </td>
                         <td className="border-l border-[#F1F5F9]"></td>
@@ -241,9 +243,9 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
                     </tr>
 
                     {/* GST Rows */}
-                    {!gstType.applicable ? (
+                    {(!gstType?.gstType || gstType.gstType === 'NONE') ? (
                         <tr className="border-b border-[#F1F5F9] h-[48px] bg-red-50/10">
-                            <td className="px-6 py-3 font-bold text-red-500 uppercase text-[12px] tracking-wide">GST NOT APPLICABLE (Case 4)</td>
+                            <td className="px-6 py-3 font-bold text-red-500 uppercase text-[12px] tracking-wide">{t('modules:gst_not_applicable')} (Case 4)</td>
                             <td className="px-6 py-3 text-right font-black text-red-500 border-l border-[#F1F5F9]">0.00</td>
                             <td className="px-6 py-3 text-right font-black text-gray-400 border-l border-[#F1F5F9]">
                                 {totals.subtotalWithBeforeGstExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -252,7 +254,7 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
                     ) : gstType.isRcm ? (
                         <tr className="border-b border-[#F1F5F9] h-[48px] bg-emerald-50/10">
                             <td className="px-6 py-3 font-bold text-emerald-700 uppercase text-[12px] tracking-wide flex items-center gap-2">
-                                RCM - Reverse Charge ✅ <span className="text-[10px] text-emerald-500 normal-case font-normal">(Buyer to pay tax)</span>
+                                {t('modules:rcm_reverse_charge')} ✅ <span className="text-[10px] text-emerald-500 normal-case font-normal">({t('modules:buyer_to_pay_tax')})</span>
                             </td>
                             <td className="px-6 py-3 text-right font-black text-emerald-700 border-l border-[#F1F5F9]">
                                 {totals.totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -263,10 +265,10 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
                         </tr>
                     ) : (
                         totals.taxGroups.map((group, gIdx) => {
-                            const label = gstType.type === 'INTRA' ? 'C-GST/S-GST' : 'I-GST';
-                            const displayRate = gstType.type === 'INTRA' ? (group.rate / 2).toFixed(2) : group.rate.toFixed(2);
+                            const label = gstType?.gstType === 'CGST_SGST' ? 'C-GST/S-GST' : 'I-GST';
+                            const displayRate = gstType?.gstType === 'CGST_SGST' ? (group.rate / 2).toFixed(2) : group.rate.toFixed(2);
                             
-                            if (gstType.type === 'INTRA') {
+                            if (gstType?.gstType === 'CGST_SGST') {
                                 return (
                                     <React.Fragment key={`tax-${group.rate}`}>
                                         <tr className="border-b border-[#F1F5F9] h-[48px]">
@@ -326,7 +328,7 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
                                                 onChange={(e) => handleExpenseChange(exp.id, 'groupName', e.target.value)}
                                                 className="w-full h-[40px] bg-white border border-[#E5E7EB] rounded-[10px] pl-4 pr-10 text-[13px] font-bold text-[#4B5563] outline-none focus:border-[#073318] appearance-none cursor-pointer"
                                             >
-                                                <option value="">Select group</option>
+                                                <option value="">{t('modules:select_group_placeholder')}</option>
                                                 {flatGroups.map(g => (
                                                     <option key={g.id} value={g.group_name}>{g.group_name}</option>
                                                 ))}
@@ -366,7 +368,7 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
                                 onClick={() => handleAddExpense(true)}
                                 className="flex items-center gap-2 text-[11px] font-bold text-gray-600 hover:text-gray-900 transition-colors uppercase py-1"
                             >
-                                <Plus size={14} /> Add Post-GST Charge (Non-Taxable)
+                                <Plus size={14} /> {t('modules:add_post_gst_charge')}
                             </button>
                         </td>
                         <td className="border-l border-[#F1F5F9]"></td>
@@ -375,7 +377,7 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
 
                     {/* Grand Total Row */}
                     <tr className="bg-[#073318] h-[60px]">
-                        <td className="px-6 py-3 font-black text-white uppercase tracking-[2px] text-[15px]">Grand Total</td>
+                        <td className="px-6 py-3 font-black text-white uppercase tracking-[2px] text-[15px]">{t('modules:grand_total')}</td>
                         <td className="px-6 py-3 text-right font-black text-white text-[20px] border-l border-[#ffffff20]">
                             ₹{totals.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>

@@ -5,8 +5,10 @@ import html2pdf from "html2pdf.js";
 import { toast } from 'react-hot-toast';
 import axiosInstance from '@/services/axiosInstance';
 import { getStandardGstUom } from '@/utils/uomUtils';
+import { useTranslation } from 'react-i18next';
 
 const SIPrintPreview = () => {
+    const { t } = useTranslation(['modules', 'common']);
     const location = useLocation();
     const navigate = useNavigate();
     const invoiceData = location.state?.invoiceData;
@@ -260,25 +262,25 @@ const SIPrintPreview = () => {
 
             <div className="no-print flex items-center justify-between px-6 pt-4">
                 <div className="flex items-center gap-2 text-[12px] font-bold text-gray-400">
-                    <span onClick={() => navigate('/seller/sales/invoice')} className="cursor-pointer hover:text-black">SALES</span>
+                    <span onClick={() => navigate('/seller/sales/invoice')} className="cursor-pointer hover:text-black uppercase">{t('modules:sales', 'SALES')}</span>
                     <span>&gt;</span>
-                    <span onClick={() => navigate('/seller/sales/invoice')} className="cursor-pointer hover:text-black">SALES INVOICE</span>
+                    <span onClick={() => navigate('/seller/sales/invoice')} className="cursor-pointer hover:text-black uppercase">{t('modules:sales_invoice', 'SALES INVOICE')}</span>
                     <span>&gt;</span>
-                    <span className="text-[#073318]">PREVIEW</span>
+                    <span className="text-[#073318] uppercase">{t('common:preview', 'PREVIEW')}</span>
                 </div>
                 <div className="flex items-center gap-3">
                     <button onClick={handleDownloadPDF} disabled={isDownloading} className="px-6 h-[40px] bg-[#073318] text-white rounded-[10px] font-bold text-[14px] flex items-center justify-center transition-colors disabled:opacity-70 disabled:cursor-not-allowed">
-                        {isDownloading ? 'Downloading...' : 'Download PDF'}
+                        {isDownloading ? t('modules:downloading', 'Downloading...') : t('modules:download_pdf', 'Download PDF')}
                     </button>
                     <button onClick={() => window.print()} className="px-6 h-[40px] bg-[#073318] text-white rounded-[10px] font-bold text-[14px] flex items-center justify-center">
-                        Print Invoice
+                        {t('modules:print_invoice', 'Print Invoice')}
                     </button>
                     <button onClick={() => {
                         const targetUrl = location.state?.from || '/seller/sales/invoice/add';
                         const needsRestore = targetUrl.includes('/add') || targetUrl.includes('/edit');
                         navigate(targetUrl + (needsRestore ? (targetUrl.includes('?') ? '&' : '?') + 'restore=true' : ''));
                     }} className="px-6 h-[40px] border border-gray-300 rounded-[10px] font-bold text-[14px] flex items-center justify-center gap-2">
-                        <ArrowLeft size={16} /> Back
+                        <ArrowLeft size={16} /> {t('common:back', 'Back')}
                     </button>
                 </div>
             </div>
@@ -294,16 +296,16 @@ const SIPrintPreview = () => {
                             {sellerInfo?.address || "Near Mahalaxmi Temple, Hitani"}
                         </div>
                         <div className="border-b border-black py-2.5 text-center text-[11px] font-semibold tracking-wide">
-                            Phone No.: {sellerInfo?.phone || "+91 2855943035"} &nbsp; Email Id: {sellerInfo?.email || "ardhya123@gmail.com"} {sellerInfo?.website && ` &nbsp; Website: ${sellerInfo.website}`}
+                            {t('common:phone', 'Phone No.')}: {sellerInfo?.phone || "+91 2855943035"} &nbsp; {t('common:email', 'Email Id')}: {sellerInfo?.email || "ardhya123@gmail.com"} {sellerInfo?.website && ` &nbsp; ${t('common:website', 'Website')}: ${sellerInfo.website}`}
                         </div>
                         <div className="border-b border-black py-3 text-center font-black text-[15px] uppercase tracking-[3px]">
-                            SALES INVOICE
+                            {t('modules:sales_invoice', 'SALES INVOICE')}
                         </div>
 
                         <div className="flex border-b border-black text-[12px] font-black uppercase">
-                            <div className="w-[38%] py-3 px-4">GSTIN : {sellerInfo?.gstNumber}</div>
-                            <div className="w-[30%] py-3 px-4 text-center">State Code : {sellerInfo?.stateInfo}</div>
-                            <div className="flex-1 py-3 px-4 text-right pr-6 whitespace-nowrap">PAN No : {sellerInfo?.panNumber}</div>
+                            <div className="w-[38%] py-3 px-4">{t('common:gstin', 'GSTIN')} : {sellerInfo?.gstNumber}</div>
+                            <div className="w-[30%] py-3 px-4 text-center">{t('common:state_code', 'State Code')} : {sellerInfo?.stateInfo}</div>
+                            <div className="flex-1 py-3 px-4 text-right pr-6 whitespace-nowrap">{t('common:pan_no', 'PAN No')} : {sellerInfo?.panNumber}</div>
                         </div>
 
                         <div className="flex border-b border-black min-h-[160px]">
@@ -317,30 +319,30 @@ const SIPrintPreview = () => {
                             <div className="w-1/2 flex flex-col">
                                 <div className="flex border-b border-black h-[44px]">
                                     <div className="flex-1 flex items-center px-4 gap-4 border-r border-black">
-                                        <span className="font-black text-[11px] whitespace-nowrap">Invoice No:</span>
+                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:invoice_no', 'Invoice No')}:</span>
                                         <span className="font-semibold text-[11px] whitespace-nowrap">{final_invoice_no}</span>
                                     </div>
                                     <div className="w-[48%] flex items-center px-4 gap-4">
-                                        <span className="font-black text-[11px] whitespace-nowrap">Invoice Date:</span>
+                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:invoice_date', 'Invoice Date')}:</span>
                                         <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(final_invoice_date)}</span>
                                     </div>
                                 </div>
                                 <div className="flex border-b border-black h-[44px]">
                                     <div className="flex-1 flex items-center px-4 gap-4 border-r border-black">
-                                        <span className="font-black text-[11px] whitespace-nowrap">SO No. :</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{soNumber || "N/A"}</span>
+                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:so_no', 'SO No.')} :</span>
+                                        <span className="font-semibold text-[11px] whitespace-nowrap">{soNumber || t('common:n_a', 'N/A')}</span>
                                     </div>
                                     <div className="w-[48%] flex items-center px-4 gap-4">
-                                        <span className="font-black text-[11px] whitespace-nowrap">SO Date :</span>
+                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:so_date', 'SO Date')} :</span>
                                         <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(soDate)}</span>
                                     </div>
                                 </div>
                                 <div className="flex-1 border-b border-black flex items-center px-4 py-2.5 gap-4">
-                                    <span className="font-black text-[12px] min-w-[80px]">Pay. Terms:</span>
-                                    <span className="font-semibold text-[12px]">{creditDays} Days</span>
+                                    <span className="font-black text-[12px] min-w-[80px]">{t('modules:pay_terms', 'Pay. Terms')}:</span>
+                                    <span className="font-semibold text-[12px]">{creditDays} {t('common:days', 'Days')}</span>
                                 </div>
                                 <div className="flex items-center px-4 h-[44px] gap-4">
-                                    <span className="font-black text-[12px] min-w-[80px]">GST No:</span>
+                                    <span className="font-black text-[12px] min-w-[80px]">{t('common:gst_no', 'GST No')}:</span>
                                     <span className="font-semibold text-[12px] uppercase">{final_gst_number}</span>
                                 </div>
                             </div>
@@ -349,14 +351,14 @@ const SIPrintPreview = () => {
                         <table className="w-full border-none m-0">
                             <thead>
                                 <tr className="text-[11px] font-black h-[40px]">
-                                    <th className="w-[45px] border-b border-r border-black">Sn.</th>
-                                    <th className="border-b border-r border-black px-4 text-left">Description</th>
-                                    <th className="w-[85px] border-b border-r border-black">HSN/SAC</th>
-                                    <th className="w-[50px] border-b border-r border-black text-center">Tax%</th>
-                                    <th className="w-[65px] border-b border-r border-black text-center">Quantity</th>
-                                    <th className="w-[65px] border-b border-r border-black text-center">Units</th>
-                                    <th className="w-[85px] border-b border-r border-black text-center">Rate</th>
-                                    <th className="w-[110px] border-b border-black text-right px-4">Amount</th>
+                                    <th className="w-[45px] border-b border-r border-black">{t('common:sn', 'Sn.')}</th>
+                                    <th className="border-b border-r border-black px-4 text-left">{t('common:description', 'Description')}</th>
+                                    <th className="w-[85px] border-b border-r border-black">{t('common:hsn_sac', 'HSN/SAC')}</th>
+                                    <th className="w-[50px] border-b border-r border-black text-center">{t('common:tax_percent', 'Tax%')}</th>
+                                    <th className="w-[65px] border-b border-r border-black text-center">{t('common:quantity', 'Quantity')}</th>
+                                    <th className="w-[65px] border-b border-r border-black text-center">{t('common:units', 'Units')}</th>
+                                    <th className="w-[85px] border-b border-r border-black text-center">{t('common:rate', 'Rate')}</th>
+                                    <th className="w-[110px] border-b border-black text-right px-4">{t('common:amount', 'Amount')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -365,7 +367,7 @@ const SIPrintPreview = () => {
                                          <td className="border-b border-r border-black text-center">{idx + 1}</td>
                                          <td className="border-b border-r border-black px-4 py-2 leading-tight">
                                              <div className="font-bold text-[13px]">
-                                                 {item.productName || item.product_name || "N/A"}
+                                                 {item.productName || item.product_name || t('common:n_a', 'N/A')}
                                                  {(() => {
                                                      const desc = item.printDescription || item.print_description || item.description || item.product_description;
                                                      return desc ? ` (${desc})` : '';
@@ -385,7 +387,7 @@ const SIPrintPreview = () => {
 
                         <div className="w-full border-t border-black bg-white">
                             <div className="flex border-b border-black h-[30px]">
-                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">Material Sub Total</div>
+                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('modules:material_sub_total', 'Material Sub Total')}</div>
                                 <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{subTotal.toFixed(2)}</div>
                             </div>
                             
@@ -397,24 +399,24 @@ const SIPrintPreview = () => {
                             ))}
 
                             <div className="flex border-b border-black h-[40px] bg-gray-50/50">
-                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[12px] uppercase tracking-wide">Taxable Sub Total</div>
+                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[12px] uppercase tracking-wide">{t('modules:taxable_sub_total', 'Taxable Sub Total')}</div>
                                 <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[12px]">{subtotalWithBeforeGstExpenses.toFixed(2)}</div>
                             </div>
 
                             {!isInterState ? (
                                 <>
                                     <div className="flex border-b border-black h-[30px]">
-                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">CGST</div>
+                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('common:cgst', 'CGST')}</div>
                                         <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{cgst.toFixed(2)}</div>
                                     </div>
                                     <div className="flex border-b border-black h-[30px]">
-                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">SGST</div>
+                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('common:sgst', 'SGST')}</div>
                                         <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{sgst.toFixed(2)}</div>
                                     </div>
                                 </>
                             ) : (
                                 <div className="flex border-b border-black h-[30px]">
-                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">IGST</div>
+                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('common:igst', 'IGST')}</div>
                                     <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{igst.toFixed(2)}</div>
                                 </div>
                             )}
@@ -428,17 +430,17 @@ const SIPrintPreview = () => {
 
                             <div className="flex h-[45px]">
                                 <div className="flex-1 border-r border-black p-4 py-2 font-black text-[10px] flex items-center">
-                                    <span className="mr-2">Amount In Words :</span>
+                                    <span className="mr-2">{t('common:amount_in_words', 'Amount In Words')} :</span>
                                     <span className="uppercase underline">{numberToWords(grandTotal)}</span>
                                 </div>
-                                <div className="w-[100px] border-r border-black flex items-center justify-center font-black text-[11px] uppercase">Grand Total</div>
+                                <div className="w-[100px] border-r border-black flex items-center justify-center font-black text-[11px] uppercase">{t('common:grand_total', 'Grand Total')}</div>
                                 <div className="w-[110px] flex items-center justify-end px-4 font-black text-[14px]">₹ {grandTotal.toFixed(2)}</div>
                             </div>
                         </div>
 
                         <div className="w-full border-t border-black p-6 flex flex-col justify-between min-h-[140px] bg-white text-right">
-                            <p className="font-black text-[11px]">For <span className="uppercase">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</span></p>
-                            <p className="font-black text-[10px] uppercase underline underline-offset-4">authorised Signatory</p>
+                            <p className="font-black text-[11px]">{t('common:for', 'For')} <span className="uppercase">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</span></p>
+                            <p className="font-black text-[10px] uppercase underline underline-offset-4">{t('common:authorised_signatory', 'authorised Signatory')}</p>
                         </div>
                     </div>
                 </div>

@@ -358,10 +358,11 @@ export class PurchaseInvoiceService {
 
     const isSupplierMsmeActive = supplier.msmeEnabled;
     const isSupplierMsmeType = supplier.regType === 'Manufacturing' || supplier.regType === 'Service';
-    const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType);
+    const hasSupplierMsmeId = supplier.msmeId && supplier.msmeId.trim() !== '' && supplier.msmeId.trim().toUpperCase() !== 'N/A';
+    const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType && hasSupplierMsmeId);
 
     if (isSupplierMsme && creditDays > 45) {
-      throw new BadRequestException('Maximum credit period allowed for MSME suppliers is 45 days.');
+      throw new BadRequestException('MSME supplier payment terms cannot exceed 45 days as per MSME compliance rules.');
     }
 
     const gstNo = supplier.gstNo || createDto.gstNumber;
@@ -596,7 +597,7 @@ export class PurchaseInvoiceService {
           sgstAmount: sgst,
           igstAmount: igst,
           isRcm: isRcm,
-          isInterState: gstResult.isInterState,
+          isInterState: gstResult.gstType === 'IGST',
           gstType: gstResult.gstType as any,
           taxableAmount: totalTaxable,
           grandTotal: grandTotal,
@@ -799,11 +800,12 @@ export class PurchaseInvoiceService {
     if (supplierInfo) {
       const isSupplierMsmeActive = supplierInfo.msmeEnabled;
       const isSupplierMsmeType = supplierInfo.regType === 'Manufacturing' || supplierInfo.regType === 'Service';
-      const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType);
+      const hasSupplierMsmeId = supplierInfo.msmeId && supplierInfo.msmeId.trim() !== '' && supplierInfo.msmeId.trim().toUpperCase() !== 'N/A';
+      const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType && hasSupplierMsmeId);
 
       const creditDays = updateDto.creditDays !== undefined ? updateDto.creditDays : existing.creditDays;
       if (isSupplierMsme && creditDays > 45) {
-        throw new BadRequestException('Maximum credit period allowed for MSME suppliers is 45 days.');
+        throw new BadRequestException('MSME supplier payment terms cannot exceed 45 days as per MSME compliance rules.');
       }
     }
     const supplierState = (supplierInfo?.state || "").trim();

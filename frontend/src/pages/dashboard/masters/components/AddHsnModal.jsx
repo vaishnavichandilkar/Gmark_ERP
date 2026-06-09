@@ -128,8 +128,8 @@ const AddHsnModal = ({ isOpen, onClose, onSuccess, onShowToast, presetType = '' 
                     newErrors.code = 'HSN Code must be exactly 6 or 8 digits.';
                 }
             } else if (formData.type === 'SAC') {
-                if (formData.code.length !== 6) {
-                    newErrors.code = 'SAC Code must be exactly 6 digits.';
+                if (formData.code.length < 6 || formData.code.length > 8) {
+                    newErrors.code = 'SAC Code must be between 6 and 8 digits.';
                 }
             }
         }

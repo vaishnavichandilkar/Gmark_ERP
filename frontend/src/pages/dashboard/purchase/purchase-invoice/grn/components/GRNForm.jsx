@@ -3,6 +3,7 @@ import { ChevronDown, Calendar, Plus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from "@/constants/routes";
 import GRNMultiSelect from './GRNMultiSelect';
+import { useTranslation } from 'react-i18next';
 
 const GRNForm = ({
     formData,
@@ -21,15 +22,16 @@ const GRNForm = ({
     type = 'GRN',
     onAddSupplier
 }) => {
+    const { t } = useTranslation(['common', 'modules']);
     const isGRN = type === 'GRN';
-    const numLabel = isGRN ? 'Challan' : 'Invoice';
+    const numLabel = isGRN ? t('modules:challan_tab', 'Challan') : t('modules:invoice_purchase_tab', 'Invoice');
     const navigate = useNavigate();
     const fieldForNumber = isGRN ? 'supplier_challan_number' : 'supplier_invoice_number';
     const [supplierSearch, setSupplierSearch] = useState(formData.supplier_name || '');
     const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
 
     // Dynamic Label Correction
-    const displayDateLabel = isGRN ? 'Supplier Challan' : 'Supplier Invoice';
+    const displayDateLabel = isGRN ? t('modules:supplier_challan_no', 'Supplier Challan') : t('modules:supplier_invoice_no', 'Supplier Invoice');
 
     React.useEffect(() => {
         setSupplierSearch(formData.supplier_name || '');
@@ -83,11 +85,11 @@ const GRNForm = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 {/* 1. Supplier Name */}
                 <div className="space-y-2 relative">
-                    <label className="text-[14px] font-semibold text-[#374151]">Supplier Name <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:supplier_name', 'Supplier Name')} <span className="text-red-500">*</span></label>
                     <div className="relative">
                         <input
                             type="text"
-                            placeholder="Select supplier name"
+                            placeholder={t('modules:select_supplier_name', 'Select supplier name')}
                             value={supplierSearch}
                             onFocus={() => setIsSupplierDropdownOpen(true)}
                             onChange={(e) => {
@@ -141,7 +143,7 @@ const GRNForm = ({
                                             </button>
                                         ))}
                                         {filteredSuppliers.length === 0 && (
-                                            <div className="px-5 py-8 text-[13px] text-gray-400 italic text-center">No results for "{supplierSearch}"</div>
+                                            <div className="px-5 py-8 text-[13px] text-gray-400 italic text-center">{t('common:no_results_found', 'No results found')}</div>
                                         )}
                                     </div>
                                     <div className="p-3 bg-gray-50 border-t border-[#F3F4F6]">
@@ -156,7 +158,7 @@ const GRNForm = ({
                                             }}
                                             className="w-full flex items-center justify-center gap-2 py-3 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold shadow-md hover:bg-[#052611] transition-all"
                                         >
-                                            <Plus size={16} /> Add new supplier
+                                            <Plus size={16} /> {t('modules:add_new_supplier', 'Add new supplier')}
                                         </button>
                                     </div>
                                 </div>
@@ -168,7 +170,7 @@ const GRNForm = ({
 
                 {/* 2. Credit Days */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Credit Days <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:credit_days', 'Credit Days')} <span className="text-red-500">*</span></label>
                     <input
                         type="number"
                         min="0"
@@ -182,10 +184,10 @@ const GRNForm = ({
 
                 {/* 3. Address */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Address <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('common:address', 'Address')} <span className="text-red-500">*</span></label>
                     <input
                         type="text"
-                        placeholder="Auto-fetched from Account Master"
+                        placeholder={t('modules:auto_fetched_desc', 'Auto-fetched from Account Master')}
                         value={formData.address || ''}
                         readOnly
                         className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed shadow-sm"
@@ -195,10 +197,10 @@ const GRNForm = ({
 
                 {/* 4. GST Number */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">GST Number</label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:gst_no', 'GST Number')}</label>
                     <input
                         type="text"
-                        placeholder="Auto-fetched from Account Master"
+                        placeholder={t('modules:auto_fetched_desc', 'Auto-fetched from Account Master')}
                         value={formData.gst_no || ''}
                         readOnly
                         className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed shadow-sm"
@@ -207,14 +209,14 @@ const GRNForm = ({
 
                 {/* 5. Link Purchase Order */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">PO Number</label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:po_no', 'PO Number')}</label>
                     <div className="relative">
                         <select
                             className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-14 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
                             value={formData.po_id || ""}
                             onChange={(e) => handlePOChange(e.target.value)}
                         >
-                            <option value="">Select PO Number</option>
+                            <option value="">{t('modules:select_po_number', 'Select PO Number')}</option>
                             {pos.map(p => <option key={p.id} value={p.id}>{p.poNumber}</option>)}
                         </select>
                         {formData.po_id && (
@@ -235,10 +237,10 @@ const GRNForm = ({
 
                 {/* 6. Supplier Challan/Invoice Number */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Supplier {numLabel} Number <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:supplier_no_label', 'Supplier {{label}} Number', { label: numLabel })} <span className="text-red-500">*</span></label>
                     <input
                         type="text"
-                        placeholder={`Enter ${numLabel.toLowerCase()} no.`}
+                        placeholder={t('modules:enter_no_placeholder', 'Enter {{label}} no.', { label: numLabel.toLowerCase() })}
                         value={formData[fieldForNumber] || ''}
                         onChange={(e) => setFormData({ ...formData, [fieldForNumber]: e.target.value })}
                         className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all ${errors[fieldForNumber] ? 'border-red-500' : 'border-[#E5E7EB]'}`}
@@ -249,7 +251,7 @@ const GRNForm = ({
                 {/* 6.1 Supplier Challan Number (Only for Invoice) */}
                 {type === 'Invoice' && (
                     <div className="space-y-2 font-outfit">
-                        <label className="text-[14px] font-semibold text-[#374151]">Supplier Challan Number</label>
+                        <label className="text-[14px] font-semibold text-[#374151]">{t('modules:supplier_challan_no', 'Supplier Challan Number')}</label>
                         <GRNMultiSelect 
                             challans={challans}
                             selectedIds={formData.grn_ids || []}
@@ -260,7 +262,7 @@ const GRNForm = ({
 
                 {/* 7. Challan/Invoice Date */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">{displayDateLabel} Date <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{isGRN ? t('modules:supplier_challan_date', 'Supplier Challan Date') : t('modules:supplier_invoice_date', 'Supplier Invoice Date')} <span className="text-red-500">*</span></label>
                     <div className="relative">
                         <input
                             type="date"
@@ -299,7 +301,7 @@ const GRNForm = ({
 
                 {/* 8. Booking Date - Frozen current date */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Booking Date</label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:booking_date', 'Booking Date')}</label>
                     <div className="relative">
                         <input
                             type="text"

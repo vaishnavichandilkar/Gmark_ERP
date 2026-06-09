@@ -342,12 +342,12 @@ export class OnboardingService {
 
         // Save GST Number
         if (dto.gstNumber) {
-            await this.saveDocument(userId, 'GST', `${dto.gstNumber}`);
+            await this.saveDocument(userId, 'GST', `${dto.gstNumber}`, 'GST_NUMBER');
         }
 
         // Save GST Certificate
         if (files?.gstCertificate?.[0]) {
-            await this.saveFile(userId, 'GST', files.gstCertificate[0]);
+            await this.saveFile(userId, 'GST', files.gstCertificate[0], 'GST_CERTIFICATE');
         }
 
         // Save Proof of Business (Optional)

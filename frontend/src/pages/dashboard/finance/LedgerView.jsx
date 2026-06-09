@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Download, Search, FileText, FileSpreadsheet, RotateCcw, XSquare } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -9,6 +10,7 @@ import ledgerService from '../../../services/ledgerService';
 import toast from 'react-hot-toast';
 
 const LedgerView = () => {
+    const { t } = useTranslation(['modules', 'common']);
     const { id } = useParams();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -305,9 +307,9 @@ const LedgerView = () => {
                                 autoFocus
                             />
                         ) : (
-                            <h1 className="text-[24px] font-bold text-[#111827] tracking-tight">LEDGER (UPDATED): {accountData.name}</h1>
+                            <h1 className="text-[24px] font-bold text-[#111827] tracking-tight">{t('modules:ledger')} (UPDATED): {accountData.name}</h1>
                         )}
-                        <p className="text-[14px] text-[#6B7280] font-medium">Detailed transaction history and financial status</p>
+                        <p className="text-[14px] text-[#6B7280] font-medium">{t('modules:transaction_history_desc')}</p>
                     </div>
                 </div>
                 
@@ -318,13 +320,13 @@ const LedgerView = () => {
                                 className="h-[42px] px-6 border border-[#E5E7EB] text-gray-600 rounded-[14px] font-bold text-[14px] hover:bg-gray-50 transition-all"
                                 onClick={() => setIsEditing(false)}
                             >
-                                Cancel
+                                {t('common:cancel')}
                             </button>
                             <button 
                                 className="h-[42px] px-8 bg-[#073318] text-white rounded-[14px] font-bold text-[14px] shadow-lg shadow-[#073318]/20 hover:bg-[#0a4422] transition-all"
                                 onClick={handleSave}
                             >
-                                Save Changes
+                                {t('modules:save_changes')}
                             </button>
                         </>
                     ) : (
@@ -332,7 +334,7 @@ const LedgerView = () => {
                             className="h-[42px] px-8 bg-[#073318] text-white rounded-[14px] font-bold text-[14px] shadow-lg shadow-[#073318]/20 hover:bg-[#0a4422] transition-all"
                             onClick={() => setIsEditing(true)}
                         >
-                            Edit Account
+                            {t('modules:edit_account')}
                         </button>
                     )}
                 </div>
@@ -344,7 +346,7 @@ const LedgerView = () => {
                     {isEditing ? (
                         <div className="lg:col-span-4 bg-white p-8 rounded-[24px] border border-[#E5E7EB] shadow-sm grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                             <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-[#6B7280] uppercase">Account Group</label>
+                                <label className="text-[12px] font-bold text-[#6B7280] uppercase">{t('modules:account_group')}</label>
                                 <select 
                                     name="group"
                                     value={accountData.group}
@@ -358,7 +360,7 @@ const LedgerView = () => {
                                 </select>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-[#6B7280] uppercase">Opening Balance</label>
+                                <label className="text-[12px] font-bold text-[#6B7280] uppercase">{t('modules:opening_balance')}</label>
                                 <input 
                                     type="number"
                                     name="openingBalance"
@@ -368,7 +370,7 @@ const LedgerView = () => {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-[#6B7280] uppercase">Contact Number</label>
+                                <label className="text-[12px] font-bold text-[#6B7280] uppercase">{t('modules:contact_number')}</label>
                                 <input 
                                     type="text"
                                     name="contact"
@@ -378,7 +380,7 @@ const LedgerView = () => {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-[#6B7280] uppercase">Email Address</label>
+                                <label className="text-[12px] font-bold text-[#6B7280] uppercase">{t('modules:email_address')}</label>
                                 <input 
                                     type="email"
                                     name="email"
@@ -391,19 +393,19 @@ const LedgerView = () => {
                     ) : (
                         <>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
-                                <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Total Debit</p>
+                                <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">{t('modules:total_debit')}</p>
                                 <h3 className="text-2xl font-extrabold text-[#111827]">₹ {periodTotals.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                             </div>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
-                                <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Total Credit</p>
+                                <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">{t('modules:total_credit')}</p>
                                 <h3 className="text-2xl font-extrabold text-[#111827]">₹ {periodTotals.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                             </div>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
-                                <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Closing Balance</p>
+                                <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">{t('modules:closing_balance')}</p>
                                 <h3 className="text-2xl font-extrabold text-[#111827]">₹ {Math.abs(Number(finalBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}</h3>
                             </div>
                             <div className="bg-white p-6 rounded-[20px] border border-[#E5E7EB] shadow-sm">
-                                <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Group</p>
+                                <p className="text-[14px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">{t('common:group')}</p>
                                 <h3 className="text-[18px] font-bold text-gray-800">{accountData.group}</h3>
                             </div>
                         </>
@@ -418,7 +420,7 @@ const LedgerView = () => {
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input 
                                     type="text" 
-                                    placeholder="Search transactions..."
+                                    placeholder={t('modules:search_transactions')}
                                     className="h-[46px] pl-10 pr-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all w-full sm:w-[320px] font-medium"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -427,7 +429,7 @@ const LedgerView = () => {
 
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">From</span>
+                                    <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">{t('common:from_date')}</span>
                                     <input 
                                         type="date" 
                                         className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] transition-all cursor-pointer"
@@ -436,7 +438,7 @@ const LedgerView = () => {
                                     />
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">To</span>
+                                    <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">{t('common:to_date')}</span>
                                     <input 
                                         type="date" 
                                         className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] transition-all cursor-pointer"
@@ -461,7 +463,7 @@ const LedgerView = () => {
                                 className={`h-[44px] px-6 transition-all flex items-center shadow-lg rounded-[12px] font-bold text-[15px] ${showAllocations ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-[#073318] hover:bg-[#0a4422] text-white'}`}
                                 onClick={() => setShowAllocations(!showAllocations)}
                             >
-                                {showAllocations ? 'Hide Allocation' : 'Allocation'}
+                                {showAllocations ? t('modules:hide_allocation') : t('modules:allocation')}
                             </button>
                             <div className="relative">
                             <button 
@@ -469,7 +471,7 @@ const LedgerView = () => {
                                 onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}
                             >
                                 <Download size={18} />
-                                Export
+                                {t('common:export')}
                             </button>
                             
                             {showExportMenu && (
@@ -481,14 +483,14 @@ const LedgerView = () => {
                                             onClick={handleExportPDF}
                                         >
                                             <FileText size={18} className="text-red-500" />
-                                            Export as PDF
+                                            {t('modules:export_pdf')}
                                         </button>
                                         <button 
                                             className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
                                             onClick={handleExportExcel}
                                         >
                                             <FileSpreadsheet size={18} className="text-emerald-500" />
-                                            Export as Excel
+                                            {t('modules:export_excel')}
                                         </button>
                                     </div>
                                 </>
@@ -504,14 +506,14 @@ const LedgerView = () => {
                         <table className="w-full min-w-[1000px]">
                             <thead>
                                 <tr className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
-                                    <th className="px-6 py-4 text-center font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Sr.No</th>
-                                    <th className="px-6 py-4 text-left font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Date</th>
-                                    <th className="px-6 py-4 text-left font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Particulars</th>
-                                    <th className="px-6 py-4 text-left font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Narration</th>
-                                    <th className="px-6 py-4 text-right font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Unallocated</th>
-                                    <th className="px-6 py-4 text-right font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Debit (₹)</th>
-                                    <th className="px-6 py-4 text-right font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Credit (₹)</th>
-                                    <th className="px-6 py-4 text-right font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">Balance</th>
+                                    <th className="px-6 py-4 text-center font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">{t('common:sr_no')}</th>
+                                    <th className="px-6 py-4 text-left font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">{t('modules:date_col')}</th>
+                                    <th className="px-6 py-4 text-left font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">{t('modules:particular')}</th>
+                                    <th className="px-6 py-4 text-left font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">{t('modules:narration')}</th>
+                                    <th className="px-6 py-4 text-right font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">{t('modules:unallocated')}</th>
+                                    <th className="px-6 py-4 text-right font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">{t('modules:debit')} (₹)</th>
+                                    <th className="px-6 py-4 text-right font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">{t('modules:credit')} (₹)</th>
+                                    <th className="px-6 py-4 text-right font-bold text-[#6B7280] uppercase text-[12px] tracking-wider">{t('modules:cumulative_balance')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -520,7 +522,7 @@ const LedgerView = () => {
                                         <td colSpan="7" className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center gap-4">
                                                 <div className="w-10 h-10 border-4 border-[#073318]/20 border-t-[#073318] rounded-full animate-spin"></div>
-                                                <p className="text-[16px] font-bold text-[#6B7280]">Fetching ledger records...</p>
+                                                <p className="text-[16px] font-bold text-[#6B7280]">{t('modules:fetching_records')}</p>
                                             </div>
                                         </td>
                                     </tr>
@@ -598,7 +600,7 @@ const LedgerView = () => {
                                                     ))}
                                                     <tr className="bg-[#FAFAFA] border-b border-[#F3F4F6]">
                                                         <td colSpan="4" className="px-6 py-2 text-right text-[12px] font-medium text-gray-500">
-                                                            Unallocated Balance:
+                                                            {t('modules:unallocated_balance')}:
                                                         </td>
                                                         <td className="px-6 py-2 text-center text-[13px] font-bold text-gray-700">
                                                             {(tx.unallocated ? Math.max(0, tx.unallocated - tx.allocations.reduce((s, a) => s + a.amount, 0)) : 0) > 0 
@@ -613,8 +615,8 @@ const LedgerView = () => {
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="7" className="px-6 py-12 text-center text-[#6B7280] font-medium">
-                                            No transactions found for the selected criteria.
+                                        <td colSpan="8" className="px-6 py-12 text-center text-[#6B7280] font-medium">
+                                            {t('common:no_results_found')}
                                         </td>
                                     </tr>
                                 )}
@@ -622,7 +624,7 @@ const LedgerView = () => {
                             <tfoot className="bg-white border-t-2 border-[#E5E7EB] font-outfit">
                                 {/* Page Total Row */}
                                 <tr className="border-b border-gray-100">
-                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">PAGE TOTAL (NEW)</td>
+                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">{t('modules:page_total')}</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -630,7 +632,7 @@ const LedgerView = () => {
                                 </tr>
                                 {/* Transactions (Ledger) Row */}
                                 <tr className="border-b border-gray-100">
-                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Transactions (Ledger)</td>
+                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">{t('modules:transactions_ledger')}</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {runningTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-900 border-l border-gray-100">₹ {runningTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -638,7 +640,7 @@ const LedgerView = () => {
                                 </tr>
                                 {/* Balance (Ledger) Row */}
                                 <tr>
-                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">Closing Balance</td>
+                                    <td colSpan="4" className="px-6 py-3 text-right font-bold text-gray-900 bg-gray-50/50">{t('modules:closing_balance')}</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
                                     <td className="px-6 py-3 text-right font-bold text-gray-400 border-l border-gray-100 text-center">--</td>
@@ -653,10 +655,10 @@ const LedgerView = () => {
                 <div className="mt-6 px-8 py-5 bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex flex-col items-center sm:items-start">
                         <p className="text-[15px] text-[#111827] font-bold">
-                            Page {currentPage} of {totalPages}
+                            {t('common:page_of', { current: currentPage, total: totalPages })}
                         </p>
                         <p className="text-[13px] text-[#6B7280] font-medium">
-                            Showing {transactions.length} records of {totalTransactions} total transactions
+                            {t('modules:showing_records', { count: transactions.length, total: totalTransactions })}
                         </p>
                     </div>
                     
@@ -670,7 +672,7 @@ const LedgerView = () => {
                             className={`flex items-center gap-2 h-[44px] px-6 rounded-[12px] border border-[#E5E7EB] text-[14px] font-bold transition-all shadow-sm ${currentPage === 1 ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 hover:border-gray-300 active:scale-95'}`}
                         >
                             <ChevronLeft size={18} />
-                            Previous
+                            {t('common:previous')}
                         </button>
 
                         <div className="hidden md:flex items-center gap-2 mx-2">
@@ -696,7 +698,7 @@ const LedgerView = () => {
                             disabled={currentPage === totalPages || loading}
                             className={`flex items-center gap-2 h-[44px] px-6 rounded-[12px] border border-[#E5E7EB] text-[14px] font-bold transition-all shadow-sm ${currentPage === totalPages ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 hover:border-gray-300 active:scale-95'}`}
                         >
-                            Next
+                            {t('common:next')}
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="rotate-180"><path d="m15 18-6-6 6-6"/></svg>
                         </button>
                     </div>

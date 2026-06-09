@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Trash2, Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import { getStandardGstUom } from '@/utils/uomUtils';
 
 const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isLinked, isChallanSelected }) => {
+    const { t } = useTranslation(['modules', 'common']);
     const [tableSearch, setTableSearch] = useState('');
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
     const [activeRowIndex, setActiveRowIndex] = useState(null);
@@ -33,7 +35,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             
             const baseAmount = qty * rate;
             const befTax = baseAmount - discAmt;
-            const isApplicable = gstType?.applicable !== false;
+            const isApplicable = typeof gstType === 'object' ? gstType?.gstType !== 'NONE' : gstType !== 'NONE';
             const taxAmt = isApplicable ? (befTax * taxPct) / 100 : 0;
             
             return {
@@ -115,7 +117,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             }
 
             const befTax = (baseAmount - discAmt);
-            const isApplicable = gstType?.applicable !== false;
+            const isApplicable = typeof gstType === 'object' ? gstType?.gstType !== 'NONE' : gstType !== 'NONE';
             const taxAmt = isApplicable ? (befTax * taxPct) / 100 : 0;
 
             item.quantity = qty;
@@ -136,7 +138,8 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
         const qty = 1;
         const taxPct = (parseFloat(product.tax_rate) || (product.hsn?.gst_rate ? parseFloat(product.hsn.gst_rate) : 0));
         const baseAmount = qty * rate;
-        const taxAmt = gstType?.applicable ? (baseAmount * taxPct) / 100 : 0;
+        const isApplicable = typeof gstType === 'object' ? gstType?.gstType !== 'NONE' : gstType !== 'NONE';
+        const taxAmt = isApplicable ? (baseAmount * taxPct) / 100 : 0;
         const total = parseFloat((baseAmount + taxAmt).toFixed(2));
 
         const updatedItems = [...items];
@@ -223,7 +226,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input
                         type="text"
-                        placeholder="Search By Anything..."
+                        placeholder={t('modules:search_by_anything_placeholder')}
                         value={tableSearch}
                         onFocus={() => { setActiveRowIndex(null); setIsProductSearchOpen(true); }}
                         onChange={(e) => { setTableSearch(e.target.value); setActiveRowIndex(null); setIsProductSearchOpen(true); }}
@@ -245,9 +248,9 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                                 <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">#{p.product_code}</span>
                                             </div>
                                             <div className="flex items-center gap-4 text-[12px] text-gray-400 font-medium">
-                                                <span>HSN: <span className="text-gray-700 font-bold">{p.hsn_code || 'N/A'}</span></span>
-                                                <span>Tax: <span className="text-gray-700 font-bold">{p.tax_rate || 0}%</span></span>
-                                                <span>Price: <span className="text-emerald-700 font-black">₹{p.sale_rate || 0}</span></span>
+                                                <span>{t('modules:hsn_code')}: <span className="text-gray-700 font-bold">{p.hsn_code || 'N/A'}</span></span>
+                                                <span>{t('modules:tax_percent')}: <span className="text-gray-700 font-bold">{p.tax_rate || 0}%</span></span>
+                                                <span>{t('modules:rate_col')}: <span className="text-emerald-700 font-black">₹{p.sale_rate || 0}</span></span>
                                             </div>
                                         </div>
                                         <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all">
@@ -260,7 +263,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                         onClick={handleAddNewProduct}
                                         className="w-full h-[40px] bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2"
                                     >
-                                        <Plus size={14} /> Add new product
+                                        <Plus size={14} /> {t('modules:add_new_product')}
                                     </button>
                                 </div>
                             </div>
@@ -279,21 +282,21 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                     <thead>
                         <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
                             <th className="px-4 py-4 w-[50px] text-center text-[13px] font-bold text-[#4B5563]">#</th>
-                            <th className="px-4 py-4 w-[60px] text-center text-[13px] font-bold text-[#4B5563] border-l border-[#F3F4F6]">Select</th>
-                            <th className="px-4 py-4 w-[160px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Product Code</th>
-                            <th className="px-4 py-4 w-[350px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Product Name</th>
-                            <th className="px-4 py-4 w-[250px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Print Description</th>
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Qty</th>
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Rate</th>
-                            <th className="px-4 py-4 w-[120px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">UOM</th>
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Discount (₹)</th>
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Discount (%)</th>
-                            <th className="px-4 py-4 w-[140px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">HSN Code</th>
-                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Tax (%)</th>
-                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Bef. Tax Amount</th>
-                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Tax Amount</th>
-                            <th className="px-4 py-4 w-[150px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Amount</th>
-                            <th className="px-4 py-4 w-[80px] text-center text-[13px] font-bold text-gray-500 border-l border-[#F3F4F6] sticky right-0 bg-white z-10">Action</th>
+                            <th className="px-4 py-4 w-[60px] text-center text-[13px] font-bold text-[#4B5563] border-l border-[#F3F4F6]">{t('common:action')}</th>
+                            <th className="px-4 py-4 w-[160px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:product_code_col')}</th>
+                            <th className="px-4 py-4 w-[350px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:product_name_col')}</th>
+                            <th className="px-4 py-4 w-[250px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:print_description_col')}</th>
+                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:qty_col')}</th>
+                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:rate_col')}</th>
+                            <th className="px-4 py-4 w-[120px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:uom_col')}</th>
+                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:discount_rs_col')}</th>
+                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:discount_percent_col')}</th>
+                            <th className="px-4 py-4 w-[140px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:hsn_code_col')}</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:tax_percent_col')}</th>
+                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:before_tax_amount_col')}</th>
+                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:tax_amount_col')}</th>
+                            <th className="px-4 py-4 w-[150px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:amount_col')}</th>
+                            <th className="px-4 py-4 w-[80px] text-center text-[13px] font-bold text-gray-500 border-l border-[#F3F4F6] sticky right-0 bg-white z-10">{t('modules:action_col')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -346,7 +349,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                             type="text"
                                             value={item.printDescription || ''}
                                             onChange={(e) => handleItemChange(index, 'printDescription', e.target.value)}
-                                            placeholder="Print Description"
+                                            placeholder={t('modules:print_description_col')}
                                             className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold outline-none focus:border-[#073318]"
                                         />
                                     </td>
@@ -477,7 +480,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                                     onClick={handleAddNewProduct}
                                                     className="inline-flex h-[40px] px-8 bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all items-center gap-3 shadow-lg"
                                                 >
-                                                    <Plus size={16} /> Add New Product
+                                                    <Plus size={16} /> {t('modules:add_new_product')}
                                                 </button>
                                             </td>
                                         </tr>
@@ -488,7 +491,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                     </tbody>
                     <tfoot>
                         <tr className="bg-[#F9FAFB] border-t border-[#E5E7EB] h-[54px]">
-                            <td colSpan={2} className="px-4 py-4 text-[13px] font-black text-[#111827]">Total</td>
+                            <td colSpan={2} className="px-4 py-4 text-[13px] font-black text-[#111827]">{t('modules:total_label')}</td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>

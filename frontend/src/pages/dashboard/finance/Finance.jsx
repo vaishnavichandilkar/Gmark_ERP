@@ -94,7 +94,7 @@ const Finance = () => {
                 setSummaryData(response.data || []);
             } catch (error) {
                 console.error('Error fetching ledger summary:', error);
-                toast.error('Failed to load ledger data');
+                toast.error(t('modules:failed_to_load_ledger'));
             } finally {
                 setLoading(false);
             }
@@ -139,10 +139,25 @@ const Finance = () => {
     }, []);
 
     const mainTabs = ['Ledger', 'Bank Reconciliation', 'Settlement'];
+    const mainTabLabels = {
+        'Ledger': t('modules:ledger'),
+        'Bank Reconciliation': t('modules:bank_reconciliation'),
+        'Settlement': t('modules:settlement')
+    };
     const getSubTabs = (mainTab) => {
         if (mainTab === 'Bank Reconciliation') return ['Receipts', 'Payments', 'JV', 'Contra'];
         if (mainTab === 'Settlement') return ['Sundry Creditors', 'Sundry Debtors'];
         return ['Sundry Creditors', 'Sundry Debtors', 'Bank', 'Cash'];
+    };
+    const subTabLabels = {
+        'Sundry Creditors': t('modules:sundry_creditors'),
+        'Sundry Debtors': t('modules:sundry_debtors'),
+        'Bank': t('modules:bank'),
+        'Cash': t('modules:cash'),
+        'Receipts': t('modules:receipts'),
+        'Payments': t('modules:payments'),
+        'JV': t('modules:jv'),
+        'Contra': t('modules:contra')
     };
     const subTabs = getSubTabs(activeMainTab);
 
@@ -186,14 +201,14 @@ const Finance = () => {
             setBankData(mappedData);
         } catch (error) {
             console.error('Error fetching vouchers:', error);
-            toast.error('Failed to load vouchers');
+            toast.error(t('modules:failed_to_load_vouchers'));
         } finally {
             setLoading(false);
         }
     };
 
     const handleDeleteVoucher = async (item) => {
-        if (!window.confirm(`Are you sure you want to delete voucher ${item.vchNo}?`)) {
+        if (!window.confirm(t('modules:delete_voucher_confirm', { vchNo: item.vchNo }))) {
             return;
         }
 
@@ -203,12 +218,12 @@ const Finance = () => {
             } else if (activeSubTab === 'Payments') {
                 await voucherService.deletePaymentVoucher(item.id);
             }
-            toast.success('Voucher deleted successfully');
+            toast.success(t('modules:voucher_deleted'));
             fetchVouchers();
         } catch (error) {
             console.error('Error deleting voucher:', error);
             const msg = error.response?.data?.message;
-            toast.error(Array.isArray(msg) ? msg[0] : (msg || 'Failed to delete voucher'));
+            toast.error(Array.isArray(msg) ? msg[0] : (msg || t('modules:failed_to_delete_voucher')));
         }
     };
 
@@ -224,10 +239,10 @@ const Finance = () => {
     const [showAllocations, setShowAllocations] = useState(false);
 
     const handleDeleteAllocation = async (allocationId) => {
-        if (!window.confirm('Are you sure you want to delete this allocation?')) return;
+        if (!window.confirm(t('modules:delete_allocation_confirm'))) return;
         try {
             await ledgerService.deleteAllocation(allocationId);
-            toast.success('Allocation deleted successfully');
+            toast.success(t('modules:allocation_deleted'));
             
             // Refresh detailed data
             setDetailedLoading(true);
@@ -245,7 +260,7 @@ const Finance = () => {
             setDetailedLoading(false);
         } catch (error) {
             console.error('Error deleting allocation:', error);
-            toast.error('Failed to delete allocation');
+            toast.error(t('modules:failed_to_delete_allocation'));
             setDetailedLoading(false);
         }
     };
@@ -268,7 +283,7 @@ const Finance = () => {
                 setDetailedTotalTotal(response.data.total || 0);
             } catch (error) {
                 console.error('Error fetching detailed ledger:', error);
-                toast.error('Failed to load detailed ledger');
+                toast.error(t('modules:failed_to_load_detailed_ledger'));
             } finally {
                 setDetailedLoading(false);
             }
@@ -420,7 +435,7 @@ const Finance = () => {
 
     const handleSearch = () => {
         if (!searchQuery) {
-            toast.error("Please enter an account name to search");
+            toast.error(t('modules:please_enter_account_search'));
             return;
         }
 
@@ -442,9 +457,9 @@ const Finance = () => {
             }
         } else {
             if (filteredMainData.length === 0) {
-                toast.error("No account found matching your search");
+                toast.error(t('modules:no_account_found'));
             } else {
-                toast.error("Multiple matches found. Please select an account from the table.");
+                toast.error(t('modules:multiple_matches_select'));
             }
         }
     };
@@ -897,7 +912,7 @@ const Finance = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8 font-outfit">
                 <div>
                     <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">{t('finance', 'Finance')}</h1>
-                    <p className="text-[14px] md:text-[16px] text-[#6B7280] font-medium">Manage your financial operations and reporting</p>
+                    <p className="text-[14px] md:text-[16px] text-[#6B7280] font-medium">{t('modules:finance')}</p>
                 </div>
                 <div className="flex items-center gap-3">
                 </div>
@@ -930,7 +945,7 @@ const Finance = () => {
                                         transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                     />
                                 )}
-                                <span className="relative z-10">{tab}</span>
+                                <span className="relative z-10">{mainTabLabels[tab] || tab}</span>
                             </button>
                         );
                     })}
@@ -952,7 +967,7 @@ const Finance = () => {
                                 }}
                                 className={`relative pb-4 text-[16px] md:text-[18px] font-bold transition-colors whitespace-nowrap shrink-0 ${isActive ? 'text-[#111827]' : 'text-[#6B7280]'}`}
                             >
-                                {tab}
+                                {subTabLabels[tab] || tab}
                                 {isActive && <motion.div layoutId="underlineSubTabFinance" className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#073318]" />}
                             </button>
                         );
@@ -993,7 +1008,7 @@ const Finance = () => {
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input 
                                     type="text" 
-                                    placeholder={activeMainTab === 'Ledger' ? "Search Account..." : "Search transactions..."}
+                                    placeholder={activeMainTab === 'Ledger' ? t('modules:search_account') : t('common:search_by_anything')}
                                     className="h-[46px] pl-10 pr-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all w-full sm:w-[320px] font-medium"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -1005,7 +1020,7 @@ const Finance = () => {
                             <div className="flex flex-wrap items-center gap-6">
                                 <div className="flex items-center gap-4">
                                     <div className="flex items-center gap-2">
-                                        <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">From</span>
+                                        <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">{t('common:from_date')}</span>
                                         <input 
                                             type="date" 
                                             value={startDate}
@@ -1014,7 +1029,7 @@ const Finance = () => {
                                         />
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">To</span>
+                                        <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">{t('common:to_date')}</span>
                                         <input 
                                             type="date" 
                                             value={endDate}
@@ -1042,7 +1057,7 @@ const Finance = () => {
                                                 onClick={(e) => { e.stopPropagation(); setShowMainExportMenu(!showMainExportMenu); }}
                                             >
                                                 <Download size={18} className="text-[#6B7280]" />
-                                                Export
+                                                {t('common:export')}
                                             </button>
                                             
                                             {showMainExportMenu && (
@@ -1054,14 +1069,14 @@ const Finance = () => {
                                                             onClick={handleExportMainLedgerPDF}
                                                         >
                                                             <FileText size={18} className="text-red-500" />
-                                                            Export as PDF
+                                                            {t('common:pdf')}
                                                         </button>
                                                         <button 
                                                             className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
                                                             onClick={handleExportMainLedgerExcel}
                                                         >
                                                             <FileSpreadsheet size={18} className="text-emerald-500" />
-                                                            Export as Excel
+                                                            {t('common:excel')}
                                                         </button>
                                                     </div>
                                                 </>
@@ -1080,7 +1095,7 @@ const Finance = () => {
                                                 }}
                                             >
                                                 <Download size={16} className="text-[#475569]" />
-                                                Import
+                                                {t('common:import')}
                                             </button>
 
                                             {/* Export Button */}
@@ -1090,7 +1105,7 @@ const Finance = () => {
                                                     onClick={(e) => { e.stopPropagation(); setShowMainExportMenu(!showMainExportMenu); }}
                                                 >
                                                     <Upload size={16} className="text-[#475569]" />
-                                                    Export
+                                                    {t('common:export')}
                                                 </button>
                                                 
                                                 {showMainExportMenu && (
@@ -1102,14 +1117,14 @@ const Finance = () => {
                                                                 onClick={handleExportBankReconPDF}
                                                             >
                                                                 <FileText size={18} className="text-red-500" />
-                                                                Export as PDF
+                                                                {t('common:pdf')}
                                                             </button>
                                                             <button 
                                                                 className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
                                                                 onClick={handleExportBankReconExcel}
                                                             >
                                                                 <FileSpreadsheet size={18} className="text-emerald-500" />
-                                                                Export as Excel
+                                                                {t('common:excel')}
                                                             </button>
                                                         </div>
                                                     </>
@@ -1135,21 +1150,21 @@ const Finance = () => {
                                 <tr className="bg-[#E5E7EB] text-[#4B5563] font-bold text-[14px]">
                                     {activeMainTab === 'Ledger' ? (
                                         <>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Account</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Opening Balance</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Debit</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Credit</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Closing Balance</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:account_col')}</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:opening_balance')}</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:debit')}</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:credit')}</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:closing_balance')}</th>
                                         </>
                                     ) : (
                                         <>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Date</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Vch No.</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Account</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Bank/Cash</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Narration</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Amount</th>
-                                            <th className="px-6 py-4 whitespace-nowrap text-center">Action</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:date_col')}</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:voucher_no')}</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:account_col')}</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:bank_cash')}</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:narration')}</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:amount_col')}</th>
+                                            <th className="px-6 py-4 whitespace-nowrap text-center">{t('common:action')}</th>
                                         </>
                                     )}
                                 </tr>
@@ -1215,7 +1230,7 @@ const Finance = () => {
                                                                 }}
                                                             >
                                                                 <Eye size={18} className="text-[#9CA3AF]" />
-                                                                View & Edit
+                                                                {t('common:view_and_edit')}
                                                             </button>
                                                             {activeSubTab !== 'Sundry Creditors' && activeSubTab !== 'Sundry Debtors' && activeSubTab !== 'Bank' && activeSubTab !== 'Cash' && (
                                                                 <button 
@@ -1226,7 +1241,7 @@ const Finance = () => {
                                                                     }}
                                                                 >
                                                                     <Trash2 size={18} className="text-red-400" />
-                                                                    Delete
+                                                                    {t('common:delete')}
                                                                 </button>
                                                             )}
 
@@ -1277,7 +1292,7 @@ const Finance = () => {
                 <div className="flex items-center justify-center flex-1 min-h-[30vh]">
                     <div className="text-center font-outfit">
                         <h2 className="text-2xl font-bold text-gray-800 mb-2">{activeSubTab}</h2>
-                        <p className="text-gray-500">This module is under development.</p>
+                        <p className="text-gray-500">{t('common:under_development_desc')}</p>
                     </div>
                 </div>
             )}
@@ -1290,10 +1305,10 @@ const Finance = () => {
                         <div className="flex items-start sm:items-center justify-between px-5 sm:px-8 py-5 sm:py-6 border-b border-[#F3F4F6] bg-white">
                             <div>
                                 <h3 className="text-[20px] font-bold text-[#111827] tracking-tight">
-                                    {activeMainTab === 'Ledger' ? `Ledger Account: ${selectedAccount.accountName || selectedAccount.account}` : `${activeSubTab} Details: ${selectedAccount.vchNo}`}
+                                    {activeMainTab === 'Ledger' ? `${t('modules:ledger_account')}: ${selectedAccount.accountName || selectedAccount.account}` : `${subTabLabels[activeSubTab] || activeSubTab} ${t('common:details', 'Details')}: ${selectedAccount.vchNo}`}
                                 </h3>
                                 <p className="text-[14px] text-[#6B7280] font-medium mt-1">
-                                    {activeMainTab === 'Ledger' ? 'Transaction history and details' : 'Complete transaction summary and status'}
+                                    {activeMainTab === 'Ledger' ? t('modules:transaction_history_desc') : t('modules:complete_transaction_desc', 'Complete transaction summary and status')}
                                 </p>
                             </div>
                             <button onClick={() => { setSelectedAccount(null); setSearchQuery(''); setStartDate(''); setEndDate(''); setShowExportMenu(false); setDetailedCurrentPage(1); }} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
@@ -1306,11 +1321,11 @@ const Finance = () => {
                                     <div className="bg-white rounded-[24px] border border-[#E5E7EB] shadow-sm overflow-hidden mb-8">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-[#E5E7EB]">
                                             {[
-                                                { label: 'Date', value: selectedAccount.date },
-                                                { label: 'Voucher Number', value: selectedAccount.vchNo },
-                                                { label: 'Account Name', value: selectedAccount.account },
-                                                { label: 'Bank / Cash', value: selectedAccount.bank },
-                                                { label: 'Amount', value: `₹ ${selectedAccount.amount}`, isBold: true, isFullWidth: true },
+                                                { label: t('common:date'), value: selectedAccount.date },
+                                                { label: t('modules:voucher_no'), value: selectedAccount.vchNo },
+                                                { label: t('common:account_name'), value: selectedAccount.account },
+                                                { label: t('modules:bank_cash'), value: selectedAccount.bank },
+                                                { label: t('modules:amount_col'), value: `₹ ${selectedAccount.amount}`, isBold: true, isFullWidth: true },
                                             ].map((detail, idx) => (
                                                 <div key={idx} className={`bg-white p-6 flex flex-col gap-2 ${detail.isFullWidth ? 'md:col-span-2' : ''}`}>
                                                     <span className="text-[13px] font-bold text-[#6B7280] uppercase tracking-wider">{detail.label}</span>
@@ -1320,7 +1335,7 @@ const Finance = () => {
                                         </div>
                                     </div>
                                     <div className="bg-[#F8FAFC] p-6 rounded-[20px] border border-[#E2E8F0]">
-                                        <p className="text-[14px] font-medium text-[#64748B] italic">Note: These details are for internal reconciliation purposes. To view the full ledger for this account, please use the Ledger tab.</p>
+                                        <p className="text-[14px] font-medium text-[#64748B] italic">{t('modules:recon_details_note')}</p>
                                     </div>
                                     <div className="mt-8 flex justify-end gap-3">
                                         <button 
@@ -1332,7 +1347,7 @@ const Finance = () => {
                                             }}
                                             className="px-6 py-2.5 rounded-xl bg-[#073318] text-white font-bold hover:bg-[#0a4422] transition-all text-[14px] shadow-[0_4px_14px_rgba(7,51,24,0.25)] flex items-center gap-2"
                                         >
-                                            Edit Voucher
+                                            {t('modules:edit_voucher')}
                                         </button>
                                     </div>
                                 </div>
@@ -1341,7 +1356,7 @@ const Finance = () => {
                                     <div className="flex flex-col gap-4 sm:gap-6 mb-6 sm:mb-8">
                                         <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-4 sm:gap-6">
                                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
-                                                <span className="text-[14px] font-bold text-[#4B5563]">Name:</span>
+                                                <span className="text-[14px] font-bold text-[#4B5563]">{t('common:name')}:</span>
                                                 <input 
                                                     type="text" 
                                                     disabled 
@@ -1350,7 +1365,7 @@ const Finance = () => {
                                                 />
                                             </div>
                                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
-                                                <span className="text-[14px] font-bold text-[#4B5563]">Start Date:</span>
+                                                <span className="text-[14px] font-bold text-[#4B5563]">{t('common:start_date')}:</span>
                                                 <input 
                                                     type="date" 
                                                     value={startDate}
@@ -1359,7 +1374,7 @@ const Finance = () => {
                                                 />
                                             </div>
                                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
-                                                <span className="text-[14px] font-bold text-[#4B5563]">End Date:</span>
+                                                <span className="text-[14px] font-bold text-[#4B5563]">{t('common:end_date')}:</span>
                                                 <input 
                                                     type="date" 
                                                     value={endDate}
@@ -1375,7 +1390,7 @@ const Finance = () => {
                                                         title="Reset Dates"
                                                     >
                                                         <RotateCcw size={16} />
-                                                        Reset
+                                                        {t('common:clear', 'Reset')}
                                                     </button>
                                                 </div>
                                             )}
@@ -1387,7 +1402,7 @@ const Finance = () => {
                                                 </div>
                                                 <input 
                                                     type="text" 
-                                                    placeholder="Search By Anything..." 
+                                                    placeholder={t('common:search_by_anything')}
                                                     value={searchQuery}
                                                     onChange={(e) => setSearchQuery(e.target.value)}
                                                     className="h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-4 text-[14px] text-[#4B5563] w-full sm:w-[300px] outline-none focus:border-[#9CA3AF] focus:ring-2 focus:ring-[#9CA3AF]/20 transition-all placeholder:text-[#9CA3AF] placeholder:font-normal" 
@@ -1398,7 +1413,7 @@ const Finance = () => {
                                                     className={`h-[42px] px-5 w-full sm:w-auto justify-center rounded-[10px] font-medium text-[15px] transition-colors flex items-center shadow-lg ${showAllocations ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-[#073318] hover:bg-[#0a4422] text-white'}`}
                                                     onClick={() => setShowAllocations(!showAllocations)}
                                                 >
-                                                    {showAllocations ? 'Hide Allocation' : 'Allocation'}
+                                                    {showAllocations ? t('modules:hide_allocation') : t('modules:allocation', 'Allocation')}
                                                 </button>
                                                 <div className="relative w-full sm:w-auto">
                                                     <button 
@@ -1406,7 +1421,7 @@ const Finance = () => {
                                                     onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}
                                                 >
                                                     <Download size={18} className="text-[#6B7280]" />
-                                                    Export
+                                                    {t('common:export')}
                                                 </button>
                                                 
                                                 {/* Export Dropdown */}
@@ -1420,14 +1435,14 @@ const Finance = () => {
                                                                 onClick={handleExportPDF}
                                                             >
                                                                 <FileText size={18} className="text-red-500" />
-                                                                Export as PDF
+                                                                {t('common:export_pdf')}
                                                             </button>
                                                             <button 
                                                                 className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
                                                                 onClick={handleExportExcel}
                                                             >
                                                                 <FileSpreadsheet size={18} className="text-emerald-500" />
-                                                                Export as Excel
+                                                                {t('common:export_excel')}
                                                             </button>
                                                         </div>
                                                     </>
@@ -1436,19 +1451,19 @@ const Finance = () => {
                                             </div>
                                         </div>
                                     </div>
-
+ 
                                     <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-sm overflow-hidden w-full">
                                         <table className="w-full min-w-[800px] border-collapse text-left">
                                             <thead>
                                                 <tr className="bg-[#E5E7EB] text-[#4B5563] font-bold text-[14px]">
-                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">Sr.No</th>
-                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">Date</th>
-                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">Particular</th>
-                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">Narration</th>
-                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">Unallocated</th>
-                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">DR</th>
-                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">CR</th>
-                                                    <th className="px-6 py-4 whitespace-nowrap text-right">Cum Balance</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('common:sr_no')}</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">{t('common:date')}</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">{t('common:particular')}</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap">{t('common:narration')}</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">{t('modules:unallocated')}</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">{t('modules:dr')}</th>
+                                                    <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-right">{t('modules:cr')}</th>
+                                                    <th className="px-6 py-4 whitespace-nowrap text-right">{t('modules:cum_balance')}</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="text-[14px] text-[#111827]">
@@ -1457,7 +1472,7 @@ const Finance = () => {
                                                         <td colSpan="8" className="px-6 py-12 text-center">
                                                             <div className="flex flex-col items-center gap-3">
                                                                 <div className="w-8 h-8 border-4 border-[#073318]/20 border-t-[#073318] rounded-full animate-spin"></div>
-                                                                <p className="font-medium text-[#6B7280]">Loading transaction history...</p>
+                                                                <p className="font-medium text-[#6B7280]">{t('modules:loading_transaction_history')}</p>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -1536,7 +1551,7 @@ const Finance = () => {
                                                                         ))}
                                                                         <tr className="bg-[#FAFAFA] border-b border-[#F3F4F6]">
                                                                             <td colSpan="4" className="px-6 py-2 text-right text-[12px] font-medium text-gray-500">
-                                                                                Unallocated Balance:
+                                                                                {t('modules:unallocated_balance')}:
                                                                             </td>
                                                                             <td className="px-6 py-2 text-right text-[13px] font-bold text-gray-700">
                                                                                 {(tx.unallocated ? Math.max(0, tx.unallocated - tx.allocations.reduce((s, a) => s + a.amount, 0)) : 0) > 0 
@@ -1553,7 +1568,7 @@ const Finance = () => {
                                                 ) : (
                                                     <tr>
                                                         <td colSpan="8" className="px-6 py-8 text-center text-[#6B7280]">
-                                                            No transactions found matching "{searchQuery}"
+                                                            {t('modules:no_transactions_found_matching', { query: searchQuery })}
                                                         </td>
                                                     </tr>
                                                 )}
@@ -1561,7 +1576,7 @@ const Finance = () => {
                                             <tfoot className="bg-[#F8FAFC] text-[13px] font-bold text-[#334155] border-t-2 border-[#CBD5E1]">
                                                 {/* Page Total Row */}
                                                 <tr className="border-b border-[#E2E8F0]">
-                                                    <td colSpan="4" className="px-4 py-2.5 text-right bg-[#F1F5F9]/50">Page Total</td>
+                                                    <td colSpan="4" className="px-4 py-2.5 text-right bg-[#F1F5F9]/50">{t('modules:page_total')}</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">-</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#111827]">₹ {pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#111827]">₹ {pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -1570,7 +1585,7 @@ const Finance = () => {
 
                                                 {/* Transactions (Ledger) Row */}
                                                 <tr className="border-b border-[#E2E8F0]">
-                                                    <td colSpan="4" className="px-4 py-2.5 text-right bg-[#F1F5F9]/50">Transactions (Ledger)</td>
+                                                    <td colSpan="4" className="px-4 py-2.5 text-right bg-[#F1F5F9]/50">{t('modules:transactions_ledger')}</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">-</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {runningTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0]">₹ {runningTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -1578,7 +1593,7 @@ const Finance = () => {
                                                 </tr>
                                                 {/* Balance (Ledger) Row */}
                                                 <tr className="bg-[#F1F5F9]">
-                                                    <td colSpan="4" className="px-4 py-2.5 text-right font-extrabold text-[#0F172A]">Closing Balance</td>
+                                                    <td colSpan="4" className="px-4 py-2.5 text-right font-extrabold text-[#0F172A]">{t('modules:closing_balance')}</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
@@ -1592,10 +1607,10 @@ const Finance = () => {
                                     <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-4 border-t border-gray-100 bg-white/50 rounded-b-[16px]">
                                         <div className="flex flex-col items-center sm:items-start">
                                             <p className="text-[14px] text-[#111827] font-bold">
-                                                Page {detailedCurrentPage} of {detailedTotalPages}
+                                                {t('common:page_of', { current: detailedCurrentPage, total: detailedTotalPages })}
                                             </p>
                                             <p className="text-[12px] text-[#6B7280] font-medium">
-                                                {detailedTotalTotal} total transactions
+                                                {detailedTotalTotal} {t('modules:total_transactions')}
                                             </p>
                                         </div>
                                         
@@ -1606,7 +1621,7 @@ const Finance = () => {
                                                 className={`flex items-center gap-1 h-[36px] px-4 rounded-[8px] border border-[#E5E7EB] text-[13px] font-bold transition-all shadow-sm ${detailedCurrentPage === 1 ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 active:scale-95'}`}
                                             >
                                                 <ChevronLeft size={16} />
-                                                Prev
+                                                {t('common:prev')}
                                             </button>
 
                                             <div className="flex items-center gap-1">
@@ -1626,7 +1641,7 @@ const Finance = () => {
                                                 disabled={detailedCurrentPage === detailedTotalPages || detailedLoading}
                                                 className={`flex items-center gap-1 h-[36px] px-4 rounded-[8px] border border-[#E5E7EB] text-[13px] font-bold transition-all shadow-sm ${detailedCurrentPage === detailedTotalPages ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 active:scale-95'}`}
                                             >
-                                                Next
+                                                {t('common:next')}
                                                 <ChevronRight size={16} />
                                             </button>
                                         </div>
@@ -1657,7 +1672,7 @@ const Finance = () => {
                     <div className="bg-white rounded-[20px] w-full max-w-[480px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] overflow-hidden font-['Plus_Jakarta_Sans'] animate-scale-up">
                         {/* Modal Header */}
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                            <h3 className="text-[18px] font-bold text-[#111827]">Import Data</h3>
+                            <h3 className="text-[18px] font-bold text-[#111827]">{t('modules:import_data')}</h3>
                             <button 
                                 onClick={() => {
                                     setShowImportModal(false);
@@ -1677,20 +1692,20 @@ const Finance = () => {
                                 className="flex items-center gap-2 bg-[#ECFDF5] hover:bg-[#D1FAE5] text-[#137333] font-bold text-[14px] px-5 py-2.5 rounded-[8px] transition-colors cursor-pointer"
                             >
                                 <Download size={18} />
-                                Download Sample
+                                {t('modules:download_sample')}
                             </button>
 
                             {/* Divider */}
                             <div className="w-full border-t border-gray-100 my-6"></div>
 
                             {/* Upload File Section */}
-                            <span className="text-[15px] font-bold text-[#374151] mb-4">Upload File</span>
+                            <span className="text-[15px] font-bold text-[#374151] mb-4">{t('modules:upload_file')}</span>
 
                             <div className="w-full flex items-center gap-4">
-                                <span className="text-[14px] font-semibold text-[#6B7280] min-w-[80px]">Select File</span>
+                                <span className="text-[14px] font-semibold text-[#6B7280] min-w-[80px]">{t('common:select')} {t('common:file', 'File')}</span>
                                 <div className="flex-1 flex items-center border border-dashed border-[#CBD5E1] rounded-[8px] bg-gray-50/20 overflow-hidden text-[14px] h-[40px]">
                                     <label className="bg-[#E5E7EB]/50 hover:bg-[#E5E7EB] text-[#374151] font-bold px-4 h-full flex items-center border-r border-[#CBD5E1] border-dashed cursor-pointer transition-colors">
-                                        Choose File
+                                        {t('modules:choose_file')}
                                         <input 
                                             type="file" 
                                             accept=".xlsx,.xls" 
@@ -1703,7 +1718,7 @@ const Finance = () => {
                                         />
                                     </label>
                                     <span className="px-3 text-gray-500 truncate flex-1 text-left">
-                                        {selectedImportFile ? selectedImportFile.name : "No file chosen"}
+                                        {selectedImportFile ? selectedImportFile.name : t('modules:no_file_chosen')}
                                     </span>
                                 </div>
                             </div>
@@ -1721,7 +1736,7 @@ const Finance = () => {
                                 }`}
                             >
                                 <UploadCloud size={18} />
-                                {loading ? 'Submitting...' : 'Submit'}
+                                {loading ? t('common:processing') : t('common:submit', 'Submit')}
                             </button>
                         </div>
                     </div>

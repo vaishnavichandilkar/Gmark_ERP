@@ -3,8 +3,10 @@ import { Search, Trash2, Plus, AlertCircle, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import grnService from '@/services/grnService';
 import { getStandardGstUom } from '@/utils/uomUtils';
+import { useTranslation } from 'react-i18next';
 
 const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstType, isPoSelected, poNumber, linkedPoItems, type = 'GRN', supplierName, isGrnSelected }) => {
+    const { t } = useTranslation(['common', 'modules']);
     const isGRN = type === 'GRN';
     const [tableSearch, setTableSearch] = useState('');
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
@@ -82,7 +84,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
             }
 
             const befTax = (baseAmount - discAmt);
-            const isApplicable = gstType?.type !== 'NONE';
+            const isApplicable = typeof gstType === 'object' ? gstType?.gstType !== 'NONE' : gstType !== 'NONE';
             const taxAmt = isApplicable ? (befTax * taxPct) / 100 : 0;
             
             // Update item fields - preserve the string finalValue for the field currently being changed to support intermediate typing states (like "10.")
@@ -142,7 +144,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
         }
 
         const baseAmount = qty * rate;
-        const taxAmt = gstType?.type === 'NONE' ? 0 : (baseAmount * taxPct) / 100;
+        const taxAmt = !isApplicable ? 0 : (baseAmount * taxPct) / 100;
         const total = parseFloat((baseAmount + taxAmt).toFixed(2));
 
         const updatedItems = [...items];
@@ -231,7 +233,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                     type="text"
-                    placeholder="Search By Anything..."
+                    placeholder={t('common:search_by_anything', 'Search By Anything...')}
                     value={tableSearch}
                     onFocus={() => { setActiveRowIndex(null); setIsProductSearchOpen(true); }}
                     onChange={(e) => { setTableSearch(e.target.value); setActiveRowIndex(null); setIsProductSearchOpen(true); }}
@@ -283,31 +285,31 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                     <thead>
                         <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
                             <th className="px-4 py-4 w-[50px] text-center text-[13px] font-bold text-[#4B5563]">#</th>
-                            <th className="px-4 py-4 w-[60px] text-center text-[13px] font-bold text-[#4B5563] border-l border-[#F3F4F6]">Select</th>
-                            <th className="px-4 py-4 w-[160px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Product Code</th>
-                            <th className="px-4 py-4 w-[350px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Product Name</th>
-                            <th className="px-4 py-4 w-[300px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Print Description</th>
+                            <th className="px-4 py-4 w-[60px] text-center text-[13px] font-bold text-[#4B5563] border-l border-[#F3F4F6]">{t('common:select', 'Select')}</th>
+                            <th className="px-4 py-4 w-[160px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:product_code', 'Product Code')}</th>
+                            <th className="px-4 py-4 w-[350px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:product_name', 'Product Name')}</th>
+                            <th className="px-4 py-4 w-[300px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:print_desc', 'Print Description')}</th>
                             {isGRN && (
                                 <>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">total po qty</th>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">previous po qty</th>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">received qty</th>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">remaining qty</th>
+                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:total_po_qty', 'total po qty')}</th>
+                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:previous_po_qty', 'previous po qty')}</th>
+                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:received_qty', 'received qty')}</th>
+                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:remaining_qty', 'remaining qty')}</th>
                                 </>
                             )}
                             {!isGRN && (
-                                <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Qty</th>
+                                <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:quantity', 'Qty')}</th>
                             )}
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Rate</th>
-                            <th className="px-4 py-4 w-[120px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">UOM</th>
-                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Discount (₹)</th>
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Discount (%)</th>
-                            <th className="px-4 py-4 w-[140px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">HSN Code</th>
-                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Tax (%)</th>
-                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Bef. Tax Amount</th>
-                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Tax Amount</th>
-                            <th className="px-4 py-4 w-[150px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">Amount</th>
-                            <th className="px-4 py-4 w-[80px] text-center text-[13px] font-bold text-gray-500 border-l border-[#F3F4F6] sticky right-0 bg-white z-10">Action</th>
+                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:rate', 'Rate')}</th>
+                            <th className="px-4 py-4 w-[120px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:uom', 'UOM')}</th>
+                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:discount_amount', 'Discount (₹)')}</th>
+                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:discount_percent', 'Discount (%)')}</th>
+                            <th className="px-4 py-4 w-[140px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:hsn_code', 'HSN Code')}</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:tax_percent', 'Tax (%)')}</th>
+                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:bef_tax_amount', 'Bef. Tax Amount')}</th>
+                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:tax_amount', 'Tax Amount')}</th>
+                            <th className="px-4 py-4 w-[150px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:amount', 'Amount')}</th>
+                            <th className="px-4 py-4 w-[80px] text-center text-[13px] font-bold text-gray-500 border-l border-[#F3F4F6] sticky right-0 bg-white z-10">{t('common:action', 'Action')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -339,7 +341,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                             readOnly={!!item.productId}
                                             onFocus={() => { if(!item.productId) { setActiveRowIndex(index); setIsProductSearchOpen(true); } }}
                                             onChange={(e) => { setTableSearch(e.target.value); setActiveRowIndex(index); setIsProductSearchOpen(true); }}
-                                            placeholder="Select product..."
+                                            placeholder={t('modules:select_product', 'Select product...')}
                                             className={`w-full h-[36px] bg-transparent border-none px-2 text-[14px] font-bold outline-none ${!item.productName ? 'italic font-normal text-gray-400' : ''}`}
                                         />
                                     </td>
@@ -350,7 +352,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                             type="text"
                                             value={item.printDescription || ''}
                                             onChange={(e) => handleItemChange(index, 'printDescription', e.target.value)}
-                                            placeholder="Description for print..."
+                                            placeholder={t('modules:description_for_print', 'Description for print...')}
                                             className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-semibold outline-none focus:border-[#073318]"
                                         />
                                     </td>
@@ -513,7 +515,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                                 <td colSpan={2} className={`px-4 py-3 border-l border-emerald-100 font-mono text-[13px] font-black ${selectedSuggestionIndex === pIdx ? 'text-white' : 'text-emerald-800'}`}>{p.product_code}</td>
                                                 <td className={`px-4 py-3 border-l border-emerald-100 font-black uppercase text-[14px] tracking-tight ${selectedSuggestionIndex === pIdx ? 'text-white' : 'text-emerald-900'}`}>{p.product_name}</td>
                                                 <td colSpan={11} className={`px-4 py-3 border-l border-emerald-100 text-center italic text-[11px] font-bold ${selectedSuggestionIndex === pIdx ? 'text-emerald-100' : 'text-emerald-500'}`}>
-                                                    Select this product to add to the list
+                                                    {t('modules:select_product_to_add', 'Select this product to add to the list')}
                                                 </td>
                                                 <td className={`px-4 py-3 border-l border-emerald-100 text-right font-black ${selectedSuggestionIndex === pIdx ? 'text-white' : 'text-emerald-900'}`}>₹{p.purchaseRate || 0}</td>
                                                 <td className="sticky right-0 bg-transparent"></td>
@@ -525,7 +527,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                                     onClick={handleAddNewProduct}
                                                     className="inline-flex h-[40px] px-8 bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all items-center gap-3 shadow-lg"
                                                 >
-                                                    <Plus size={16} /> Add New Product
+                                                    <Plus size={16} /> {t('modules:add_new_product', 'Add New Product')}
                                                 </button>
                                             </td>
                                         </tr>
@@ -537,7 +539,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
 
                     <tfoot>
                         <tr className="bg-[#F9FAFB] border-t border-[#E5E7EB] font-outfit h-[54px]">
-                            <td colSpan={2} className="px-4 py-4 text-[13px] font-black text-[#111827]">Total</td>
+                            <td colSpan={2} className="px-4 py-4 text-[13px] font-black text-[#111827]">{t('common:total', 'Total')}</td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>

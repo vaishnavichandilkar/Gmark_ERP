@@ -146,6 +146,7 @@ const VerifyOTP = () => {
                     if (response.user.selected_language) {
                         const dbLanguage = response.user.selected_language;
                         localStorage.setItem('selectedLanguage', dbLanguage);
+                        localStorage.setItem('i18nextLng', dbLanguage);
                         localStorage.setItem('languageConfirmed', 'true');
 
                         import('../../i18n').then(module => {

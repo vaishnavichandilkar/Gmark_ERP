@@ -23,10 +23,13 @@ import axiosInstance from '../../../../services/axiosInstance';
 import { getStandardGstUom } from '@/utils/uomUtils';
 import accountService from '@/services/accountService';
 import productService from '@/services/productService';
+import { useTranslation } from 'react-i18next';
+import { determinePurchaseGst } from '@/utils/gstUtils';
 
 // Mock data removed in favor of API calls
 
 const AddPO = () => {
+    const { t } = useTranslation(['modules', 'common']);
     const navigate = useNavigate();
     const { id } = useParams();
     const isEditMode = Boolean(id);
@@ -262,7 +265,8 @@ const AddPO = () => {
                                 before_tax: (item.quantity * item.rate - item.discountAmount).toFixed(2),
                                 tax_amount: item.taxAmount.toFixed(2),
                                 total_amount: item.totalAmount.toFixed(2),
-                                description: item.printDescription || item.description || ''
+                                description: item.printDescription || item.description || '',
+                                original_description: item.printDescription || item.description || ''
                             })));
                         }
                     }
@@ -275,7 +279,7 @@ const AddPO = () => {
                 if (!formData.po_number) {
                     try {
                         const response = await purchaseOrderService.getNextNumber();
-                        setFormData(prev => ({ ...prev, po_number: response.poNumber }));
+                        setFormData(prev => ({ ...prev, po_number: typeof response === 'string' ? response : response?.poNumber || '' }));
                     } catch (error) {
                         console.error("Error fetching next PO number:", error);
                     }
@@ -338,7 +342,7 @@ const AddPO = () => {
     // Filtered suppliers for dropdown
     const filteredSuppliers = useMemo(() => {
         return (suppliers || []).filter(s =>
-            s.accountName?.toLowerCase().includes(supplierSearch.toLowerCase())
+            s.accountName?.toLowerCase()?.includes((supplierSearch || '').toLowerCase())
         );
     }, [supplierSearch, suppliers]);
 
@@ -346,7 +350,7 @@ const AddPO = () => {
     // Filter products for the search suggestions - remove already added products and filter by search term
     const filteredProducts = useMemo(() => {
         const addedProductIds = items.map(item => item.product_id).filter(id => id);
-        const searchLower = tableSearch.toLowerCase();
+        const searchLower = (tableSearch || '').toLowerCase();
 
         return (products || []).filter(p => {
             // Already added products should NOT be visible
@@ -357,10 +361,10 @@ const AddPO = () => {
 
             // Search across multiple fields
             return (
-                p.product_name?.toLowerCase().includes(searchLower) ||
-                p.product_code?.toLowerCase().includes(searchLower) ||
-                p.hsn_code?.toLowerCase().includes(searchLower) ||
-                p.category?.name?.toLowerCase().includes(searchLower)
+                p.product_name?.toLowerCase()?.includes(searchLower) ||
+                p.product_code?.toLowerCase()?.includes(searchLower) ||
+                p.hsn_code?.toLowerCase()?.includes(searchLower) ||
+                p.category?.name?.toLowerCase()?.includes(searchLower)
             );
         });
     }, [products, items, tableSearch]);
@@ -372,9 +376,19 @@ const AddPO = () => {
     const isIntraState = useMemo(() => {
         const sellerGst = businessProfile?.gstNumber || businessProfile?.shopDetail?.gstNumber || "";
         const supplierGst = formData.gst_number || "";
-        if (!sellerGst || !supplierGst) return true; // Default to true (CGST/SGST)
-        return sellerGst.substring(0, 2) === supplierGst.substring(0, 2);
-    }, [businessProfile, formData.gst_number]);
+        const sellerState = businessProfile?.shopDetail?.state || "";
+        const supplierState = formData.state || ""; // fallback if we don't have supplier state directly
+
+        const gstResult = determinePurchaseGst(
+            supplierGst,
+            sellerGst,
+            sellerState,
+            supplierState,
+            0, 0, 0
+        );
+
+        return gstResult.gstType === 'CGST_SGST';
+    }, [businessProfile, formData.gst_number, formData.state]);
 
     useEffect(() => {
         if (!formData.supplier_id) return;
@@ -397,6 +411,27 @@ const AddPO = () => {
         }
     }, [formData.supplier_id, formData.credit_days, suppliers]);
 
+    useEffect(() => {
+        setItems(prevItems => prevItems.map(item => {
+            if (!item.product_name) return item;
+            const qty = parseFloat(item.quantity) || 0;
+            const rate = parseFloat(item.rate) || 0;
+            const taxPct = parseFloat(item.tax_percent) || 0;
+            const discAmt = parseFloat(item.discount_amount) || 0;
+
+            const baseAmount = qty * rate;
+            const beforeTaxAmount = baseAmount - discAmt;
+            const taxAmount = isGstApplicable ? ((beforeTaxAmount * taxPct) / 100) : 0;
+            
+            return {
+                ...item,
+                before_tax: parseFloat(beforeTaxAmount.toFixed(2)),
+                tax_amount: parseFloat(taxAmount.toFixed(2)),
+                total_amount: parseFloat((beforeTaxAmount + taxAmount).toFixed(2))
+            };
+        }));
+    }, [isGstApplicable]);
+
     const handleSelectSupplier = async (supplier) => {
         try {
             // Requirement 1: Optionally fetch fresh details for PO creation
@@ -404,12 +439,12 @@ const AddPO = () => {
             setFormData(prev => ({
                 ...prev,
                 supplier_id: supplier.id,
-                supplier_name: details.supplierName,
-                address: details.address,
-                gst_number: details.gstNumber || '',
-                credit_days: details.creditDays || 0, // Default to 0 instead of empty string if needed
+                supplier_name: details.accountName,
+                address: [details.addressLine1, details.addressLine2].filter(Boolean).join(', '),
+                gst_number: details.gstNo || '',
+                credit_days: details.supplierCreditDays || 0,
             }));
-            setSupplierSearch(details.supplierName);
+            setSupplierSearch(details.accountName);
         } catch (error) {
             console.error("Error fetching supplier details:", error);
             // Fallback to local data if fresh fetch fails
@@ -432,6 +467,7 @@ const AddPO = () => {
 
     const handleQuickAddProduct = (product, targetIndex = null) => {
         const printDesc = product.print_description || product.description || product.printDescription || product.product_name || '';
+        const taxRate = parseFloat(product.tax_rate ?? product.taxRate ?? product.taxPercent ?? product.tax_percent ?? product.tax ?? 0);
         const newItem = {
             id: Date.now(),
             product_id: product.id,
@@ -443,10 +479,10 @@ const AddPO = () => {
             discount_amount: 0,
             discount_percent: 0,
             hsn: product.hsn_code || product.hsn || '',
-            tax_percent: product.tax_rate || product.tax || 0,
+            tax_percent: taxRate,
             before_tax: (product.purchaseRate || 0).toFixed(2),
-            tax_amount: isGstApplicable ? ((product.purchaseRate || 0) * (product.tax_rate || 0) / 100).toFixed(2) : "0.00",
-            total_amount: isGstApplicable ? ((product.purchaseRate || 0) * (1 + (product.tax_rate || 0) / 100)).toFixed(2) : (product.purchaseRate || 0).toFixed(2),
+            tax_amount: isGstApplicable ? ((product.purchaseRate || 0) * taxRate / 100).toFixed(2) : "0.00",
+            total_amount: isGstApplicable ? ((product.purchaseRate || 0) * (1 + taxRate / 100)).toFixed(2) : (product.purchaseRate || 0).toFixed(2),
             description: printDesc,
             original_description: printDesc
         };
@@ -822,7 +858,7 @@ const AddPO = () => {
                 {/* Header Section */}
                 <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-[#F3F4F6] bg-white flex items-center justify-between">
                     <div>
-                        <h2 className="hidden md:block text-[18px] md:text-[20px] font-bold text-[#111827]">{isEditMode ? 'Edit PO' : 'Add PO'}</h2>
+                        <h2 className="hidden md:block text-[18px] md:text-[20px] font-bold text-[#111827]">{isEditMode ? t('common:edit_order') : t('common:add_order')}</h2>
                     </div>
 
                     <button
@@ -830,8 +866,8 @@ const AddPO = () => {
                         className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[40px] sm:h-[44px] border border-[#E5E7EB] rounded-[10px] text-[14px] md:text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all font-outfit shadow-sm"
                     >
                         <ArrowLeft size={18} />
-                        <span className="hidden sm:inline">Back</span>
-                        <span className="sm:hidden text-gray-500">Back</span>
+                        <span className="hidden sm:inline">{t('common:back')}</span>
+                        <span className="sm:hidden text-gray-500">{t('common:back')}</span>
                     </button>
                 </div>
 
@@ -840,11 +876,11 @@ const AddPO = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Row 1 */}
                         <div className="space-y-2 relative">
-                            <label className="text-[14px] font-semibold text-[#374151] font-outfit">Supplier Name <span className="text-red-500">*</span></label>
+                            <label className="text-[14px] font-semibold text-[#374151] font-outfit">{t('modules:supplier_name')} <span className="text-red-500">*</span></label>
                             <div className="relative">
                                 <input
                                     type="text"
-                                    placeholder="Select supplier name"
+                                    placeholder={t('modules:select_supplier_name')}
                                     value={supplierSearch}
                                     onFocus={() => setIsSupplierDropdownOpen(true)}
                                     onChange={(e) => {
@@ -889,12 +925,12 @@ const AddPO = () => {
                                                             className="w-full text-left px-5 py-3.5 hover:bg-emerald-50 transition-all border-b border-[#F3F4F6] last:border-0 group"
                                                         >
                                                             <div className="font-bold text-[#111827] text-[15px] group-hover:text-emerald-900 transition-colors">{s.accountName}</div>
-                                                            <div className="text-[12px] text-gray-400 mt-0.5">{s.gstNo || 'No GST Number'}</div>
+                                                            <div className="text-[12px] text-gray-400 mt-0.5">{s.gstNo || t('modules:no_gst_number', 'No GST Number')}</div>
                                                         </button>
                                                     ))
                                                 ) : (
                                                     <div className="px-4 py-8 text-[13px] text-gray-400 italic text-center font-outfit">
-                                                        No results for "{supplierSearch}"
+                                                        {t('common:no_results_found')}
                                                     </div>
                                                 )}
                                             </div>
@@ -908,7 +944,7 @@ const AddPO = () => {
                                                     className="w-full flex items-center justify-center gap-2 py-3 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-md group font-outfit"
                                                 >
                                                     <Plus size={16} className="group-hover:scale-125 transition-all" />
-                                                    Add new supplier
+                                                    {t('modules:add_new_supplier')}
                                                 </button>
                                             </div>
                                         </div>
@@ -918,11 +954,11 @@ const AddPO = () => {
                         </div>
 
                         <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">Credit Days <span className="text-red-500">*</span></label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:credit_days_col')} <span className="text-red-500">*</span></label>
                             <input
                                 type="number"
                                 min="0"
-                                placeholder="Auto-filled from supplier"
+                                placeholder={t('modules:auto_filled_from_supplier')}
                                 value={formData.credit_days !== undefined && formData.credit_days !== null && formData.credit_days !== '' ? formData.credit_days : ''}
                                 onChange={(e) => setFormData({ ...formData, credit_days: e.target.value })}
                                 className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none transition-all ${errors.credit_days ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
@@ -932,10 +968,10 @@ const AddPO = () => {
 
                         {/* Row 2 */}
                         <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">Address</label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('common:address')}</label>
                             <input
                                 type="text"
-                                placeholder="Auto-fetched from Account Master"
+                                placeholder={t('common:auto_fetched')}
                                 value={formData.address || ''}
                                 readOnly
                                 className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium shadow-sm"
@@ -944,7 +980,7 @@ const AddPO = () => {
                         </div>
 
                         <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">PO Creation Date</label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:creation_date')}</label>
                             <div className="relative">
                                 <input
                                     type="date"
@@ -973,10 +1009,10 @@ const AddPO = () => {
 
                         {/* Row 3 */}
                         <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">PO Number <span className="text-red-500">*</span></label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:po_no')} <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
-                                placeholder="Purchase order will be autogenerated here"
+                                placeholder={t('modules:po_autogenerated')}
                                 value={formData.po_number}
                                 readOnly
                                 className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 text-[14px] text-[#6B7280] outline-none cursor-not-allowed ${errors.po_number ? 'border-red-500' : 'border-[#E5E7EB]'}`}
@@ -985,7 +1021,7 @@ const AddPO = () => {
                         </div>
 
                         <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">Expiry Date <span className="text-red-500">*</span></label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:expiry_date')} <span className="text-red-500">*</span></label>
                             <div className="relative">
                                 <input
                                     type="date"
@@ -1014,10 +1050,10 @@ const AddPO = () => {
 
                         {/* Row 4 */}
                         <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">GST Number</label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:gst_number_col')}</label>
                             <input
                                 type="text"
-                                placeholder="Auto-fetched from Account Master"
+                                placeholder={t('modules:auto_fetched_account_master', 'Auto-fetched from Account Master')}
                                 value={formData.gst_number || ''}
                                 readOnly
                                 className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium shadow-sm"
@@ -1034,7 +1070,7 @@ const AddPO = () => {
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" size={18} />
                             <input
                                 type="text"
-                                placeholder="Search By Anything..."
+                                placeholder={t('common:search_by_anything')}
                                 value={tableSearch}
                                 onFocus={() => {
                                     setActiveRowIndex(null); // Ensure top search is active
@@ -1047,7 +1083,7 @@ const AddPO = () => {
                                 }}
                                 className={`w-full h-[44px] bg-white border rounded-[12px] pl-11 pr-4 text-[14px] outline-none focus:ring-1 transition-all placeholder:text-[#9CA3AF] shadow-sm font-outfit ${errors.items ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
                             />
-                            {errors.items && <p className="text-red-500 text-[12px] mt-1 font-medium italic font-outfit">*Please add at least one product</p>}
+                            {errors.items && <p className="text-red-500 text-[12px] mt-1 font-medium italic font-outfit">*{t('modules:please_add_product', 'Please add at least one product')}</p>}
 
                             {/* Global Product Search Suggestions Dropdown - Only when NOT editing a specific row */}
                             {isProductSearchOpen && activeRowIndex === null && (
@@ -1080,7 +1116,7 @@ const AddPO = () => {
                                             </button>
                                         ))}
                                         {filteredProducts.length === 0 && (
-                                            <div className="px-5 py-10 text-center text-[13px] text-gray-400 italic">No products found for "{tableSearch}"</div>
+                                            <div className="px-5 py-10 text-center text-[13px] text-gray-400 italic">{t('common:no_results_found')}</div>
                                         )}
                                     </div>
 
@@ -1091,7 +1127,7 @@ const AddPO = () => {
                                             className="w-full h-[44px] bg-[#073318] text-white text-[14px] font-bold rounded-[10px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-md"
                                         >
                                             <Plus size={16} className="group-hover:scale-110 transition-transform" />
-                                            Add new product
+                                            {t('modules:add_new_product')}
                                         </button>
                                     </div>
                                 </div>
@@ -1129,25 +1165,25 @@ const AddPO = () => {
                                     #
                                 </th>
                                 {[
-                                    { label: "Product Code", width: "160px" },
-                                    { label: "Product Name", width: "350px" },
-                                    { label: "Print Description", width: "300px" },
-                                    { label: "Quantity", width: "120px" },
-                                    { label: "Rate", width: "120px" },
-                                    { label: "UOM", width: "140px" },
-                                    { label: "Discount Amount", width: "160px" },
-                                    { label: "Discount (%)", width: "140px" },
-                                    { label: "HSN Code", width: "140px" },
-                                    { label: "Tax (%)", width: "120px" },
-                                    { label: "Bef. Tax Amount", width: "160px" },
-                                    { label: "Tax Amount", width: "140px" },
-                                    { label: "Amount", width: "160px" }
+                                    { label: t('modules:product_code'), width: "160px" },
+                                    { label: t('modules:product_name'), width: "350px" },
+                                    { label: t('modules:print_description', 'Print Description'), width: "300px" },
+                                    { label: t('modules:quantity'), width: "120px" },
+                                    { label: t('modules:rate'), width: "120px" },
+                                    { label: t('modules:uom'), width: "140px" },
+                                    { label: t('modules:discount_amount'), width: "160px" },
+                                    { label: t('modules:discount_percent', 'Disc %'), width: "140px" },
+                                    { label: t('modules:hsn_code'), width: "140px" },
+                                    { label: t('modules:tax_percent'), width: "120px" },
+                                    { label: t('modules:bef_tax_amount'), width: "160px" },
+                                    { label: t('modules:tax_amount'), width: "140px" },
+                                    { label: t('modules:amount_col'), width: "160px" }
                                 ].map((col, i) => (
                                     <th key={i} className="px-4 py-4 text-left text-[13px] font-medium text-[#6B7280] border-l border-[#F3F4F6]" style={{ width: col.width }}>
                                         {col.label}
                                     </th>
                                 ))}
-                                <th className="px-4 py-4 w-[80px] text-center text-[13px] font-semibold text-[#4B5563] border-l border-[#F3F4F6]">Action</th>
+                                <th className="px-4 py-4 w-[80px] text-center text-[13px] font-semibold text-[#4B5563] border-l border-[#F3F4F6]">{t('common:action')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1169,7 +1205,7 @@ const AddPO = () => {
                                                     setActiveRowIndex(index);
                                                     setIsProductSearchOpen(true);
                                                 }}
-                                                placeholder="Code"
+                                                placeholder={t('common:code')}
                                                 className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none hover:bg-gray-50 rounded-md transition-all cursor-pointer font-bold"
                                             />
                                         </td>
@@ -1187,7 +1223,7 @@ const AddPO = () => {
                                                     setActiveRowIndex(index);
                                                     setIsProductSearchOpen(true);
                                                 }}
-                                                placeholder={item.product_name ? "" : "Select product..."}
+                                                placeholder={item.product_name ? "" : t('modules:select_product')}
                                                 className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#111827] outline-none hover:bg-gray-50 rounded-md transition-all cursor-pointer ${!item.product_name ? 'italic text-gray-400 font-normal' : ''}`}
                                             />
                                         </td>
@@ -1197,7 +1233,7 @@ const AddPO = () => {
                                                 value={item.description}
                                                 onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                                                 className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] text-[#111827] outline-none focus:border-[#073318] transition-all shadow-sm"
-                                                placeholder="Description"
+                                                placeholder={t('common:description')}
                                             />
                                         </td>
                                         <td className="px-2 py-2 border-l border-[#F3F4F6]">
@@ -1358,12 +1394,12 @@ const AddPO = () => {
                                                     <td className={`px-4 py-3 border-l border-emerald-100 ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-900 font-bold'}`}>
                                                         <div className="flex flex-col">
                                                             <span className="text-[14px] font-black tracking-tight uppercase">{p.product_name}</span>
-                                                            <span className={`text-[10px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-600/70'}`}>{p.category?.name || 'STOCK ITEM'}</span>
+                                                            <span className={`text-[10px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-600/70'}`}>{p.category?.name || t('modules:stock_item', 'STOCK ITEM')}</span>
                                                         </div>
                                                     </td>
                                                     <td colSpan={1} className="px-4 py-3 border-l border-emerald-100 text-center">
                                                         <div className={`text-[11px] font-black italic uppercase tracking-tighter ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-600/50'}`}>
-                                                            {selectedSuggestionIndex === pIndex ? 'Hit Enter' : '---'}
+                                                            {selectedSuggestionIndex === pIndex ? t('modules:hit_enter') : '---'}
                                                         </div>
                                                     </td>
                                                     <td className={`px-4 py-3 border-l border-emerald-100 text-right ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-900 font-black'}`}>
@@ -1373,7 +1409,7 @@ const AddPO = () => {
                                                         {getStandardGstUom(p.uom)}
                                                     </td>
                                                     <td colSpan={2} className={`px-4 py-3 border-l border-emerald-100 text-center italic text-[11px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-400'}`}>
-                                                        Select this item to continue
+                                                        {t('modules:select_item_continue')}
                                                     </td>
                                                     <td className={`px-4 py-3 border-l border-emerald-100 text-center ${selectedSuggestionIndex === pIndex ? 'text-white font-black' : 'text-emerald-900 font-bold'}`}>
                                                         {p.hsn_code || p.hsn || 'N/A'}
@@ -1387,7 +1423,7 @@ const AddPO = () => {
                                                 </tr>
                                             ))}
 
-                                            {/* Standardized Add New Product Button */}
+                                            {/* Standardized {t('modules:add_new_product')} Button */}
                                             <tr className="bg-white border-t border-gray-100">
                                                 <td colSpan={15} className="px-4 py-5 bg-emerald-50/10">
                                                     <div className="flex justify-center">
@@ -1411,7 +1447,7 @@ const AddPO = () => {
                         </tbody>
                         <tfoot>
                             <tr className="bg-[#F9FAFB] border-t border-[#E5E7EB]">
-                                <td className="px-4 py-4 text-[13px] font-bold text-[#111827]">Total</td>
+                                <td className="px-4 py-4 text-[13px] font-bold text-[#111827]">{t('modules:total')}</td>
                                 <td className="border-l border-[#F3F4F6]"></td>
                                 <td className="border-l border-[#F3F4F6]"></td>
                                 <td className="border-l border-[#F3F4F6]"></td>
@@ -1443,7 +1479,7 @@ const AddPO = () => {
                 <div className="flex justify-end p-4 sm:p-8 bg-gray-50/30 border-t border-[#F3F4F6]">
                     <div className="w-full max-w-[400px] space-y-3 font-outfit">
                         <div className="flex justify-between text-[14px]">
-                            <span className="text-[#6B7280] font-medium">Material Sub Total</span>
+                            <span className="text-[#6B7280] font-medium">{t('modules:material_sub_total')}</span>
                             <span className="text-[#111827] font-bold">₹ {items.reduce((sum, item) => sum + (parseFloat(item.before_tax) || 0), 0).toFixed(2)}</span>
                         </div>
                         {isIntraState ? (
@@ -1464,7 +1500,7 @@ const AddPO = () => {
                             </div>
                         )}
                         <div className="flex justify-between text-[18px] pt-4 border-t border-[#E5E7EB] mt-2">
-                            <span className="text-[#111827] font-black uppercase tracking-tight">Grand Total</span>
+                            <span className="text-[#111827] font-black uppercase tracking-tight">{t('modules:grand_total')}</span>
                             <span className="text-[#073318] font-black">₹ {totalBillAmount.toFixed(2)}</span>
                         </div>
                     </div>
@@ -1477,19 +1513,19 @@ const AddPO = () => {
                         className="w-full sm:w-auto px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all shadow-md flex items-center justify-center gap-2"
                     >
                         <Printer size={18} />
-                        Preview & Print
+                        {t('modules:preview_print')}
                     </button>
                     <button
                         onClick={handleSave}
                         className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 md:px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-md"
                     >
-                        Save PO
+                        {t('modules:save_po')}
                     </button>
                     <button
                         onClick={() => navigate(ROUTES.PURCHASE_ORDER)}
                         className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 md:px-10 h-[48px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all shadow-sm order-3"
                     >
-                        Cancel
+                        {t('common:cancel')}
                     </button>
                 </div>
             </div>
@@ -1502,7 +1538,7 @@ const AddPO = () => {
                         <div className="px-8 py-5 flex items-center justify-between bg-red-600 text-white">
                             <div className="flex items-center gap-3">
                                 <AlertCircle size={22} className="text-white" />
-                                <h3 className="text-[18px] font-bold tracking-tight">Missing Required Fields</h3>
+                                <h3 className="text-[18px] font-bold tracking-tight">{t('modules:missing_required_fields')}</h3>
                             </div>
                             <button onClick={() => setShowValidationPopup(false)} className="p-1 hover:bg-white/10 rounded-full transition-colors">
                                 <X size={20} />
@@ -1510,7 +1546,7 @@ const AddPO = () => {
                         </div>
                         <div className="p-8">
                             <p className="text-[15px] text-[#4B5563] font-medium leading-relaxed">
-                                Please ensure all mandatory fields (marked with <span className="text-red-500 font-bold">*</span>) are filled correctly before proceeding to preview.
+                                {t('modules:please_ensure_mandatory_fields')}
                             </p>
                         </div>
                         <div className="px-8 py-5 bg-gray-50 flex justify-end">
@@ -1518,7 +1554,7 @@ const AddPO = () => {
                                 onClick={() => setShowValidationPopup(false)}
                                 className="px-8 h-[48px] bg-red-600 text-white rounded-[12px] text-[15px] font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200 active:scale-95"
                             >
-                                Got it
+                                {t('modules:got_it')}
                             </button>
                         </div>
                     </div>

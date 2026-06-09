@@ -326,6 +326,12 @@ export class ReceiptVoucherService {
           invoiceNumber: existing.voucherNumber,
           transactionType: TransactionType.Receipt,
         }, tx);
+        await this.transactionService.deleteTransaction({
+          userId,
+          accountId: item.accountId,
+          invoiceNumber: existing.voucherNumber,
+          transactionType: TransactionType.Payment,
+        }, tx);
       }
 
       const totalAmount = updateDto.items.reduce((sum, item) => sum + item.amount, 0);

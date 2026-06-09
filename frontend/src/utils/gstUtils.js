@@ -1,5 +1,5 @@
 /**
- * GST Helper Utility
+ * GST Helper Utility (Frontend)
  * Centralized GST logic for both Sales Invoice and Purchase Invoice modules.
  *
  * Rules:
@@ -13,8 +13,7 @@
  *   Fallback when GST numbers are missing/invalid: compare state names.
  */
 
-/** Map of Indian GST state codes → state names */
-export const GST_STATE_CODES: Record<string, string> = {
+export const GST_STATE_CODES = {
   '01': 'Jammu And Kashmir',
   '02': 'Himachal Pradesh',
   '03': 'Punjab',
@@ -62,9 +61,9 @@ export const GST_STATE_CODES: Record<string, string> = {
  * A valid GST number must be ≥ 15 characters (standard) and not a placeholder like 'N/A'.
  * We accept ≥ 10 chars as a pragmatic lower bound (to tolerate minor data issues).
  */
-export function isValidGst(gst: string | null | undefined): boolean {
+export function isValidGst(gst) {
   if (!gst) return false;
-  const trimmed = gst.trim().toUpperCase();
+  const trimmed = String(gst).trim().toUpperCase();
   if (trimmed === 'N/A' || trimmed === 'NOT AVAILABLE' || trimmed === '-') return false;
   if (trimmed.length < 10) return false;
   return true;
@@ -74,9 +73,9 @@ export function isValidGst(gst: string | null | undefined): boolean {
  * Extract the 2-digit state code from a GST number.
  * Returns null if the GST is invalid or the code is not numeric.
  */
-export function extractStateCode(gst: string | null | undefined): string | null {
+export function extractStateCode(gst) {
   if (!isValidGst(gst)) return null;
-  const code = gst!.trim().substring(0, 2);
+  const code = String(gst).trim().substring(0, 2);
   return /^\d{2}$/.test(code) ? code : null;
 }
 
@@ -84,82 +83,13 @@ export function extractStateCode(gst: string | null | undefined): string | null 
  * Get the state name from a GST number.
  * Returns null if the code cannot be determined.
  */
-export function getStateFromGst(gst: string | null | undefined): string | null {
+export function getStateFromGst(gst) {
   const code = extractStateCode(gst);
   if (!code) return null;
   return GST_STATE_CODES[code] || null;
 }
 
-export type GstType = 'CGST_SGST' | 'IGST' | 'NONE';
-
-export interface GstResult {
-  gstType: GstType;
-  gstRate: number;
-  cgstPercent: number;
-  sgstPercent: number;
-  igstPercent: number;
-  cgstAmount: number;
-  sgstAmount: number;
-  igstAmount: number;
-  totalGstAmount: number;
-  finalAmount: number;
-}
-
-/**
- * Determine GST type and compute tax amounts for a Sales Invoice.
- *
- * @param userGst         Seller's (user/company) GST number
- * @param customerGst   Customer's GST number (may be null/undefined for non-GST customers)
- * @param userState     Seller's state name (fallback when GST code unavailable)
- * @param customerState Customer's state name (fallback)
- * @param taxableAmount Total taxable base amount (material + direct expenses)
- * @param totalGstPercent The total GST percentage (e.g., 18 for 18%)
- */
-export function determineSalesGst(
-  userGst: string | null | undefined,
-  customerGst: string | null | undefined,
-  userState: string,
-  customerState: string,
-  taxableAmount: number,
-  totalGstPercent: number = 0,
-  preCalculatedTaxAmount?: number
-): GstResult {
-  // Rule: Apply GST only if User (seller) has a valid GST number
-  if (!isValidGst(userGst)) {
-    return buildNoneResult();
-  }
-
-  const taxAmount = preCalculatedTaxAmount !== undefined 
-    ? preCalculatedTaxAmount 
-    : (taxableAmount * totalGstPercent) / 100;
-
-  return splitTaxAmount(userGst, customerGst, userState, customerState, taxAmount, taxableAmount, totalGstPercent);
-}
-
-export function determinePurchaseGst(
-  supplierGst: string | null | undefined,
-  userGst: string | null | undefined,
-  userState: string,
-  supplierState: string,
-  taxableAmount: number,
-  totalGstPercent: number = 0,
-  preCalculatedTaxAmount?: number
-): GstResult {
-  // Rule: Apply GST only if Supplier has a valid GST number
-  if (!isValidGst(supplierGst)) {
-    return buildNoneResult();
-  }
-
-  const taxAmount = preCalculatedTaxAmount !== undefined 
-    ? preCalculatedTaxAmount 
-    : (taxableAmount * totalGstPercent) / 100;
-
-  return splitTaxAmount(userGst, supplierGst, userState, supplierState, taxAmount, taxableAmount, totalGstPercent);
-}
-
-// ─── Private helpers ──────────────────────────────────────────────────────────
-
-function buildNoneResult(): GstResult {
+function buildNoneResult() {
   return {
     gstType: 'NONE',
     gstRate: 0,
@@ -177,19 +107,11 @@ function buildNoneResult(): GstResult {
 /**
  * Split a pre-calculated tax amount into CGST/SGST or IGST based on GST numbers or states.
  */
-export function splitTaxAmount(
-  gst1: string | null | undefined,
-  gst2: string | null | undefined,
-  state1: string,
-  state2: string,
-  totalTaxAmount: number,
-  baseAmount: number,
-  totalGstPercent: number
-): GstResult {
+export function splitTaxAmount(gst1, gst2, state1, state2, totalTaxAmount, baseAmount, totalGstPercent) {
   const code1 = extractStateCode(gst1);
   const code2 = extractStateCode(gst2);
 
-  let isInterState: boolean;
+  let isInterState;
 
   if (code1 && code2) {
     isInterState = code1 !== code2;
@@ -229,4 +151,52 @@ export function splitTaxAmount(
       finalAmount: baseAmount + totalTaxAmount,
     };
   }
+}
+
+/**
+ * Determine GST type and compute tax amounts for a Sales Invoice.
+ *
+ * @param {string} userGst Seller's (user/company) GST number
+ * @param {string} customerGst Customer's GST number (may be null/undefined for non-GST customers)
+ * @param {string} userState Seller's state name (fallback when GST code unavailable)
+ * @param {string} customerState Customer's state name (fallback)
+ * @param {number} taxableAmount Total taxable base amount
+ * @param {number} totalGstPercent The total GST percentage
+ * @param {number} preCalculatedTaxAmount Optional pre-calculated tax amount
+ */
+export function determineSalesGst(userGst, customerGst, userState, customerState, taxableAmount, totalGstPercent = 0, preCalculatedTaxAmount = undefined) {
+  // Rule: Apply GST only if User (seller) has a valid GST number
+  if (!isValidGst(userGst)) {
+    return buildNoneResult();
+  }
+
+  const taxAmount = preCalculatedTaxAmount !== undefined 
+    ? preCalculatedTaxAmount 
+    : (taxableAmount * totalGstPercent) / 100;
+
+  return splitTaxAmount(userGst, customerGst, userState, customerState, taxAmount, taxableAmount, totalGstPercent);
+}
+
+/**
+ * Determine GST type and compute tax amounts for a Purchase Invoice/GRN.
+ *
+ * @param {string} supplierGst Supplier's GST number
+ * @param {string} userGst Buyer's (user/company) GST number
+ * @param {string} userState Buyer's state name (fallback)
+ * @param {string} supplierState Supplier's state name (fallback)
+ * @param {number} taxableAmount Total taxable base amount
+ * @param {number} totalGstPercent The total GST percentage
+ * @param {number} preCalculatedTaxAmount Optional pre-calculated tax amount
+ */
+export function determinePurchaseGst(supplierGst, userGst, userState, supplierState, taxableAmount, totalGstPercent = 0, preCalculatedTaxAmount = undefined) {
+  // Rule: Apply GST only if Supplier has a valid GST number
+  if (!isValidGst(supplierGst)) {
+    return buildNoneResult();
+  }
+
+  const taxAmount = preCalculatedTaxAmount !== undefined 
+    ? preCalculatedTaxAmount 
+    : (taxableAmount * totalGstPercent) / 100;
+
+  return splitTaxAmount(userGst, supplierGst, userState, supplierState, taxAmount, taxableAmount, totalGstPercent);
 }

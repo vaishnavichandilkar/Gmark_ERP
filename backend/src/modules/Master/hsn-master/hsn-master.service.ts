@@ -62,8 +62,8 @@ export class HsnMasterService {
                 throw new BadRequestException('HSN Code must be exactly 6 or 8 digits.');
             }
         } else if (dto.type === HsnMasterType.SAC) {
-            if (dto.code.length !== 6) {
-                throw new BadRequestException('SAC Code must be exactly 6 digits.');
+            if (dto.code.length < 6 || dto.code.length > 8) {
+                throw new BadRequestException('SAC Code must be between 6 and 8 digits.');
             }
         }
 
@@ -167,8 +167,8 @@ export class HsnMasterService {
                 throw new BadRequestException('HSN Code must be exactly 6 or 8 digits.');
             }
         } else if (finalType === HsnMasterType.SAC) {
-            if (finalCode.length !== 6) {
-                throw new BadRequestException('SAC Code must be exactly 6 digits.');
+            if (finalCode.length < 6 || finalCode.length > 8) {
+                throw new BadRequestException('SAC Code must be between 6 and 8 digits.');
             }
         }
 
@@ -552,8 +552,8 @@ export class HsnMasterService {
                         throw new Error('HSN Code must be exactly 6 or 8 digits.');
                     }
                 } else if (typeStr === 'SAC') {
-                    if (code.length !== 6) {
-                        throw new Error('SAC Code must be exactly 6 digits.');
+                    if (code.length < 6 || code.length > 8) {
+                        throw new Error('SAC Code must be between 6 and 8 digits.');
                     }
                 }
 

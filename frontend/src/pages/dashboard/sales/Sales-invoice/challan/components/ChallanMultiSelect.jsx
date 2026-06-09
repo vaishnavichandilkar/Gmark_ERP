@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDown, Search, X, Check } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const ChallanMultiSelect = ({ 
     challans = [], 
@@ -7,6 +8,7 @@ const ChallanMultiSelect = ({
     onChange, 
     isLoading = false 
 }) => {
+    const { t } = useTranslation(['modules', 'common']);
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const containerRef = useRef(null);
@@ -64,14 +66,14 @@ const ChallanMultiSelect = ({
                     </div>
                 ) : (
                     <span className="text-gray-400 text-[14px] px-1">
-                        {isLoading ? "Loading Challans..." : (challans.length > 0 ? `Select Challans (${challans.length} found)` : "No Challans Found")}
+                        {isLoading ? t('common:loading_challans', 'Loading Challans...') : (challans.length > 0 ? `${t('modules:select_challans')} (${challans.length})` : t('modules:no_challans_found'))}
                     </span>
                 )}
                 
                 <div className="flex items-center gap-2 ml-auto pr-1">
                     {selectedIds.length > 0 && (
                         <span className="text-[11px] font-black bg-[#073318] text-white px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                            {selectedIds.length} Selected
+                            {selectedIds.length} {t('modules:selected')}
                         </span>
                     )}
                     <ChevronDown className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} size={18} />
@@ -85,7 +87,7 @@ const ChallanMultiSelect = ({
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                             <input
                                 type="text"
-                                placeholder="Search challan number..."
+                                placeholder={t('modules:search_challan_number')}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full h-[38px] bg-white border border-[#E5E7EB] rounded-[8px] pl-10 pr-4 text-[13px] font-medium outline-none focus:border-[#073318] transition-all"
@@ -104,7 +106,7 @@ const ChallanMultiSelect = ({
                                     }}
                                     className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 uppercase tracking-tight transition-colors flex items-center gap-1"
                                 >
-                                    Select All {searchTerm && `(${filteredChallans.length})`}
+                                    {t('modules:select_all')} {searchTerm && `(${filteredChallans.length})`}
                                 </button>
                                 <button
                                     type="button"
@@ -119,7 +121,7 @@ const ChallanMultiSelect = ({
                                     }}
                                     className="text-[11px] font-bold text-red-600 hover:text-red-800 uppercase tracking-tight transition-colors flex items-center gap-1"
                                 >
-                                    Deselect All
+                                    {t('modules:deselect_all')}
                                 </button>
                             </div>
                         )}
@@ -156,7 +158,7 @@ const ChallanMultiSelect = ({
                             })
                         ) : (
                             <div className="px-5 py-8 text-[13px] text-gray-400 italic text-center">
-                                {searchTerm ? `No results for "${searchTerm}"` : "No challans available"}
+                                {searchTerm ? `${t('modules:no_results_for')} "${searchTerm}"` : t('modules:no_challans_available')}
                             </div>
                         )}
                     </div>

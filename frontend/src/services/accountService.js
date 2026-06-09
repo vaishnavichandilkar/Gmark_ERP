@@ -97,6 +97,15 @@ export const getBusinessProfile = async () => {
     return response.data;
 };
 
+export const checkMsmeUser = async (phone, email, gst) => {
+    const params = {};
+    if (phone) params.phone = phone;
+    if (email) params.email = email;
+    if (gst) params.gst = gst;
+    const response = await axiosInstance.get(`${API_PATH}/check-msme-user`, { params });
+    return response.data;
+};
+
 export default {
     getAllAccounts,
     getAccountById,
@@ -114,5 +123,6 @@ export default {
     getActiveCustomers,
     getActiveSuppliers,
     getReceiptEligibleCustomers,
-    getPaymentEligibleSuppliers
+    getPaymentEligibleSuppliers,
+    checkMsmeUser
 };

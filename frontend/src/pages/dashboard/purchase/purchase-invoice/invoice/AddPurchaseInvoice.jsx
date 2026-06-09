@@ -11,12 +11,15 @@ import accountService from '@/services/accountService';
 import productService from '@/services/productService';
 import grnService from '@/services/grnService';
 import { getProfileApi } from '@/services/authService';
+import { useTranslation } from 'react-i18next';
+import { determinePurchaseGst } from '@/utils/gstUtils';
 
 import GRNForm from '../grn/components/GRNForm';
 import GRNTable from '../grn/components/GRNTable';
 import AccountTable from '../grn/components/AccountTable';
 
 const AddPurchaseInvoice = () => {
+    const { t } = useTranslation(['modules', 'common']);
     const navigate = useNavigate();
     const { id } = useParams();
     const isEditMode = Boolean(id);
@@ -115,7 +118,7 @@ const AddPurchaseInvoice = () => {
     const [errors, setErrors] = useState({});
     const [companyInfo, setCompanyInfo] = useState(null);
     const [businessProfile, setBusinessProfile] = useState(null);
-    const [gstType, setGstType] = useState({ type: 'NONE' });
+    const [gstType, setGstType] = useState({ gstType: 'NONE' });
 
     const getFinancialYearStart = () => {
         const now = new Date();
@@ -192,7 +195,7 @@ const AddPurchaseInvoice = () => {
                     });
 
                     // Trigger GST calculation with direct profile data
-                    const type = calculateGST(supplierGST, supplierState, companyGst);
+                    const type = determinePurchaseGst(supplierGST, companyGst, companyInfo?.state || "", supplierState, 0, 0, 0);
                     setGstType(type);
 
                     // Requirement: If challans are selected, re-sync the item table from GRN data
@@ -330,7 +333,7 @@ const AddPurchaseInvoice = () => {
                             setExpenses(restoredExpenses);
                             
                             if (restoredFormData.gst_no || restoredFormData.supplier_state) {
-                                setGstType(calculateGST(restoredFormData.gst_no, restoredFormData.supplier_state));
+                                setGstType(determinePurchaseGst(restoredFormData.gst_no, companyGst, companyInfo?.state || "", restoredFormData.supplier_state, 0, 0, 0));
                             }
                         } catch (e) {
                             console.error('Draft parsing failed', e);
@@ -358,14 +361,15 @@ const AddPurchaseInvoice = () => {
 
         const isSupplierMsmeActive = supplier.msmeEnabled;
         const isSupplierMsmeType = supplier.regType === "Manufacturing" || supplier.regType === "Service";
-        const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType);
+        const hasSupplierMsmeId = supplier.msmeId && supplier.msmeId.trim() !== '' && supplier.msmeId.trim().toUpperCase() !== 'N/A';
+        const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType && hasSupplierMsmeId);
 
         if (isSupplierMsme && formData.credit_days) {
             const val = parseInt(formData.credit_days, 10);
             if (!isNaN(val) && val > 45) {
                 setFormData(prev => ({ ...prev, credit_days: 45 }));
                 toast.error(
-                    "For MSME Manufacturing/Service suppliers,maximum credit period allowed is 45 days.Credit Days has been adjusted to 45.",
+                    "For MSME Manufacturing/Service suppliers, maximum credit period allowed is 45 days. Credit Days has been adjusted to 45.",
                     { id: "msme-supplier-warning" }
                 );
             }
@@ -387,7 +391,7 @@ const AddPurchaseInvoice = () => {
             grn_ids: []
         }));
 
-        const type = calculateGST(supplier.gstNo || "", supplier.state);
+        const type = determinePurchaseGst(supplier.gstNo || "", companyInfo?.gstNumber || "", companyInfo?.state || "", supplier.state || "", 0, 0, 0);
         setGstType(type);
 
         try {
@@ -422,49 +426,6 @@ const AddPurchaseInvoice = () => {
                    selectedGrnIds.includes(c.id.toString());
         });
     }, [challans, formData.po_id, formData.po_number, formData.grn_ids]);
-
-    const calculateGST = (supplierGST, supplierState, companyGst = companyInfo?.gstNumber) => {
-        const userGst = companyInfo?.gstNumber || "";
-        const userState = (companyInfo?.state || "").trim().toLowerCase();
-        const suppState = (supplierState || "").trim().toLowerCase();
-
-        // Strict validation helper
-        const isValidGstStr = (g) => Boolean(
-            g && 
-            String(g).trim().toUpperCase() !== 'N/A' && 
-            String(g).trim().toUpperCase() !== 'NOT AVAILABLE' && 
-            String(g).trim().toUpperCase() !== '-' && 
-            String(g).trim().length >= 10
-        );
-
-        // Purchase Side Rule: Applicable if Supplier has GST
-        const applicable = isValidGstStr(supplierGST);
-
-        if (!applicable) {
-            return { type: 'NONE', applicable: false, isRcm: false };
-        }
-
-        const userCode = userGst ? userGst.substring(0, 2) : null;
-        const supplierCode = supplierGST ? supplierGST.substring(0, 2) : null;
-
-        let isInterState = false;
-        if (userGst && supplierGST && /^\d{2}$/.test(userCode) && /^\d{2}$/.test(supplierCode)) {
-            isInterState = userCode !== supplierCode;
-        } else {
-            isInterState = userState !== suppState;
-        }
-
-        // Determine if RCM (If Supplier has NO GST but User HAS GST -> This was old rule, 
-        // but user says "If Supplier does NOT have GST Number -> Do NOT apply GST". 
-        // This usually means NO GST at all in the invoice. 
-        // However, I'll keep the inter/intra check for when it IS applicable.
-        
-        return { 
-            type: isInterState ? 'INTER' : 'INTRA', 
-            applicable: true, 
-            isRcm: false // Simplifying as per request "depend on Supplier GST"
-        };
-    };
 
     const handleChallanChange = async (selectedGrnIds) => {
         if (!selectedGrnIds || selectedGrnIds.length === 0) {
@@ -810,6 +771,20 @@ const AddPurchaseInvoice = () => {
         if (!formData.address) newErrors.address = "Address is required";
         if (formData.credit_days === "" || formData.credit_days === undefined) newErrors.credit_days = "Credit days is required";
         if (!formData.supplier_invoice_number) newErrors.supplier_invoice_number = "Invoice number is required";
+
+        const supplier = suppliers.find(s => String(s.id) === String(formData.supplier_id));
+        if (supplier) {
+            const isSupplierMsmeActive = supplier.msmeEnabled;
+            const isSupplierMsmeType = supplier.regType === "Manufacturing" || supplier.regType === "Service";
+            const hasSupplierMsmeId = supplier.msmeId && supplier.msmeId.trim() !== '' && supplier.msmeId.trim().toUpperCase() !== 'N/A';
+            const isSupplierMsme = Boolean(isSupplierMsmeActive && isSupplierMsmeType && hasSupplierMsmeId);
+
+            if (isSupplierMsme && Number(formData.credit_days) > 45) {
+                newErrors.credit_days = "MSME supplier payment terms cannot exceed 45 days as per MSME compliance rules.";
+                toast.error("MSME supplier payment terms cannot exceed 45 days as per MSME compliance rules.", { id: "msme-supplier-error" });
+            }
+        }
+
         const isoDocDate = toIsoDate(formData.document_date);
         if (!isoDocDate) {
             newErrors.document_date = "Invoice date is required";
@@ -845,17 +820,17 @@ const AddPurchaseInvoice = () => {
             } else {
                 // Condition 3: Direct Purchase Invoice Without PO and Without GRN
                 // Supplier Invoice Date allowed from: Financial Year Start Date → Till Today
-                // Validation Message: Supplier Invoice Date must be within current financial year.
+                // Validation Message: Supplier Invoice Date must be between Financial Year Start and Current Date.
                 const fyStart = getFinancialYearStart();
                 if (isoDocDate > today || isoDocDate < fyStart) {
-                    newErrors.document_date = "Supplier Invoice Date must be within current financial year.";
+                    newErrors.document_date = "Supplier Invoice Date must be between Financial Year Start and Current Date.";
                 }
             }
         }
 
         const validItems = items.filter(item => item.productId || item.productCode);
         if (validItems.length === 0) {
-            newErrors.items = true;
+            newErrors.items = "At least one product is required";
         } else {
             const itemErrors = [];
             items.forEach((item, index) => {
@@ -873,6 +848,24 @@ const AddPurchaseInvoice = () => {
             if (itemErrors.length > 0) newErrors.itemErrors = itemErrors;
         }
 
+        if (Object.keys(newErrors).length > 0) {
+            if (newErrors.document_date) {
+                toast.error(newErrors.document_date);
+            } else if (newErrors.supplier_name) {
+                toast.error(newErrors.supplier_name);
+            } else if (newErrors.supplier_invoice_number) {
+                toast.error(newErrors.supplier_invoice_number);
+            } else if (newErrors.credit_days) {
+                toast.error(newErrors.credit_days);
+            } else if (newErrors.items) {
+                toast.error(newErrors.items);
+            } else if (newErrors.itemErrors) {
+                toast.error("Please fill all product details correctly");
+            } else {
+                toast.error("Please fill all required fields correctly");
+            }
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -885,7 +878,7 @@ const AddPurchaseInvoice = () => {
         setIsSaving(true);
         try {
             const validItems = items.filter(i => i.productId || i.productCode);
-            const gstResult = calculateGST(formData.gst_no, formData.supplier_state);
+            const gstResult = determinePurchaseGst(formData.gst_no, companyInfo?.gstNumber || "", companyInfo?.state || "", formData.supplier_state, 0, 0, 0);
             
             let materialTotal = 0;
             let materialTax = 0;
@@ -920,20 +913,20 @@ const AddPurchaseInvoice = () => {
                 };
             });
 
-            const finalTaxTotal = gstResult.applicable ? (materialTax + expenseTax) : 0;
+            const finalTaxTotal = gstResult.gstType !== 'NONE' ? (materialTax + expenseTax) : 0;
             let cgst = 0, sgst = 0, igst = 0;
 
-            if (gstResult.applicable) {
-                if (gstResult.type === 'INTRA') {
+            if (gstResult.gstType !== 'NONE') {
+                if (gstResult.gstType === 'CGST_SGST') {
                     cgst = finalTaxTotal / 2;
                     sgst = finalTaxTotal / 2;
-                } else if (gstResult.type === 'INTER') {
+                } else if (gstResult.gstType === 'IGST') {
                     igst = finalTaxTotal;
                 }
             }
 
             // Case 2 RCM: Tax is calculated but not added to grandTotal payable to supplier
-            const taxInGrandTotal = gstResult.isRcm ? 0 : finalTaxTotal;
+            const taxInGrandTotal = finalTaxTotal;
             // Material + Expenses + Tax
             const grandTotal = materialTotal + expenseTotal + taxInGrandTotal;
 
@@ -942,7 +935,7 @@ const AddPurchaseInvoice = () => {
                 supplierName: formData.supplier_name,
                 address: formData.address,
                 gstNumber: formData.gst_no,
-                isRcm: gstResult.isRcm,
+                isRcm: false,
                 creditDays: Number(formData.credit_days),
                 poIds: formData.po_id ? [formData.po_id.toString()] : [],
                 challanNumbers: formData.grn_ids.map(id => id.toString()),
@@ -960,8 +953,8 @@ const AddPurchaseInvoice = () => {
                     uom: i.uom,
                     hsnCode: i.hsnCode,
                     discount: Number(i.discountAmount) || 0,
-                    taxPercent: gstResult.applicable ? (parseFloat(i.taxPercent) || 0) : 0,
-                    taxAmount: gstResult.applicable ? (parseFloat(i.taxAmount) || 0) : 0,
+                    taxPercent: gstResult.gstType !== 'NONE' ? (parseFloat(i.taxPercent) || 0) : 0,
+                    taxAmount: gstResult.gstType !== 'NONE' ? (parseFloat(i.taxAmount) || 0) : 0,
                     beforeTaxAmount: parseFloat(i.beforeTaxAmount) || 0,
                     totalAmount: parseFloat(i.totalAmount) || 0
                 })),
@@ -1040,12 +1033,12 @@ const AddPurchaseInvoice = () => {
         <div className="flex flex-col gap-8 pb-20 font-outfit">
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
                 <div className="px-8 py-6 border-b border-[#F3F4F6] bg-white flex items-center justify-between">
-                    <h2 className="text-[20px] font-bold text-[#111827]">{isEditMode ? 'Edit' : 'Add'} Purchase Invoice</h2>
+                    <h2 className="text-[20px] font-bold text-[#111827]">{isEditMode ? t('common:edit_purchase_invoice', 'Edit Purchase Invoice') : t('common:add_purchase_invoice', 'Add Purchase Invoice')}</h2>
                     <button 
                         onClick={() => navigate(-1)}
                         className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all shadow-sm"
                     >
-                        <ArrowLeft size={18} /> Back
+                        <ArrowLeft size={18} /> {t('common:back')}
                     </button>
                 </div>
 
@@ -1107,7 +1100,7 @@ const AddPurchaseInvoice = () => {
                 <div className="p-8">
                     <h2 className="text-[18px] font-bold text-[#111827] mb-6 flex items-center gap-2 tracking-tight uppercase">
                         <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
-                        Account Summary
+                        {t('modules:account_summary')}
                     </h2>
                     <AccountTable 
                         items={items} 
@@ -1118,21 +1111,21 @@ const AddPurchaseInvoice = () => {
                 </div>
 
                 <div className="p-8 flex items-center gap-6 border-t border-[#F3F4F6]">
-                    <span className="text-[15px] font-bold text-[#374151]">Upload Purchase Invoice :</span>
+                    <span className="text-[15px] font-bold text-[#374151]">{t('modules:upload_purchase_invoice')} :</span>
                     <div className="flex items-center gap-3">
                         <label className="relative cursor-pointer px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all flex items-center justify-center gap-2 shadow-sm group active:scale-95">
                             {formData.attachment ? (
                                 <span className="flex items-center gap-2">
                                     <FileText size={18} />
                                     <span className="max-w-[200px] truncate">
-                                        {typeof formData.attachment === 'string' ? 'Existing Invoice' : formData.attachment.name}
+                                        {typeof formData.attachment === 'string' ? t('modules:existing_invoice', 'Existing Invoice') : formData.attachment.name}
                                     </span>
-                                    <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded text-emerald-100">Change</span>
+                                    <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded text-emerald-100">{t('common:change')}</span>
                                 </span>
                             ) : (
                                 <>
                                     <FileText size={18} />
-                                    <span>Upload Purchase Invoice</span>
+                                    <span>{t('modules:upload_purchase_invoice')}</span>
                                 </>
                             )}
                             <input 
@@ -1161,8 +1154,8 @@ const AddPurchaseInvoice = () => {
                                     {previewUrl && (
                                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover/preview:flex flex-col w-[380px] h-[480px] bg-white border border-gray-200 rounded-[16px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] z-[100] p-3 animate-in fade-in slide-in-from-bottom-2 duration-200 pointer-events-none">
                                             <div className="text-[12px] font-bold text-gray-500 mb-2 border-b pb-1.5 flex items-center justify-between">
-                                                <span>Invoice Preview</span>
-                                                <span className="text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-black uppercase">Live View</span>
+                                                <span>{t('modules:invoice_preview', 'Invoice Preview')}</span>
+                                                <span className="text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-black uppercase">{t('modules:live_view', 'Live View')}</span>
                                             </div>
                                             <div className="flex-1 w-full bg-gray-50 rounded-[8px] overflow-hidden border border-gray-100">
                                                 {typeof formData.attachment === 'string' || (formData.attachment instanceof File && formData.attachment.type?.includes('pdf')) ? (
@@ -1201,13 +1194,13 @@ const AddPurchaseInvoice = () => {
                         disabled={isSaving}
                         className="px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] shadow-[0_4px_15px_rgba(7,51,24,0.15)] transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70"
                     >
-                        Save Invoice
+                        {t('modules:save_invoice', 'Save Invoice')}
                     </button>
                     <button 
                         onClick={() => navigate(-1)}
                         className="px-8 h-[48px] bg-white border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[15px] font-bold hover:bg-gray-100 transition-all flex items-center justify-center gap-2 shadow-sm"
                     >
-                        Cancel
+                        {t('common:cancel')}
                     </button>
                 </div>
             </div>

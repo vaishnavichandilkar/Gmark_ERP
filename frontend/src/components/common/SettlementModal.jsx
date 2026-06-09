@@ -72,8 +72,9 @@ const SettlementModal = ({
     const fetchPendingInvoices = async () => {
         setIsLoading(true);
         try {
-            const role = accountType || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER');
-            const voucherParam = role === 'CUSTOMER' ? 'receipt' : 'payment';
+            const normalizedRole = String(accountType || '').toUpperCase() || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER');
+            const isCustomer = ['CUSTOMER', 'DEBTOR'].includes(normalizedRole);
+            const voucherParam = isCustomer ? 'receipt' : 'payment';
             const response = await axiosInstance.get(`/invoices/pending/${ledgerId}?voucherType=${voucherParam}`);
             setInvoices(response.data || []);
             

@@ -34,7 +34,7 @@ import FilterDropdown from "@/pages/dashboard/masters/components/FilterDropdown"
 import ImportModal from "@/pages/dashboard/masters/components/ImportModal";
 import CustomSelect from "@/components/common/CustomSelect";
 
-const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
+const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting, t }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
@@ -45,10 +45,10 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
             <Trash2 size={32} className="text-red-500" />
           </div>
           <h3 className="text-[20px] font-bold text-[#111827] mb-2 font-outfit uppercase tracking-tight">
-            Delete Purchase Order
+            {t('modules:delete_po')}
           </h3>
           <p className="text-[#6B7280] text-[15px] font-medium mb-8 font-outfit">
-            Are you sure you want to delete this purchase order? This action will mark the status as deleted.
+            {t('modules:delete_po_confirm')}
           </p>
           <div className="flex gap-4">
             <button
@@ -56,7 +56,7 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
               disabled={isDeleting}
               className="flex-1 h-[52px] rounded-[14px] border border-[#E5E7EB] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all font-outfit uppercase tracking-widest"
             >
-              No, Keep it
+              {t('common:no_keep_it')}
             </button>
             <button
               onClick={onConfirm}
@@ -66,7 +66,7 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
               {isDeleting ? (
                 <RefreshCw size={18} className="animate-spin" />
               ) : (
-                "Yes, Delete"
+                t('common:yes_delete')
               )}
             </button>
           </div>
@@ -220,6 +220,10 @@ const PurchaseOrder = () => {
         computedStatusLabel = "Expiring Soon"; bgClass = "bg-amber-50 text-amber-600 border border-amber-100";
       } else if (status === 'INVOICE_GENERATED' || status === 'INVOICE_COMPLETED' || status === 'COMPLETED') {
         computedStatusLabel = "Completed"; bgClass = "bg-emerald-50 text-emerald-600 border border-emerald-100";
+      } else if (status === 'GRN_COMPLETED') {
+        computedStatusLabel = "GRN Completed"; bgClass = "bg-teal-50 text-teal-600 border border-teal-100";
+      } else if (po.grn?.length > 0 || po.purchaseInvoices?.length > 0) {
+        computedStatusLabel = "Partial GRN"; bgClass = "bg-indigo-50 text-indigo-600 border border-indigo-100";
       } else {
         computedStatusLabel = "Pending"; bgClass = "bg-blue-50 text-blue-600 border border-blue-100";
       }
@@ -247,9 +251,9 @@ const PurchaseOrder = () => {
     setIsRefreshing(true);
     try {
       await fetchData();
-      toast.success("Data refreshed successfully");
+      toast.success(t('common:data_refreshed'));
     } catch (error) {
-      toast.error("Failed to refresh data");
+      toast.error(t('common:failed_to_refresh'));
     } finally {
       setIsRefreshing(false);
     }
@@ -288,12 +292,12 @@ const PurchaseOrder = () => {
 
     try {
       await purchaseOrderService.deletePurchaseOrder(deletedId);
-      toast.success("Purchase order deleted successfully");
+      toast.success(t('modules:po_deleted'));
       // Optional: Refetch after a small delay to sync with server
       setTimeout(fetchData, 500);
     } catch (error) {
       console.error("Delete error:", error);
-      toast.error(error.response?.data?.message || "Failed to delete PO");
+      toast.error(error.response?.data?.message || t('modules:failed_to_delete_po'));
       // Revert if error
       setPurchaseOrders(previousOrders);
     } finally {
@@ -324,7 +328,7 @@ const PurchaseOrder = () => {
       });
     } catch (error) {
       console.error("Print error:", error);
-      toast.error("Failed to load print preview");
+      toast.error(t('modules:failed_to_load_print'));
     } finally {
       setIsRefreshing(false);
     }
@@ -333,7 +337,7 @@ const PurchaseOrder = () => {
   const handleExport = async (format) => {
     try {
       if (purchaseOrders.length === 0) {
-        toast.error("No data available to export.");
+        toast.error(t('modules:no_data_to_export'));
         setIsExportOpen(false);
         return;
       }
@@ -356,11 +360,11 @@ const PurchaseOrder = () => {
           document.body.removeChild(link);
           window.URL.revokeObjectURL(url);
         }, 100);
-        toast.success(`Exported to ${format.toUpperCase()} successfully!`);
+        toast.success(t('common:export_pdf_success'));
       }
     } catch (error) {
       console.error("Export error:", error);
-      toast.error("Export failed. Please try again.");
+      toast.error(t('common:export_failed'));
     } finally {
       setIsRefreshing(false);
     }
@@ -385,12 +389,12 @@ const PurchaseOrder = () => {
       setIsRefreshing(true);
       await purchaseOrderService.importPurchaseOrders(formData);
       setIsImportModalOpen(false);
-      toast.success("Data imported successfully");
+      toast.success(t('modules:data_imported'));
       handleRefresh();
       return Promise.resolve();
     } catch (error) {
       console.error("Import error:", error);
-      toast.error(error.response?.data?.message || "Import failed");
+      toast.error(error.response?.data?.message || t('common:import_failed'));
       return Promise.reject(error);
     } finally {
       setIsRefreshing(false);
@@ -446,22 +450,22 @@ const PurchaseOrder = () => {
               onClick={() => setIsImportModalOpen(true)}
               className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all"
             >
-              <Download size={18} /> Import
+              <Download size={18} /> {t('common:import')}
             </button>
             <div className="relative" ref={exportRef}>
               <button
                 onClick={() => setIsExportOpen(!isExportOpen)}
                 className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all bg-white ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563] hover:bg-gray-50'}`}
               >
-                <Upload size={18} /> Export
+                <Upload size={18} /> {t('common:export')}
               </button>
               {isExportOpen && (
                 <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
                   <button onClick={() => handleExport('pdf')} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
-                    <FileText size={18} className="text-red-500" /> PDF
+                    <FileText size={18} className="text-red-500" /> {t('common:pdf')}
                   </button>
                   <button onClick={() => handleExport('xlsx')} className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 text-[14px] font-bold text-gray-700">
-                    <FileSpreadsheet size={18} className="text-green-600" /> Excel
+                    <FileSpreadsheet size={18} className="text-green-600" /> {t('common:excel')}
                   </button>
                 </div>
               )}
@@ -474,7 +478,11 @@ const PurchaseOrder = () => {
           <table className="w-full min-w-[1500px] border-collapse text-left font-outfit">
             <thead>
               <tr className="bg-emerald-900 text-white font-bold text-[15px]">
-                {["Po No", "Supplier Name", "Creation Date", "Expiry Date", "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status", "Action"].map(h => (
+                {[
+                  t('modules:po_no'), t('modules:supplier_name'), t('modules:creation_date'),
+                  t('modules:expiry_date'), t('modules:gst_number_col'), t('modules:credit_days_col'),
+                  t('modules:tax_amount_col'), t('modules:total_amount_col'), t('common:status'), t('common:action')
+                ].map(h => (
                   <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -494,7 +502,7 @@ const PurchaseOrder = () => {
                     <td className="px-6 py-5 text-center">{(po.taxAmount || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 text-[#073318]">{(po.totalAmount || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 text-center">
-                      <span className={`px-4 py-1.5 ${po.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{po.computedStatusLabel}</span>
+                      <span className={`px-4 py-1.5 ${po.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{t(`common:status_${po.computedStatusLabel.toLowerCase().replace(' ', '_')}`, po.computedStatusLabel)}</span>
                     </td>
                     <td className="px-6 py-5 text-center relative" ref={el => dropdownRefs.current[po.id] = el}>
                       <button onClick={() => setActiveDropdown(activeDropdown === po.id ? null : po.id)} className={`p-2 rounded-lg ${activeDropdown === po.id ? 'bg-[#073318] text-white' : 'text-gray-400 hover:bg-gray-100'}`}><MoreVertical size={20} /></button>
@@ -502,19 +510,19 @@ const PurchaseOrder = () => {
                         <div className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= currentItems.length - 2 ? 'bottom-0' : 'top-0'}`}>
                           {/* VIEW / VIEW & EDIT */}
                           {((['Pending', 'Expiring Soon'].includes(po.computedStatusLabel)) && !(po.grn?.length > 0 || po.purchaseInvoices?.length > 0)) ? (
-                            <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50 underline-offset-4 decoration-emerald-500 hover:text-emerald-700"><Eye size={18} /> View and Edit PO</button>
+                            <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50 underline-offset-4 decoration-emerald-500 hover:text-emerald-700"><Eye size={18} /> {t('modules:view_edit_po')}</button>
                           ) : (
-                            <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Eye size={18} /> View PO</button>
+                            <button onClick={() => navigate(ROUTES.PURCHASE_ORDER_VIEW.replace(':id', po.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Eye size={18} /> {t('modules:view_po_action')}</button>
                           )}
 
                           {/* PRINT */}
-                          {['Pending', 'Expiring Soon', 'Completed', 'Expired'].includes(po.computedStatusLabel) && (
-                            <button onClick={() => handlePrint(po)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Printer size={18} /> Print PO</button>
+                          {['Pending', 'Expiring Soon', 'Completed', 'Expired', 'GRN Completed', 'Partial GRN'].includes(po.computedStatusLabel) && (
+                            <button onClick={() => handlePrint(po)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50"><Printer size={18} /> {t('modules:print_po')}</button>
                           )}
 
                           {/* DELETE */}
                           {['Expired'].includes(po.computedStatusLabel) && (
-                            <button onClick={() => handleDeletePO(po.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50"><Trash2 size={18} /> Delete</button>
+                            <button onClick={() => handleDeletePO(po.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50"><Trash2 size={18} /> {t('modules:delete_action')}</button>
                           )}
                         </div>
                       )}
@@ -522,7 +530,7 @@ const PurchaseOrder = () => {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan="11" className="px-6 py-24 text-center text-gray-400 uppercase font-bold tracking-widest">No results found</td></tr>
+                <tr><td colSpan="11" className="px-6 py-24 text-center text-gray-400 uppercase font-bold tracking-widest">{t('common:no_results_found')}</td></tr>
               )}
             </tbody>
           </table>
@@ -531,7 +539,7 @@ const PurchaseOrder = () => {
         {/* Pagination */}
         <div className="px-8 py-5 border-t border-[#F3F4F6] bg-[#F9FAFB] flex flex-row items-center justify-between uppercase">
           <div className="flex items-center gap-2 text-[14px] font-bold text-[#6B7280]">
-            <span>Show</span>
+            <span>{t('common:show')}</span>
             <CustomSelect 
                 value={itemsPerPage}
                 onChange={(val) => {
@@ -555,7 +563,7 @@ const PurchaseOrder = () => {
       {/* Modals & Overlays - Using Portals to break out of layout constraints */}
       {createPortal(
         <>
-          <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} />
+          <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} t={t} />
 
           {isImportModalOpen && (
             <ImportModal
@@ -571,7 +579,7 @@ const PurchaseOrder = () => {
               <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" />
               <div className="relative bg-white/95 px-12 py-10 rounded-[32px] shadow-2xl flex flex-col items-center gap-5 animate-in zoom-in-95 duration-400">
                 <RefreshCw size={48} className="text-[#073318] animate-spin" />
-                <p className="font-bold text-[#073318] uppercase tracking-widest font-outfit">Processing...</p>
+                <p className="font-bold text-[#073318] uppercase tracking-widest font-outfit">{t('common:processing')}</p>
               </div>
             </div>
           )}
@@ -585,7 +593,7 @@ const PurchaseOrder = () => {
           )}
           <div className={`fixed top-0 right-0 h-full w-screen sm:w-[440px] bg-white shadow-2xl z-[110] transform transition-all duration-300 ease-in-out flex flex-col font-outfit ${isFilterOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'}`}>
             <div className="flex items-center justify-between px-6 py-5 border-b border-[#04200f] bg-emerald-900">
-              <h2 className="text-[20px] font-bold text-white tracking-tight text-transform-none">{t('apply_filters', 'Apply Filters')}</h2>
+              <h2 className="text-[20px] font-bold text-white tracking-tight text-transform-none">{t('modules:apply_filters_title')}</h2>
               <button onClick={() => setIsFilterOpen(false)} className="text-emerald-100 hover:text-white transition-colors p-1">
                 <X size={20} />
               </button>
@@ -593,17 +601,17 @@ const PurchaseOrder = () => {
 
             <div className="flex-1 px-5 sm:px-8 py-6 sm:py-8 overflow-y-auto space-y-6 sm:space-y-7 pb-32">
               <FilterDropdown
-                label="Status"
+                label={t('common:status')}
                 name="status"
                 value={filterInputs.status}
                 onChange={(e) => setFilterInputs({ ...filterInputs, status: e.target.value })}
                 options={[
-                  { label: 'All', value: 'All' },
-                  { label: 'Pending', value: 'Pending' },
-                  { label: 'Expiring Soon', value: 'Expiring Soon' },
-                  { label: 'Expired', value: 'Expired' },
-                  { label: 'Completed', value: 'Completed' },
-                  { label: 'Deleted', value: 'Deleted' }
+                  { label: t('common:status_all'), value: 'All' },
+                  { label: t('common:status_pending'), value: 'Pending' },
+                  { label: t('common:status_expiring_soon'), value: 'Expiring Soon' },
+                  { label: t('common:status_expired'), value: 'Expired' },
+                  { label: t('common:status_completed'), value: 'Completed' },
+                  { label: t('common:status_deleted'), value: 'Deleted' }
                 ]}
               />
             </div>

@@ -55,7 +55,7 @@ export class GrnService {
         userId,
         accountName: { equals: dto.supplierName, mode: 'insensitive' }
       },
-      select: { state: true, gstNo: true, status: true, supplierStatus: true, msmeEnabled: true, regType: true, supplierCreditDays: true }
+      select: { state: true, gstNo: true, status: true, supplierStatus: true, msmeEnabled: true, msmeId: true, regType: true, supplierCreditDays: true }
     });
 
     if (!company) throw new BadRequestException('Company shop details not found');
@@ -67,12 +67,13 @@ export class GrnService {
 
     const supplierMsmeActive = supplier.msmeEnabled;
     const supplierMsmeType = supplier.regType === 'Manufacturing' || supplier.regType === 'Service';
-    const isSupplierMsme = Boolean(supplierMsmeActive && supplierMsmeType);
+    const hasSupplierMsmeId = supplier.msmeId && supplier.msmeId.trim() !== '' && supplier.msmeId.trim().toUpperCase() !== 'N/A';
+    const isSupplierMsme = Boolean(supplierMsmeActive && supplierMsmeType && hasSupplierMsmeId);
 
     const creditDays = dto.creditDays !== undefined && dto.creditDays !== null ? dto.creditDays : (supplier.supplierCreditDays || 0);
 
     if (isSupplierMsme && creditDays > 45) {
-      throw new BadRequestException('Maximum credit period allowed for MSME suppliers is 45 days.');
+      throw new BadRequestException('MSME supplier payment terms cannot exceed 45 days as per MSME compliance rules.');
     }
 
     // Fetch user's registered GST

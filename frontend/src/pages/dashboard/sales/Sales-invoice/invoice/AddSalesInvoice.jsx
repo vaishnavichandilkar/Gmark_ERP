@@ -4,6 +4,8 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import { ArrowLeft, RefreshCw, Save, CheckCircle2, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
+import { determineSalesGst } from '@/utils/gstUtils';
 
 import salesInvoiceService from '@/services/salesInvoiceService';
 import salesOrderService from '@/services/salesOrderService';
@@ -32,6 +34,7 @@ const toIsoDate = (displayDate) => {
 };
 
 const AddSalesInvoice = () => {
+    const { t } = useTranslation(['modules', 'common']);
     const navigate = useNavigate();
     const { id } = useParams();
     const location = useLocation();
@@ -185,13 +188,14 @@ const AddSalesInvoice = () => {
                         setGstType({ type: 'INTRA', applicable: true, isRcm: invoice.isRcm });
                     } else {
                         // Fallback to calculation if amounts are zero or not set
-                        setGstType(calculateGST(invoice.gstNumber || '', foundCustomer?.state || ''));
+                        setGstType(determineSalesGst(companyInfo?.gstNumber, invoice.gstNumber || '', companyInfo?.state || "", foundCustomer?.state || '', 0, 0, 0));
                     }
 
                     setItems(invoice.items.map(item => ({
                         ...item,
                         id: item.id || Date.now() + Math.random(),
-                        printDescription: item.printDescription || item.productName || ""
+                        printDescription: item.printDescription || item.productName || "",
+                        originalPrintDescription: item.printDescription || item.productName || ""
                     })));
 
                     setExpenses(invoice.expenses?.map(e => ({
@@ -237,57 +241,12 @@ const AddSalesInvoice = () => {
         fetchInitialData();
     }, [id, isEditMode]);
 
-    const calculateGST = (custGST, custState) => {
-        if (!companyInfo) return { type: 'INTRA', applicable: false, isRcm: false };
-        
-        const companyGST = companyInfo?.gstNumber || "";
-        const companyState = (companyInfo?.state || "").trim().toLowerCase();
-        
-        // Strict validation: must be ≥10 chars and not 'N/A' or 'NOT AVAILABLE'
-        const isValidGstStr = (g) => Boolean(
-            g && 
-            String(g).trim().toUpperCase() !== 'N/A' && 
-            String(g).trim().toUpperCase() !== 'NOT AVAILABLE' && 
-            String(g).trim().toUpperCase() !== '-' && 
-            String(g).trim().length >= 10
-        );
-
-        // Sales Invoice Rule: GST applicable ONLY if User (Company) has a valid GST
-        const applicable = isValidGstStr(companyGST);
-        
-        if (!applicable) {
-            return { type: 'INTRA', applicable: false, isRcm: false };
-        }
-
-        const customerGST = isValidGstStr(custGST) ? custGST : "";
-        const customerState = (custState || "").trim().toLowerCase();
-
-        const companyStateCode = companyGST.trim().substring(0, 2);
-        const customerStateCode = customerGST ? customerGST.trim().substring(0, 2) : "";
-
-        let isInterState = false;
-
-        if (companyStateCode && customerStateCode && /^\d{2}$/.test(companyStateCode) && /^\d{2}$/.test(customerStateCode)) {
-            // Primary: compare state codes from GST numbers
-            isInterState = companyStateCode !== customerStateCode;
-        } else {
-            // Fallback: compare state names
-            isInterState = companyState !== customerState;
-        }
-
-        return { 
-            type: isInterState ? 'INTER' : 'INTRA', 
-            applicable: true, 
-            isRcm: false 
-        };
-    };
-
     // Auto-update GST Type whenever customer or company info changes
     useEffect(() => {
         if (formData.customerId && companyInfo) {
             const customer = customers.find(c => c.id === formData.customerId);
             if (customer) {
-                setGstType(calculateGST(customer.gstNo || "", customer.state || ""));
+                setGstType(determineSalesGst(companyInfo?.gstNumber, customer.gstNo || "", companyInfo?.state || "", customer.state || "", 0, 0, 0));
             }
         } else if (!formData.customerId && companyInfo) {
             setGstType({ type: 'INTRA', applicable: true, isRcm: false });
@@ -303,41 +262,39 @@ const AddSalesInvoice = () => {
         return Boolean(isSellerMsmeActive && isSellerMsmeType);
     }, [businessProfile]);
 
+    const [isCustomerMsmeUser, setIsCustomerMsmeUser] = useState(false);
+
     useEffect(() => {
-        if (!formData.customerId) return;
-        const customer = customers.find(c => String(c.id) === String(formData.customerId));
-        if (!customer) return;
+        if (formData.customerId && customers.length > 0) {
+            const currentCustomer = customers.find(c => String(c.id) === String(formData.customerId));
+            if (currentCustomer) {
+                setIsCustomerMsmeUser(Boolean(currentCustomer.isMsmeUser));
+            } else {
+                setIsCustomerMsmeUser(false);
+            }
+        } else {
+            setIsCustomerMsmeUser(false);
+        }
+    }, [formData.customerId, customers]);
 
-        const isCustomerMsmeActive = customer.msmeEnabled;
-        const isCustomerMsmeType = customer.regType === "Manufacturing" || customer.regType === "Service";
-        const isCustomerMsme = Boolean(isCustomerMsmeActive && isCustomerMsmeType);
-
-        const shouldCap = isSellerMsme || isCustomerMsme;
-
-        if (shouldCap && formData.creditDays) {
+    useEffect(() => {
+        if (isSellerMsme && formData.creditDays) {
             const val = parseInt(formData.creditDays, 10);
             if (!isNaN(val) && val > 45) {
                 setFormData(prev => ({ ...prev, creditDays: 45 }));
-                if (isSellerMsme) {
-                    toast.error(
-                        "As you are registered under MSME/Udyam with Registration Type Manufacturing/Service, the maximum credit period allowed for your customers is 45 days. Credit Days has been adjusted to 45.",
-                        { id: "msme-customer-warning" }
-                    );
-                } else {
-                    toast.error(
-                        "This customer is registered under MSME/Udyam with Registration Type Manufacturing/Service. As per MSME rules, maximum credit period allowed is 45 days. Credit Days has been adjusted to 45.",
-                        { id: "msme-customer-warning" }
-                    );
-                }
+                toast.error(
+                    "As you are registered under MSME (Manufacturing/Service), maximum credit period allowed for customers is 45 days. Credit Days has been adjusted to 45.",
+                    { id: "msme-customer-warning", duration: 6000 }
+                );
             }
         }
-    }, [formData.customerId, formData.creditDays, customers, isSellerMsme]);
+    }, [formData.creditDays, isSellerMsme]);
 
     const handleCustomerChange = async (customerId) => {
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
 
-        const type = calculateGST(customer.gstNo || "", customer.state || "");
+        const type = determineSalesGst(companyInfo?.gstNumber, customer.gstNo || "", companyInfo?.state || "", customer.state || "", 0, 0, 0);
         setGstType(type);
 
         const mappedAddress = [customer.addressLine1, customer.addressLine2, customer.city, customer.state].filter(Boolean).join(', ');
@@ -345,7 +302,7 @@ const AddSalesInvoice = () => {
         setFormData(prev => ({
             ...prev,
             customerId: customer.id,
-            customerName: customer.accountName,
+            customerName: customer.customerName || customer.accountName,
             customerType: customer.customerType || customer.accountType || 'industrial',
             address: mappedAddress || customer.address || '',
             gstNo: customer.gstNo || '',
@@ -353,12 +310,14 @@ const AddSalesInvoice = () => {
             customerState: customer.state || '',
             challanIds: []
         }));
+        setIsCustomerMsmeUser(Boolean(customer.isMsmeUser));
 
         try {
             // Fix: Use accountName instead of id because backend getCustomerSOs expects a name string
+            const customerNameKey = customer.customerName || customer.accountName;
             const [soData, challanData] = await Promise.all([
-                salesInvoiceService.getCustomerSOs(customer.accountName, id),
-                challanService.getCustomerChallans(customer.accountName, '', id)
+                salesInvoiceService.getCustomerSOs(customerNameKey, id),
+                challanService.getCustomerChallans(customerNameKey, '', id)
             ]);
             setSos(soData || []);
             setChallans(challanData || []);
@@ -368,7 +327,7 @@ const AddSalesInvoice = () => {
     };
     const handleSOChange = async (soId) => {
         if (!soId) {
-            const customer = accounts.find(c => c.id === parseInt(formData.customerId));
+            const customer = customers.find(c => c.id === parseInt(formData.customerId));
             const defaultCreditDays = customer ? (customer.customerCreditDays || customer.creditDays || 0) : 0;
             setFormData(prev => ({
                 ...prev,
@@ -510,7 +469,7 @@ const AddSalesInvoice = () => {
 
     const handleChallanChange = async (selectedIds) => {
         if (!selectedIds || selectedIds.length === 0) {
-            const customer = accounts.find(c => c.id === parseInt(formData.customerId));
+            const customer = customers.find(c => c.id === parseInt(formData.customerId));
             const defaultCreditDays = customer ? (customer.customerCreditDays || customer.creditDays || 0) : 0;
             setFormData(prev => ({ 
                 ...prev, 
@@ -813,7 +772,8 @@ const AddSalesInvoice = () => {
                         hsnCode: match.hsn_code || match.hsn?.hsn_code || item.hsnCode,
                         taxPercent: taxPct,
                         rate: item.rate || rate,
-                        printDescription: item.printDescription || match.product_name
+                        printDescription: item.printDescription || match.product_name || "",
+                        originalPrintDescription: item.printDescription || match.product_name || ""
                     };
                 }
             }
@@ -911,7 +871,8 @@ const AddSalesInvoice = () => {
                         hsnCode: match.hsn_code || match.hsn?.hsn_code || item.hsnCode,
                         taxPercent: taxPct,
                         rate: item.rate || rate,
-                        printDescription: item.printDescription || match.product_name
+                        printDescription: item.printDescription || match.product_name || "",
+                        originalPrintDescription: item.printDescription || match.product_name || ""
                     };
                 }
             }
@@ -977,7 +938,7 @@ const AddSalesInvoice = () => {
             <div className="flex items-center justify-center min-h-screen bg-[#F8FAFC]">
                 <div className="flex flex-col items-center gap-4">
                     <RefreshCw className="animate-spin text-[#073318]" size={40} />
-                    <p className="text-[14px] font-bold text-gray-500 animate-pulse uppercase tracking-[2px]">Loading Invoice Module...</p>
+                    <p className="text-[14px] font-bold text-gray-500 animate-pulse uppercase tracking-[2px]">{t('modules:loading_invoice_module')}</p>
                 </div>
             </div>
         );
@@ -994,20 +955,20 @@ const AddSalesInvoice = () => {
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
                 <div className="px-8 py-6 border-b border-[#F3F4F6] bg-white flex items-center justify-between">
                     <h2 className="text-[20px] font-bold text-[#111827]">
-                        {isEditMode ? 'Edit Sales Invoice' : 'Add Sales Invoice'}
+                        {isEditMode ? t('modules:edit_sales_invoice_title') : t('modules:add_sales_invoice_title')}
                     </h2>
                     <button 
                         onClick={() => navigate(-1)}
                         className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all shadow-sm"
                     >
-                        <ArrowLeft size={18} /> Back
+                        <ArrowLeft size={18} /> {t('modules:back')}
                     </button>
                 </div>
 
                 <div className="p-8 border-b border-[#F3F4F6]">
                     <h2 className="text-[18px] font-bold text-[#111827] mb-6 flex items-center gap-2 tracking-tight uppercase">
                          <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
-                        Basic Details
+                        {t('modules:basic_details')}
                     </h2>
                     {(() => {
                         const today = new Date().toISOString().split('T')[0];
@@ -1072,7 +1033,7 @@ const AddSalesInvoice = () => {
                 <div className="p-8 border-b border-[#F3F4F6]">
                     <h2 className="text-[18px] font-bold text-[#111827] mb-6 flex items-center gap-2 tracking-tight uppercase">
                          <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
-                        Product Details
+                        {t('modules:product_details')}
                     </h2>
                     <InvoiceTable
                         items={items}
@@ -1089,7 +1050,7 @@ const AddSalesInvoice = () => {
                 <div className="p-8">
                     <h2 className="text-[18px] font-bold text-[#111827] mb-6 flex items-center gap-2 tracking-tight uppercase">
                          <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
-                        Account Summary
+                        {t('modules:account_summary')}
                     </h2>
                     <AccountTable
                         items={items}
@@ -1105,20 +1066,20 @@ const AddSalesInvoice = () => {
                         onClick={handlePrintPreview}
                         className="px-6 h-[48px] border border-[#073318] text-[#073318] bg-white rounded-[10px] text-[15px] font-bold hover:bg-emerald-50 transition-all flex items-center justify-center gap-2 active:scale-95"
                     >
-                        <Printer size={18} /> Preview & Print
+                        <Printer size={18} /> {t('modules:preview_print')}
                     </button>
                     <button 
                         onClick={handleSave} 
                         disabled={isSaving}
                         className="px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] shadow-[0_4px_15px_rgba(7,51,24,0.15)] transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70"
                     >
-                        {isSaving ? <RefreshCw className="animate-spin" size={18} /> : (isEditMode ? 'Update Invoice' : 'Generate Invoice')}
+                        {isSaving ? <RefreshCw className="animate-spin" size={18} /> : (isEditMode ? t('modules:update_invoice') : t('modules:generate_invoice'))}
                     </button>
                     <button 
                         onClick={() => navigate(ROUTES.SALES_INVOICE)}
                         className="px-8 h-[48px] bg-white border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[15px] font-bold hover:bg-gray-100 transition-all flex items-center justify-center gap-2 shadow-sm"
                     >
-                        Cancel
+                        {t('modules:cancel')}
                     </button>
                 </div>
             </div>

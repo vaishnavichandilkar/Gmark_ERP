@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 
 import purchaseInvoiceService from '@/services/purchaseInvoiceService';
 import { getStandardGstUom } from '@/utils/uomUtils';
+import { useTranslation } from 'react-i18next';
 
 const InfoTableRow = ({ label1, value1, label2, value2 }) => (
     <div className="flex flex-col sm:flex-row border-[#E5E7EB] border-b last:border-0 font-outfit">
@@ -28,6 +29,7 @@ const InfoTableRow = ({ label1, value1, label2, value2 }) => (
 );
 
 const ViewPurchaseInvoice = () => {
+    const { t } = useTranslation(['modules', 'common']);
     const navigate = useNavigate();
     const { id } = useParams();
     
@@ -110,21 +112,21 @@ const ViewPurchaseInvoice = () => {
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
                 {/* Header Section */}
                 <div className="flex flex-col sm:flex-row items-center justify-between px-8 py-6 border-b border-[#F3F4F6] gap-4">
-                    <h2 className="text-[20px] font-bold text-[#111827]">View Purchase Invoice</h2>
+                    <h2 className="text-[20px] font-bold text-[#111827]">{t('modules:view_purchase_invoice', 'View Purchase Invoice')}</h2>
                     <div className="flex items-center gap-3">
                         {invoice.status !== 'DELETED' && (
                             <button 
                                 onClick={() => navigate(`/seller/purchase/invoice/edit/${id}`)}
                                 className="px-6 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all flex items-center gap-2"
                             >
-                                Edit
+                                {t('common:edit')}
                             </button>
                         )}
                         <button 
                             onClick={() => navigate(-1)}
                             className="flex items-center gap-2 px-6 h-[44px] border border-[#E5E7EB] rounded-[10px] text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all"
                         >
-                            <ArrowLeft size={18} /> Back
+                            <ArrowLeft size={18} /> {t('common:back')}
                         </button>
                     </div>
                 </div>
@@ -134,40 +136,40 @@ const ViewPurchaseInvoice = () => {
                     <div className="mb-6">
                         <h1 className="text-[32px] font-bold text-[#111827] mb-2 uppercase tracking-tight">#{invoice.invoiceNumber}</h1>
                         <div className="flex gap-2">
-                            <span className="px-4 py-1.5 bg-[#4B5563] text-white rounded-full text-[13px] font-bold">INVOICE DETAILS</span>
+                            <span className="px-4 py-1.5 bg-[#4B5563] text-white rounded-full text-[13px] font-bold">{t('modules:invoice_details', 'INVOICE DETAILS')}</span>
                             <span className={`px-4 py-1.5 rounded-full text-[13px] font-bold border ${
                                 invoice.status === 'DELETED' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                             }`}>
-                                {invoice.status === 'DELETED' ? 'DELETED' : 'POSTED'}
+                                {invoice.status === 'DELETED' ? t('modules:deleted', 'DELETED') : t('modules:posted', 'POSTED')}
                             </span>
                         </div>
                     </div>
 
                     <div className="border border-[#E5E7EB] rounded-[12px] overflow-hidden shadow-sm">
-                        <InfoTableRow label1="Supplier Name:" value1={invoice.supplierName} label2="Credit Days:" value2={invoice.creditDays} />
-                        <InfoTableRow label1="Supplier Address:" value1={invoice.address} label2="PO Number:" value2={invoice.poNumber} />
-                        <InfoTableRow label1="Supplier Invoice No:" value1={invoice.supplierInvoiceNumber} label2="Booking Date:" value2={formatDate(invoice.bookingDate)} />
-                        <InfoTableRow label1="Invoice Date:" value1={formatDate(invoice.supplierInvoiceDate)} label2="GST Number:" value2={invoice.gstNumber} />
+                        <InfoTableRow label1={t('modules:supplier_name') + ":"} value1={invoice.supplierName} label2={t('modules:credit_days_col') + ":"} value2={invoice.creditDays} />
+                        <InfoTableRow label1={t('modules:supplier_address', 'Supplier Address') + ":"} value1={invoice.address} label2={t('modules:po_number', 'PO Number') + ":"} value2={invoice.poNumber} />
+                        <InfoTableRow label1={t('modules:supplier_invoice_no', 'Supplier Invoice No') + ":"} value1={invoice.supplierInvoiceNumber} label2={t('modules:booking_date', 'Booking Date') + ":"} value2={formatDate(invoice.bookingDate)} />
+                        <InfoTableRow label1={t('modules:invoice_date', 'Invoice Date') + ":"} value1={formatDate(invoice.supplierInvoiceDate)} label2={t('modules:gst_number_col') + ":"} value2={invoice.gstNumber} />
                     </div>
                 </div>
 
                 {/* Table Section */}
                 <div className="p-8">
-                    <h3 className="text-[16px] font-bold text-gray-800 mb-4 uppercase tracking-wider">Item Details</h3>
+                    <h3 className="text-[16px] font-bold text-gray-800 mb-4 uppercase tracking-wider">{t('modules:item_details', 'Item Details')}</h3>
                     <div className="overflow-x-auto custom-invoice-scrollbar border border-[#E5E7EB] rounded-[12px] mb-8">
                         <table className="w-full min-w-[1200px] border-collapse bg-white">
                             <thead>
                                 <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
                                     <th className="px-4 py-4 w-[60px] text-center text-[13px] font-bold text-[#4B5563]">#</th>
-                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-left border-l border-[#F3F4F6]">Product Code</th>
-                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-left border-l border-[#F3F4F6]">Product Name</th>
-                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-right border-l border-[#F3F4F6]">Quantity</th>
-                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-left border-l border-[#F3F4F6]">UOM</th>
-                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-right border-l border-[#F3F4F6]">Rate</th>
-                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-right border-l border-[#F3F4F6]">Tax %</th>
-                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-right border-l border-[#F3F4F6]">Before Tax</th>
-                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-right border-l border-[#F3F4F6]">Tax Amount</th>
-                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-right border-l border-[#F3F4F6]">Total Amount</th>
+                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-left border-l border-[#F3F4F6]">{t('modules:product_code')}</th>
+                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-left border-l border-[#F3F4F6]">{t('modules:product_name')}</th>
+                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-right border-l border-[#F3F4F6]">{t('modules:quantity')}</th>
+                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-left border-l border-[#F3F4F6]">{t('modules:uom')}</th>
+                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-right border-l border-[#F3F4F6]">{t('modules:rate')}</th>
+                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-right border-l border-[#F3F4F6]">{t('modules:tax_percent', 'Tax %')}</th>
+                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-right border-l border-[#F3F4F6]">{t('modules:before_tax', 'Before Tax')}</th>
+                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-right border-l border-[#F3F4F6]">{t('modules:tax_amount')}</th>
+                                    <th className="px-4 py-4 text-[13px] font-bold text-[#4B5563] text-right border-l border-[#F3F4F6]">{t('modules:amount_col')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[#F3F4F6]">
@@ -182,9 +184,9 @@ const ViewPurchaseInvoice = () => {
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right font-bold text-emerald-800">
                                             {parseFloat((invoice.gstNumber && invoice.gstNumber.trim() !== '' && invoice.gstNumber !== '-') ? (item.taxPercent || 0) : 0).toFixed(2)}%
                                         </td>
-                                        <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right">₹{parseFloat(item.beforeTaxAmount).toFixed(2)}</td>
-                                        <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right">₹{parseFloat(item.taxAmount).toFixed(2)}</td>
-                                        <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right font-bold text-[#073318]">₹{parseFloat(item.totalAmount).toFixed(2)}</td>
+                                        <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right">₹{parseFloat(item.beforeTaxAmount || 0).toFixed(2)}</td>
+                                        <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right">₹{parseFloat(item.taxAmount || 0).toFixed(2)}</td>
+                                        <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-right font-bold text-[#073318]">₹{parseFloat(item.totalAmount || (parseFloat(item.beforeTaxAmount || 0) + parseFloat(item.taxAmount || 0))).toFixed(2)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -192,14 +194,14 @@ const ViewPurchaseInvoice = () => {
                     </div>
 
                     {/* Account Summary */}
-                    <h3 className="text-[16px] font-bold text-gray-800 mb-4 uppercase tracking-wider">Account Summary</h3>
+                    <h3 className="text-[16px] font-bold text-gray-800 mb-4 uppercase tracking-wider">{t('modules:account_summary', 'Account Summary')}</h3>
                     <div className="border border-[#E5E7EB] rounded-[16px] overflow-hidden shadow-sm w-full">
                         <table className="w-full text-left">
                             <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
                                 <tr>
-                                    <th className="px-6 py-4 text-[13px] font-bold text-[#64748B] uppercase tracking-wider">Account Description</th>
-                                    <th className="px-6 py-4 text-right text-[13px] font-bold text-[#64748B] uppercase tracking-wider border-l border-[#F1F5F9]">Amount</th>
-                                    <th className="px-6 py-4 text-right text-[13px] font-bold text-[#64748B] uppercase tracking-wider border-l border-[#F1F5F9]">Cum. Balance</th>
+                                    <th className="px-6 py-4 text-[13px] font-bold text-[#64748B] uppercase tracking-wider">{t('modules:account_description', 'Account Description')}</th>
+                                    <th className="px-6 py-4 text-right text-[13px] font-bold text-[#64748B] uppercase tracking-wider border-l border-[#F1F5F9]">{t('modules:amount_col')}</th>
+                                    <th className="px-6 py-4 text-right text-[13px] font-bold text-[#64748B] uppercase tracking-wider border-l border-[#F1F5F9]">{t('modules:cum_balance')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[#F1F5F9]">
@@ -208,7 +210,7 @@ const ViewPurchaseInvoice = () => {
                                     let runningBalance = materialSubtotal;
                                     return (
                                         <tr>
-                                            <td className="px-6 py-4 text-[14px] font-bold text-[#475569]">MATERIAL PURCHASE (EXCL. GST)</td>
+                                            <td className="px-6 py-4 text-[14px] font-bold text-[#475569]">{t('modules:material_purchase_excl_gst', 'MATERIAL PURCHASE (EXCL. GST)')}</td>
                                             <td className="px-6 py-4 text-right font-bold text-[#1e293b] border-l border-[#F1F5F9]">₹{materialSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                             <td className="px-6 py-4 text-right font-bold text-[#64748B] border-l border-[#F1F5F9]">₹{runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                         </tr>
@@ -282,7 +284,7 @@ const ViewPurchaseInvoice = () => {
 
                                 {/* Grand Total */}
                                 <tr className="bg-[#073318] text-white">
-                                    <td className="px-6 py-5 text-[16px] font-black uppercase tracking-widest">Grand Total</td>
+                                    <td className="px-6 py-5 text-[16px] font-black uppercase tracking-widest">{t('modules:grand_total')}</td>
                                     <td className="px-6 py-5 text-right text-[20px] font-black border-l border-[#ffffff20]">₹{parseFloat(invoice.grandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                     <td className="px-6 py-5 border-l border-[#ffffff20]"></td>
                                 </tr>

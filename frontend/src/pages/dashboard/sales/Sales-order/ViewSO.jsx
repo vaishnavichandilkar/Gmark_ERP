@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ROUTES } from '../../../../constants/routes';
+import { useTranslation } from 'react-i18next';
 import {
     ArrowLeft,
     Search,
@@ -36,6 +37,7 @@ const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1,
 );
 
 const ViewSO = () => {
+    const { t } = useTranslation(['modules', 'common']);
     const navigate = useNavigate();
     const { id } = useParams();
     const isEditMode = false;
@@ -116,7 +118,7 @@ const ViewSO = () => {
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
                 <div className="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-[#F3F4F6] gap-4">
                     <h2 className="text-[18px] md:text-[20px] font-bold text-[#111827]">
-                        View Sales Order
+                        {t('modules:view_so')}
                     </h2>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                         {!isLoading && salesOrder && salesOrder.status === 'PENDING' && !(salesOrder.salesChallans?.length > 0 || salesOrder.salesInvoices?.length > 0) && (
@@ -124,14 +126,14 @@ const ViewSO = () => {
                                 onClick={() => navigate(ROUTES.SALES_ORDER_EDIT.replace(':id', id))}
                                 className="flex-1 sm:flex-none px-6 md:px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] md:text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-md flex items-center justify-center gap-2"
                             >
-                                Edit SO
+                                {t('modules:edit_so')}
                             </button>
                         )}
                         <button
                             onClick={() => navigate(-1)}
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[44px] border border-[#E5E7EB] rounded-[10px] text-[14px] md:text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all font-outfit"
                         >
-                            <ArrowLeft size={18} /> Back
+                            <ArrowLeft size={18} /> {t('common:back')}
                         </button>
                     </div>
                 </div>
@@ -152,42 +154,42 @@ const ViewSO = () => {
                             </h1>
                             <div className="flex gap-2">
                                 <div className="inline-flex items-center px-4 py-1.5 bg-[#4B5563] text-white rounded-[100px] text-[14px] font-medium">
-                                    Sales Order
+                                    {t('modules:sales_order')}
                                 </div>
                                 {formData.status && (
                                     <div className={`inline-flex items-center px-4 py-1.5 rounded-[100px] text-[14px] font-bold shadow-sm border ${formData.status === 'completed' ? 'bg-[#D1FAE5] text-[#059669] border-[#A7F3D0]' :
                                         'bg-[#F3F4F6] text-[#4B5563] border-[#E5E7EB]'
                                         }`}>
-                                        {formData.status}
+                                        {t(`common:status_${formData.status.toLowerCase()}`, formData.status)}
                                     </div>
                                 )}
                             </div>
                         </div>
 
                         <div className="border border-[#E5E7EB] rounded-[12px] overflow-hidden shadow-sm">
-                            <InfoTableRow label1="Customer Name:" value1={formData.customer_name} label2="Credit Days:" value2={formData.credit_days} />
-                            <InfoTableRow label1="Address:" value1={formData.address} label2="SO Creation Date:" value2={formatDate(formData.creation_date)} />
-                            <InfoTableRow label1="Expiry Date:" value1={formatDate(formData.expiry_date)} label2="GST Number:" value2={formData.gst_number} />
-                            <InfoTableRow label1="PAN Number:" value1={formData.pan_number} label2="Customer Type:" value2={formData.customer_type ? formData.customer_type.toUpperCase() : '-'} />
+                            <InfoTableRow label1={t('modules:customerName') + ":"} value1={formData.customer_name} label2={t('modules:credit_days') + ":"} value2={formData.credit_days} />
+                            <InfoTableRow label1={t('common:address') + ":"} value1={formData.address} label2={t('modules:creation_date') + ":"} value2={formatDate(formData.creation_date)} />
+                            <InfoTableRow label1={t('modules:expiry_date') + ":"} value1={formatDate(formData.expiry_date)} label2={t('modules:gst_no') + ":"} value2={formData.gst_number} />
+                            <InfoTableRow label1={t('modules:pan_no') + ":"} value1={formData.pan_number} label2={t('modules:customer_type') + ":"} value2={formData.customer_type ? formData.customer_type.toUpperCase() : '-'} />
                             {formData.customer_po_number === 'verbal' ? (
-                                <InfoTableRow label1="Customer PO Number:" value1="Verbal" label2="" value2="" />
+                                <InfoTableRow label1={t('modules:customerPoNumber') + ":"} value1={t('common:status_verbal', 'Verbal')} label2="" value2="" />
                             ) : (
                                 <>
                                     <InfoTableRow 
-                                        label1="Customer PO Number:" 
+                                        label1={t('modules:customerPoNumber') + ":"} 
                                         value1={formData.customer_po_number} 
-                                        label2="Customer PO Date:" 
+                                        label2={t('modules:customerPoDate') + ":"} 
                                         value2={formatDate(formData.po_date)} 
                                     />
                                     <InfoTableRow 
-                                        label1="Customer PO Expiry Date:" 
+                                        label1={t('modules:customerPoExpDate') + ":"} 
                                         value1={formatDate(formData.po_expiry_date)} 
-                                        label2="Customer PO Amount:" 
+                                        label2={t('modules:customerPoAmount', 'Customer PO Amount') + ":"} 
                                         value2={formData.customer_amt !== null && formData.customer_amt !== undefined && formData.customer_amt !== '' ? `₹ ${parseFloat(formData.customer_amt).toFixed(2)}` : '-'} 
                                     />
                                     {formData.customer_po_file && (
                                         <InfoTableRow 
-                                            label1="Customer PO Document:" 
+                                            label1={t('modules:customerPoDocument', 'Customer PO Document') + ":"} 
                                             value1={
                                                 <button
                                                     onClick={() => {
@@ -197,7 +199,7 @@ const ViewSO = () => {
                                                     }}
                                                     className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 text-emerald-800 rounded-md font-bold text-[12px] hover:bg-emerald-100 transition-colors border border-emerald-200 cursor-pointer shadow-sm active:scale-95 shrink-0"
                                                 >
-                                                    <FileText size={14} /> View Document
+                                                    <FileText size={14} /> {t('common:view_document', 'View Document')}
                                                 </button>
                                             }
                                             label2="" 
@@ -215,22 +217,22 @@ const ViewSO = () => {
                         <table className="w-full min-w-[2000px] border-collapse bg-white">
                             <thead>
                                 <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                                    <th className="px-4 py-4 w-[60px] text-center text-[13px] font-semibold text-[#4B5563]">S.No</th>
+                                    <th className="px-4 py-4 w-[60px] text-center text-[13px] font-semibold text-[#4B5563]">{t('common:sr_no_short', '#')}</th>
                                     {[
-                                        { label: "Product Code", width: "160px" },
-                                        { label: "Product", width: "350px" },
-                                        { label: "Qty", width: "120px", align: "right" },
-                                        { label: "UOM", width: "100px" },
-                                        { label: "Rate", width: "140px", align: "right" },
-                                        { label: "Disc Amt", width: "130px", align: "right" },
-                                        { label: "Disc %", width: "120px", align: "right" },
-                                        { label: "HSN", width: "130px" },
-                                        { label: "Tax %", width: "100px", align: "right" },
-                                        { label: "Before Tax", width: "150px", align: "right" },
-                                        { label: "Tax Amt", width: "140px", align: "right" },
-                                        { label: "Total Amt", width: "160px", align: "right" },
-                                        { label: "Description", width: "250px" },
-                                        { label: "Action", width: "80px", align: "center" }
+                                        { label: t('modules:product_code'), width: "160px" },
+                                        { label: t('modules:product_name'), width: "350px" },
+                                        { label: t('common:quantity', 'Qty'), width: "120px", align: "right" },
+                                        { label: t('modules:uom'), width: "100px" },
+                                        { label: t('common:rate', 'Rate'), width: "140px", align: "right" },
+                                        { label: t('modules:discount_amount', 'Disc Amt'), width: "130px", align: "right" },
+                                        { label: t('modules:discount_percent', 'Disc %'), width: "120px", align: "right" },
+                                        { label: t('modules:hsn_code'), width: "130px" },
+                                        { label: t('modules:tax_percent'), width: "100px", align: "right" },
+                                        { label: t('modules:beforeTaxAmount', 'Before Tax'), width: "150px", align: "right" },
+                                        { label: t('modules:taxAmount'), width: "140px", align: "right" },
+                                        { label: t('modules:total_amount_col'), width: "160px", align: "right" },
+                                        { label: t('common:description'), width: "250px" },
+                                        { label: t('common:action'), width: "80px", align: "center" }
                                     ].map((col, idx) => (
                                         <th
                                             key={idx}
@@ -289,7 +291,7 @@ const ViewSO = () => {
                             </tbody>
                             <tfoot className="bg-[#F9FAFB] border-t-2 border-[#E5E7EB] font-bold">
                                 <tr>
-                                    <td colSpan={3} className="px-4 py-5 text-[14px]">Total Summary</td>
+                                    <td colSpan={3} className="px-4 py-5 text-[14px]">{t('common:total_summary', 'Total Summary')}</td>
                                     <td className="px-4 py-4 border-l border-[#F3F4F6] text-right">
                                         {isLoading ? <div className="h-4 bg-gray-100 rounded w-12 ml-auto"></div> : items.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0).toFixed(2)}
                                     </td>
@@ -316,7 +318,9 @@ const ViewSO = () => {
                             </tfoot>
                         </table>
                     </div>
-                </div>                {/* Footer Actions */}
+                </div>
+
+                {/* Footer Actions */}
                 {!isLoading && (
                     <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-[#E5E7EB] p-5 flex justify-end z-[100] shadow-[0_-8px_30px_rgba(0,0,0,0.04)] font-outfit">
                         <button
@@ -330,7 +334,7 @@ const ViewSO = () => {
                             }}
                             className="flex items-center gap-2 px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all active:scale-95 shadow-sm"
                         >
-                            <Printer size={18} /> Preview & Print SO
+                            <Printer size={18} /> {t('modules:preview_print_so', 'Preview & Print SO')}
                         </button>
                     </div>
                 )}

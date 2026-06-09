@@ -26,8 +26,10 @@ import salesOrderService from '../../../../services/salesOrderService';
 import accountService from '../../../../services/accountService';
 import productService from '../../../../services/productService';
 import { BASE_URL } from '@/constants/apiConstants';
+import { useTranslation } from 'react-i18next';
 
 const AddSO = () => {
+    const { t } = useTranslation(['modules', 'common']);
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { id } = useParams();
@@ -314,7 +316,8 @@ const AddSO = () => {
                                 before_tax: (item.quantity * item.rate - item.discountAmount).toFixed(2),
                                 tax_amount: item.taxAmount.toFixed(2),
                                 total_amount: item.totalAmount.toFixed(2),
-                                description: item.printDescription || item.description || ''
+                                description: item.printDescription || item.description || '',
+                                original_description: item.printDescription || item.description || ''
                             })));
                         }
                     }
@@ -408,35 +411,33 @@ const AddSO = () => {
         return Boolean(isSellerMsmeActive && isSellerMsmeType);
     }, [businessProfile]);
 
+    const [isCustomerMsmeUser, setIsCustomerMsmeUser] = useState(false);
+
     useEffect(() => {
-        if (!formData.customer_id) return;
-        const customer = customers.find(c => String(c.id) === String(formData.customer_id));
-        if (!customer) return;
+        if (formData.customer_id && customers.length > 0) {
+            const currentCustomer = customers.find(c => String(c.id) === String(formData.customer_id));
+            if (currentCustomer) {
+                setIsCustomerMsmeUser(Boolean(currentCustomer.isMsmeUser));
+            } else {
+                setIsCustomerMsmeUser(false);
+            }
+        } else {
+            setIsCustomerMsmeUser(false);
+        }
+    }, [formData.customer_id, customers]);
 
-        const isCustomerMsmeActive = customer.msmeEnabled;
-        const isCustomerMsmeType = customer.regType === "Manufacturing" || customer.regType === "Service";
-        const isCustomerMsme = Boolean(isCustomerMsmeActive && isCustomerMsmeType);
-
-        const shouldCap = isSellerMsme || isCustomerMsme;
-
-        if (shouldCap && formData.credit_days) {
+    useEffect(() => {
+        if (isSellerMsme && formData.credit_days) {
             const val = parseInt(formData.credit_days, 10);
             if (!isNaN(val) && val > 45) {
                 setFormData(prev => ({ ...prev, credit_days: '45' }));
-                if (isSellerMsme) {
-                    toast.error(
-                        "As you are registered under MSME/Udyam with Registration Type Manufacturing/Service, the maximum credit period allowed for your customers is 45 days. Credit Days has been adjusted to 45.",
-                        { id: "msme-customer-warning" }
-                    );
-                } else {
-                    toast.error(
-                        "This customer is registered under MSME/Udyam with Registration Type Manufacturing/Service. As per MSME rules, maximum credit period allowed is 45 days. Credit Days has been adjusted to 45.",
-                        { id: "msme-customer-warning" }
-                    );
-                }
+                toast.error(
+                    "As you are registered under MSME (Manufacturing/Service), maximum credit period allowed for customers is 45 days. Credit Days has been adjusted to 45.",
+                    { id: "msme-customer-warning", duration: 6000 }
+                );
             }
         }
-    }, [formData.customer_id, formData.credit_days, customers, isSellerMsme]);
+    }, [formData.credit_days, isSellerMsme]);
 
     const handleSelectCustomer = async (customer) => {
         setFormData(prev => ({
@@ -449,6 +450,7 @@ const AddSO = () => {
             pan_number: customer.panNumber || '',
             customer_type: customer.customerType || ''
         }));
+        setIsCustomerMsmeUser(Boolean(customer.isMsmeUser));
         setCustomerSearch(''); // Clear search after selection
         setIsCustomerDropdownOpen(false);
     };
@@ -764,10 +766,10 @@ const AddSO = () => {
         <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-500 pb-20">
             <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
                 <div className="px-8 py-6 border-b border-[#F3F4F6] flex items-center justify-between">
-                    <h2 className="text-[20px] font-bold text-[#111827]">{isEditMode ? 'Edit SO' : 'Add SO'}</h2>
+                    <h2 className="text-[20px] font-bold text-[#111827]">{isEditMode ? t('common:edit_so', 'Edit SO') : t('common:add_so', 'Add SO')}</h2>
                     <div className="flex items-center gap-3">
                         <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-6 h-[44px] border border-[#E5E7EB] rounded-[10px] text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all font-outfit shadow-sm">
-                            <ArrowLeft size={18} /> Back
+                            <ArrowLeft size={18} /> {t('common:back')}
                         </button>
                     </div>
                 </div>
@@ -776,7 +778,7 @@ const AddSO = () => {
                     <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-[100] flex items-center justify-center">
                         <div className="flex flex-col items-center gap-3">
                             <div className="w-10 h-10 border-4 border-emerald-800 border-t-transparent rounded-full animate-spin"></div>
-                            <p className="text-[14px] font-bold text-emerald-900">Loading customers...</p>
+                            <p className="text-[14px] font-bold text-emerald-900">{t('modules:loading_customers', 'Loading customers...')}</p>
                         </div>
                     </div>
                 )}
@@ -785,11 +787,11 @@ const AddSO = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 font-outfit">
                         {/* Row 1 */}
                         <div className="space-y-2 relative" ref={customerContainerRef}>
-                            <label className="text-[14px] font-semibold text-[#374151]">Customer Name <span className="text-red-500">*</span></label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:customer_name', 'Customer Name')} <span className="text-red-500">*</span></label>
                             <div className="relative">
                                 <input
                                     type="text"
-                                    placeholder="Search or select customer..."
+                                    placeholder={t('modules:search_or_select_customer', 'Search or select customer...')}
                                     value={isCustomerDropdownOpen ? customerSearch : (formData.customer_name || '')}
                                     onFocus={() => {
                                         setCustomerSearch(formData.customer_name || '');
@@ -869,43 +871,43 @@ const AddSO = () => {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[14px] font-semibold text-[#374151]">Customer Type</label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:customer_type_col', 'Customer Type')}</label>
                             <input
                                 type="text"
                                 value={formData.customer_type || ''}
                                 readOnly
                                 className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium"
-                                placeholder="Auto-fetched from Account Master"
+                                placeholder={t('common:auto_fetched')}
                             />
                         </div>
 
                         {/* Row 2 */}
                         <div className="space-y-2">
-                            <label className="text-[14px] font-semibold text-[#374151]">Credit Days <span className="text-red-500">*</span></label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:credit_days_col')} <span className="text-red-500">*</span></label>
                             <input
                                 type="number"
                                 min="0"
                                 value={formData.credit_days !== undefined && formData.credit_days !== null && formData.credit_days !== '' ? formData.credit_days : ''}
                                 onChange={(e) => setFormData({ ...formData, credit_days: e.target.value })}
                                 className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318]"
-                                placeholder="Enter credit days"
+                                placeholder={t('modules:enter_credit_days', 'Enter credit days')}
                             />
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[14px] font-semibold text-[#374151]">Address</label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('common:address')}</label>
                             <input
                                 type="text"
                                 value={formData.address || ''}
                                 readOnly
                                 className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium"
-                                placeholder="Auto-fetched from Account Master"
+                                placeholder={t('modules:auto_fetched_account_master', 'Auto-fetched from Account Master')}
                             />
                         </div>
 
                         {/* Row 3 */}
                         <div className="space-y-2">
-                            <label className="text-[14px] font-semibold text-[#374151]">SO Creation Date</label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:so_creation_date', 'SO Creation Date')}</label>
                             <input
                                 type="text"
                                 value={formatDate(formData.creation_date)}
@@ -915,7 +917,7 @@ const AddSO = () => {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[14px] font-semibold text-[#374151]">SO Booking Date</label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:so_booking_date', 'SO Booking Date')}</label>
                             <input
                                 type="text"
                                 value={formatDate(new Date())}
@@ -925,7 +927,7 @@ const AddSO = () => {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[14px] font-semibold text-[#374151]">SO Number</label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:so_number', 'SO Number')}</label>
                             <input
                                 type="text"
                                 value={formData.so_number}
@@ -936,7 +938,7 @@ const AddSO = () => {
 
                         {/* Row 4 */}
                         <div className="space-y-2">
-                            <label className="text-[14px] font-semibold text-[#374151]">Expiry Date <span className="text-red-500">*</span></label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:expiry_date')} <span className="text-red-500">*</span></label>
                             <div className="relative group/date">
                                 <input
                                     type="date"
@@ -960,7 +962,7 @@ const AddSO = () => {
 
                         {/* Customer PO Type */}
                         <div className="space-y-2">
-                            <label className="text-[14px] font-semibold text-[#374151]">Customer PO Type</label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:customer_po_type', 'Customer PO Type')}</label>
                             <select
                                 value={poType}
                                 onChange={(e) => {
@@ -991,7 +993,7 @@ const AddSO = () => {
                                 }}
                                 className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] font-medium"
                             >
-                                <option value="">Select PO Type...</option>
+                                <option value="">{t('modules:select_po_type', 'Select PO Type...')}</option>
                                 <option value="verbal">Verbal</option>
                                 <option value="written">Written</option>
                             </select>
@@ -1077,13 +1079,13 @@ const AddSO = () => {
                         )}
 
                         <div className="space-y-2">
-                            <label className="text-[14px] font-semibold text-[#374151]">GST Number</label>
+                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:gst_number_col')}</label>
                             <input
                                 type="text"
                                 value={formData.gst_number || ''}
                                 readOnly
                                 className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-gray-500 outline-none cursor-not-allowed font-medium"
-                                placeholder="Auto-fetched from Account Master"
+                                placeholder={t('modules:auto_fetched_account_master', 'Auto-fetched from Account Master')}
                             />
                         </div>
                     </div>
@@ -1175,7 +1177,7 @@ const AddSO = () => {
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" size={18} />
                             <input
                                 type="text"
-                                placeholder="Search By Anything..."
+                                placeholder={t('common:search_by_anything')}
                                 value={tableSearch}
                                 onFocus={() => {
                                     setActiveRowIndex(null);
@@ -1190,7 +1192,7 @@ const AddSO = () => {
                                 }}
                                 className={`w-full h-[48px] bg-white border rounded-[12px] pl-11 pr-4 text-[14px] outline-none focus:ring-1 transition-all placeholder:text-[#9CA3AF] shadow-sm font-outfit ${errors.items ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-[#073318]/10'}`}
                             />
-                            {errors.items && <p className="text-red-500 text-[12px] mt-1 font-medium italic font-outfit">*Please add at least one product</p>}
+                            {errors.items && <p className="text-red-500 text-[12px] mt-1 font-medium italic font-outfit">*{t('modules:please_add_product', 'Please add at least one product')}</p>}
 
                             {/* Global Product Search Suggestions Dropdown */}
                             {isProductSearchOpen && activeRowIndex === null && (
@@ -1223,7 +1225,7 @@ const AddSO = () => {
                                             </button>
                                         ))}
                                         {filteredProducts.length === 0 && (
-                                            <div className="px-5 py-10 text-center text-[13px] text-gray-400 italic">No products found for "{tableSearch}"</div>
+                                            <div className="px-5 py-10 text-center text-[13px] text-gray-400 italic">{t('common:no_results_found')}</div>
                                         )}
                                     </div>
 
@@ -1234,7 +1236,7 @@ const AddSO = () => {
                                             className="w-full h-[44px] bg-[#073318] text-white text-[14px] font-bold rounded-[10px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-md"
                                         >
                                             <Plus size={16} className="group-hover:scale-110 transition-transform" />
-                                            Add new product
+                                            {t('modules:add_new_product')}
                                         </button>
                                     </div>
                                 </div>
@@ -1347,25 +1349,25 @@ const AddSO = () => {
                                         #
                                     </th>
                                     {[
-                                        { label: "Product Code", width: "160px" },
-                                        { label: "Product", width: "350px" },
-                                        { label: "Description", width: "300px" },
-                                        { label: "Qty", width: "120px" },
-                                        { label: "UOM", width: "100px" },
-                                        { label: "Rate", width: "120px" },
-                                        { label: "Disc Amt", width: "160px" },
-                                        { label: "Disc %", width: "140px" },
-                                        { label: "HSN", width: "140px" },
-                                        { label: "Tax %", width: "120px" },
-                                        { label: "Before Tax", width: "160px" },
-                                        { label: "Tax Amt", width: "140px" },
-                                        { label: "Total Amt", width: "160px" }
+                                        { label: t('modules:product_code', 'Product Code'), width: "160px" },
+                                        { label: t('modules:product_name', 'Product'), width: "350px" },
+                                        { label: t('common:description', 'Description'), width: "300px" },
+                                        { label: t('modules:quantity', 'Qty'), width: "120px" },
+                                        { label: t('modules:uom', 'UOM'), width: "100px" },
+                                        { label: t('modules:rate', 'Rate'), width: "120px" },
+                                        { label: t('modules:discount_amount', 'Disc Amt'), width: "160px" },
+                                        { label: t('modules:discount_percent', 'Disc %'), width: "140px" },
+                                        { label: t('modules:hsn_code', 'HSN'), width: "140px" },
+                                        { label: t('modules:tax_percent', 'Tax %'), width: "120px" },
+                                        { label: t('modules:bef_tax_amount', 'Before Tax'), width: "160px" },
+                                        { label: t('modules:tax_amount', 'Tax Amt'), width: "140px" },
+                                        { label: t('modules:amount_col', 'Total Amt'), width: "160px" }
                                     ].map((col, i) => (
                                         <th key={i} className="px-4 py-4 text-left text-[13px] font-medium text-[#6B7280] border-l border-[#F3F4F6]" style={{ width: col.width }}>
                                             {col.label}
                                         </th>
                                     ))}
-                                    <th className="px-4 py-4 w-[80px] text-center text-[13px] font-semibold text-[#4B5563] border-l border-[#F3F4F6]">Action</th>
+                                    <th className="px-4 py-4 w-[80px] text-center text-[13px] font-semibold text-[#4B5563] border-l border-[#F3F4F6]">{t('common:action')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1389,7 +1391,7 @@ const AddSO = () => {
                                                     setActiveField('code');
                                                     setIsProductSearchOpen(true);
                                                 }}
-                                                placeholder="Code"
+                                                placeholder={t('common:code')}
                                                 className="w-full h-[36px] bg-transparent border-none px-2 text-[13px] text-[#6B7280] outline-none hover:bg-gray-50 rounded-md transition-all cursor-pointer font-bold"
                                             />
                                         </td>
@@ -1410,7 +1412,7 @@ const AddSO = () => {
                                                     setActiveField('name');
                                                     setIsProductSearchOpen(true);
                                                 }}
-                                                placeholder={item.product_name ? "" : "Select product..."}
+                                                placeholder={item.product_name ? "" : t('modules:select_product')}
                                                 className={`w-full h-[36px] bg-transparent border-none px-2 text-[13px] font-bold text-[#111827] outline-none hover:bg-gray-50 rounded-md transition-all cursor-pointer ${!item.product_name ? 'italic text-gray-400 font-normal' : ''}`}
                                             />
 
@@ -1475,7 +1477,7 @@ const AddSO = () => {
 
                                                                     {/* Description Col - Width: 300px */}
                                                                     <div className="w-[300px] px-8 flex items-center justify-center suggestion-col-divider italic text-[12px] font-bold text-white/80 shrink-0">
-                                                                        Select this item to continue
+                                                                        {t('modules:select_item_continue')}
                                                                     </div>
 
                                                                     {/* Qty Col - Width: 120px */}
@@ -1538,7 +1540,7 @@ const AddSO = () => {
                                                 value={item.description}
                                                 onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                                                 className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] text-[#111827] outline-none focus:border-[#073318] transition-all shadow-sm"
-                                                placeholder="Description"
+                                                placeholder={t('common:description')}
                                             />
                                         </td>
 
@@ -1705,7 +1707,7 @@ const AddSO = () => {
                 <div className="flex justify-end p-5 bg-gray-50/20 border-t border-[#E5E7EB] font-outfit">
                     <div className="w-full max-w-[400px] space-y-3">
                         <div className="flex justify-between text-[14px]">
-                            <span className="text-[#64748B] font-medium tracking-tight">Material Sub Total</span>
+                            <span className="text-[#64748B] font-medium tracking-tight">{t('modules:material_sub_total', 'Material Sub Total')}</span>
                             <span className="text-[#1E293B] font-bold">₹ {tableTotals.beforeTax.toFixed(2)}</span>
                         </div>
                         {isIntraState ? (
@@ -1726,7 +1728,7 @@ const AddSO = () => {
                             </div>
                         )}
                         <div className="flex justify-between text-[19px] pt-4 border-t border-[#E2E8F0] mt-2">
-                            <span className="text-[#0F172A] font-black uppercase tracking-tighter">Grand Total</span>
+                            <span className="text-[#0F172A] font-black uppercase tracking-tighter">{t('modules:grand_total', 'Grand Total')}</span>
                             <span className="text-[#073318] font-black">₹ {tableTotals.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                         </div>
                     </div>
@@ -1762,18 +1764,18 @@ const AddSO = () => {
                         className="flex items-center gap-2 px-7 h-[48px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all active:scale-95 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={isSaving}
                     >
-                        <Printer size={18} /> Preview & Print
+                        <Printer size={18} /> {t('modules:preview_print', 'Preview & Print')}
                     </button>
                     <button onClick={handleSave} disabled={isSaving} className="px-9 h-[48px] bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all active:scale-95 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                         {isSaving ? (
                             <>
                                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                Saving...
+                                {t('common:saving', 'Saving...')}
                             </>
-                        ) : 'Save SO'}
+                        ) : t('modules:save_so', 'Save SO')}
                     </button>
                     <button onClick={() => navigate(-1)} disabled={isSaving} className="px-9 h-[48px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all active:scale-95 shadow-sm disabled:opacity-50">
-                        Cancel
+                        {t('common:cancel', 'Cancel')}
                     </button>
                 </div>
             {/* Validation Popup */}
@@ -1809,7 +1811,7 @@ const AddSO = () => {
                                     onClick={() => setShowValidationPopup(false)}
                                     className="h-[46px] px-8 bg-[#EF4444] text-white rounded-[12px] text-[15px] font-bold hover:bg-[#DC2626] transition-all active:scale-[0.96] shadow-[0_4px_15px_rgba(239,68,68,0.25)] flex items-center justify-center"
                                 >
-                                    Got it
+                                    {t('modules:got_it')}
                                 </button>
                             </div>
                         </div>

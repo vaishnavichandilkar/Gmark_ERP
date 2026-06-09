@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import purchaseOrderService from '@/services/purchaseOrderService';
+import { useTranslation } from 'react-i18next';
 import { getStandardGstUom } from '@/utils/uomUtils';
 
 const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1, renderEdit2 }) => (
@@ -34,6 +35,7 @@ const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1,
 );
 
 const ViewPO = () => {
+    const { t } = useTranslation(['modules', 'common']);
     const navigate = useNavigate();
     const { id } = useParams();
     const isEditMode = false;
@@ -133,7 +135,7 @@ const ViewPO = () => {
                 {/* Card Header Section */}
                 <div className="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-[#F3F4F6] gap-4">
                     <h2 className="text-[18px] md:text-[20px] font-bold text-[#111827]">
-                        View PO
+                        {t('common:view_order', 'View Purchase Order')}
                     </h2>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                         {(() => {
@@ -162,7 +164,7 @@ const ViewPO = () => {
                                     onClick={() => navigate(ROUTES.PURCHASE_ORDER_EDIT.replace(':id', id))}
                                     className="flex-1 sm:flex-none px-6 md:px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[14px] md:text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-md flex items-center justify-center gap-2"
                                 >
-                                    Edit PO
+                                    {t('common:edit', 'Edit')}
                                 </button>
                             );
                         })()}
@@ -172,8 +174,8 @@ const ViewPO = () => {
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 h-[44px] border border-[#E5E7EB] rounded-[10px] text-[14px] md:text-[15px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all font-outfit"
                         >
                             <ArrowLeft size={18} />
-                            <span className="hidden sm:inline">Back</span>
-                            <span className="sm:hidden text-gray-500">Back</span>
+                            <span className="hidden sm:inline">{t('common:back')}</span>
+                            <span className="sm:hidden text-gray-500">{t('common:back')}</span>
                         </button>
                     </div>
                 </div>
@@ -195,7 +197,7 @@ const ViewPO = () => {
                             </h1>
                             <div className="flex gap-2">
                                 <div className="inline-flex items-center px-4 py-1.5 bg-[#4B5563] text-white rounded-[100px] text-[14px] font-medium">
-                                    Purchase Order
+                                    {t('modules:purchaseOrder', 'Purchase Order')}
                                 </div>
                                 {formData.status && (
                                     <div className={`inline-flex items-center px-4 py-1.5 rounded-[100px] text-[14px] font-bold shadow-sm border ${formData.status === 'Approved' ? 'bg-[#D1FAE5] text-[#059669] border-[#A7F3D0]' :
@@ -208,9 +210,9 @@ const ViewPO = () => {
                         </div>
 
                         <div className="border border-[#E5E7EB] rounded-[12px] overflow-hidden shadow-sm">
-                            <InfoTableRow label1="Supplier Name:" value1={formData.supplier_name} label2="Credit Days:" value2={formData.credit_days} />
-                            <InfoTableRow label1="Address:" value1={formData.address} label2="PO Creation Date:" value2={formatDate(formData.creation_date)} />
-                            <InfoTableRow label1="Expiry Date:" value1={formatDate(formData.expiry_date)} label2="GST Number:" value2={formData.gst_number} />
+                            <InfoTableRow label1={t('modules:supplier_name') + ':'} value1={formData.supplier_name} label2={t('modules:credit_days_col') + ':'} value2={formData.credit_days} />
+                            <InfoTableRow label1={t('common:address') + ':'} value1={formData.address} label2={t('modules:creation_date') + ':'} value2={formatDate(formData.creation_date)} />
+                            <InfoTableRow label1={t('modules:expiry_date') + ':'} value1={formatDate(formData.expiry_date)} label2={t('modules:gst_number_col') + ':'} value2={formData.gst_number} />
                         </div>
                     </div>
                 )}
@@ -257,22 +259,22 @@ const ViewPO = () => {
                         <table className="w-full min-w-[2000px] border-collapse bg-white">
                             <thead>
                                 <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                                    <th className="px-4 py-4 w-[60px] text-center text-[13px] font-semibold text-[#4B5563]">S.No</th>
+                                    <th className="px-4 py-4 w-[60px] text-center text-[13px] font-semibold text-[#4B5563]">{t('common:sr_no')}</th>
                                     {[
-                                        { label: "Product Code", width: "160px" },
-                                        { label: "Product", width: "350px" },
-                                        { label: "Qty", width: "120px", align: "right" },
-                                        { label: "UOM", width: "100px" },
-                                        { label: "Rate", width: "140px", align: "right" },
-                                        { label: "Disc Amt", width: "130px", align: "right" },
-                                        { label: "Disc %", width: "120px", align: "right" },
-                                        { label: "HSN", width: "130px" },
-                                        { label: "Tax %", width: "100px", align: "right" },
-                                        { label: "Before Tax", width: "150px", align: "right" },
-                                        { label: "Tax Amt", width: "140px", align: "right" },
-                                        { label: "Total Amt", width: "160px", align: "right" },
-                                        { label: "Description", width: "250px" },
-                                        { label: "Action", width: "80px", align: "center" }
+                                        { label: t('modules:product_code'), width: "160px" },
+                                        { label: t('modules:product_name'), width: "350px" },
+                                        { label: t('modules:quantity'), width: "120px", align: "right" },
+                                        { label: t('modules:uom'), width: "100px" },
+                                        { label: t('modules:rate'), width: "140px", align: "right" },
+                                        { label: t('modules:discount_amount'), width: "130px", align: "right" },
+                                        { label: t('modules:discount_percent'), width: "120px", align: "right" },
+                                        { label: t('modules:hsn_code'), width: "130px" },
+                                        { label: t('modules:tax_percent'), width: "100px", align: "right" },
+                                        { label: t('modules:bef_tax_amount'), width: "150px", align: "right" },
+                                        { label: t('modules:tax_amount'), width: "140px", align: "right" },
+                                        { label: t('modules:amount_col'), width: "160px", align: "right" },
+                                        { label: t('common:description'), width: "250px" },
+                                        { label: t('common:action'), width: "80px", align: "center" }
                                     ].map((col, idx) => (
                                         <th
                                             key={idx}
@@ -320,7 +322,7 @@ const ViewPO = () => {
                             </tbody>
                             <tfoot className="bg-[#F9FAFB] border-t-2 border-[#E5E7EB] font-bold">
                                 <tr>
-                                    <td colSpan={3} className="px-4 py-5 text-[14px]">Total Summary</td>
+                                    <td colSpan={3} className="px-4 py-5 text-[14px]">{t('modules:total_summary', 'Total Summary')}</td>
                                     <td className="px-4 py-4 border-l border-[#F3F4F6] text-right">
                                         {isLoading ? <div className="h-4 bg-gray-100 rounded w-12 ml-auto"></div> : items.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0).toFixed(2)}
                                     </td>
@@ -354,7 +356,7 @@ const ViewPO = () => {
                             className="w-full sm:w-auto px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#052611] transition-all shadow-md flex items-center justify-center gap-2"
                         >
                             <Printer size={18} />
-                            Preview & Print
+                            {t('modules:preview_print')}
                         </button>
                     </div>
                 )}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Calendar, Landmark, CreditCard, User, ClipboardList, 
@@ -10,6 +11,11 @@ import axiosInstance from '../../../services/axiosInstance';
 import toast from 'react-hot-toast';
 
 const OneTabSettlement = ({ activeSubTab }) => {
+    const { t } = useTranslation(['modules', 'common']);
+    const subTabLabels = {
+        'Sundry Creditors': t('modules:sundry_creditors'),
+        'Sundry Debtors': t('modules:sundry_debtors')
+    };
     // Determine Type: 'Receipt' (Sundry Debtors) or 'Payment' (Sundry Creditors)
     const type = activeSubTab === 'Sundry Creditors' ? 'Payment' : 'Receipt';
 
@@ -417,7 +423,7 @@ const OneTabSettlement = ({ activeSubTab }) => {
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                     <input 
                         type="text" 
-                        placeholder={`Search Account / Ledger...`}
+                        placeholder={t('modules:search_account_ledger_placeholder')}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full h-11 pl-10 pr-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl outline-none focus:ring-2 focus:ring-current text-[14px] font-semibold text-gray-800 focus:bg-white transition-all"
@@ -431,7 +437,7 @@ const OneTabSettlement = ({ activeSubTab }) => {
                         className={`h-11 px-5 rounded-xl border border-[#E5E7EB] text-[13.5px] font-bold text-gray-600 bg-white hover:bg-gray-50 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50`}
                     >
                         <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} />
-                        Refresh List
+                        {t('modules:refresh_list')}
                     </button>
                 </div>
             </div>
@@ -442,7 +448,7 @@ const OneTabSettlement = ({ activeSubTab }) => {
                     <div className="flex items-center gap-2">
                         <ClipboardList size={18} className={theme.primaryText} />
                         <h3 className="text-[16px] font-bold text-gray-800 uppercase tracking-wider">
-                            Outstanding {activeSubTab} Accounts
+                            {t('modules:outstanding_accounts_title', { type: subTabLabels[activeSubTab] || activeSubTab })}
                         </h3>
                     </div>
                 </div>
@@ -450,22 +456,22 @@ const OneTabSettlement = ({ activeSubTab }) => {
                 {loading ? (
                     <div className="py-24 flex flex-col items-center gap-3">
                         <div className={`w-10 h-10 border-4 ${theme.borderColor} border-t-current rounded-full animate-spin`} />
-                        <p className="font-bold text-gray-400 text-[14px]">Fetching outstanding accounts...</p>
+                        <p className="font-bold text-gray-400 text-[14px]">{t('modules:fetching_outstanding')}</p>
                     </div>
                 ) : groupedParties.length === 0 ? (
                     <div className="py-20 text-center flex flex-col items-center justify-center gap-3 text-gray-500 max-w-md mx-auto">
                         <div className={`w-12 h-12 rounded-full flex items-center justify-center ${theme.lightBg} ${theme.primaryText}`}>
                             <CheckCircle2 size={24} />
                         </div>
-                        <p className="font-bold text-gray-800 text-[15px]">Perfect! No Outstanding Accounts</p>
-                        <p className="text-[13px] text-gray-400 font-medium">All accounts under {activeSubTab} have been fully settled.</p>
+                        <p className="font-bold text-gray-800 text-[15px]">{t('modules:no_outstanding_accounts')}</p>
+                        <p className="text-[13px] text-gray-400 font-medium">{t('modules:all_accounts_settled', { type: subTabLabels[activeSubTab] || activeSubTab })}</p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse text-left text-[14px]">
                             <thead>
                                 <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB] text-gray-500 font-bold text-[12px] tracking-wider uppercase">
-                                    <th className="px-6 py-4">Account Name</th>
+                                    <th className="px-6 py-4">{t('modules:account')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
@@ -509,10 +515,10 @@ const OneTabSettlement = ({ activeSubTab }) => {
                             <div className="flex items-start sm:items-center justify-between px-6 py-5 border-b border-[#F3F4F6] bg-white">
                                 <div>
                                     <h3 className="text-[20px] font-bold text-[#111827] tracking-tight">
-                                        Settle Account: {selectedParty.partyName}
+                                        {t('modules:settle_account')}: {selectedParty.partyName}
                                     </h3>
                                     <p className="text-[14px] text-[#6B7280] font-medium mt-1">
-                                        Settle pending debit and credit transactions
+                                        {t('modules:settle_transactions_desc')}
                                     </p>
                                 </div>
                                 <button 
@@ -527,23 +533,21 @@ const OneTabSettlement = ({ activeSubTab }) => {
                             <div className="max-h-[80vh] overflow-y-auto bg-[#F9FAFB]">
                                 <form onSubmit={handleConfirmSettlement} className="p-6 space-y-6 font-outfit">
                                     
-                                    {/* Settings Panel removed per user request (handled as background defaults) */}
-
                                     {/* Outstanding Transactions (Debit vs Credit) */}
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                                         
                                         {/* Left Column: Debit Transactions */}
                                         <div className="space-y-3">
                                             <div className="bg-[#073318]/5 text-[#073318] font-bold text-[12.5px] px-3.5 py-1.5 rounded-lg border border-[#073318]/15 uppercase tracking-wider text-center">
-                                                Debit Transaction
+                                                {t('modules:debit')} {t('modules:transaction', 'Transaction')}
                                             </div>
                                             {loadingPartyInvoices ? (
                                                 <div className="py-12 text-center text-gray-400 text-[13px] flex flex-col items-center gap-2">
                                                     <div className="w-6 h-6 border-2 border-sky-200 border-t-sky-600 rounded-full animate-spin" />
-                                                    <span>Loading...</span>
+                                                    <span>{t('common:loading')}</span>
                                                 </div>
                                             ) : debitTransactions.length === 0 ? (
-                                                <p className="text-center text-gray-400 py-12 text-[13px] font-semibold italic bg-gray-50 border border-dashed rounded-xl">No debit transactions found.</p>
+                                                <p className="text-center text-gray-400 py-12 text-[13px] font-semibold italic bg-gray-50 border border-dashed rounded-xl">{t('modules:no_debit_found')}</p>
                                             ) : (
                                                 <div className="border border-[#E5E7EB] rounded-[16px] overflow-hidden shadow-sm max-h-[280px] overflow-y-auto bg-white">
                                                     <table className="w-full border-collapse text-[12.5px] text-left">
@@ -552,11 +556,11 @@ const OneTabSettlement = ({ activeSubTab }) => {
                                                                 <th className="px-3 py-4 w-[40px] text-center">
                                                                     <Check size={14} className="inline-block" />
                                                                 </th>
-                                                                <th className="px-3 py-4 text-left">Date</th>
-                                                                <th className="px-2 py-4 text-left">Type</th>
-                                                                <th className="px-2 py-4 text-right">Total Amt</th>
-                                                                <th className="px-2 py-4 text-right">Balance Amt</th>
-                                                                <th className="px-3 py-4 text-right w-[125px]">Settlement Amt</th>
+                                                                <th className="px-3 py-4 text-left">{t('modules:date_col')}</th>
+                                                                <th className="px-2 py-4 text-left">{t('common:type')}</th>
+                                                                <th className="px-2 py-4 text-right">{t('modules:total_amount_col')}</th>
+                                                                <th className="px-2 py-4 text-right">{t('modules:cumulative_balance')}</th>
+                                                                <th className="px-3 py-4 text-right w-[125px]">{t('modules:settlement_amount_col')}</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="font-medium text-gray-700">
@@ -609,15 +613,15 @@ const OneTabSettlement = ({ activeSubTab }) => {
                                         {/* Right Column: Credit Transactions */}
                                         <div className="space-y-3">
                                             <div className="bg-[#073318]/5 text-[#073318] font-bold text-[12.5px] px-3.5 py-1.5 rounded-lg border border-[#073318]/15 uppercase tracking-wider text-center">
-                                                Credit Transaction
+                                                {t('modules:credit_transaction')}
                                             </div>
                                             {loadingPartyInvoices ? (
                                                 <div className="py-12 text-center text-gray-400 text-[13px] flex flex-col items-center gap-2">
                                                     <div className="w-6 h-6 border-2 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
-                                                    <span>Loading...</span>
+                                                    <span>{t('common:loading')}</span>
                                                 </div>
                                             ) : creditTransactions.length === 0 ? (
-                                                <p className="text-center text-gray-400 py-12 text-[13px] font-semibold italic bg-gray-50 border border-dashed rounded-xl">No credit transactions found.</p>
+                                                <p className="text-center text-gray-400 py-12 text-[13px] font-semibold italic bg-gray-50 border border-dashed rounded-xl">{t('modules:no_credit_transactions_found')}</p>
                                             ) : (
                                                 <div className="border border-[#E5E7EB] rounded-[16px] overflow-hidden shadow-sm max-h-[280px] overflow-y-auto bg-white">
                                                     <table className="w-full border-collapse text-[12.5px] text-left">
@@ -626,11 +630,11 @@ const OneTabSettlement = ({ activeSubTab }) => {
                                                                 <th className="px-3 py-4 w-[40px] text-center">
                                                                     <Check size={14} className="inline-block" />
                                                                 </th>
-                                                                <th className="px-3 py-4 text-left">Date</th>
-                                                                <th className="px-2 py-4 text-left">Type</th>
-                                                                <th className="px-2 py-4 text-right">Total Amt</th>
-                                                                <th className="px-2 py-4 text-right">Balance Amt</th>
-                                                                <th className="px-3 py-4 text-right w-[125px]">Settlement Amt</th>
+                                                                <th className="px-3 py-4 text-left">{t('common:date')}</th>
+                                                                <th className="px-2 py-4 text-left">{t('common:type')}</th>
+                                                                <th className="px-2 py-4 text-right">{t('modules:total_amt')}</th>
+                                                                <th className="px-2 py-4 text-right">{t('modules:balance_amt')}</th>
+                                                                <th className="px-3 py-4 text-right w-[125px]">{t('modules:settlement_amount_col')}</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="font-medium text-gray-700">
@@ -682,8 +686,6 @@ const OneTabSettlement = ({ activeSubTab }) => {
 
                                     </div>
 
-                                    {/* Direct Adjustments removed per user request */}
-
                                     {/* Summary */}
                                     <div className="space-y-4">
                                         <div className={`p-4.5 rounded-2xl border flex justify-between items-center ${
@@ -693,23 +695,23 @@ const OneTabSettlement = ({ activeSubTab }) => {
                                         }`}>
                                             <div className="flex flex-col">
                                                 <span className={`font-bold uppercase tracking-wider text-[11px] ${debitTotal > 0 && debitTotal === creditTotal ? 'text-emerald-700' : 'text-red-700'}`}>
-                                                    Settlement Match
+                                                    {t('modules:settlement_match')}
                                                 </span>
                                                 <span className="text-[13px] font-medium text-gray-700 mt-1">
-                                                    Debit: <strong className="text-gray-900">₹{debitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong> | 
-                                                    Credit: <strong className="text-gray-900">₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                                                    {t('modules:debit')}: <strong className="text-gray-900">₹{debitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong> | 
+                                                    {t('modules:credit')}: <strong className="text-gray-900">₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
                                                 </span>
                                             </div>
                                             
                                             {debitTotal > 0 && debitTotal === creditTotal ? (
                                                 <div className="flex items-center gap-1.5 text-emerald-600 font-bold bg-emerald-100 px-3 py-1.5 rounded-lg text-[13px]">
                                                     <CheckCircle2 size={16} />
-                                                    <span>Matched</span>
+                                                    <span>{t('modules:matched')}</span>
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-1.5 text-red-600 font-bold bg-red-100 px-3 py-1.5 rounded-lg text-[13px]">
                                                     <AlertCircle size={16} />
-                                                    <span>Diff: ₹{Math.abs(debitTotal - creditTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                    <span>{t('modules:diff', 'Diff')}: ₹{Math.abs(debitTotal - creditTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                                 </div>
                                             )}
                                         </div>
@@ -722,7 +724,7 @@ const OneTabSettlement = ({ activeSubTab }) => {
                                             onClick={() => setIsSettleModalOpen(false)}
                                             className="flex-1 h-11 rounded-xl border border-[#E5E7EB] text-[13.5px] font-bold text-gray-500 hover:bg-gray-50 active:scale-95 transition-all"
                                         >
-                                            Cancel
+                                            {t('common:cancel')}
                                         </button>
                                         <button
                                             type="submit"
@@ -732,10 +734,10 @@ const OneTabSettlement = ({ activeSubTab }) => {
                                             {isSubmitting ? (
                                                 <>
                                                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                    Recording...
+                                                    {t('common:processing')}
                                                 </>
                                             ) : (
-                                                <>Confirm Settlement</>
+                                                <>{t('modules:confirm_settlement')}</>
                                             )}
                                         </button>
                                     </div>

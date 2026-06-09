@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import { ArrowLeft, RefreshCw, Save, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
+import { determineSalesGst } from '@/utils/gstUtils';
 
 import salesOrderService from '@/services/salesOrderService';
 import challanService from '@/services/challanService';
@@ -15,6 +17,7 @@ import ChallanTable from './components/ChallanTable';
 import AccountTable from './components/AccountTable';
 
 const AddChallan = () => {
+    const { t } = useTranslation(['modules', 'common']);
     const navigate = useNavigate();
     const { id } = useParams();
     const isEditMode = Boolean(id);
@@ -101,7 +104,7 @@ const AddChallan = () => {
                         bookingDate: invoice.bookingDate?.split('T')[0],
                     });
 
-                    setGstType(calculateGST(invoice.gstNumber || '', foundCustomer?.state || ''));
+                    setGstType(determineSalesGst(companyInfo?.gstNumber, invoice.gstNumber || '', companyInfo?.state || "", foundCustomer?.state || '', 0, 0, 0));
 
                     setItems(invoice.items.map(item => ({
                         ...item,
@@ -109,6 +112,7 @@ const AddChallan = () => {
                         totalSoQty: item.totalSoQty || 0,
                         remainingQty: item.remainingQty || 0,
                         id: item.id || Date.now() + Math.random(),
+                        originalPrintDescription: item.printDescription || item.productName || ''
                     })));
 
                     setExpenses(invoice.expenses?.map(e => ({
@@ -162,46 +166,10 @@ const AddChallan = () => {
         fetchInitialData();
     }, [id, isEditMode]);
 
-    const calculateGST = (custGST, custState) => {
-        if (!companyInfo) return { type: 'INTRA', applicable: false, isRcm: false };
-        
-        const companyGST = companyInfo?.gstNumber || "";
-        const companyState = (companyInfo?.state || "").trim().toLowerCase();
-        
-        const isValidGstStr = (g) => Boolean(
-            g && 
-            String(g).trim().toUpperCase() !== 'N/A' && 
-            String(g).trim().toUpperCase() !== 'NOT AVAILABLE' && 
-            String(g).trim().toUpperCase() !== '-' && 
-            String(g).trim().length >= 10
-        );
-
-        // Sales Side Rule: GST applicable ONLY if User (Company) has a valid GST
-        const applicable = isValidGstStr(companyGST);
-        
-        if (!applicable) {
-            return { type: 'INTRA', applicable: false, isRcm: false };
-        }
-
-        const customerGST = custGST || "";
-        const customerState = (custState || "").trim().toLowerCase();
-
-        const userCode = companyGST.substring(0, 2);
-        const custCode = customerGST.substring(0, 2);
-
-        let isInterState = false;
-        if (companyGST && customerGST && /^\d{2}$/.test(userCode) && /^\d{2}$/.test(custCode)) {
-            isInterState = userCode !== custCode;
-        } else {
-            isInterState = companyState !== customerState;
-        }
-        return { type: isInterState ? 'INTER' : 'INTRA', applicable: true, isRcm: false };
-    };
-
     const isSellerMsme = useMemo(() => {
         if (!businessProfile) return false;
         const isSellerMsmeActive = (businessProfile.sellerDocuments || []).some(
-            doc => doc.type === 'UDYOG_AADHAR' && doc.name && doc.name.trim() !== ''
+            doc => doc.category === 'UDYOG_AADHAR' && doc.name && doc.name.trim() !== '' && doc.name.trim().toUpperCase() !== 'N/A'
         );
         const isSellerMsmeType = businessProfile.regType === "Manufacturing" || businessProfile.regType === "Service";
         return Boolean(isSellerMsmeActive && isSellerMsmeType);
@@ -212,27 +180,14 @@ const AddChallan = () => {
         const customer = customers.find(c => String(c.id) === String(formData.customerId));
         if (!customer) return;
 
-        const isCustomerMsmeActive = customer.msmeEnabled;
-        const isCustomerMsmeType = customer.regType === "Manufacturing" || customer.regType === "Service";
-        const isCustomerMsme = Boolean(isCustomerMsmeActive && isCustomerMsmeType);
-
-        const shouldCap = isSellerMsme || isCustomerMsme;
-
-        if (shouldCap && formData.creditDays) {
+        if (isSellerMsme && formData.creditDays) {
             const val = parseInt(formData.creditDays, 10);
             if (!isNaN(val) && val > 45) {
                 setFormData(prev => ({ ...prev, creditDays: 45 }));
-                if (isSellerMsme) {
-                    toast.error(
-                        "As you are registered under MSME/Udyam with Registration Type Manufacturing/Service, the maximum credit period allowed for your customers is 45 days. Credit Days has been adjusted to 45.",
-                        { id: "msme-customer-warning" }
-                    );
-                } else {
-                    toast.error(
-                        "This customer is registered under MSME/Udyam with Registration Type Manufacturing/Service. As per MSME rules, maximum credit period allowed is 45 days. Credit Days has been adjusted to 45.",
-                        { id: "msme-customer-warning" }
-                    );
-                }
+                toast.error(
+                    "As you are registered under MSME (Manufacturing/Service), maximum credit period allowed for customers is 45 days. Credit Days has been adjusted to 45.",
+                    { id: "msme-customer-warning", duration: 6000 }
+                );
             }
         }
     }, [formData.customerId, formData.creditDays, customers, isSellerMsme]);
@@ -242,7 +197,7 @@ const AddChallan = () => {
         if (formData.customerId && companyInfo) {
             const customer = customers.find(c => c.id === formData.customerId);
             if (customer) {
-                setGstType(calculateGST(customer.gstNo || "", customer.state || ""));
+                setGstType(determineSalesGst(companyInfo?.gstNumber, customer.gstNo || "", companyInfo?.state || "", customer.state || "", 0, 0, 0));
             }
         } else if (!formData.customerId && companyInfo) {
             setGstType({ type: 'INTRA', applicable: true, isRcm: false });
@@ -253,13 +208,13 @@ const AddChallan = () => {
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
 
-        const type = calculateGST(customer.gstNo || "", customer.state || "");
+        const type = determineSalesGst(companyInfo?.gstNumber, customer.gstNo || "", companyInfo?.state || "", customer.state || "", 0, 0, 0);
         setGstType(type);
 
         setFormData(prev => ({
             ...prev,
             customerId: customer.id,
-            customerName: customer.accountName,
+            customerName: customer.customerName || customer.accountName,
             customerType: customer.customerType || customer.accountType || '',
             address: [customer.addressLine1, customer.addressLine2].filter(Boolean).join(', '),
             gstNo: customer.gstNo || '',
@@ -279,9 +234,10 @@ const AddChallan = () => {
         }]);
 
         try {
+            const customerNameKey = customer.customerName || customer.accountName;
             const [soData, challanData] = await Promise.all([
-                challanService.getCustomerSOs(customer.accountName),
-                challanService.getCustomerChallans(customer.accountName)
+                challanService.getCustomerSOs(customerNameKey),
+                challanService.getCustomerChallans(customerNameKey)
             ]);
             setSos(soData || []);
             setChallans(challanData?.data || challanData || []);
@@ -392,6 +348,7 @@ const AddChallan = () => {
                 taxAmount: parseFloat(taxAmount.toFixed(2)),
                 totalAmount: parseFloat(totalAmount.toFixed(2)),
                 printDescription: item.printDescription || item.productName || '',
+                originalPrintDescription: item.printDescription || item.productName || '',
             };
         }));
 
@@ -519,11 +476,11 @@ const AddChallan = () => {
                         rate: parseFloat(item.rate) || 0,
                         uom: item.uom || '',
                         hsnCode: item.hsnCode || '',
-                        taxPercent: gstType.applicable ? (parseFloat(item.taxPercent) || 0) : 0,
+                        taxPercent: gstType.gstType !== 'NONE' ? (parseFloat(item.taxPercent) || 0) : 0,
                         discountAmt: parseFloat(item.discountAmount) || 0,
                         discountPercent: parseFloat(item.discountPercent) || 0,
                         beforeTaxAmount: parseFloat(item.beforeTaxAmount) || 0,
-                        taxAmount: gstType.applicable ? (parseFloat(item.taxAmount) || 0) : 0,
+                        taxAmount: gstType.gstType !== 'NONE' ? (parseFloat(item.taxAmount) || 0) : 0,
                         amount: parseFloat(item.totalAmount) || 0,
                         totalSoQty: parseFloat(item.totalSoQty) || 0,
                         printDescription: item.printDescription || item.productName || '',
@@ -588,9 +545,9 @@ const AddChallan = () => {
 
                 <div className="p-8 border-b border-[#F3F4F6]">
                     <h2 className="text-[18px] font-bold text-[#111827] mb-6 flex items-center gap-2 tracking-tight uppercase">
-                         <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
-                        Basic Details
-                    </h2>
+                            <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
+                            {t('modules:basic_details', 'Basic Details')}
+                        </h2>
                     <ChallanForm
                         formData={formData}
                         setFormData={setFormData}
@@ -608,9 +565,9 @@ const AddChallan = () => {
 
                 <div className="p-8 border-b border-[#F3F4F6]">
                     <h2 className="text-[18px] font-bold text-[#111827] mb-6 flex items-center gap-2 tracking-tight uppercase">
-                         <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
-                        Product Details
-                    </h2>
+                            <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
+                            {t('modules:product_details', 'Product Details')}
+                        </h2>
                     <ChallanTable
                         items={items}
                         setItems={setItems}
@@ -627,9 +584,9 @@ const AddChallan = () => {
 
                 <div className="p-8">
                     <h2 className="text-[18px] font-bold text-[#111827] mb-6 flex items-center gap-2 tracking-tight uppercase">
-                         <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
-                        Account Summary
-                    </h2>
+                            <div className="w-1.5 h-6 bg-emerald-800 rounded-full"></div>
+                            {t('modules:account_summary', 'Account Summary')}
+                        </h2>
                     <AccountTable
                         items={items}
                         gstType={gstType}
@@ -645,13 +602,13 @@ const AddChallan = () => {
                         disabled={isSaving}
                         className="px-10 h-[48px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] shadow-[0_4px_15px_rgba(7,51,24,0.15)] transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70"
                     >
-                        {isSaving ? <RefreshCw className="animate-spin" size={18} /> : (isEditMode ? 'Update Challan' : 'Save Challan')}
+                        {isSaving ? <RefreshCw className="animate-spin" size={18} /> : (isEditMode ? t('modules:update_challan', 'Update Challan') : t('modules:save_challan', 'Save Challan'))}
                     </button>
                     <button 
                         onClick={() => navigate(ROUTES.SALES_CHALLAN)}
                         className="px-8 h-[48px] bg-white border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[15px] font-bold hover:bg-gray-100 transition-all flex items-center justify-center gap-2 shadow-sm"
                     >
-                        Cancel
+                        {t('common:cancel', 'Cancel')}
                     </button>
                 </div>
             </div>

@@ -449,6 +449,7 @@ onUpdateAccount,
 
   const [sellerProfile, setSellerProfile] = useState(null);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
+  const [isCustomerMsmeUser, setIsCustomerMsmeUser] = useState(Boolean(initialData?.isMsmeUser));
 
   useEffect(() => {
     const fetchSellerProfile = async () => {
@@ -473,54 +474,72 @@ onUpdateAccount,
     return Boolean(isSellerMsmeActive && isSellerMsmeType);
   }, [sellerProfile]);
 
+  useEffect(() => {
+    let active = true;
+    const checkCustomerMsme = async () => {
+      const phone = formData.mobileNo?.trim();
+      const email = formData.emailId?.trim();
+      const gst = formData.gstNo?.trim();
+
+      if (!phone && !email && !gst) {
+        if (active) setIsCustomerMsmeUser(false);
+        return;
+      }
+
+      try {
+        const res = await accountService.checkMsmeUser(phone, email, gst);
+        if (active) {
+          setIsCustomerMsmeUser(Boolean(res.isMsmeUser));
+        }
+      } catch (err) {
+        console.error("Failed to check MSME user", err);
+      }
+    };
+
+    const delay = setTimeout(checkCustomerMsme, 500);
+    return () => {
+      active = false;
+      clearTimeout(delay);
+    };
+  }, [formData.mobileNo, formData.emailId, formData.gstNo]);
+
   const isLoadedRef = useRef(false);
 
   useEffect(() => {
     if (!isProfileLoaded) return;
 
-    const isMSMEActive = msmeEnabled && formData.msmeId?.trim();
-    const isMSMEType = formData.regType === "Manufacturing" || formData.regType === "Service";
+    const isSupplierMSMEActive = msmeEnabled && formData.msmeId?.trim();
+    const isSupplierMSMEType = formData.regType === "Manufacturing" || formData.regType === "Service";
+    const isSupplierMsme = Boolean(isSupplierMSMEActive && isSupplierMSMEType);
 
     let adjusted = false;
     let newVendorDays = formData.vendorCreditDays;
     let newCustomerDays = formData.customerCreditDays;
 
-    if (isMSMEActive && isMSMEType) {
-      if (formData.isVendor && formData.vendorCreditDays) {
-        const val = parseInt(formData.vendorCreditDays, 10);
-        if (!isNaN(val) && val > 45) {
-          newVendorDays = "45";
-          adjusted = true;
-          if (isLoadedRef.current) {
-            toast.error(
-              "For MSME Manufacturing/Service suppliers,maximum credit period allowed is 45 days.Credit Days has been adjusted to 45.",
-              { id: "msme-supplier-warning" }
-            );
-          }
+    if (formData.isVendor && isSupplierMsme && formData.vendorCreditDays) {
+      const val = parseInt(formData.vendorCreditDays, 10);
+      if (!isNaN(val) && val > 45) {
+        newVendorDays = "45";
+        adjusted = true;
+        if (isLoadedRef.current) {
+          toast.error(
+            "MSME Manufacturing/Service suppliers cannot have credit days greater than 45 days. Value has been adjusted to 45.",
+            { id: "msme-supplier-warning" }
+          );
         }
       }
     }
 
-    const shouldCapCustomer = (isMSMEActive && isMSMEType) || isSellerMsme;
-    if (shouldCapCustomer) {
-      if (formData.isCustomer && formData.customerCreditDays) {
-        const val = parseInt(formData.customerCreditDays, 10);
-        if (!isNaN(val) && val > 45) {
-          newCustomerDays = "45";
-          adjusted = true;
-          if (isLoadedRef.current) {
-            if (isSellerMsme) {
-              toast.error(
-                "As you are registered under MSME/Udyam with Registration Type Manufacturing/Service, the maximum credit period allowed for your customers is 45 days. Credit Days has been adjusted to 45.",
-                { id: "msme-customer-warning" }
-              );
-            } else {
-              toast.error(
-                "This customer is registered under MSME/Udyam with Registration Type Manufacturing/Service. As per MSME rules, maximum credit period allowed is 45 days. Credit Days has been adjusted to 45.",
-                { id: "msme-customer-warning" }
-              );
-            }
-          }
+    if (formData.isCustomer && isSellerMsme && formData.customerCreditDays) {
+      const val = parseInt(formData.customerCreditDays, 10);
+      if (!isNaN(val) && val > 45) {
+        newCustomerDays = "45";
+        adjusted = true;
+        if (isLoadedRef.current) {
+          toast.error(
+            "As you are registered under MSME (Manufacturing/Service), maximum credit period allowed for customers is 45 days. Credit Days has been adjusted to 45.",
+            { id: "msme-customer-warning" }
+          );
         }
       }
     }
@@ -534,7 +553,7 @@ onUpdateAccount,
 
       if (!isLoadedRef.current) {
         toast.error(
-          "Credit Days exceeded MSME limit.Value has been adjusted to 45 days.",
+          "Credit Days exceeded MSME limit. Value has been adjusted to 45 days.",
           { id: "msme-load-warning" }
         );
       }
@@ -548,7 +567,7 @@ onUpdateAccount,
     formData.isVendor,
     formData.isCustomer,
     msmeEnabled,
-    isSellerMsme,
+    isCustomerMsmeUser,
     isProfileLoaded,
   ]);
   const [areaOptions, setAreaOptions] = useState([]);

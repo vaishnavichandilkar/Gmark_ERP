@@ -20,6 +20,7 @@ const LanguageSelection = () => {
         if (selectedLang) {
             i18n.changeLanguage(selectedLang);
             localStorage.setItem('selectedLanguage', selectedLang);
+            localStorage.setItem('i18nextLng', selectedLang);
             // We set a flag to indicate language is confirmed for this "session"
             // To handle "clear on server restart", we would ideally check a server-side timestamp.
             // For now, we'll store it in localStorage as requested for persistence across browser closes.

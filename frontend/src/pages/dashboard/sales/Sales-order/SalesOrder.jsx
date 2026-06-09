@@ -34,7 +34,7 @@ import salesOrderService from "../../../../services/salesOrderService";
 import ScrollableTable from "../../../../components/common/ScrollableTable";
 import CustomSelect from "../../../../components/common/CustomSelect";
 
-const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
+const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting, t }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
@@ -45,10 +45,10 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
             <Trash2 size={32} className="text-red-500" />
           </div>
           <h3 className="text-[20px] font-bold text-[#111827] mb-2 font-outfit uppercase tracking-tight">
-            Delete Sales Order
+            {t('modules:delete_so')}
           </h3>
           <p className="text-[#6B7280] text-[15px] font-medium mb-8 font-outfit">
-            Are you sure you want to delete this sales order? This action will mark the status as deleted.
+            {t('modules:delete_so_confirm')}
           </p>
           <div className="flex gap-4">
             <button
@@ -56,7 +56,7 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
               disabled={isDeleting}
               className="flex-1 h-[52px] rounded-[14px] border border-[#E5E7EB] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all font-outfit uppercase tracking-widest"
             >
-              No, Keep it
+              {t('common:no_keep_it')}
             </button>
             <button
               onClick={onConfirm}
@@ -66,7 +66,7 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
               {isDeleting ? (
                 <RefreshCw size={18} className="animate-spin" />
               ) : (
-                "Yes, Delete"
+                t('common:yes_delete')
               )}
             </button>
           </div>
@@ -154,7 +154,7 @@ const SalesOrder = () => {
         setTotalItemsCount(response.meta?.total || data.length);
       } catch (error) {
         console.error("Error fetching sales orders:", error);
-        toast.error("Failed to load sales orders");
+        toast.error(t('common:failed_to_load'));
         setSalesOrders([]);
         setTotalItemsCount(0);
       } finally {
@@ -262,7 +262,7 @@ const SalesOrder = () => {
       });
     } catch (error) {
       console.error("Print error:", error);
-      toast.error("Failed to load print preview");
+      toast.error(t('modules:failed_to_load_print'));
     } finally {
       setIsRefreshing(false);
     }
@@ -272,7 +272,7 @@ const SalesOrder = () => {
     setIsRefreshing(true);
     setTimeout(() => {
       setIsRefreshing(false);
-      toast.success("Data refreshed successfully");
+      toast.success(t('common:data_refreshed'));
     }, 400);
   };
 
@@ -299,13 +299,13 @@ const SalesOrder = () => {
     setIsDeleting(true);
     try {
       await salesOrderService.deleteSalesOrder(soToDelete);
-      toast.success("Sales order deleted successfully");
+      toast.success(t('modules:so_deleted'));
       setIsDeleteModalOpen(false);
       setSoToDelete(null);
       setIsRefreshing(prev => !prev);
     } catch (error) {
       console.error("Delete error:", error);
-      toast.error(error.response?.data?.message || "Failed to delete SO");
+      toast.error(error.response?.data?.message || t('modules:failed_to_delete_so'));
     } finally {
       setIsDeleting(false);
     }
@@ -314,7 +314,7 @@ const SalesOrder = () => {
   const handleExport = (format) => {
     try {
       if (filteredData.length === 0) {
-        toast.error("No data available to export.");
+        toast.error(t('modules:no_data_to_export'));
         setIsExportOpen(false);
         return;
       }
@@ -531,10 +531,10 @@ const SalesOrder = () => {
         doc.save(`Sales_Orders_${new Date().toLocaleDateString('en-GB').replace(/\//g, '_')}.pdf`);
       }
 
-      toast.success(`Exported to ${format.toUpperCase()} successfully!`);
+      toast.success(format === 'pdf' ? t('common:export_pdf_success') : t('common:export_excel_success'));
     } catch (error) {
       console.error("Export error:", error);
-      toast.error("Export failed. Please try again.");
+      toast.error(t('common:export_failed'));
     } finally {
       setIsRefreshing(false);
     }
@@ -614,10 +614,10 @@ const SalesOrder = () => {
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Order Sample");
       XLSX.writeFile(workbook, "Sales_Order_Import_Template.xlsx");
-      toast.success("Professional styled template downloaded!");
+      toast.success(t('modules:sample_downloaded_success', 'Sample template downloaded successfully!'));
     } catch (error) {
       console.error("Sample download error:", error);
-      toast.error("Failed to generate styled sample file.");
+      toast.error(t('modules:sample_download_failed', 'Failed to download sample file.'));
     }
   };
 
@@ -635,7 +635,7 @@ const SalesOrder = () => {
           const json = XLSX.utils.sheet_to_json(sheet);
 
           if (json.length === 0) {
-            toast.error("The uploaded file is empty.");
+            toast.error(t('modules:uploaded_file_empty', 'The uploaded file is empty.'));
             setIsRefreshing(false);
             return;
           }
@@ -663,10 +663,10 @@ const SalesOrder = () => {
           setTotalItemsCount(prev => prev + importedData.length);
           setIsImportModalOpen(false);
           setSelectedFile(null);
-          toast.success(`${importedData.length} records imported successfully!`);
+          toast.success(t('modules:records_imported_success', { count: importedData.length, defaultValue: `${importedData.length} records imported successfully!` }));
         } catch (err) {
           console.error("Parsing error:", err);
-          toast.error("Invalid file format. Please use the provided sample template.");
+          toast.error(t('modules:invalid_file_format', 'Invalid file format. Please use the provided sample template.'));
         } finally {
           setIsRefreshing(false);
         }
@@ -674,7 +674,7 @@ const SalesOrder = () => {
       reader.readAsBinaryString(selectedFile);
     } catch (error) {
       console.error("Import error:", error);
-      toast.error("Failed to read file.");
+      toast.error(t('modules:failed_to_read_file', 'Failed to read file.'));
       setIsRefreshing(false);
     }
   };
@@ -683,12 +683,12 @@ const SalesOrder = () => {
     <div className="flex flex-col w-full relative">
       {/* Title & Action Bar */}
       <div className="flex flex-col md:flex-row gap-4 mb-6 md:mb-8 justify-between items-center font-outfit uppercase">
-        <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">Sales Order</h1>
+        <h1 className="text-[24px] md:text-[28px] font-bold text-[#111827] tracking-tight">{t('modules:sales_order')}</h1>
         <button
           onClick={() => navigate(ROUTES.SALES_ORDER_ADD)}
           className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 duration-200"
         >
-          <Plus size={18} /> Add SO
+          <Plus size={18} /> {t('modules:add_so')}
         </button>
       </div>
 
@@ -716,17 +716,17 @@ const SalesOrder = () => {
               className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all uppercase ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-[#E5E7EB] text-[#4B5563]'}`}
             >
               <Filter size={18} className={isFilterApplied ? "text-red-500" : "text-gray-400"} />
-              {isFilterApplied ? "Clear" : "Apply Filters"}
+              {isFilterApplied ? t('common:clear') : t('common:apply_filters')}
             </button>
           </div>
 
           <div className="flex items-center gap-3">
             <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 uppercase">
-              <Download size={18} className="text-gray-400" /> Import
+              <Download size={18} className="text-gray-400" /> {t('common:import')}
             </button>
             <div className="relative" ref={exportRef}>
               <button onClick={() => setIsExportOpen(!isExportOpen)} className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 uppercase">
-                <Upload size={18} className="text-gray-400" /> Export
+                <Upload size={18} className="text-gray-400" /> {t('common:export')}
               </button>
               {isExportOpen && (
                 <div className="absolute top-full right-0 mt-2 w-[180px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-50 py-2 animate-in slide-in-from-top-2 duration-200 uppercase font-bold">
@@ -743,7 +743,12 @@ const SalesOrder = () => {
           <table className="w-full min-w-[1500px] border-collapse text-left font-outfit">
             <thead>
               <tr className="bg-emerald-900 text-white font-bold text-[15px] uppercase">
-                {["SO No", "Customer Name", "Customer Type", "Customer PO Number", "Customer PO Date", "Customer PO Exp. Date", "Creation Date", "Expiry Date", "Amount", "Gst Number", "Credit Days", "Tax Amount", "Total Amount", "Status", "Action"].map(h => (
+                {[
+                  t('modules:soNo'), t('modules:customerName'), t('modules:customer_type'), t('modules:customerPoNumber'), 
+                  t('modules:customerPoDate'), t('modules:customerPoExpDate'), t('modules:creation_date'), t('modules:expiry_date'), 
+                  t('modules:amount_col', 'Amount'), t('modules:gst_no'), t('modules:credit_days'), t('modules:taxAmount'), 
+                  t('modules:total_amount_col'), t('common:status'), t('common:action')
+                ].map(h => (
                   <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap" style={{ wordSpacing: '1px' }}>{h}</th>
                 ))}
               </tr>
@@ -766,7 +771,9 @@ const SalesOrder = () => {
                     <td className="px-6 py-5 font-bold text-center">{(so.taxAmount || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 font-bold text-[#073318]">{(so.grandTotal || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 text-center">
-                      <span className={`px-4 py-1.5 ${so.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{so.computedStatusLabel}</span>
+                      <span className={`px-4 py-1.5 ${so.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>
+                        {t(`common:status_${so.computedStatusLabel.toLowerCase().replace(' ', '_')}`, so.computedStatusLabel)}
+                      </span>
                     </td>
                     <td className="px-6 py-5 text-center relative" ref={el => dropdownRefs.current[so.id] = el}>
                       <button onClick={() => setActiveDropdown(activeDropdown === so.id ? null : so.id)} className={`p-2 rounded-lg ${activeDropdown === so.id ? 'bg-[#073318] text-white' : 'text-gray-400 hover:bg-gray-100'}`}><MoreVertical size={20} /></button>
@@ -775,20 +782,20 @@ const SalesOrder = () => {
                           {/* View Option (Always) */}
                           <button onClick={() => navigate(ROUTES.SALES_ORDER_VIEW.replace(':id', so.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50">
                             <Eye size={18} />
-                            {((so.computedStatusLabel === 'Pending' || so.computedStatusLabel === 'Expiring Soon') && !(so.salesChallans?.length > 0 || so.salesInvoices?.length > 0)) ? 'View / Edit SO' : 'View SO'}
+                            {((so.computedStatusLabel === 'Pending' || so.computedStatusLabel === 'Expiring Soon') && !(so.salesChallans?.length > 0 || so.salesInvoices?.length > 0)) ? t('modules:view_edit_so') : t('modules:view_so_action')}
                           </button>
 
                           {/* Print Option (Not for Deleted) */}
                           {so.computedStatusLabel !== 'Deleted' && (
                             <button onClick={() => handlePrint(so)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50">
-                              <Printer size={18} /> Print
+                              <Printer size={18} /> {t('common:print')}
                             </button>
                           )}
 
                           {/* Delete Option (Only for Expired) */}
                           {so.computedStatusLabel === 'Expired' && (
                             <button onClick={() => handleDeleteSO(so.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50 uppercase">
-                              <Trash2 size={18} /> Delete
+                              <Trash2 size={18} /> {t('common:delete')}
                             </button>
                           )}
                         </div>
@@ -797,7 +804,7 @@ const SalesOrder = () => {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan="11" className="px-6 py-24 text-center text-gray-400 uppercase font-bold tracking-widest">No results found</td></tr>
+                <tr><td colSpan="15" className="px-6 py-24 text-center text-gray-400 uppercase font-bold tracking-widest">{t('common:no_results_found')}</td></tr>
               )}
             </tbody>
           </table>
@@ -806,7 +813,7 @@ const SalesOrder = () => {
         {/* Pagination */}
         <div className="px-8 py-5 border-t border-[#F3F4F6] bg-[#F9FAFB] flex flex-row items-center justify-between uppercase">
           <div className="flex items-center gap-2 text-[14px] font-bold text-[#6B7280]">
-            <span>Show</span>
+            <span>{t('common:show')}</span>
             <CustomSelect 
                 value={itemsPerPage}
                 onChange={(val) => {
@@ -828,7 +835,7 @@ const SalesOrder = () => {
       </div>
 
       {/* Modals */}
-      <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} />
+      <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} t={t} />
       {createPortal(
         <>
           {isImportModalOpen && (
@@ -836,22 +843,22 @@ const SalesOrder = () => {
               <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] transition-all duration-300" onClick={() => { setIsImportModalOpen(false); setSelectedFile(null); }} />
               <div className="relative bg-white w-full max-w-[500px] rounded-[24px] shadow-2xl p-10 space-y-8 animate-in zoom-in-95 duration-300 border border-gray-100">
                 <div className="text-center space-y-2">
-                  <h3 className="text-[24px] font-bold text-[#111827] uppercase tracking-tight font-outfit">Import Sales Orders</h3>
-                  <p className="text-gray-500 text-[14px] font-medium font-outfit">Download the sample file to ensure correct format.</p>
+                  <h3 className="text-[24px] font-bold text-[#111827] uppercase tracking-tight font-outfit">{t('modules:import_so')}</h3>
+                  <p className="text-gray-500 text-[14px] font-medium font-outfit">{t('modules:import_so_desc')}</p>
                 </div>
 
                 <button
                   onClick={handleDownloadSample}
                   className="w-full py-4 border-2 border-emerald-100 bg-emerald-50 text-emerald-700 rounded-[14px] font-bold uppercase transition-all hover:bg-emerald-100 flex items-center justify-center gap-3 active:scale-95 duration-200 shadow-sm"
                 >
-                  <Download size={20} /> Download Sample XLSX
+                  <Download size={20} /> {t('modules:download_sample_xlsx')}
                 </button>
 
                 <div className="space-y-4 font-outfit">
-                  <label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest block text-center">Upload Template</label>
+                  <label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest block text-center">{t('modules:upload_template')}</label>
                   <div className={`border-2 border-dashed rounded-[18px] h-[72px] flex items-center overflow-hidden transition-all duration-300 ${selectedFile ? 'border-[#073318] bg-emerald-50/50' : 'border-gray-200 bg-gray-50 hover:border-gray-300'}`}>
                     <label className="h-full px-8 flex items-center justify-center bg-white border-r border-dashed border-gray-200 font-bold uppercase text-[14px] cursor-pointer hover:bg-gray-50 transition-all text-[#073318]">
-                      Browse
+                      {t('modules:browse')}
                       <input
                         type="file"
                         className="hidden"
@@ -881,7 +888,7 @@ const SalesOrder = () => {
                           <button onClick={() => setSelectedFile(null)} className="ml-auto p-1.5 hover:bg-emerald-100 rounded-full text-emerald-700 transition-colors"><X size={14} /></button>
                         </>
                       ) : (
-                        <span className="text-[14px] font-bold text-gray-400 uppercase tracking-tight">No file chosen...</span>
+                        <span className="text-[14px] font-bold text-gray-400 uppercase tracking-tight">{t('modules:no_file_chosen')}</span>
                       )}
                     </div>
                   </div>
@@ -892,14 +899,14 @@ const SalesOrder = () => {
                     onClick={() => { setIsImportModalOpen(false); setSelectedFile(null); }}
                     className="flex-1 py-4 border border-[#E5E7EB] text-[#4B5563] rounded-[14px] font-bold uppercase transition-all hover:bg-gray-50 active:scale-95 duration-200"
                   >
-                    Cancel
+                    {t('common:cancel')}
                   </button>
                   <button
                     onClick={handleSubmitImport}
                     disabled={!selectedFile || isRefreshing}
                     className={`flex-[2] py-4 rounded-[14px] font-bold uppercase shadow-lg transition-all active:scale-95 duration-200 ${selectedFile ? 'bg-[#073318] text-white hover:bg-[#04200f]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
                   >
-                    {isRefreshing ? 'Importing...' : 'Submit Data'}
+                    {isRefreshing ? t('modules:importing') : t('modules:submit_data')}
                   </button>
                 </div>
               </div>
@@ -911,7 +918,7 @@ const SalesOrder = () => {
               <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" />
               <div className="relative bg-white/95 px-12 py-10 rounded-[32px] shadow-2xl flex flex-col items-center gap-5 animate-in zoom-in-95 duration-400">
                 <RefreshCw size={48} className="text-[#073318] animate-spin" />
-                <p className="font-bold text-[#073318] uppercase tracking-widest font-outfit">Processing...</p>
+                <p className="font-bold text-[#073318] uppercase tracking-widest font-outfit">{t('common:processing')}</p>
               </div>
             </div>
           )}
@@ -920,12 +927,12 @@ const SalesOrder = () => {
           {isFilterOpen && <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-[4px]" onClick={() => setIsFilterOpen(false)} />}
           <div className={`fixed top-0 right-0 h-full w-[440px] bg-white shadow-2xl z-[110] transform transition-transform duration-500 ${isFilterOpen ? "translate-x-0" : "translate-x-full"}`}>
             <div className="bg-[#073318] p-8 flex items-center justify-between">
-              <h2 className="text-white font-bold uppercase text-[20px] tracking-tight font-outfit">Apply Filters</h2>
+              <h2 className="text-white font-bold uppercase text-[20px] tracking-tight font-outfit">{t('modules:apply_filters_title')}</h2>
               <button onClick={() => setIsFilterOpen(false)} className="text-white/50 hover:text-white transition-all bg-white/10 p-2 rounded-full"><X size={20} /></button>
             </div>
             <div className="p-8 space-y-10 flex flex-col h-full bg-white font-outfit">
               <div className="space-y-4">
-                <label className="text-[14px] font-bold text-gray-400 uppercase tracking-widest block">Status Filter</label>
+                <label className="text-[14px] font-bold text-gray-400 uppercase tracking-widest block">{t('modules:status_filter')}</label>
                 <div className="relative">
                   <select
                     value={filterInputs.status}
@@ -933,7 +940,7 @@ const SalesOrder = () => {
                     className="w-full h-14 bg-white border border-gray-200 rounded-[12px] px-5 text-[14px] font-bold text-[#111827] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 appearance-none font-outfit"
                   >
                     {statusTabs.map(s => (
-                      <option key={s} value={s}>{s}</option>
+                      <option key={s} value={s}>{t(`common:status_${s.toLowerCase()}`, s)}</option>
                     ))}
                   </select>
                   <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
@@ -942,8 +949,8 @@ const SalesOrder = () => {
                 </div>
               </div>
               <div className="mt-auto pb-16 flex gap-4">
-                <button onClick={handleClearFilter} className="flex-1 h-14 border border-[#E5E7EB] rounded-[14px] font-bold uppercase tracking-widest text-gray-600 hover:bg-gray-50 transition-all font-outfit">Clear</button>
-                <button onClick={handleApplyFilter} className="flex-1 h-14 bg-[#073318] text-white rounded-[14px] font-bold uppercase tracking-widest hover:bg-[#04200f] shadow-lg transition-all font-outfit">Apply</button>
+                <button onClick={handleClearFilter} className="flex-1 h-14 border border-[#E5E7EB] rounded-[14px] font-bold uppercase tracking-widest text-gray-600 hover:bg-gray-50 transition-all font-outfit">{t('common:clear')}</button>
+                <button onClick={handleApplyFilter} className="flex-1 h-14 bg-[#073318] text-white rounded-[14px] font-bold uppercase tracking-widest hover:bg-[#04200f] shadow-lg transition-all font-outfit">{t('common:apply')}</button>
               </div>
             </div>
           </div>

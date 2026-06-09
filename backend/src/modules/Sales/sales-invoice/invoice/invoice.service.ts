@@ -29,8 +29,37 @@ export class SalesInvoiceService {
     return Boolean(isSellerMsmeActive && isSellerMsmeType);
   }
 
+  private async isCustomerMsme(mobileNo?: string, emailId?: string, gstNo?: string): Promise<boolean> {
+    const conditions = [];
+    if (mobileNo && mobileNo.trim() !== '') {
+      conditions.push({ phone: mobileNo.trim() });
+    }
+    if (emailId && emailId.trim() !== '') {
+      conditions.push({ email: emailId.trim() });
+    }
+    if (gstNo && gstNo.trim() !== '') {
+      const gstDoc = await this.prisma.sellerDocument.findFirst({
+        where: { type: 'GST', name: gstNo.trim() }
+      });
+      if (gstDoc && gstDoc.uploadedByUserId) {
+        conditions.push({ id: gstDoc.uploadedByUserId });
+      }
+    }
+    if (conditions.length === 0) return false;
+    const user = await this.prisma.user.findFirst({
+      where: { OR: conditions },
+      include: { sellerDocuments: true }
+    });
+    if (!user) return false;
+    const isMsmeActive = user.sellerDocuments.some(
+      d => d.category === 'UDYOG_AADHAR' && d.name && d.name.trim() !== '' && d.name.trim().toUpperCase() !== 'N/A'
+    );
+    const isMsmeType = user.regType === 'Manufacturing' || user.regType === 'Service';
+    return Boolean(isMsmeActive && isMsmeType);
+  }
+
   async getCustomers(userId: number) {
-    return this.prisma.accountMaster.findMany({
+    const customers = await this.prisma.accountMaster.findMany({
       where: {
         userId,
         groupName: { has: 'SUNDRY_DEBTORS' },
@@ -48,9 +77,37 @@ export class SalesInvoiceService {
         customerType: true,
         msmeEnabled: true,
         regType: true,
+        msmeId: true,
+        mobileNo: true,
+        emailId: true,
       },
       orderBy: { accountName: 'asc' },
     });
+
+    return Promise.all(
+      customers.map(async (customer) => {
+        const isMsmeUser = await this.isCustomerMsme(
+          customer.mobileNo,
+          customer.emailId,
+          customer.gstNo
+        );
+        return {
+          id: customer.id,
+          customerName: customer.accountName,
+          customerCreditDays: customer.customerCreditDays,
+          addressLine1: customer.addressLine1,
+          addressLine2: customer.addressLine2,
+          gstNo: customer.gstNo,
+          panNo: customer.panNo,
+          state: customer.state,
+          customerType: customer.customerType,
+          msmeEnabled: customer.msmeEnabled,
+          regType: customer.regType,
+          msmeId: customer.msmeId,
+          isMsmeUser,
+        };
+      })
+    );
   }
 
   async getCustomerSOs(customerIdOrName: string, userId: number, excludeInvoiceId?: number) {
@@ -293,16 +350,29 @@ export class SalesInvoiceService {
       throw new BadRequestException('Customer is inactive. New sales transactions are not allowed.');
     }
 
-    const sellerMsme = await this.isSellerMsme(userId);
-    const customerMsmeActive = customer.msmeEnabled;
-    const customerMsmeType = customer.regType === 'Manufacturing' || customer.regType === 'Service';
-    const isCustomerMsme = Boolean(customerMsmeActive && customerMsmeType);
-
-    const creditDays = createDto.creditDays !== undefined && createDto.creditDays !== null ? createDto.creditDays : (customer.customerCreditDays || 0);
-
-    if ((sellerMsme || isCustomerMsme) && creditDays > 45) {
-      throw new BadRequestException('Maximum credit period allowed under MSME rules is 45 days.');
-    }
+     const sellerMsme = await this.isSellerMsme(userId);
+ 
+     let creditDays = createDto.creditDays !== undefined && createDto.creditDays !== null ? createDto.creditDays : (customer.customerCreditDays || 0);
+ 
+     if (sellerMsme && creditDays > 45) {
+       const entered = creditDays;
+       creditDays = 45;
+       createDto.creditDays = 45;
+       await this.prisma.auditLog.create({
+         data: {
+           userId,
+           action: 'MSME_AUTO_CORRECT',
+           resource: 'SalesInvoice',
+           details: {
+             entered,
+             final: 45,
+             reason: 'MSME Compliance Rule',
+             comment: 'MSME Manufacturing/Service Credit Limit',
+             type: 'Customer'
+           }
+         }
+       });
+     }
 
     const address = createDto.address || customer.addressLine1;
     const gstNo = createDto.gstNumber || customer.gstNo;
@@ -434,7 +504,7 @@ export class SalesInvoiceService {
             sgstAmount: sgst,
             igstAmount: igst,
             isRcm,
-            isInterState: gstResult.isInterState,
+            isInterState: gstResult.gstType === 'IGST',
             gstType: gstResult.gstType as any,
             taxableAmount: totalTaxable,
             grandTotal,
@@ -630,17 +700,28 @@ export class SalesInvoiceService {
     const company = await this.prisma.shopDetail.findUnique({ where: { userId: existing.userId } });
     const customer = await this.prisma.accountMaster.findUnique({ where: { id: updateDto.customerId || existing.customerId } });
     
-    if (customer) {
-      const sellerMsme = await this.isSellerMsme(userId);
-      const customerMsmeActive = customer.msmeEnabled;
-      const customerMsmeType = customer.regType === 'Manufacturing' || customer.regType === 'Service';
-      const isCustomerMsme = Boolean(customerMsmeActive && customerMsmeType);
-
-      const creditDays = updateDto.creditDays !== undefined ? updateDto.creditDays : existing.creditDays;
-      if ((sellerMsme || isCustomerMsme) && creditDays > 45) {
-        throw new BadRequestException('Maximum credit period allowed under MSME rules is 45 days.');
+      const sellerMsme = await this.isSellerMsme(existing.userId);
+      if (sellerMsme) {
+         const creditDays = updateDto.creditDays !== undefined ? updateDto.creditDays : existing.creditDays;
+         if (creditDays > 45) {
+           const entered = creditDays;
+           updateDto.creditDays = 45;
+           await this.prisma.auditLog.create({
+             data: {
+               userId: existing.userId,
+               action: 'MSME_AUTO_CORRECT',
+               resource: 'SalesInvoice',
+               details: {
+                 entered,
+                 final: 45,
+                 reason: 'MSME Compliance Rule',
+                 comment: 'MSME Manufacturing/Service Credit Limit',
+                 type: 'Customer'
+               }
+             }
+           });
+         }
       }
-    }
     
     // Fetch Company GST
     const companyGstDoc = await this.prisma.sellerDocument.findFirst({

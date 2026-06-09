@@ -26,7 +26,7 @@ import ScrollableTable from "@/components/common/ScrollableTable";
 import FilterDropdown from "@/pages/dashboard/masters/components/FilterDropdown";
 import CustomSelect from "@/components/common/CustomSelect";
 
-const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
+const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting, t }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
@@ -37,10 +37,10 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
             <Trash2 size={32} className="text-red-500" />
           </div>
           <h3 className="text-[20px] font-bold text-[#111827] mb-2 uppercase tracking-tight">
-            Delete GRN
+            {t('modules:delete_grn')}
           </h3>
           <p className="text-[#6B7280] text-[15px] font-medium mb-8">
-            Are you sure you want to delete this Goods Receipt Note? This action will mark its status as deleted.
+            {t('modules:delete_grn_confirm')}
           </p>
           <div className="flex gap-4">
             <button
@@ -48,14 +48,14 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting }) => {
               disabled={isDeleting}
               className="flex-1 h-[52px] rounded-[14px] border border-[#E5E7EB] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all uppercase tracking-widest"
             >
-              No, Keep it
+              {t('common:no_keep_it')}
             </button>
             <button
               onClick={onConfirm}
               disabled={isDeleting}
               className="flex-1 h-[52px] rounded-[14px] bg-red-600 hover:bg-red-700 text-white text-[14px] font-bold transition-all shadow-lg flex items-center justify-center gap-2 uppercase tracking-widest"
             >
-              {isDeleting ? <RefreshCw size={18} className="animate-spin" /> : "Yes, Delete"}
+              {isDeleting ? <RefreshCw size={18} className="animate-spin" /> : t('common:yes_delete')}
             </button>
           </div>
         </div>
@@ -114,7 +114,7 @@ const GRN = () => {
             setTotalItemsCount(response.meta?.total || data.length);
         } catch (error) {
             console.error("Error fetching GRNs:", error);
-            toast.error("Failed to load GRNs");
+            toast.error(t('modules:failed_to_load_grns'));
         } finally {
             setIsLoading(false);
         }
@@ -152,9 +152,9 @@ const GRN = () => {
             document.body.appendChild(link);
             link.click();
             link.parentNode.removeChild(link);
-            toast.success('PDF Exported Successfully');
+            toast.success(t('common:export_pdf_success'));
         } catch (e) {
-            toast.error('Failed to export PDF');
+            toast.error(t('common:export_failed'));
         }
     };
 
@@ -169,9 +169,9 @@ const GRN = () => {
             document.body.appendChild(link);
             link.click();
             link.parentNode.removeChild(link);
-            toast.success('Excel Exported Successfully');
+            toast.success(t('common:export_excel_success'));
         } catch (e) {
-            toast.error('Failed to export Excel');
+            toast.error(t('common:export_failed'));
         }
     };
 
@@ -230,10 +230,10 @@ const GRN = () => {
         setIsDeleting(true);
         try {
             await grnService.deleteGRN(grnToDelete);
-            toast.success("GRN deleted successfully");
+            toast.success(t('modules:grn_deleted'));
             fetchData();
         } catch (error) {
-            toast.error("Failed to delete GRN");
+            toast.error(t('modules:failed_to_delete_grn'));
         } finally {
             setIsDeleting(false);
             setIsDeleteModalOpen(false);
@@ -245,12 +245,12 @@ const GRN = () => {
         <div className="flex flex-col w-full relative font-outfit">
             {/* Header */}
             <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between items-center">
-                <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">Goods Receipt Note (GRN)</h1>
+                <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('modules:grn_title')}</h1>
                 <button
                     onClick={() => navigate('add')}
                     className="px-8 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all flex items-center gap-2 active:scale-95"
                 >
-                    <Plus size={18} /> Add GRN
+                    <Plus size={18} /> {t('modules:add_grn')}
                 </button>
             </div>
 
@@ -262,7 +262,7 @@ const GRN = () => {
                         onClick={() => navigate(tab === 'GRN' ? '/seller/purchase/grn' : '/seller/purchase/invoice')}
                         className={`relative pb-4 text-[18px] font-bold transition-colors ${tab === 'GRN' ? 'text-[#073318]' : 'text-[#6B7280]'}`}
                     >
-                        {tab}
+                        {tab === 'GRN' ? t('modules:grn_tab', 'GRN') : t('modules:invoice_purchase_tab', 'Invoice')}
                         {tab === 'GRN' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#073318]" />}
                     </button>
                 ))}
@@ -279,7 +279,7 @@ const GRN = () => {
                             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                             <input
                                 type="text"
-                                placeholder="Search by anything..."
+                                placeholder={t('common:search_by_anything', 'Search by anything...')}
                                 value={searchQuery}
                                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                                 className="w-full h-[42px] border border-[#E5E7EB] rounded-[10px] pl-10 pr-10 text-[14px] outline-none focus:border-[#073318]"
@@ -290,7 +290,7 @@ const GRN = () => {
                             onClick={() => isFilterApplied ? handleClearFilter() : setIsFilterOpen(true)} 
                             className={`flex items-center gap-2 px-4 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isFilterApplied ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-[#E5E7EB] text-[#4B5563]'}`}
                         >
-                            <Filter size={18} /> {isFilterApplied ? "Clear" : "Filter"}
+                            <Filter size={18} /> {isFilterApplied ? t('common:clear_filter') : t('common:filter')}
                         </button>
                         <button onClick={fetchData} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] flex items-center justify-center bg-white hover:bg-gray-50 transition-colors">
                             <RefreshCw size={18} className={`text-gray-400 ${isLoading ? 'animate-spin border-[#073318]' : ''}`} />
@@ -303,7 +303,7 @@ const GRN = () => {
                                 onClick={() => setIsExportOpen(!isExportOpen)} 
                                 className={`flex items-center gap-2 px-6 h-[42px] border rounded-[10px] text-[14px] font-bold transition-all ${isExportOpen ? 'border-[#073318] text-[#073318]' : 'border-[#E5E7EB] text-[#4B5563]'}`}
                             >
-                                <Download size={18} /> Export
+                                <Download size={18} /> {t('common:export')}
                             </button>
                             {isExportOpen && (
                                 <div className="absolute top-full right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -324,7 +324,12 @@ const GRN = () => {
                     <table className="w-full min-w-[1500px] border-collapse text-left">
                         <thead>
                             <tr className="bg-emerald-900 text-white font-bold text-[15px]">
-                                {["Supplier Name", "Supplier Challan Number", "Supplier Challan Date", "Booking Date", "Po No", "Gst No", "Credit Days", "Taxable Amount", "Tax Amount", "Gross Amount", "Status", "Action"].map(h => (
+                                {[
+                                    t('modules:supplier_name'), t('modules:supplier_challan_no'), t('modules:supplier_challan_date'),
+                                    t('modules:booking_date'), t('modules:po_no'), t('modules:gst_number_col'),
+                                    t('modules:credit_days_col'), t('modules:taxable_amount_col'), t('modules:tax_amount_col'),
+                                    t('modules:gross_amount_col'), t('common:status'), t('common:action')
+                                ].map(h => (
                                     <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
                                 ))}
                             </tr>
@@ -344,7 +349,7 @@ const GRN = () => {
                                         <td className="px-6 py-4">₹{row.taxAmount}</td>
                                         <td className="px-6 py-5 font-bold text-[#073318]">₹{row.grossAmount}</td>
                                         <td className="px-6 py-5">
-                                            <span className={`px-4 py-1.5 ${row.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{row.status}</span>
+                                            <span className={`px-4 py-1.5 ${row.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{t(`common:status_${row.status.toLowerCase()}`, row.status)}</span>
                                         </td>
                                         <td className="px-6 py-5 text-center relative">
                                             <button 
@@ -357,12 +362,12 @@ const GRN = () => {
                                             {activeDropdown === row.id && (
                                                 <div data-menu-id={row.id} className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= mappedGRNs.length - 2 ? 'bottom-0' : 'top-0'}`}>
                                                     <button onClick={() => navigate(`view/${row.id}`)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] border-b border-gray-50">
-                                                        <Eye size={18} /> {row.status === 'Generated' ? 'View and Edit GRN' : 'View GRN'}
+                                                        <Eye size={18} /> {row.status === 'Generated' ? t('modules:view_edit_grn') : t('modules:view_grn_action')}
                                                     </button>
                                                     {row.status === 'Generated' && (
                                                         <>
                                                             <button onClick={() => handleDeleteClick(row.id)} className="w-full px-5 py-3.5 flex items-center gap-3 text-red-600 hover:bg-red-50">
-                                                                <Trash2 size={18} /> Delete
+                                                                <Trash2 size={18} /> {t('modules:delete_action')}
                                                             </button>
                                                         </>
                                                     )}
@@ -372,7 +377,7 @@ const GRN = () => {
                                     </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan="12" className="px-6 py-24 text-center text-gray-400 font-bold uppercase tracking-widest">No results found</td></tr>
+                                <tr><td colSpan="12" className="px-6 py-24 text-center text-gray-400 font-bold uppercase tracking-widest">{t('common:no_results_found')}</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -381,7 +386,7 @@ const GRN = () => {
                 {/* Pagination */}
                 <div className="px-8 py-5 border-t border-[#F3F4F6] bg-[#F9FAFB] flex items-center justify-between font-bold text-[#6B7280]">
                     <div className="flex items-center gap-2">
-                        <span>Show</span>
+                        <span>{t('common:show')}</span>
                         <CustomSelect 
                             value={itemsPerPage} 
                             onChange={(val) => {
@@ -393,7 +398,7 @@ const GRN = () => {
                         />
                     </div>
                     <div className="flex items-center gap-4">
-                        <span className="text-[14px]">Page {currentPage} of {totalPages || 1}</span>
+                        <span className="text-[14px]">{t('common:page_of', { current: currentPage, total: totalPages || 1 })}</span>
                         <div className="flex gap-2">
                             <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowLeft size={18} /></button>
                             <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowRight size={18} /></button>
@@ -405,21 +410,21 @@ const GRN = () => {
             {/* Modals via Portal */}
             {createPortal(
                 <>
-                    <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} />
+                    <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} t={t} />
                     
                     {/* Filter Sidebar */}
                     {isFilterOpen && <div className="fixed inset-0 z-[100] bg-slate-900/20 backdrop-blur-[2px]" onClick={() => setIsFilterOpen(false)} />}
                     <div className={`fixed top-0 right-0 h-full w-[400px] bg-white shadow-2xl z-[110] transform transition-all duration-300 ${isFilterOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                         <div className="flex items-center justify-between px-6 py-5 border-b border-[#04200f] bg-emerald-900 text-white font-bold">
-                            <h2>Apply Filters</h2>
+                            <h2>{t('modules:apply_filters_title')}</h2>
                             <button onClick={() => setIsFilterOpen(false)}><X size={20} /></button>
                         </div>
                         <div className="p-8 space-y-6">
-                            <p className="text-gray-500 text-sm italic">No additional filters available at the moment.</p>
+                            <p className="text-gray-500 text-sm italic">{t('common:no_additional_filters')}</p>
                         </div>
                         <div className="absolute bottom-0 left-0 right-0 p-8 border-t flex gap-4 bg-white">
-                            <button onClick={handleClearFilter} className="flex-1 h-[46px] border border-[#E5E7EB] rounded-[10px] font-bold">Clear</button>
-                            <button onClick={handleApplyFilter} className="flex-1 h-[46px] bg-[#073318] text-white rounded-[10px] font-bold">Apply</button>
+                            <button onClick={handleClearFilter} className="flex-1 h-[46px] border border-[#E5E7EB] rounded-[10px] font-bold">{t('common:clear')}</button>
+                            <button onClick={handleApplyFilter} className="flex-1 h-[46px] bg-[#073318] text-white rounded-[10px] font-bold">{t('common:apply')}</button>
                         </div>
                     </div>
                 </>,

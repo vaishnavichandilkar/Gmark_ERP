@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronDown, Calendar, Plus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ROUTES } from "@/constants/routes";
 import ChallanMultiSelect from '../../challan/components/ChallanMultiSelect';
 
@@ -21,6 +22,7 @@ const InvoiceForm = ({
     maxDate,
     isLocked
 }) => {
+    const { t } = useTranslation(['modules', 'common']);
     const navigate = useNavigate();
     const [customerSearch, setCustomerSearch] = useState(formData.customerName || '');
     const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
@@ -38,7 +40,7 @@ const InvoiceForm = ({
 
     const filteredCustomers = useMemo(() => {
         return (customers || []).filter(c =>
-            c.accountName?.toLowerCase().includes(customerSearch.toLowerCase())
+            (c.customerName || c.accountName)?.toLowerCase().includes(customerSearch.toLowerCase())
         );
     }, [customerSearch, customers]);
 
@@ -68,11 +70,11 @@ const InvoiceForm = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 {/* 1. Customer Name */}
                 <div className="space-y-2 relative">
-                    <label className="text-[14px] font-semibold text-[#374151]">Customer Name <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:customerName')} <span className="text-red-500">*</span></label>
                     <div className="relative">
                         <input
                             type="text"
-                            placeholder="Select customer name"
+                            placeholder={t('modules:select_customer_name')}
                             value={customerSearch}
                             onFocus={() => setIsCustomerDropdownOpen(true)}
                             onChange={(e) => {
@@ -123,17 +125,17 @@ const InvoiceForm = ({
                                                 key={c.id}
                                                 onClick={() => {
                                                     handleCustomerChange(c.id);
-                                                    setCustomerSearch(c.accountName);
+                                                    setCustomerSearch(c.customerName || c.accountName);
                                                     setIsCustomerDropdownOpen(false);
                                                 }}
                                                 className="w-full text-left px-5 py-3.5 hover:bg-emerald-50 transition-all border-b border-[#F3F4F6] last:border-0"
                                             >
-                                                <div className="font-bold text-[#111827] text-[15px]">{c.accountName}</div>
-                                                <div className="text-[12px] text-gray-400 mt-0.5 font-medium">{c.gstNo || 'No GST Number'}</div>
+                                                <div className="font-bold text-[#111827] text-[15px]">{c.customerName || c.accountName}</div>
+                                                <div className="text-[12px] text-gray-400 mt-0.5 font-medium">{c.gstNo || t('common:no_gst_number', 'No GST Number')}</div>
                                             </button>
                                         ))}
                                         {filteredCustomers.length === 0 && (
-                                            <div className="px-5 py-8 text-[13px] text-gray-400 italic text-center">No results for "{customerSearch}"</div>
+                                            <div className="px-5 py-8 text-[13px] text-gray-400 italic text-center">{t('modules:no_results_for')} "{customerSearch}"</div>
                                         )}
                                     </div>
                                     <div className="p-3 bg-gray-50 border-t border-[#F3F4F6]">
@@ -148,7 +150,7 @@ const InvoiceForm = ({
                                             }}
                                             className="w-full flex items-center justify-center gap-2 py-3 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold shadow-md hover:bg-[#052611] transition-all"
                                         >
-                                            <Plus size={16} /> Add new customer
+                                            <Plus size={16} /> {t('modules:add_new_customer')}
                                         </button>
                                     </div>
                                 </div>
@@ -160,23 +162,23 @@ const InvoiceForm = ({
 
                 {/* 2. Customer Type */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Customer Type <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:customerType')} <span className="text-red-500">*</span></label>
                     <input
                         type="text"
                         readOnly
                         value={formData.customerType || ''}
-                        placeholder="Auto-fetched on customer select"
+                        placeholder={t('modules:auto_fetched_customer')}
                         className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed shadow-sm"
                     />
                 </div>
 
                 {/* 3. Credit Days */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Credit Days <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:creditDays')} <span className="text-red-500">*</span></label>
                     <input
                         type="number"
                         min="0"
-                        placeholder="Enter credit days"
+                        placeholder={t('modules:enter_credit_days_placeholder')}
                         value={formData.creditDays !== undefined && formData.creditDays !== null && formData.creditDays !== '' ? formData.creditDays : ''}
                         onChange={(e) => setFormData(prev => ({ ...prev, creditDays: e.target.value }))}
                         className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm ${errors.creditDays ? 'border-red-500' : 'border-[#E5E7EB]'}`}
@@ -186,12 +188,12 @@ const InvoiceForm = ({
 
                 {/* 4. Address */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Address <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:address')} <span className="text-red-500">*</span></label>
                     <input
                         type="text"
                         readOnly
                         value={formData.address || ''}
-                        placeholder="Auto-fetched on customer select"
+                        placeholder={t('modules:auto_fetched_customer')}
                         className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed shadow-sm"
                     />
                     {errors.address && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.address}</p>}
@@ -199,26 +201,26 @@ const InvoiceForm = ({
 
                 {/* 5. GST Number (Optional) */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">GST Number (Optional)</label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:gst_number_optional')}</label>
                     <input
                         type="text"
                         readOnly
                         value={formData.gstNo || ''}
-                        placeholder="Auto-fetched on customer select"
+                        placeholder={t('modules:auto_fetched_customer')}
                         className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed shadow-sm"
                     />
                 </div>
 
                 {/* 6. SO Number (Optional) */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">SO Number (Optional)</label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:so_number_optional')}</label>
                     <div className="relative">
                         <select
                             className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-14 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
                             value={formData.soId || ""}
                             onChange={(e) => handleSOChange(e.target.value)}
                         >
-                            <option value="">Enter SO number</option>
+                            <option value="">{t('modules:enter_so_number')}</option>
                             {sos.map(p => <option key={p.id} value={p.id}>{p.soNumber}</option>)}
                             {formData.soNumber && !sos.find(s => String(s.id) === String(formData.soId)) && (
                                 <option value={formData.soId}>{formData.soNumber}</option>
@@ -242,7 +244,7 @@ const InvoiceForm = ({
 
                 {/* 7. Customer Invoice Date */}
                 <div className="space-y-2 font-outfit">
-                    <label className="text-[14px] font-semibold text-[#374151]">Customer Invoice Date <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:customer_invoice_date')} <span className="text-red-500">*</span></label>
                     <div className="relative">
                         <input
                             type="date"
@@ -256,7 +258,7 @@ const InvoiceForm = ({
                         />
                         <input
                             type="text"
-                            placeholder="DD/MM/YYYY"
+                            placeholder={t('modules:date_placeholder')}
                             value={toDisplayDate(formData.customerInvoiceDate)}
                             readOnly
                             onClick={() => !isLocked && invoiceDateRef.current?.showPicker?.()}
@@ -277,14 +279,14 @@ const InvoiceForm = ({
 
                 {/* 8. Booking Date */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Booking Date (Current Date) <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:booking_date_current')} <span className="text-red-500">*</span></label>
                     <div className="relative">
                         <input
                             type="text"
                             value={toDisplayDate(new Date().toISOString().split('T')[0])}
                             readOnly
                             className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all text-gray-500 cursor-not-allowed shadow-sm"
-                            placeholder="DD/MM/YYYY"
+                            placeholder={t('modules:date_placeholder')}
                         />
                         <Calendar
                             size={18}
@@ -295,10 +297,10 @@ const InvoiceForm = ({
 
                 {/* 9. Customer Invoice Number */}
                 <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">Customer Invoice Number <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:customer_invoice_number')} <span className="text-red-500">*</span></label>
                     <input
                         type="text"
-                        placeholder="Enter customer invoice number"
+                        placeholder={t('modules:enter_customer_invoice_number')}
                         value={formData.customerInvoiceNumber || ''}
                         onChange={(e) => setFormData({ ...formData, customerInvoiceNumber: e.target.value })}
                         className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all ${errors.customerInvoiceNumber ? 'border-red-500' : 'border-[#E5E7EB]'}`}
@@ -308,7 +310,7 @@ const InvoiceForm = ({
 
                 {/* 10. Customer Challan Number (Optional) */}
                 <div className="space-y-2 relative">
-                    <label className="text-[14px] font-semibold text-[#374151]">Customer Challan Number (Optional)</label>
+                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:customer_challan_number_optional')}</label>
                     <ChallanMultiSelect
                         challans={challans}
                         selectedIds={formData.challanIds || []}

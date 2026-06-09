@@ -1,25 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './src/app.module';
-import { LedgerService } from './src/modules/Ledger/ledger.service';
+import { PrismaService } from './src/infrastructure/prisma/prisma.service';
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
-  const ledgerService = app.get(LedgerService);
-  const data = await ledgerService.getDetailedLedger(9, 2, '', '', '', 1, 50);
+  const prisma = app.get(PrismaService);
   
-  // Just print the one with id: 16 (the Purchase)
-  const p = data.items.find(x => x.id === 16);
-  console.dir(p, { depth: null });
-  
-  // Also call the same invoiceIdMap logic locally to see what happens
-  const prisma = app.get('PrismaService');
-  const allS = await prisma.voucherSettlement.findMany({ where: { ledger_id: 9 } });
-  console.log("Found " + allS.length + " settlements");
-  
-  const invs = await prisma.purchaseInvoice.findMany({ where: { OR: [{ invoiceNumber: "6767" }, { supplierInvoiceNumber: "6767" }] } });
-  console.log("Purchase Invoices:");
-  console.dir(invs, { depth: null });
-  
+  console.log("=== TRANSACTIONS FOR ACCOUNT 4 ===");
+  const txs = await prisma.transaction.findMany({
+    where: { accountId: 4 }
+  });
+  console.dir(txs.map(t => ({ id: t.id, invoiceNumber: t.invoiceNumber, transactionType: t.transactionType, amount: Number(t.amount), entryType: t.entryType })), { depth: null });
+
   await app.close();
 }
 bootstrap();
