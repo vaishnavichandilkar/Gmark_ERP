@@ -265,10 +265,10 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
                         </tr>
                     ) : (
                         totals.taxGroups.map((group, gIdx) => {
-                            const label = gstType?.gstType === 'CGST_SGST' ? 'C-GST/S-GST' : 'I-GST';
-                            const displayRate = gstType?.gstType === 'CGST_SGST' ? (group.rate / 2).toFixed(2) : group.rate.toFixed(2);
+                            const isIntra = gstType?.gstType === 'CGST_SGST' || totals.totalTax === 0;
+                            const displayRate = isIntra ? (group.rate / 2).toFixed(2) : group.rate.toFixed(2);
                             
-                            if (gstType?.gstType === 'CGST_SGST') {
+                            if (isIntra) {
                                 return (
                                     <React.Fragment key={`tax-${group.rate}`}>
                                         <tr className="border-b border-[#F1F5F9] h-[48px]">

@@ -405,6 +405,103 @@ const Finance = () => {
         return filteredTransactions[filteredTransactions.length - 1].balance;
     }, [filteredTransactions]);
 
+    const isCreditorOrDebtor = useMemo(() => {
+        if (detailedLedger && detailedLedger.isCreditorOrDebtor !== undefined) {
+            return detailedLedger.isCreditorOrDebtor;
+        }
+        if (selectedAccount && selectedAccount.accountType) {
+            const typeLower = selectedAccount.accountType.toLowerCase();
+            return typeLower === 'creditor' || typeLower === 'supplier' || typeLower === 'debtor' || typeLower === 'customer';
+        }
+        return activeSubTab === 'Sundry Creditors' || activeSubTab === 'Sundry Debtors';
+    }, [activeSubTab, selectedAccount, detailedLedger]);
+
+    const isCreditor = useMemo(() => {
+        if (detailedLedger && detailedLedger.isCreditorLedger !== undefined) {
+            return detailedLedger.isCreditorLedger;
+        }
+        if (selectedAccount && selectedAccount.accountType) {
+            const typeLower = selectedAccount.accountType.toLowerCase();
+            return typeLower === 'creditor' || typeLower === 'supplier';
+        }
+        return activeSubTab === 'Sundry Creditors';
+    }, [activeSubTab, selectedAccount, detailedLedger]);
+
+    const allocationSummary = useMemo(() => {
+        let againstRefTotal = 0;
+        let againstRefPaid = 0;
+        let againstRefOutstanding = 0;
+
+        let onAccountTotal = 0;
+        let onAccountPaid = 0;
+        let onAccountOutstanding = 0;
+
+        if (!detailedLedger || !detailedLedger.items) {
+            return {
+                againstRef: { particular: 'Against reference payment', totalAmt: 0, paidAmt: 0, outstanding: 0 },
+                onAccount: { particular: 'On Account', totalAmt: 0, paidAmt: 0, outstanding: 0 },
+                total: { particular: 'Total', totalAmt: 0, paidAmt: 0, outstanding: 0 }
+            };
+        }
+
+        const activeTxList = detailedLedger.items.filter(tx => 
+            tx.particulars && 
+            !tx.particulars.toLowerCase().includes('balance') && 
+            !tx.isBalanceRow
+        );
+
+        activeTxList.forEach(tx => {
+            const pLower = tx.particulars.toLowerCase();
+            
+            // Invoices (Purchase or Sales)
+            if (pLower.includes('purchase') || pLower.includes('sales')) {
+                const total = parseFloat(tx.credit || tx.debit || 0);
+                againstRefTotal += total;
+
+                // Mapped allocations
+                const allocated = tx.allocations ? tx.allocations.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0) : 0;
+                againstRefPaid += allocated;
+            }
+            
+            // Payments (Payment or Receipt)
+            if (pLower.includes('payment') || pLower.includes('receipt')) {
+                const totalPayment = parseFloat(tx.debit || tx.credit || 0);
+                const allocated = tx.allocations ? tx.allocations.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0) : 0;
+                const unallocated = Math.max(0, totalPayment - allocated);
+                
+                onAccountPaid += unallocated;
+            }
+        });
+
+        againstRefOutstanding = Math.max(0, againstRefTotal - againstRefPaid);
+        onAccountOutstanding = onAccountPaid;
+
+        const grandTotalAmt = againstRefTotal + onAccountTotal;
+        const grandPaidAmt = againstRefPaid + onAccountPaid;
+        const grandOutstanding = againstRefOutstanding + onAccountOutstanding;
+
+        return {
+            againstRef: {
+                particular: 'Against reference payment',
+                totalAmt: againstRefTotal,
+                paidAmt: againstRefPaid,
+                outstanding: againstRefOutstanding
+            },
+            onAccount: {
+                particular: 'On Account',
+                totalAmt: onAccountTotal,
+                paidAmt: onAccountPaid,
+                outstanding: onAccountOutstanding
+            },
+            total: {
+                particular: 'Total',
+                totalAmt: grandTotalAmt,
+                paidAmt: grandPaidAmt,
+                outstanding: grandOutstanding
+            }
+        };
+    }, [detailedLedger, activeSubTab]);
+
     
     const overallTotalDR = detailedLedger?.periodDebit || 0;
     const overallTotalCR = detailedLedger?.periodCredit || 0;
@@ -450,7 +547,7 @@ const Finance = () => {
         if (match) {
             if (startDate && endDate) {
                 // Navigate to full ledger view with dates
-                navigate(`/seller/finance/ledger/${match.id}?startDate=${startDate}&endDate=${endDate}&name=${match.account}`);
+                navigate(`/seller/finance/ledger/${match.id}?startDate=${startDate}&endDate=${endDate}&name=${match.account}&type=${encodeURIComponent(activeSubTab)}`);
             } else {
                 // Just open the modal if no dates set
                 setSelectedAccount(match);
@@ -472,7 +569,7 @@ const Finance = () => {
             const match = exactMatch || (filteredMainData.length === 1 ? filteredMainData[0] : null);
 
             if (match) {
-                navigate(`/seller/finance/ledger/${match.id}?startDate=${startDate}&endDate=${endDate}&name=${match.account}`);
+                navigate(`/seller/finance/ledger/${match.id}?startDate=${startDate}&endDate=${endDate}&name=${match.account}&type=${encodeURIComponent(activeSubTab)}`);
             }
         }
     }, [activeMainTab, searchQuery, startDate, endDate, filteredMainData, navigate]);
@@ -1339,11 +1436,22 @@ const Finance = () => {
                                     </div>
                                     <div className="mt-8 flex justify-end gap-3">
                                         <button 
-                                            onClick={() => {
-                                                setEditVoucherData(selectedAccount.originalVoucher);
-                                                setEditVoucherType(activeSubTab === 'Receipts' ? 'Receipt' : 'Payment');
-                                                setIsEditModalOpen(true);
-                                                setSelectedAccount(null); // Close the view modal
+                                            onClick={async () => {
+                                                try {
+                                                    let fullVoucher;
+                                                    if (activeSubTab === 'Receipts') {
+                                                        fullVoucher = await voucherService.getReceiptVoucherById(selectedAccount.id);
+                                                    } else {
+                                                        fullVoucher = await voucherService.getPaymentVoucherById(selectedAccount.id);
+                                                    }
+                                                    setEditVoucherData(fullVoucher);
+                                                    setEditVoucherType(activeSubTab === 'Receipts' ? 'Receipt' : 'Payment');
+                                                    setIsEditModalOpen(true);
+                                                    setSelectedAccount(null); // Close the view modal
+                                                } catch (error) {
+                                                    console.error('Error fetching full voucher details:', error);
+                                                    toast.error('Failed to load voucher details for editing');
+                                                }
                                             }}
                                             className="px-6 py-2.5 rounded-xl bg-[#073318] text-white font-bold hover:bg-[#0a4422] transition-all text-[14px] shadow-[0_4px_14px_rgba(7,51,24,0.25)] flex items-center gap-2"
                                         >
@@ -1597,11 +1705,56 @@ const Finance = () => {
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
                                                     <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] text-[#94A3B8]">--</td>
-                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] font-extrabold text-[#111827]">₹ {Math.abs(currentClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {activeSubTab === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}</td>
+                                                    <td className="px-4 py-2.5 text-right border-l border-[#E2E8F0] font-extrabold text-[#111827]">₹ {Math.abs(currentClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {isCreditor ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}</td>
                                                 </tr>
                                             </tfoot>
                                         </table>
                                     </div>
+
+                                    {/* Summary Table Card */}
+                                    {isCreditorOrDebtor && (
+                                        <div className="mt-6 bg-white rounded-[16px] border border-[#E5E7EB] shadow-sm overflow-hidden font-outfit">
+                                            <div className="px-6 py-4 border-b border-[#F1F5F9] bg-[#F8FAFC]">
+                                                <h4 className="text-[13px] font-bold text-[#6B7280] uppercase tracking-wider">
+                                                    {isCreditor ? 'Sundry Creditor' : 'Sundry Debtor'}
+                                                </h4>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-left border-collapse">
+                                                    <thead>
+                                                        <tr className="border-b border-[#E5E7EB] bg-gray-50/50 text-[#4B5563] font-bold text-[12px]">
+                                                            <th className="px-6 py-3 font-bold uppercase tracking-wider">Particular</th>
+                                                            <th className="px-6 py-3 text-right font-bold uppercase tracking-wider">Total Amt (₹)</th>
+                                                            <th className="px-6 py-3 text-right font-bold uppercase tracking-wider">Paid Amt (₹)</th>
+                                                            <th className="px-6 py-3 text-right font-bold uppercase tracking-wider">Outstanding (₹)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="text-[14px] text-gray-700">
+                                                        <tr className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
+                                                            <td className="px-6 py-3.5 font-semibold text-gray-900">{allocationSummary.againstRef.particular}</td>
+                                                            <td className="px-6 py-3.5 text-right font-medium">₹ {allocationSummary.againstRef.totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            <td className="px-6 py-3.5 text-right font-medium">₹ {allocationSummary.againstRef.paidAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            <td className="px-6 py-3.5 text-right font-bold text-gray-900">₹ {allocationSummary.againstRef.outstanding.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                        </tr>
+                                                        <tr className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
+                                                            <td className="px-6 py-3.5 font-semibold text-gray-900">{allocationSummary.onAccount.particular}</td>
+                                                            <td className="px-6 py-3.5 text-right font-medium">₹ {allocationSummary.onAccount.totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            <td className="px-6 py-3.5 text-right font-medium">₹ {allocationSummary.onAccount.paidAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            <td className="px-6 py-3.5 text-right font-bold text-gray-900">₹ {allocationSummary.onAccount.outstanding.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                        </tr>
+                                                    </tbody>
+                                                    <tfoot className="bg-[#F8FAFC] border-t-2 border-[#E5E7EB] font-bold text-[13px] text-gray-900">
+                                                        <tr>
+                                                            <td className="px-6 py-3">{allocationSummary.total.particular}</td>
+                                                            <td className="px-6 py-3 text-right">₹ {allocationSummary.total.totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            <td className="px-6 py-3 text-right">₹ {allocationSummary.total.paidAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            <td className="px-6 py-3 text-right text-gray-900">₹ {allocationSummary.total.outstanding.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Modal Pagination Controls */}
                                     <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-4 border-t border-gray-100 bg-white/50 rounded-b-[16px]">

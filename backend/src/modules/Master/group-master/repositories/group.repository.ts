@@ -246,7 +246,6 @@ export class GroupMasterRepository {
     }
 
     async updateGroupStatus(id: number, level: number, status: MasterStatus, userId: number, opening_balance?: number | null, balance_type?: BalanceType | null) {
-        const where = { id, userId };
         const data: any = { status };
         if (opening_balance !== undefined) {
             data.opening_balance = opening_balance !== null ? Number(opening_balance) : null;
@@ -254,16 +253,44 @@ export class GroupMasterRepository {
         if (balance_type !== undefined) {
             data.balance_type = balance_type || null;
         }
+
+        // 1. Fetch group record by ID to check existence and ownership
+        let groupRecord;
         switch (level) {
             case 1:
-                // Header groups cannot be updated
-                const g = await this.prisma.group.findUnique({ where: { id } });
-                if (g?.is_header) return null;
-                return this.prisma.group.update({ where: { id }, data });
-            case 2: return this.prisma.subGroup.update({ where, data });
-            case 3: return this.prisma.subSubGroup.update({ where, data });
-            case 4: return this.prisma.subSubSubGroup.update({ where, data });
-            case 5: return this.prisma.subSubSubSubGroup.update({ where, data });
+                groupRecord = await this.prisma.group.findUnique({ where: { id } });
+                break;
+            case 2:
+                groupRecord = await this.prisma.subGroup.findUnique({ where: { id } });
+                break;
+            case 3:
+                groupRecord = await this.prisma.subSubGroup.findUnique({ where: { id } });
+                break;
+            case 4:
+                groupRecord = await this.prisma.subSubSubGroup.findUnique({ where: { id } });
+                break;
+            case 5:
+                groupRecord = await this.prisma.subSubSubSubGroup.findUnique({ where: { id } });
+                break;
+        }
+
+        if (!groupRecord) return null;
+
+        // 2. Header groups cannot be updated
+        if (level === 1 && groupRecord.is_header) return null;
+
+        // 3. Ensure user has access: either it is a system group (userId === null) or belongs to this user
+        if (groupRecord.userId !== null && groupRecord.userId !== userId) {
+            return null;
+        }
+
+        // 4. Update the status by unique record ID
+        switch (level) {
+            case 1: return this.prisma.group.update({ where: { id }, data });
+            case 2: return this.prisma.subGroup.update({ where: { id }, data });
+            case 3: return this.prisma.subSubGroup.update({ where: { id }, data });
+            case 4: return this.prisma.subSubSubGroup.update({ where: { id }, data });
+            case 5: return this.prisma.subSubSubSubGroup.update({ where: { id }, data });
             default: return null;
         }
     }

@@ -224,7 +224,7 @@ const AccountTable = ({ items, gstType, expenses, setExpenses, mainAccountLabel 
                                 {totals.subtotalWithBeforeGstExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             </td>
                         </tr>
-                    ) : gstType?.gstType === 'CGST_SGST' ? (
+                    ) : (gstType?.gstType === 'CGST_SGST' || totals.totalTax === 0) ? (
                         <>
                             <tr className="border-b border-[#F1F5F9] h-[48px]">
                                 <td className="px-6 py-3 font-bold text-[#334155] uppercase text-[12px] tracking-wide">C-GST</td>

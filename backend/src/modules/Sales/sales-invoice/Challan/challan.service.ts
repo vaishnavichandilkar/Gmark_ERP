@@ -82,7 +82,7 @@ export class ChallanService {
     }
 
     const userGstDoc = await this.prisma.sellerDocument.findFirst({
-      where: { uploadedByUserId: userId, type: 'GST' },
+      where: { uploadedByUserId: userId, type: 'GST', url: 'N/A' },
       select: { name: true }
     });
     const userGst = userGstDoc?.name;
@@ -163,7 +163,8 @@ export class ChallanService {
         taxPercent,
         taxAmount: itemTaxAmount,
         beforeTaxAmount,
-        totalAmount
+        totalAmount,
+        printDescription: item.printDescription || item.productName || ''
       });
     }
 

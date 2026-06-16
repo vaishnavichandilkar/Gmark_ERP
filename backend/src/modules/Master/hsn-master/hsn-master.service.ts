@@ -259,7 +259,7 @@ export class HsnMasterService {
             { header: 'Type*', key: 'type', width: 15 },
             { header: 'Code*', key: 'code', width: 20 },
             { header: 'Tax Rate*', key: 'taxRate', width: 15 },
-            { header: 'Description', key: 'description', width: 40 }
+            { header: 'Description*', key: 'description', width: 40 }
         ];
 
         // Format code as text
@@ -539,6 +539,10 @@ export class HsnMasterService {
 
             try {
                 // Business Validations
+                if (!description) {
+                    throw new Error('Description is required.');
+                }
+
                 if (!typeStr || (typeStr !== 'HSN' && typeStr !== 'SAC')) {
                     throw new Error('Type is required and must be HSN or SAC.');
                 }

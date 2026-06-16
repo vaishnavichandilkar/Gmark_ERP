@@ -375,7 +375,7 @@ export class PurchaseInvoiceService {
 
     // Fetch user's registered GST early for tax logic
     const userGstDoc = await this.prisma.sellerDocument.findFirst({
-        where: { uploadedByUserId: userId, type: 'GST' },
+        where: { uploadedByUserId: userId, type: 'GST', url: 'N/A' },
         select: { name: true }
     });
     const userGst = userGstDoc?.name;
@@ -707,7 +707,7 @@ export class PurchaseInvoiceService {
 
     // Fetch user's registered GST early
     const userGstDoc = await this.prisma.sellerDocument.findFirst({
-        where: { uploadedByUserId: existing.userId, type: 'GST' },
+        where: { uploadedByUserId: existing.userId, type: 'GST', url: 'N/A' },
         select: { name: true }
     });
     const userGst = userGstDoc?.name;

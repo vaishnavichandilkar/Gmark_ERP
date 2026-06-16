@@ -565,25 +565,25 @@ const ProductMaster = () => {
                   <tr>
                     <th className="border-r border-white/10">
                       <div className="flex items-center gap-2">
-                        {appliedFilters.productType === "SERVICES" ? t("modules:service_code", "Service Code") : t("product_code")}{" "}
+                        {t("product_type")}{" "}
                         <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
                     <th className="border-r border-white/10">
                       <div className="flex items-center gap-2">
-                        {appliedFilters.productType === "SERVICES" ? t("modules:service_name", "Service Name") : t("product_name")}{" "}
+                        {appliedFilters.productType === "SERVICES" ? t("modules:service_code", "Service Code") : t("common:code")}{" "}
+                        <ChevronsUpDown size={14} className="opacity-70" />
+                      </div>
+                    </th>
+                    <th className="border-r border-white/10">
+                      <div className="flex items-center gap-2">
+                        {appliedFilters.productType === "SERVICES" ? t("modules:service_name", "Service Name") : t("common:name")}{" "}
                         <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
                     <th className="border-r border-white/10">
                       <div className="flex items-center gap-2">
                         {t("modules:gst_uom", "GST UOM")}{" "}
-                        <ChevronsUpDown size={14} className="opacity-70" />
-                      </div>
-                    </th>
-                    <th className="border-r border-white/10">
-                      <div className="flex items-center gap-2">
-                        {t("product_type")}{" "}
                         <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
@@ -646,6 +646,9 @@ const ProductMaster = () => {
                         key={row.id}
                         className="group"
                       >
+                        <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">
+                          {translateDynamic(row.product_type, t)}
+                        </td>
                         <td className="font-bold text-[#111827] border-r border-[#F3F4F6]">
                           {row.product_code}
                         </td>
@@ -654,9 +657,6 @@ const ProductMaster = () => {
                         </td>
                         <td className="font-bold text-[#073318] border-r border-[#F3F4F6] text-center uppercase">
                           {getStandardGstUom(row.uom)}
-                        </td>
-                        <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">
-                          {translateDynamic(row.product_type, t)}
                         </td>
                         <td className="font-medium text-[#4B5563] border-r border-[#F3F4F6]">
                           {translateDynamic(row.category?.name, t)}

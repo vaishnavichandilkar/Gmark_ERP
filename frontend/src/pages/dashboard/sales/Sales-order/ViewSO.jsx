@@ -85,6 +85,8 @@ const ViewSO = () => {
                     po_date: so.poDate,
                     po_expiry_date: so.poExpiryDate,
                     customer_amt: so.customerAmt,
+                    customer_amt_excl_tax: so.customerAmtExclTax,
+                    customer_amt_incl_tax: so.customerAmtInclTax,
                     customer_po_file: so.customerPoFile || ''
                 });
                 setItems(so.items || []);
@@ -184,8 +186,14 @@ const ViewSO = () => {
                                     <InfoTableRow 
                                         label1={t('modules:customerPoExpDate') + ":"} 
                                         value1={formatDate(formData.po_expiry_date)} 
-                                        label2={t('modules:customerPoAmount', 'Customer PO Amount') + ":"} 
-                                        value2={formData.customer_amt !== null && formData.customer_amt !== undefined && formData.customer_amt !== '' ? `₹ ${parseFloat(formData.customer_amt).toFixed(2)}` : '-'} 
+                                        label2={t('modules:customerPoAmountExcl', 'Customer PO Amt (Excl. Tax)') + ":"} 
+                                        value2={formData.customer_amt_excl_tax !== null && formData.customer_amt_excl_tax !== undefined && formData.customer_amt_excl_tax !== '' ? `₹ ${parseFloat(formData.customer_amt_excl_tax).toFixed(2)}` : '-'} 
+                                    />
+                                    <InfoTableRow 
+                                        label1={t('modules:customerPoAmountIncl', 'Customer PO Amt (Incl. Tax)') + ":"} 
+                                        value1={formData.customer_amt_incl_tax !== null && formData.customer_amt_incl_tax !== undefined && formData.customer_amt_incl_tax !== '' ? `₹ ${parseFloat(formData.customer_amt_incl_tax).toFixed(2)}` : '-'} 
+                                        label2="" 
+                                        value2="" 
                                     />
                                     {formData.customer_po_file && (
                                         <InfoTableRow 

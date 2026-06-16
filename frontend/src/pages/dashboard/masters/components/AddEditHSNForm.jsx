@@ -150,6 +150,10 @@ const AddEditHSNForm = ({ initialData = null, mode = 'add', onBack, onSubmit }) 
             newErrors.taxRate = 'Tax Rate is required.';
         }
 
+        if (!formData.description?.trim()) {
+            newErrors.description = `${formData.type === 'SAC' ? 'SAC Description' : formData.type === 'HSN' ? 'HSN Description' : 'HSN/SAC Description'} is required.`;
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -228,7 +232,7 @@ const AddEditHSNForm = ({ initialData = null, mode = 'add', onBack, onSubmit }) 
                     </label>
                     <input
                         type="text"
-                        placeholder={formData.type === 'SAC' ? 'Enter 6 digit code' : formData.type === 'HSN' ? 'Enter 6 or 8 digit code' : 'Enter 6-8 digit code'}
+                        placeholder={formData.type === 'SAC' ? 'Enter 6 to 8 digit code' : formData.type === 'HSN' ? 'Enter 6 or 8 digit code' : 'Enter 6-8 digit code'}
                         value={formData.code}
                         onChange={handleCodeChange}
                         disabled={isViewOnly || mode === 'edit'} // Lock code during edit
@@ -261,11 +265,11 @@ const AddEditHSNForm = ({ initialData = null, mode = 'add', onBack, onSubmit }) 
                 {/* Field 4: Description */}
                 <div className="flex flex-col gap-2 relative w-full md:col-span-2">
                     <label className="text-[14px] font-bold text-[#374151]">
-                        {formData.type === 'SAC' ? 'SAC Description' : formData.type === 'HSN' ? 'HSN Description' : 'Description'}
+                        {formData.type === 'SAC' ? 'SAC Description' : formData.type === 'HSN' ? 'HSN Description' : 'HSN/SAC Description'} {!isViewOnly && <span className="text-red-500">*</span>}
                     </label>
                     <textarea
                         rows={3}
-                        placeholder={formData.type === 'SAC' ? 'Enter SAC description (optional)' : formData.type === 'HSN' ? 'Enter HSN description (optional)' : 'Enter description (optional)'}
+                        placeholder={formData.type === 'SAC' ? 'Enter SAC description' : formData.type === 'HSN' ? 'Enter HSN description' : 'Enter HSN/SAC description'}
                         value={formData.description}
                         onChange={(e) => handleFieldChange('description', e.target.value)}
                         disabled={isViewOnly}
@@ -274,6 +278,7 @@ const AddEditHSNForm = ({ initialData = null, mode = 'add', onBack, onSubmit }) 
                                 errors.description ? 'border-red-500 focus:ring-1 focus:ring-red-500/10' :
                                     'border-[#E5E7EB] focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10'}`}
                     />
+                    {errors.description && <span className="text-red-500 text-[11px] mt-0.5 ml-1 animate-in fade-in slide-in-from-top-1 duration-200 font-medium">*{errors.description}</span>}
                 </div>
             </div>
 

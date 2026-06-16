@@ -214,16 +214,16 @@ const PurchaseOrder = () => {
 
       if (status === 'DELETED') {
         computedStatusLabel = "Deleted"; bgClass = "bg-red-50 text-red-600 border border-red-100";
-      } else if (expiryEndOfDay < now) {
-        computedStatusLabel = "Expired"; bgClass = "bg-red-50 text-red-600 border border-red-100";
-      } else if (diffHrs > 0 && diffHrs <= 48) {
-        computedStatusLabel = "Expiring Soon"; bgClass = "bg-amber-50 text-amber-600 border border-amber-100";
       } else if (status === 'INVOICE_GENERATED' || status === 'INVOICE_COMPLETED' || status === 'COMPLETED') {
         computedStatusLabel = "Completed"; bgClass = "bg-emerald-50 text-emerald-600 border border-emerald-100";
       } else if (status === 'GRN_COMPLETED') {
         computedStatusLabel = "GRN Completed"; bgClass = "bg-teal-50 text-teal-600 border border-teal-100";
       } else if (po.grn?.length > 0 || po.purchaseInvoices?.length > 0) {
         computedStatusLabel = "Partial GRN"; bgClass = "bg-indigo-50 text-indigo-600 border border-indigo-100";
+      } else if (expiryEndOfDay < now) {
+        computedStatusLabel = "Expired"; bgClass = "bg-red-50 text-red-600 border border-red-100";
+      } else if (diffHrs > 0 && diffHrs <= 48) {
+        computedStatusLabel = "Expiring Soon"; bgClass = "bg-amber-50 text-amber-600 border border-amber-100";
       } else {
         computedStatusLabel = "Pending"; bgClass = "bg-blue-50 text-blue-600 border border-blue-100";
       }

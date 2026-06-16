@@ -79,7 +79,7 @@ const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting, t }) => {
 
 
 const SalesOrder = () => {
-  const statusTabs = ["ALL", "PENDING", "COMPLETED", "DELETED"];
+  const statusTabs = ["All", "Pending", "Expiring Soon", "Expired", "Completed", "Deleted"];
   const { t } = useTranslation(['modules', 'common']);
   const navigate = useNavigate();
 
@@ -100,11 +100,11 @@ const SalesOrder = () => {
   const [activeTab, setActiveTab] = useState("All");
 
   // Filter State
-  const defaultFilters = { status: "ALL" };
+  const defaultFilters = { status: "All" };
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filterInputs, setFilterInputs] = useState(defaultFilters);
   const [appliedFilters, setAppliedFilters] = useState(defaultFilters);
-  const isFilterApplied = appliedFilters.status !== "ALL";
+  const isFilterApplied = appliedFilters.status !== "All";
 
   // Pagination State
   const [itemsPerPage, setItemsPerPage] = useState(15);
@@ -142,8 +142,15 @@ const SalesOrder = () => {
         };
 
         const statusFilter = appliedFilters.status;
-        if (statusFilter !== "ALL") {
-          params.filter = statusFilter.toLowerCase();
+        if (statusFilter !== "All") {
+          const statusMap = {
+            "Pending": "pending",
+            "Completed": "completed",
+            "Deleted": "deleted",
+            "Expiring Soon": "expiring",
+            "Expired": "expired"
+          };
+          params.filter = statusMap[statusFilter];
         }
 
         const response = await salesOrderService.getSalesOrders(params);
@@ -186,28 +193,29 @@ const SalesOrder = () => {
   const filteredData = useMemo(() => {
     let baseData = salesOrders.map(so => {
       const status = so.status;
-      const expiryDate = so.expiryDate ? new Date(so.expiryDate) : null;
-      const today = new Date();
-      const isExpired = expiryDate && expiryDate < today;
-
-      // Calculate days diff
-      const diffTime = expiryDate ? expiryDate - today : null;
-      const diffHrs = diffTime ? diffTime / (1000 * 60 * 60) : null;
-      const isExpiringSoon = !isExpired && diffHrs !== null && diffHrs > 0 && diffHrs <= 48;
+      const expDate = so.expiryDate ? new Date(so.expiryDate) : new Date();
+      const now = new Date();
+      const expiryEndOfDay = new Date(expDate);
+      expiryEndOfDay.setHours(23, 59, 59, 999);
+      const diffHrs = (expiryEndOfDay.getTime() - now.getTime()) / (1000 * 60 * 60);
 
       let computedStatusLabel = "Pending";
-      let bgClass = "bg-orange-100 text-orange-600";
+      let bgClass = "bg-blue-50 text-blue-600 border border-blue-100";
 
       if (status === 'DELETED' || status === 'deleted') {
-        computedStatusLabel = "Deleted"; bgClass = "bg-red-100 text-red-600";
-      } else if (isExpired) {
-        computedStatusLabel = "Expired"; bgClass = "bg-slate-100 text-slate-500 border border-slate-200";
-      } else if (isExpiringSoon) {
-        computedStatusLabel = "Expiring Soon"; bgClass = "bg-amber-100 text-amber-600 border border-amber-200";
+        computedStatusLabel = "Deleted"; bgClass = "bg-red-50 text-red-600 border border-red-100";
       } else if (status === 'INVOICE_GENERATED' || status === 'INVOICE_COMPLETED' || status === 'completed' || status === 'COMPLETED') {
-        computedStatusLabel = "Completed"; bgClass = "bg-emerald-100 text-emerald-600";
+        computedStatusLabel = "Completed"; bgClass = "bg-emerald-50 text-emerald-600 border border-emerald-100";
+      } else if (status === 'CHALLAN_COMPLETED') {
+        computedStatusLabel = "Challan Completed"; bgClass = "bg-teal-50 text-teal-600 border border-teal-100";
+      } else if (so.salesChallans?.length > 0 || so.salesInvoices?.length > 0) {
+        computedStatusLabel = "Partial Challan"; bgClass = "bg-indigo-50 text-indigo-600 border border-indigo-100";
+      } else if (expiryEndOfDay < now) {
+        computedStatusLabel = "Expired"; bgClass = "bg-red-50 text-red-600 border border-red-100";
+      } else if (diffHrs > 0 && diffHrs <= 48) {
+        computedStatusLabel = "Expiring Soon"; bgClass = "bg-amber-50 text-amber-600 border border-amber-100";
       } else {
-        computedStatusLabel = "Pending"; bgClass = "bg-orange-100 text-orange-600";
+        computedStatusLabel = "Pending"; bgClass = "bg-blue-50 text-blue-600 border border-blue-100";
       }
 
       return { ...so, computedStatusLabel, bgClass };

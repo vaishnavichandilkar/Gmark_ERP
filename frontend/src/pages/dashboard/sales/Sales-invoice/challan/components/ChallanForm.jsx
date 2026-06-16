@@ -179,7 +179,12 @@ const ChallanForm = ({
                         value={formData.creditDays !== undefined && formData.creditDays !== '' ? formData.creditDays : ''}
                         placeholder={t('modules:auto_fetched_on_customer_select', 'Auto-fetched on customer select')}
                         onChange={(e) => setFormData(prev => ({ ...prev, creditDays: e.target.value }))}
-                        className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-[#111827] focus:border-[#073318] transition-all"
+                        readOnly={!!formData.soId}
+                        className={`w-full h-[48px] border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all ${
+                            formData.soId
+                                ? 'bg-gray-50 border-[#E5E7EB] text-gray-500 cursor-not-allowed'
+                                : 'bg-white text-[#111827] focus:border-[#073318] border-[#E5E7EB]'
+                        }`}
                     />
                 </div>
 
@@ -229,13 +234,25 @@ const ChallanForm = ({
                     <label className="text-[14px] font-semibold text-[#374151]">{t('modules:so_number_optional', 'SO Number (Optional)')}</label>
                     <div className="relative">
                         <select
-                            className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-10 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
+                            className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-14 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
                             value={formData.soId || ""}
                             onChange={(e) => handleSOChange(e.target.value)}
                         >
                             <option value="">{t('modules:select_so_number', 'Select SO Number')}</option>
                             {sos.map(p => <option key={p.id} value={p.id}>{p.soNumber}</option>)}
                         </select>
+                        {formData.soId && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSOChange("");
+                                }}
+                                className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors z-10"
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                     </div>
                 </div>

@@ -145,16 +145,38 @@ const SIPrintPreview = () => {
     } else {
         // Fallback to calculation
         const gstTypeStr = typeof invoiceData.gstType === 'string' ? invoiceData.gstType : (invoiceData.gstType?.type || '');
-        const isApplicable = invoiceData.gstType?.applicable !== false && gstTypeStr !== 'NONE';
+        const isApplicable = invoiceData.gstType?.applicable !== false && 
+                             gstTypeStr !== 'NONE' &&
+                             final_gst_number &&
+                             final_gst_number.trim() !== '-' &&
+                             final_gst_number.trim() !== '' &&
+                             final_gst_number.trim().toUpperCase() !== 'N/A' &&
+                             final_gst_number.trim().toUpperCase() !== 'NOT AVAILABLE' &&
+                             final_gst_number.trim().length >= 10;
+        
         totalTaxOnCombined = !isApplicable ? 0 : (materialTax + (directExpenses * effectiveTaxRate));
 
-        const sellerStateCode = sellerInfo?.gstNumber && /^\d{2}$/.test(sellerInfo.gstNumber.substring(0, 2)) ? sellerInfo.gstNumber.substring(0, 2) : "";
-        const customerStateCode = final_gst_number && /^\d{2}$/.test(final_gst_number.substring(0, 2)) ? final_gst_number.substring(0, 2) : "";
-        isInterState = gstTypeStr === 'INTER' || (sellerStateCode && customerStateCode && sellerStateCode !== customerStateCode);
+        if (!isApplicable) {
+            isInterState = false;
+            cgst = 0;
+            sgst = 0;
+            igst = 0;
+        } else {
+            const sellerStateCode = sellerInfo?.gstNumber && /^\d{2}$/.test(sellerInfo.gstNumber.substring(0, 2)) ? sellerInfo.gstNumber.substring(0, 2) : "";
+            const customerStateCode = final_gst_number && /^\d{2}$/.test(final_gst_number.substring(0, 2)) ? final_gst_number.substring(0, 2) : "";
+            isInterState = gstTypeStr === 'INTER' || (sellerStateCode && customerStateCode && sellerStateCode !== customerStateCode);
 
-        cgst = !isInterState ? totalTaxOnCombined / 2 : 0;
-        sgst = !isInterState ? totalTaxOnCombined / 2 : 0;
-        igst = isInterState ? totalTaxOnCombined : 0;
+            cgst = !isInterState ? totalTaxOnCombined / 2 : 0;
+            sgst = !isInterState ? totalTaxOnCombined / 2 : 0;
+            igst = isInterState ? totalTaxOnCombined : 0;
+        }
+    }
+
+    if (totalTaxOnCombined === 0) {
+        isInterState = false;
+        cgst = 0;
+        sgst = 0;
+        igst = 0;
     }
 
     const postGstExpenses = expenses.filter(e => e.isPostGst).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);

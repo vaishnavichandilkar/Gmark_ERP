@@ -78,11 +78,15 @@ const ReportTable = ({ data, type, status, onClose }) => {
             const now = new Date();
             const expiringSoonLimit = new Date(now.getTime() + 48 * 60 * 60 * 1000);
             const expiry = parseSafeDate(item.expiryDate);
-            const isCompleted = item.status === 'INVOICE_GENERATED' || item.status === 'INVOICE_COMPLETED' || item.status === 'COMPLETED';
+            const isCompleted = item.status === 'INVOICE_GENERATED' || item.status === 'INVOICE_COMPLETED' || item.status === 'COMPLETED' || item.status === 'CHALLAN_COMPLETED' || item.status === 'GRN_COMPLETED';
+            const hasActivity = (item.salesChallans?.length > 0 || item.salesInvoices?.length > 0 || item.grn?.length > 0 || item.purchaseInvoices?.length > 0);
 
+            if (isCompleted) return 'COMPLETED';
+            if (hasActivity) {
+                return type === 'SO' ? 'PARTIAL CHALLAN' : 'PARTIAL GRN';
+            }
             if (expiry && expiry < now) return 'EXPIRED';
             if (expiry && expiry <= expiringSoonLimit) return 'EXPIRING SOON';
-            if (isCompleted) return 'COMPLETED';
             return 'PENDING';
         }
 

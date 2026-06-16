@@ -4,6 +4,17 @@ import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from './dto/purchase-o
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 
+const isValidGst = (gst?: string | null): boolean => {
+  return Boolean(
+    gst &&
+      gst.trim() !== '-' &&
+      gst.trim() !== '' &&
+      gst.trim().toUpperCase() !== 'N/A' &&
+      gst.trim().toUpperCase() !== 'NOT AVAILABLE' &&
+      gst.trim().length >= 10
+  );
+};
+
 @Injectable()
 export class PurchaseOrderService {
   constructor(private prisma: PrismaService) {}
@@ -49,6 +60,8 @@ export class PurchaseOrderService {
     });
     if (!supplier) throw new BadRequestException('Supplier not found');
 
+    const isGstApplicable = isValidGst(createDto.gstNo || supplier.gstNo);
+
     const items = (createDto.items || []).map((item) => {
       const qty = Number(item.quantity || 0);
       const rate = Number(item.rate || 0);
@@ -56,7 +69,7 @@ export class PurchaseOrderService {
       const discPct = Number(item.discountPercent || 0);
       const taxPct = Number(item.taxPercent || 0);
       const beforeTax = qty * rate - discAmt;
-      const taxAmt = (beforeTax * taxPct) / 100;
+      const taxAmt = isGstApplicable ? (beforeTax * taxPct) / 100 : 0;
       return {
         productCode: item.productCode,
         productId: item.productId || null,
@@ -165,6 +178,8 @@ export class PurchaseOrderService {
       supplierName = supplier.accountName;
     }
 
+    const isGstApplicable = isValidGst(updateDto.gstNo ?? (existing as any).gstNumber);
+
     const items = updateDto.items
       ? updateDto.items.map((item) => {
           const qty = Number(item.quantity || 0);
@@ -173,7 +188,7 @@ export class PurchaseOrderService {
           const discPct = Number(item.discountPercent || 0);
           const taxPct = Number(item.taxPercent || 0);
           const beforeTax = qty * rate - discAmt;
-          const taxAmt = (beforeTax * taxPct) / 100;
+          const taxAmt = isGstApplicable ? (beforeTax * taxPct) / 100 : 0;
           return {
             productCode: item.productCode,
             productId: item.productId || null,

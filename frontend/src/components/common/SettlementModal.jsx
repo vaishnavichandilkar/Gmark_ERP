@@ -12,6 +12,7 @@ const SettlementModal = ({
     ledgerName, 
     accountType,
     initialData = null,
+    voucherId = null,
     onSave 
 }) => {
     const [selectedTypes, setSelectedTypes] = useState(['ON_ACCOUNT']); // array of 'ADVANCE', 'AGAINST_REFERENCE', 'ON_ACCOUNT'
@@ -75,7 +76,7 @@ const SettlementModal = ({
             const normalizedRole = String(accountType || '').toUpperCase() || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER');
             const isCustomer = ['CUSTOMER', 'DEBTOR'].includes(normalizedRole);
             const voucherParam = isCustomer ? 'receipt' : 'payment';
-            const response = await axiosInstance.get(`/invoices/pending/${ledgerId}?voucherType=${voucherParam}`);
+            const response = await axiosInstance.get(`/invoices/pending/${ledgerId}?voucherType=${voucherParam}${voucherId ? `&excludeVoucherId=${voucherId}` : ''}`);
             setInvoices(response.data || []);
             
             if (initialData) {

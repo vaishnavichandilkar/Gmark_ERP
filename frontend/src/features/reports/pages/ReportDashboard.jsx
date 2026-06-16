@@ -77,14 +77,15 @@ const ReportDashboard = () => {
                     deleted++;
                 } else {
                     const expiry = parseSafeDate(item.expiryDate);
-                    const isCompleted = item.status === 'INVOICE_GENERATED' || item.status === 'INVOICE_COMPLETED' || item.status === 'COMPLETED';
+                    const isCompleted = item.status === 'INVOICE_GENERATED' || item.status === 'INVOICE_COMPLETED' || item.status === 'COMPLETED' || item.status === 'CHALLAN_COMPLETED' || item.status === 'GRN_COMPLETED';
+                    const hasActivity = (item.salesChallans?.length > 0 || item.salesInvoices?.length > 0 || item.grn?.length > 0 || item.purchaseInvoices?.length > 0);
                     
-                    if (expiry && expiry < now) {
+                    if (isCompleted || hasActivity) {
+                        completed++;
+                    } else if (expiry && expiry < now) {
                         expired++;
                     } else if (expiry && expiry <= expiringSoonLimit) {
                         expiringSoon++;
-                    } else if (isCompleted) {
-                        completed++;
                     } else {
                         pending++;
                     }
@@ -174,7 +175,7 @@ const ReportDashboard = () => {
 
         if (type === 'PO' || type === 'SO') {
             filtered = (data || []).filter(item => {
-                const isCompleted = item.status === 'INVOICE_GENERATED' || item.status === 'INVOICE_COMPLETED' || item.status === 'COMPLETED';
+                const isCompleted = item.status === 'INVOICE_GENERATED' || item.status === 'INVOICE_COMPLETED' || item.status === 'COMPLETED' || item.status === 'CHALLAN_COMPLETED' || item.status === 'GRN_COMPLETED';
                 const parseSafeDate = (d) => {
                     if (!d) return null;
                     if (d instanceof Date) return isNaN(d.getTime()) ? null : d;
@@ -194,12 +195,14 @@ const ReportDashboard = () => {
 
                 const expiry = parseSafeDate(item.expiryDate);
 
+                const hasActivity = (item.salesChallans?.length > 0 || item.salesInvoices?.length > 0 || item.grn?.length > 0 || item.purchaseInvoices?.length > 0);
+
                 if (statusLabel === 'Created') return true;
                 if (statusLabel === 'Deleted') return item.status === 'DELETED';
-                if (statusLabel === 'Expired') return expiry && expiry < now && item.status !== 'DELETED';
-                if (statusLabel === 'Expiring Soon') return expiry && expiry >= now && expiry <= expiringSoonLimit && item.status !== 'DELETED';
-                if (statusLabel === 'Completed') return isCompleted && item.status !== 'DELETED' && !(expiry && expiry < now) && !(expiry && expiry <= expiringSoonLimit);
-                if (statusLabel === 'Pending') return (!expiry || expiry > expiringSoonLimit) && item.status !== 'DELETED' && !isCompleted;
+                if (statusLabel === 'Completed') return (isCompleted || hasActivity) && item.status !== 'DELETED';
+                if (statusLabel === 'Expired') return !isCompleted && !hasActivity && expiry && expiry < now && item.status !== 'DELETED';
+                if (statusLabel === 'Expiring Soon') return !isCompleted && !hasActivity && expiry && expiry >= now && expiry <= expiringSoonLimit && item.status !== 'DELETED';
+                if (statusLabel === 'Pending') return !isCompleted && !hasActivity && (!expiry || expiry > expiringSoonLimit) && item.status !== 'DELETED';
 
                 return false;
             });

@@ -6,6 +6,126 @@ import {
 } from 'lucide-react';
 import { getPendingSellersApi, approveSellerApi, rejectSellerApi } from '../../services/superAdminService';
 
+const REJECTION_REASONS = {
+    firstName: [
+        "First name does not match the submitted identity proof.",
+        "First name contains invalid or suspicious characters.",
+        "The provided first name appears incomplete or incorrect.",
+        "The name format does not match official records.",
+        "Please update the first name as per your valid documents."
+    ],
+    lastName: [
+        "Last name does not match the submitted identity proof.",
+        "Last name contains invalid or suspicious characters.",
+        "The provided last name appears incomplete or incorrect.",
+        "The name format does not match official records.",
+        "Please update the last name as per your valid documents."
+    ],
+    email: [
+        "The email address could not be verified.",
+        "The email provided belongs to another registered account.",
+        "The email address does not match the submitted verification details.",
+        "The provided email appears invalid or incorrect.",
+        "Please provide a valid business email address."
+    ],
+    phone: [
+        "The phone number could not be verified.",
+        "The phone number belongs to another registered account.",
+        "Please provide a valid and active mobile number."
+    ],
+    shopName: [
+        "Business name does not match the uploaded documents.",
+        "Business registration details do not match the provided name.",
+        "The business name contains incorrect information.",
+        "The provided business details could not be verified.",
+        "Please update the business name as per official records."
+    ],
+    address: [
+        "Address does not match the submitted business documents.",
+        "Address details are incomplete or inconsistent.",
+        "The provided address could not be verified.",
+        "The address contains incorrect location information.",
+        "Please provide an accurate registered business address."
+    ],
+    pinCode: [
+        "Pincode does not match the provided address.",
+        "Pincode does not correspond to the selected city, district, or state.",
+        "The provided pincode could not be verified.",
+        "The pincode information is incorrect.",
+        "Please provide a valid business location pincode."
+    ],
+    village: [
+        "The selected village/city does not match the pincode.",
+        "Village/city information does not match the business address.",
+        "The provided location details could not be verified.",
+        "Incorrect village/city information has been submitted.",
+        "Please select the correct business location."
+    ],
+    district: [
+        "District does not match the provided pincode.",
+        "District information does not match the submitted address.",
+        "The district details could not be verified.",
+        "Incorrect district information has been submitted.",
+        "Please provide the correct district details."
+    ],
+    state: [
+        "State does not match the provided pincode.",
+        "State information does not match the business address.",
+        "The provided state details could not be verified.",
+        "Incorrect state information has been submitted.",
+        "Please select the correct business state."
+    ],
+    udyogAadharNumber: [
+        "Udyog Aadhaar number does not match the business details.",
+        "The provided Udyog Aadhaar could not be verified.",
+        "Udyog Aadhaar belongs to a different business entity.",
+        "Udyog Aadhaar details are inconsistent with submitted documents.",
+        "Please provide a valid Udyog Aadhaar linked to your business."
+    ],
+    regType: [
+        "Registration type does not match the Udyog Aadhaar records.",
+        "The selected business category is incorrect.",
+        "Registration type details are inconsistent with submitted documents.",
+        "Registration details could not be verified.",
+        "Please select the correct registration type."
+    ],
+    gstNumber: [
+        "GST details do not match the registered business information.",
+        "The GST number could not be verified from official records.",
+        "GST registration belongs to a different business entity.",
+        "GST registration status is inactive or invalid.",
+        "Please provide a valid GST registration linked to your business."
+    ],
+    udyogAadharCert: [
+        "The uploaded document is unclear or unreadable.",
+        "The document details do not match the entered Udyog Aadhaar information.",
+        "The uploaded document is incomplete or missing important details.",
+        "The document appears altered or tampered with.",
+        "Please upload a clear and valid Udyog Aadhaar document."
+    ],
+    gstCert: [
+        "The uploaded GST certificate is unclear or unreadable.",
+        "The document details do not match the entered GST number.",
+        "The uploaded GST document is incomplete.",
+        "The document appears modified or invalid.",
+        "Please upload a valid and clear GST certificate."
+    ],
+    businessProof: [
+        "The uploaded document is unclear or unreadable.",
+        "The document does not support the submitted business details.",
+        "The document is incomplete or missing required information.",
+        "The document appears altered or invalid.",
+        "Please upload appropriate supporting documents."
+    ],
+    shopActLicense: [
+        "The uploaded document is unclear or unreadable.",
+        "The document does not support the submitted business details.",
+        "The document is incomplete or missing required information.",
+        "The document appears altered or invalid.",
+        "Please upload appropriate supporting documents."
+    ]
+};
+
 const PendingSellers = () => {
     const [sellers, setSellers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -25,8 +145,10 @@ const PendingSellers = () => {
     const [reviewStep, setReviewStep] = useState(1);
     const [flaggedFields, setFlaggedFields] = useState({});
     const [fieldReasons, setFieldReasons] = useState({});
+    const [isOtherSelected, setIsOtherSelected] = useState({});
     const [generalRemark, setGeneralRemark] = useState('');
     const [submitAttempted, setSubmitAttempted] = useState(false);
+    const [previewDoc, setPreviewDoc] = useState(null);
 
     useEffect(() => {
         fetchPendingSellers();
@@ -59,13 +181,16 @@ const PendingSellers = () => {
         setReviewStep(1);
         setFlaggedFields({});
         setFieldReasons({});
+        setIsOtherSelected({});
         setGeneralRemark('');
         setSubmitAttempted(false);
+        setPreviewDoc(null);
     };
 
     const handleCloseReviewModal = () => {
         if (!actionLoading) {
             setReviewModal({ isOpen: false, seller: null });
+            setPreviewDoc(null);
         }
     };
 
@@ -77,6 +202,11 @@ const PendingSellers = () => {
         // Clean reason if unflagged
         if (flaggedFields[fieldKey]) {
             setFieldReasons(prev => {
+                const updated = { ...prev };
+                delete updated[fieldKey];
+                return updated;
+            });
+            setIsOtherSelected(prev => {
                 const updated = { ...prev };
                 delete updated[fieldKey];
                 return updated;
@@ -401,363 +531,443 @@ const PendingSellers = () => {
 
                 return (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                        <div className="bg-white rounded-3xl w-[95%] max-w-[760px] h-[90vh] md:h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 relative border border-gray-100">
-                            {/* Modal Header */}
-                            <div className="bg-[#0F3D2E] text-white px-6 py-4 flex justify-between items-center shrink-0">
-                                <div>
-                                    <h3 className="text-lg font-bold">Review Seller Application</h3>
-                                    <p className="text-xs text-emerald-200 mt-0.5">Seller: {seller.firstName || seller.first_name} {seller.lastName || seller.last_name} • #{seller.id}</p>
+                        <div className={`bg-white rounded-3xl w-[95%] h-[90vh] md:h-[80vh] flex flex-col md:flex-row shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 relative border border-gray-100 transition-all duration-300 ${previewDoc ? 'max-w-[1200px]' : 'max-w-[760px]'}`}>
+                            <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+                                {/* Modal Header */}
+                                <div className="bg-[#0F3D2E] text-white px-6 py-4 flex justify-between items-center shrink-0">
+                                    <div>
+                                        <h3 className="text-lg font-bold">Review Seller Application</h3>
+                                        <p className="text-xs text-emerald-200 mt-0.5">Seller: {seller.firstName || seller.first_name} {seller.lastName || seller.last_name} • #{seller.id}</p>
+                                    </div>
+                                    <button
+                                        onClick={handleCloseReviewModal}
+                                        disabled={actionLoading}
+                                        className="text-white/80 hover:text-white hover:bg-white/10 rounded-full p-2.5 transition-colors focus:outline-none cursor-pointer"
+                                    >
+                                        <X size={20} />
+                                    </button>
                                 </div>
-                                <button
-                                    onClick={handleCloseReviewModal}
-                                    disabled={actionLoading}
-                                    className="text-white/80 hover:text-white hover:bg-white/10 rounded-full p-2.5 transition-colors focus:outline-none cursor-pointer"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
 
-                            {/* Wizard Progress Bar */}
-                            <div className="bg-gray-50 border-b border-gray-100 px-6 py-4 flex items-center justify-between shrink-0 select-none">
-                                {[
-                                    { step: 1, label: 'Personal Details' },
-                                    { step: 2, label: 'Business Details' },
-                                    { step: 3, label: 'Business Docs' },
-                                    { step: 4, label: 'Action & Summary' }
-                                ].map((item) => (
-                                    <div key={item.step} className="flex items-center flex-1 last:flex-initial">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all
-                                                ${reviewStep === item.step
-                                                    ? 'bg-[#0F3D2E] text-white ring-4 ring-emerald-500/20'
-                                                    : reviewStep > item.step
-                                                        ? 'bg-emerald-600 text-white'
-                                                        : 'bg-gray-200 text-gray-500'
-                                                }
-                                                ${isStepFlagged(item.step) ? 'bg-red-500 text-white ring-4 ring-red-500/10' : ''}
-                                            `}>
-                                                {reviewStep > item.step ? <Check size={14} strokeWidth={3} /> : item.step}
-                                            </div>
-                                            <span className={`text-xs font-semibold hidden sm:inline transition-colors
-                                                ${reviewStep === item.step ? 'text-gray-900 font-bold' : 'text-gray-400'}
-                                                ${isStepFlagged(item.step) ? 'text-red-500 font-bold' : ''}
-                                            `}>
-                                                {item.label}
-                                            </span>
-                                        </div>
-                                        {item.step < 4 && (
-                                            <div className={`flex-1 h-[2px] mx-4 rounded-full transition-all duration-300
-                                                ${reviewStep > item.step ? 'bg-emerald-600' : 'bg-gray-200'}
-                                            `}></div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Step Contents */}
-                            <div className="flex-1 overflow-y-auto p-6 min-h-0 bg-gray-50/30">
-                                {/* Step 1: Personal Details */}
-                                {reviewStep === 1 && (
-                                    <div className="space-y-4 animate-in fade-in duration-300">
-                                        <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-2 flex items-center gap-1">
-                                            <Info size={14} className="text-emerald-600" />
-                                            Verify Personal Details
-                                        </h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {/* First Name */}
-                                            <ReviewFieldCard 
-                                                label="First Name" 
-                                                value={seller.firstName || seller.first_name} 
-                                                isFlagged={flaggedFields.firstName}
-                                                onToggle={() => toggleFlagField('firstName')}
-                                            />
-                                            {/* Last Name */}
-                                            <ReviewFieldCard 
-                                                label="Last Name" 
-                                                value={seller.lastName || seller.last_name} 
-                                                isFlagged={flaggedFields.lastName}
-                                                onToggle={() => toggleFlagField('lastName')}
-                                            />
-                                            {/* Email */}
-                                            <ReviewFieldCard 
-                                                label="Email Address" 
-                                                value={seller.email} 
-                                                isFlagged={flaggedFields.email}
-                                                onToggle={() => toggleFlagField('email')}
-                                            />
-                                            {/* Phone */}
-                                            <ReviewFieldCard 
-                                                label="Phone Number" 
-                                                value={seller.phone} 
-                                                isFlagged={flaggedFields.phone}
-                                                onToggle={() => toggleFlagField('phone')}
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Step 2: Business Details */}
-                                {reviewStep === 2 && (
-                                    <div className="space-y-4 animate-in fade-in duration-300">
-                                        <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-2 flex items-center gap-1">
-                                            <Info size={14} className="text-emerald-600" />
-                                            Verify Business & Address Details
-                                        </h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {/* Business Name */}
-                                            <ReviewFieldCard 
-                                                label="Business Name" 
-                                                value={seller.shopDetail?.shopName} 
-                                                isFlagged={flaggedFields.shopName}
-                                                onToggle={() => toggleFlagField('shopName')}
-                                            />
-                                            {/* Business Address */}
-                                            <ReviewFieldCard 
-                                                label="Business Address" 
-                                                value={seller.shopDetail?.address} 
-                                                isFlagged={flaggedFields.address}
-                                                onToggle={() => toggleFlagField('address')}
-                                            />
-                                            {/* Pin Code */}
-                                            <ReviewFieldCard 
-                                                label="Pin Code" 
-                                                value={seller.shopDetail?.pinCode} 
-                                                isFlagged={flaggedFields.pinCode}
-                                                onToggle={() => toggleFlagField('pinCode')}
-                                            />
-                                            {/* Village / Area */}
-                                            <ReviewFieldCard 
-                                                label="Village/Area" 
-                                                value={seller.shopDetail?.village} 
-                                                isFlagged={flaggedFields.village}
-                                                onToggle={() => toggleFlagField('village')}
-                                            />
-                                            {/* District */}
-                                            <ReviewFieldCard 
-                                                label="District" 
-                                                value={seller.shopDetail?.district} 
-                                                isFlagged={flaggedFields.district}
-                                                onToggle={() => toggleFlagField('district')}
-                                            />
-                                            {/* State */}
-                                            <ReviewFieldCard 
-                                                label="State" 
-                                                value={seller.shopDetail?.state} 
-                                                isFlagged={flaggedFields.state}
-                                                onToggle={() => toggleFlagField('state')}
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Step 3: Business Details & Documents */}
-                                {reviewStep === 3 && (
-                                    <div className="space-y-4 animate-in fade-in duration-300">
-                                        <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-2 flex items-center gap-1">
-                                            <Info size={14} className="text-emerald-600" />
-                                            Verify Business Numbers & Uploaded Files
-                                        </h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {/* Udyog Aadhar Number */}
-                                            <ReviewFieldCard 
-                                                label="Udyog Aadhar Number" 
-                                                value={(!docs.udyogAadharNumber?.name || docs.udyogAadharNumber?.name === 'N/A') ? 'Not Added' : docs.udyogAadharNumber.name} 
-                                                isFlagged={flaggedFields.udyogAadharNumber}
-                                                onToggle={() => toggleFlagField('udyogAadharNumber')}
-                                            />
-                                            {/* Registration Type */}
-                                            <ReviewFieldCard 
-                                                label="Registration Type" 
-                                                value={seller.regType || 'Not Added'} 
-                                                isFlagged={flaggedFields.regType}
-                                                onToggle={() => toggleFlagField('regType')}
-                                            />
-                                            {/* GST Number */}
-                                            <ReviewFieldCard 
-                                                label="GST Number" 
-                                                value={(!docs.gstNumber?.name || docs.gstNumber?.name === 'N/A') ? 'Not Added' : docs.gstNumber.name} 
-                                                isFlagged={flaggedFields.gstNumber}
-                                                onToggle={() => toggleFlagField('gstNumber')}
-                                            />
-                                            
-                                            {/* Udyog Aadhar File */}
-                                            <ReviewFileCard 
-                                                label="Udyog Aadhar Certificate File" 
-                                                doc={docs.udyogAadharCert} 
-                                                isFlagged={flaggedFields.udyogAadharCert}
-                                                onToggle={() => toggleFlagField('udyogAadharCert')}
-                                                onView={() => viewDocumentFile(docs.udyogAadharCert?.url)}
-                                            />
-
-                                            {/* GST File */}
-                                            <ReviewFileCard 
-                                                label="GST Certificate File" 
-                                                doc={docs.gstCert} 
-                                                isFlagged={flaggedFields.gstCert}
-                                                onToggle={() => toggleFlagField('gstCert')}
-                                                onView={() => viewDocumentFile(docs.gstCert?.url)}
-                                            />
-
-                                            {/* Shop Act License */}
-                                            <ReviewFileCard 
-                                                label="Shop Act License File" 
-                                                doc={docs.shopActLicense} 
-                                                isFlagged={flaggedFields.shopActLicense}
-                                                onToggle={() => toggleFlagField('shopActLicense')}
-                                                onView={() => viewDocumentFile(docs.shopActLicense?.url)}
-                                            />
-
-                                            {/* Business Proof / Other File */}
-                                            <ReviewFileCard 
-                                                label="Business Proof Document (Optional)" 
-                                                doc={docs.businessProof} 
-                                                isFlagged={flaggedFields.businessProof}
-                                                onToggle={() => toggleFlagField('businessProof')}
-                                                onView={() => viewDocumentFile(docs.businessProof?.url)}
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Step 4: Summary & Submission */}
-                                {reviewStep === 4 && (
-                                    <div className="space-y-6 animate-in fade-in duration-300">
-                                        {!isRejected ? (
-                                            /* Clean Approval Card */
-                                            <div className="bg-emerald-50/50 border border-emerald-100 rounded-3xl p-6 text-center shadow-sm">
-                                                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-800">
-                                                    <ShieldCheck size={36} />
+                                {/* Wizard Progress Bar */}
+                                <div className="bg-gray-50 border-b border-gray-100 px-6 py-4 flex items-center justify-between shrink-0 select-none">
+                                    {[
+                                        { step: 1, label: 'Personal Details' },
+                                        { step: 2, label: 'Business Details' },
+                                        { step: 3, label: 'Business Docs' },
+                                        { step: 4, label: 'Action & Summary' }
+                                    ].map((item) => (
+                                        <div key={item.step} className="flex items-center flex-1 last:flex-initial">
+                                            <div className="flex items-center gap-2">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all
+                                                    ${reviewStep === item.step
+                                                        ? 'bg-[#0F3D2E] text-white ring-4 ring-emerald-500/20'
+                                                        : reviewStep > item.step
+                                                            ? 'bg-emerald-600 text-white'
+                                                            : 'bg-gray-200 text-gray-500'
+                                                    }
+                                                    ${isStepFlagged(item.step) ? 'bg-red-500 text-white ring-4 ring-red-500/10' : ''}
+                                                `}>
+                                                    {reviewStep > item.step ? <Check size={14} strokeWidth={3} /> : item.step}
                                                 </div>
-                                                <h4 className="text-xl font-extrabold text-emerald-950">Application Fully Verified</h4>
-                                                <p className="text-sm text-emerald-700/80 max-w-[480px] mx-auto mt-2 leading-relaxed font-medium">
-                                                    All fields and documents have been checked and no issues were marked. Click "Approve Seller" to activate their access immediately.
-                                                </p>
+                                                <span className={`text-xs font-semibold hidden sm:inline transition-colors
+                                                    ${reviewStep === item.step ? 'text-gray-900 font-bold' : 'text-gray-400'}
+                                                    ${isStepFlagged(item.step) ? 'text-red-500 font-bold' : ''}
+                                                `}>
+                                                    {item.label}
+                                                </span>
                                             </div>
-                                        ) : (
-                                            /* Rejection Setup Card */
-                                            <div className="space-y-4">
-                                                <div className="bg-red-50 border border-red-100 rounded-3xl p-5 shadow-sm flex items-start gap-4">
-                                                    <div className="p-3 bg-red-100 rounded-2xl text-red-600 shrink-0">
-                                                        <ShieldAlert size={28} />
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-base font-extrabold text-red-950">Rejection Feedback Needed</h4>
-                                                        <p className="text-sm text-red-700 mt-1 leading-relaxed font-medium">
-                                                            You flagged {flaggedKeys.length} items as incorrect. Please specify the feedback/rejection reason for each below. These comments will guide the seller on what to modify.
-                                                        </p>
-                                                    </div>
-                                                </div>
+                                            {item.step < 4 && (
+                                                <div className={`flex-1 h-[2px] mx-4 rounded-full transition-all duration-300
+                                                    ${reviewStep > item.step ? 'bg-emerald-600' : 'bg-gray-200'}
+                                                `}></div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
 
-                                                {/* Field Reasons inputs */}
-                                                <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-4">
-                                                    <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Field-Level Feedback</h5>
-                                                    <div className="divide-y divide-gray-100">
-                                                        {flaggedKeys.map((key) => (
-                                                            <div key={key} className="py-3 flex flex-col sm:flex-row sm:items-start gap-3 first:pt-0 last:pb-0">
-                                                                <span className="text-sm font-semibold text-gray-800 sm:w-1/3 shrink-0 pt-2">
-                                                                    {getFieldLabel(key)}
-                                                                </span>
-                                                                {(() => {
-                                                                    const hasError = submitAttempted && !fieldReasons[key]?.trim();
-                                                                    return (
-                                                                        <div className="flex-1 flex flex-col gap-1.5">
-                                                                            <input
-                                                                                type="text"
-                                                                                placeholder={`Enter correction instructions (e.g. "invalid number", "re-upload clear PDF")`}
-                                                                                value={fieldReasons[key] || ''}
-                                                                                onChange={(e) => handleFieldReasonChange(key, e.target.value)}
-                                                                                className={`w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent text-sm transition-all duration-300
-                                                                                    ${hasError
+                                {/* Step Contents */}
+                                <div className="flex-1 overflow-y-auto p-6 min-h-0 bg-gray-50/30">
+                                    {/* Step 1: Personal Details */}
+                                    {reviewStep === 1 && (
+                                        <div className="space-y-4 animate-in fade-in duration-300">
+                                            <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                                <Info size={14} className="text-emerald-600" />
+                                                Verify Personal Details
+                                            </h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {/* First Name */}
+                                                <ReviewFieldCard 
+                                                    label="First Name" 
+                                                    value={seller.firstName || seller.first_name} 
+                                                    isFlagged={flaggedFields.firstName}
+                                                    onToggle={() => toggleFlagField('firstName')}
+                                                />
+                                                {/* Last Name */}
+                                                <ReviewFieldCard 
+                                                    label="Last Name" 
+                                                    value={seller.lastName || seller.last_name} 
+                                                    isFlagged={flaggedFields.lastName}
+                                                    onToggle={() => toggleFlagField('lastName')}
+                                                />
+                                                {/* Email */}
+                                                <ReviewFieldCard 
+                                                    label="Email Address" 
+                                                    value={seller.email} 
+                                                    isFlagged={flaggedFields.email}
+                                                    onToggle={() => toggleFlagField('email')}
+                                                />
+                                                {/* Phone */}
+                                                <ReviewFieldCard 
+                                                    label="Phone Number" 
+                                                    value={seller.phone} 
+                                                    isFlagged={flaggedFields.phone}
+                                                    onToggle={() => toggleFlagField('phone')}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Step 2: Business Details */}
+                                    {reviewStep === 2 && (
+                                        <div className="space-y-4 animate-in fade-in duration-300">
+                                            <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                                <Info size={14} className="text-emerald-600" />
+                                                Verify Business & Address Details
+                                            </h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {/* Business Name */}
+                                                <ReviewFieldCard 
+                                                    label="Business Name" 
+                                                    value={seller.shopDetail?.shopName} 
+                                                    isFlagged={flaggedFields.shopName}
+                                                    onToggle={() => toggleFlagField('shopName')}
+                                                />
+                                                {/* Business Address */}
+                                                <ReviewFieldCard 
+                                                    label="Business Address" 
+                                                    value={seller.shopDetail?.address} 
+                                                    isFlagged={flaggedFields.address}
+                                                    onToggle={() => toggleFlagField('address')}
+                                                />
+                                                {/* Pin Code */}
+                                                <ReviewFieldCard 
+                                                    label="Pin Code" 
+                                                    value={seller.shopDetail?.pinCode} 
+                                                    isFlagged={flaggedFields.pinCode}
+                                                    onToggle={() => toggleFlagField('pinCode')}
+                                                />
+                                                {/* Village / Area */}
+                                                <ReviewFieldCard 
+                                                    label="Village/Area" 
+                                                    value={seller.shopDetail?.village} 
+                                                    isFlagged={flaggedFields.village}
+                                                    onToggle={() => toggleFlagField('village')}
+                                                />
+                                                {/* District */}
+                                                <ReviewFieldCard 
+                                                    label="District" 
+                                                    value={seller.shopDetail?.district} 
+                                                    isFlagged={flaggedFields.district}
+                                                    onToggle={() => toggleFlagField('district')}
+                                                />
+                                                {/* State */}
+                                                <ReviewFieldCard 
+                                                    label="State" 
+                                                    value={seller.shopDetail?.state} 
+                                                    isFlagged={flaggedFields.state}
+                                                    onToggle={() => toggleFlagField('state')}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Step 3: Business Details & Documents */}
+                                    {reviewStep === 3 && (
+                                        <div className="space-y-4 animate-in fade-in duration-300">
+                                            <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                                <Info size={14} className="text-emerald-600" />
+                                                Verify Business Numbers & Uploaded Files
+                                            </h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {/* Udyog Aadhar Number */}
+                                                <ReviewFieldCard 
+                                                    label="Udyog Aadhar Number" 
+                                                    value={(!docs.udyogAadharNumber?.name || docs.udyogAadharNumber?.name === 'N/A') ? 'Not Added' : docs.udyogAadharNumber.name} 
+                                                    isFlagged={flaggedFields.udyogAadharNumber}
+                                                    onToggle={() => toggleFlagField('udyogAadharNumber')}
+                                                />
+                                                {/* Registration Type */}
+                                                <ReviewFieldCard 
+                                                    label="Registration Type" 
+                                                    value={seller.regType || 'Not Added'} 
+                                                    isFlagged={flaggedFields.regType}
+                                                    onToggle={() => toggleFlagField('regType')}
+                                                />
+                                                {/* GST Number */}
+                                                <ReviewFieldCard 
+                                                    label="GST Number" 
+                                                    value={(!docs.gstNumber?.name || docs.gstNumber?.name === 'N/A') ? 'Not Added' : docs.gstNumber.name} 
+                                                    isFlagged={flaggedFields.gstNumber}
+                                                    onToggle={() => toggleFlagField('gstNumber')}
+                                                />
+                                                
+                                                {/* Udyog Aadhar File */}
+                                                <ReviewFileCard 
+                                                    label="Udyog Aadhar Certificate File" 
+                                                    doc={docs.udyogAadharCert} 
+                                                    isFlagged={flaggedFields.udyogAadharCert}
+                                                    onToggle={() => toggleFlagField('udyogAadharCert')}
+                                                    onView={() => viewDocumentFile(docs.udyogAadharCert?.url)}
+                                                    onHoverStart={() => docs.udyogAadharCert && setPreviewDoc(docs.udyogAadharCert)}
+                                                />
+
+                                                {/* GST File */}
+                                                <ReviewFileCard 
+                                                    label="GST Certificate File" 
+                                                    doc={docs.gstCert} 
+                                                    isFlagged={flaggedFields.gstCert}
+                                                    onToggle={() => toggleFlagField('gstCert')}
+                                                    onView={() => viewDocumentFile(docs.gstCert?.url)}
+                                                    onHoverStart={() => docs.gstCert && setPreviewDoc(docs.gstCert)}
+                                                />
+
+                                                {/* Shop Act License */}
+                                                <ReviewFileCard 
+                                                    label="Shop Act License File" 
+                                                    doc={docs.shopActLicense} 
+                                                    isFlagged={flaggedFields.shopActLicense}
+                                                    onToggle={() => toggleFlagField('shopActLicense')}
+                                                    onView={() => viewDocumentFile(docs.shopActLicense?.url)}
+                                                    onHoverStart={() => docs.shopActLicense && setPreviewDoc(docs.shopActLicense)}
+                                                />
+
+                                                {/* Business Proof / Other File */}
+                                                <ReviewFileCard 
+                                                    label="Business Proof Document (Optional)" 
+                                                    doc={docs.businessProof} 
+                                                    isFlagged={flaggedFields.businessProof}
+                                                    onToggle={() => toggleFlagField('businessProof')}
+                                                    onView={() => viewDocumentFile(docs.businessProof?.url)}
+                                                    onHoverStart={() => docs.businessProof && setPreviewDoc(docs.businessProof)}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Step 4: Summary & Submission */}
+                                    {reviewStep === 4 && (
+                                        <div className="space-y-6 animate-in fade-in duration-300">
+                                            {!isRejected ? (
+                                                /* Clean Approval Card */
+                                                <div className="bg-emerald-50/50 border border-emerald-100 rounded-3xl p-6 text-center shadow-sm">
+                                                    <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-800">
+                                                        <ShieldCheck size={36} />
+                                                    </div>
+                                                    <h4 className="text-xl font-extrabold text-emerald-950">Application Fully Verified</h4>
+                                                    <p className="text-sm text-emerald-700/80 max-w-[480px] mx-auto mt-2 leading-relaxed font-medium">
+                                                        All fields and documents have been checked and no issues were marked. Click "Approve Seller" to activate their access immediately.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                /* Rejection Setup Card */
+                                                <div className="space-y-4">
+                                                    <div className="bg-red-50 border border-red-100 rounded-3xl p-5 shadow-sm flex items-start gap-4">
+                                                        <div className="p-3 bg-red-100 rounded-2xl text-red-600 shrink-0">
+                                                            <ShieldAlert size={28} />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-base font-extrabold text-red-950">Rejection Feedback Needed</h4>
+                                                            <p className="text-sm text-red-700 mt-1 leading-relaxed font-medium">
+                                                                You flagged {flaggedKeys.length} items as incorrect. Please specify the feedback/rejection reason for each below. These comments will guide the seller on what to modify.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Field Reasons inputs */}
+                                                    <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-4">
+                                                        <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Field-Level Feedback</h5>
+                                                        <div className="divide-y divide-gray-100">
+                                                            {flaggedKeys.map((key) => {
+                                                                const reasons = REJECTION_REASONS[key] || [];
+                                                                const hasError = submitAttempted && !fieldReasons[key]?.trim();
+                                                                const isOther = isOtherSelected[key];
+                                                                return (
+                                                                    <div key={key} className="py-3 flex flex-col sm:flex-row sm:items-start gap-3 first:pt-0 last:pb-0">
+                                                                        <span className="text-sm font-semibold text-gray-800 sm:w-1/3 shrink-0 pt-2">
+                                                                            {getFieldLabel(key)}
+                                                                        </span>
+                                                                        <div className="flex-1 flex flex-col gap-2">
+                                                                            <select
+                                                                                value={isOther ? 'Other' : (fieldReasons[key] || '')}
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value;
+                                                                                    if (val === 'Other') {
+                                                                                        setIsOtherSelected(prev => ({ ...prev, [key]: true }));
+                                                                                        handleFieldReasonChange(key, '');
+                                                                                    } else {
+                                                                                        setIsOtherSelected(prev => ({ ...prev, [key]: false }));
+                                                                                        handleFieldReasonChange(key, val);
+                                                                                    }
+                                                                                }}
+                                                                                className={`w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent text-sm transition-all duration-300 cursor-pointer shadow-sm
+                                                                                    ${hasError && !isOther
                                                                                         ? 'border-red-500 ring-2 ring-red-500/10 bg-red-50/5 focus:ring-red-500'
-                                                                                        : 'border-gray-200 focus:ring-red-500 bg-gray-50/50'
+                                                                                        : 'border-gray-200 focus:ring-emerald-500 bg-gray-50/50'
                                                                                     }
                                                                                 `}
-                                                                            />
+                                                                            >
+                                                                                <option value="" disabled>-- Select Rejection Reason --</option>
+                                                                                {reasons.map((reason, idx) => (
+                                                                                    <option key={idx} value={reason}>{reason}</option>
+                                                                                ))}
+                                                                                <option value="Other">Other (Write custom reason)</option>
+                                                                            </select>
+                                                                            {isOther && (
+                                                                                <div className="animate-in slide-in-from-top-2 duration-300 flex flex-col gap-1.5">
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        placeholder="Enter custom rejection reason..."
+                                                                                        value={fieldReasons[key] || ''}
+                                                                                        onChange={(e) => handleFieldReasonChange(key, e.target.value)}
+                                                                                        className={`w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent text-sm transition-all duration-300 shadow-sm
+                                                                                            ${hasError
+                                                                                                ? 'border-red-500 ring-2 ring-red-500/10 bg-red-50/5 focus:ring-red-500'
+                                                                                                : 'border-gray-200 focus:ring-emerald-500 bg-gray-50/50'
+                                                                                            }
+                                                                                        `}
+                                                                                    />
+                                                                                </div>
+                                                                            )}
                                                                             {hasError && (
                                                                                 <span className="text-[12px] font-semibold text-red-500 animate-in fade-in slide-in-from-top-1 duration-200">
                                                                                     Please provide a reason for flagged {getFieldLabel(key)}.
                                                                                 </span>
                                                                             )}
                                                                         </div>
-                                                                    );
-                                                                })()}
-                                                            </div>
-                                                        ))}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* General Remarks */}
+                                                    <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-2">
+                                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">General Remark (Optional)</label>
+                                                        <textarea
+                                                            rows={3}
+                                                            placeholder="Enter general comments for the seller application..."
+                                                            value={generalRemark}
+                                                            onChange={(e) => setGeneralRemark(e.target.value)}
+                                                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm transition-all duration-300 resize-none"
+                                                        />
                                                     </div>
                                                 </div>
-
-                                                {/* General Remarks */}
-                                                <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-2">
-                                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">General Remark (Optional)</label>
-                                                    <textarea
-                                                        rows={3}
-                                                        placeholder="Enter general comments for the seller application..."
-                                                        value={generalRemark}
-                                                        onChange={(e) => setGeneralRemark(e.target.value)}
-                                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm resize-none"
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Modal Footer Controls */}
-                            <div className="bg-white border-t border-gray-100 px-6 py-4 flex items-center justify-between shrink-0">
-                                <button
-                                    disabled={reviewStep === 1 || actionLoading}
-                                    onClick={() => setReviewStep(prev => prev - 1)}
-                                    className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed border-none"
-                                >
-                                    <ArrowLeft size={16} />
-                                    <span>Back</span>
-                                </button>
-
-                                <div className="flex items-center gap-3">
-                                    {reviewStep < 4 ? (
-                                        <button
-                                            onClick={() => setReviewStep(prev => prev + 1)}
-                                            className="px-4 py-2 text-sm font-semibold text-white bg-[#0F3D2E] hover:bg-[#0A291F] rounded-xl transition-all flex items-center gap-1.5 cursor-pointer border-none shadow-sm active:scale-95"
-                                        >
-                                            <span>Next</span>
-                                            <ArrowRight size={16} />
-                                        </button>
-                                    ) : (
-                                        <>
-                                            <button
-                                                onClick={handleCloseReviewModal}
-                                                disabled={actionLoading}
-                                                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer border-none"
-                                            >
-                                                Cancel
-                                            </button>
-                                            {!isRejected ? (
-                                                <button
-                                                    onClick={handleApprove}
-                                                    disabled={actionLoading}
-                                                    className="px-5 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all flex items-center justify-center min-w-[120px] shadow-md hover:shadow-emerald-500/20 active:scale-95 border-none cursor-pointer"
-                                                >
-                                                    {actionLoading ? <Loader2 className="animate-spin" size={16} /> : 'Approve Seller'}
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    onClick={handleRejectSubmit}
-                                                    disabled={actionLoading}
-                                                    className={`px-5 py-2 text-sm font-bold text-white rounded-xl transition-all flex items-center justify-center min-w-[120px] border-none cursor-pointer
-                                                        ${flaggedKeys.length === 0 || flaggedKeys.some(key => !fieldReasons[key]?.trim())
-                                                            ? 'bg-red-600/50 hover:bg-red-600/60 shadow-none cursor-pointer'
-                                                            : 'bg-red-600 hover:bg-red-700 shadow-md hover:shadow-red-500/20 active:scale-95'
-                                                        }
-                                                    `}
-                                                >
-                                                    {actionLoading ? <Loader2 className="animate-spin" size={16} /> : 'Submit Rejection'}
-                                                </button>
                                             )}
-                                        </>
+                                        </div>
                                     )}
                                 </div>
+
+                                {/* Modal Footer Controls */}
+                                <div className="bg-white border-t border-gray-100 px-6 py-4 flex items-center justify-between shrink-0">
+                                    <button
+                                        disabled={reviewStep === 1 || actionLoading}
+                                        onClick={() => { setReviewStep(prev => prev - 1); setPreviewDoc(null); }}
+                                        className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed border-none"
+                                    >
+                                        <ArrowLeft size={16} />
+                                        <span>Back</span>
+                                    </button>
+
+                                    <div className="flex items-center gap-3">
+                                        {reviewStep < 4 ? (
+                                            <button
+                                                onClick={() => { setReviewStep(prev => prev + 1); setPreviewDoc(null); }}
+                                                className="px-4 py-2 text-sm font-semibold text-white bg-[#0F3D2E] hover:bg-[#0A291F] rounded-xl transition-all flex items-center gap-1.5 cursor-pointer border-none shadow-sm active:scale-95"
+                                            >
+                                                <span>Next</span>
+                                                <ArrowRight size={16} />
+                                            </button>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    onClick={handleCloseReviewModal}
+                                                    disabled={actionLoading}
+                                                    className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer border-none"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                {!isRejected ? (
+                                                    <button
+                                                        onClick={handleApprove}
+                                                        disabled={actionLoading}
+                                                        className="px-5 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all flex items-center justify-center min-w-[120px] shadow-md hover:shadow-emerald-500/20 active:scale-95 border-none cursor-pointer"
+                                                    >
+                                                        {actionLoading ? <Loader2 className="animate-spin" size={16} /> : 'Approve Seller'}
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={handleRejectSubmit}
+                                                        disabled={actionLoading}
+                                                        className={`px-5 py-2 text-sm font-bold text-white rounded-xl transition-all flex items-center justify-center min-w-[120px] border-none cursor-pointer
+                                                            ${flaggedKeys.length === 0 || flaggedKeys.some(key => !fieldReasons[key]?.trim())
+                                                                ? 'bg-red-600/50 hover:bg-red-600/60 shadow-none cursor-pointer'
+                                                                : 'bg-red-600 hover:bg-red-700 shadow-md hover:shadow-red-500/20 active:scale-95'
+                                                            }
+                                                        `}
+                                                    >
+                                                        {actionLoading ? <Loader2 className="animate-spin" size={16} /> : 'Submit Rejection'}
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
+                            {previewDoc && (
+                                <div className="w-full md:w-[440px] border-t md:border-t-0 md:border-l border-gray-100 flex flex-col h-full bg-gray-50/50 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    {/* Preview header */}
+                                    <div className="px-5 py-4 border-b border-gray-100 bg-white flex justify-between items-center shrink-0">
+                                        <div className="min-w-0 flex-1 flex flex-col">
+                                            <span className="text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-black uppercase tracking-wider w-fit mb-1">Live Document Preview</span>
+                                            <span className="text-sm font-bold text-gray-800 truncate block">{previewDoc.name}</span>
+                                        </div>
+                                        <button 
+                                            onClick={() => setPreviewDoc(null)}
+                                            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors border-none bg-transparent cursor-pointer"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+                                    {/* Document iframe/image view */}
+                                    <div className="flex-1 p-4 flex items-center justify-center min-h-0">
+                                        <div className="w-full h-full bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm relative flex items-center justify-center">
+                                            {/* Preview Component */}
+                                            {(() => {
+                                                const url = previewDoc.url;
+                                                const fullUrl = url.startsWith('http') ? url : `${BASE_URL}/${url}`;
+                                                const isPdf = url.toLowerCase().endsWith('.pdf') || previewDoc.name?.toLowerCase().endsWith('.pdf');
+                                                if (isPdf) {
+                                                    return (
+                                                        <iframe
+                                                            src={`${fullUrl}#toolbar=0&navpanes=0`}
+                                                            className="w-full h-full border-none animate-in fade-in duration-300"
+                                                            title="Document Preview"
+                                                        />
+                                                    );
+                                                } else {
+                                                    return (
+                                                        <img
+                                                            src={fullUrl}
+                                                            alt="Document Preview"
+                                                            className="max-w-full max-h-full object-contain p-2 animate-in fade-in duration-300"
+                                                        />
+                                                    );
+                                                }
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 );
@@ -793,7 +1003,7 @@ const ReviewFieldCard = ({ label, value, isFlagged, onToggle }) => {
 };
 
 // UI Cards for Modal Document Files
-const ReviewFileCard = ({ label, doc, isFlagged, onToggle, onView }) => {
+const ReviewFileCard = ({ label, doc, isFlagged, onToggle, onView, onHoverStart }) => {
     return (
         <div className={`p-4 rounded-2xl border bg-white flex flex-col shadow-sm transition-all duration-300
             ${isFlagged ? 'border-red-500 ring-2 ring-red-500/5 bg-red-50/10' : 'border-gray-100 hover:border-gray-200'}
@@ -828,6 +1038,7 @@ const ReviewFileCard = ({ label, doc, isFlagged, onToggle, onView }) => {
                 <button
                     type="button"
                     onClick={onView}
+                    onMouseEnter={onHoverStart}
                     className="w-full mt-2 py-1.5 rounded-lg border border-emerald-100 bg-emerald-50 text-emerald-800 hover:bg-emerald-600 hover:text-white hover:border-transparent transition-all flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer"
                 >
                     <ExternalLink size={12} />

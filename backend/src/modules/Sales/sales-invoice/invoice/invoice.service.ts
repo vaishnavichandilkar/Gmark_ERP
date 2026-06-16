@@ -445,7 +445,7 @@ export class SalesInvoiceService {
 
     const finalTax = materialTax + expenseTax;
     const userGstDoc = await this.prisma.sellerDocument.findFirst({
-      where: { uploadedByUserId: userId, type: 'GST' },
+      where: { uploadedByUserId: userId, type: 'GST', url: 'N/A' },
       select: { name: true }
     });
     const userGst = userGstDoc?.name;
@@ -725,7 +725,7 @@ export class SalesInvoiceService {
     
     // Fetch Company GST
     const companyGstDoc = await this.prisma.sellerDocument.findFirst({
-      where: { uploadedByUserId: existing.userId, type: 'GST' },
+      where: { uploadedByUserId: existing.userId, type: 'GST', url: 'N/A' },
       select: { name: true }
     });
     const companyGST = isValidGst(companyGstDoc?.name) ? companyGstDoc!.name : null;

@@ -519,11 +519,11 @@ onUpdateAccount,
     if (formData.isVendor && isSupplierMsme && formData.vendorCreditDays) {
       const val = parseInt(formData.vendorCreditDays, 10);
       if (!isNaN(val) && val > 45) {
-        newVendorDays = "45";
+        newVendorDays = "";
         adjusted = true;
         if (isLoadedRef.current) {
           toast.error(
-            "MSME Manufacturing/Service suppliers cannot have credit days greater than 45 days. Value has been adjusted to 45.",
+            "MSME Manufacturing/Service suppliers cannot have credit days greater than 45 days. Credit Days has been cleared.",
             { id: "msme-supplier-warning" }
           );
         }
@@ -533,11 +533,11 @@ onUpdateAccount,
     if (formData.isCustomer && isSellerMsme && formData.customerCreditDays) {
       const val = parseInt(formData.customerCreditDays, 10);
       if (!isNaN(val) && val > 45) {
-        newCustomerDays = "45";
+        newCustomerDays = "";
         adjusted = true;
         if (isLoadedRef.current) {
           toast.error(
-            "As you are registered under MSME (Manufacturing/Service), maximum credit period allowed for customers is 45 days. Credit Days has been adjusted to 45.",
+            "As you are registered under MSME (Manufacturing/Service), maximum credit period allowed for customers is 45 days. Credit Days has been cleared.",
             { id: "msme-customer-warning" }
           );
         }
@@ -553,7 +553,7 @@ onUpdateAccount,
 
       if (!isLoadedRef.current) {
         toast.error(
-          "Credit Days exceeded MSME limit. Value has been adjusted to 45 days.",
+          "Credit Days exceeded MSME limit. Credit Days has been cleared.",
           { id: "msme-load-warning" }
         );
       }
@@ -710,6 +710,12 @@ onUpdateAccount,
 
   const handleInputChange = async (field, value) => {
     const newFormData = { ...formData, [field]: value };
+
+    // Clear credit days when registration type changes
+    if (field === "regType") {
+      newFormData.vendorCreditDays = "";
+      newFormData.customerCreditDays = "";
+    }
 
     // Auto fetch PAN from GST No
     if (field === "gstNo") {

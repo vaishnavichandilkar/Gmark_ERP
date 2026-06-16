@@ -194,7 +194,7 @@ export class SalesOrderService {
         const customer = await this._getCustomerDetails(createDto.customerId);
         
         const userGstDoc = await this.prisma.sellerDocument.findFirst({
-            where: { uploadedByUserId: userId, type: 'GST' },
+            where: { uploadedByUserId: userId, type: 'GST', url: 'N/A' },
             select: { name: true }
         });
         const isValidGst = (name?: string | null) => Boolean(
@@ -211,6 +211,23 @@ export class SalesOrderService {
         const totalAmount = processedItems.reduce((sum, item) => sum + (item.quantity * item.rate) - item.discountAmount, 0);
         const totalTaxAmount = processedItems.reduce((sum, item) => sum + item.taxAmount, 0);
         const grandTotal = processedItems.reduce((sum, item) => sum + item.totalAmount, 0);
+
+        // Validate PO Amounts if PO Type is Written
+        const isWrittenPo = createDto.customerPoNumber && createDto.customerPoNumber.trim().toLowerCase() !== 'verbal';
+        if (isWrittenPo) {
+            if (createDto.customerAmtExclTax === undefined || createDto.customerAmtExclTax === null) {
+                throw new BadRequestException('Customer PO Amount (Excl. Tax) is required for Written PO Type.');
+            }
+            if (createDto.customerAmtInclTax === undefined || createDto.customerAmtInclTax === null) {
+                throw new BadRequestException('Customer PO Amount (Incl. Tax) is required for Written PO Type.');
+            }
+            if (Math.abs(Number(createDto.customerAmtExclTax) - totalAmount) >= 0.01) {
+                throw new BadRequestException(`Customer PO Amount (Excl. Tax) must match Sub Total (₹${totalAmount.toFixed(2)})`);
+            }
+            if (Math.abs(Number(createDto.customerAmtInclTax) - grandTotal) >= 0.01) {
+                throw new BadRequestException(`Customer PO Amount (Incl. Tax) must match Grand Total (₹${grandTotal.toFixed(2)})`);
+            }
+        }
 
         try {
             return await this.prisma.$transaction(async (tx) => {
@@ -229,6 +246,8 @@ export class SalesOrderService {
                         poDate: createDto.poDate ? new Date(createDto.poDate) : null,
                         poExpiryDate: createDto.poExpiryDate ? new Date(createDto.poExpiryDate) : null,
                         customerAmt: createDto.customerAmt !== undefined && createDto.customerAmt !== null ? Number(createDto.customerAmt) : null,
+                        customerAmtExclTax: createDto.customerAmtExclTax !== undefined && createDto.customerAmtExclTax !== null ? Number(createDto.customerAmtExclTax) : null,
+                        customerAmtInclTax: createDto.customerAmtInclTax !== undefined && createDto.customerAmtInclTax !== null ? Number(createDto.customerAmtInclTax) : null,
                         customerPoFile: uploadedFilePath || null,
                         gstNumber: customer.gstNumber || createDto.gstNo || '',
                         panNumber: customer.panNumber || createDto.panNo || '',
@@ -272,26 +291,32 @@ export class SalesOrderService {
 
         const where: Prisma.SalesOrderWhereInput = { userId };
 
-        switch (query.filter) {
-            case 'pending':
-                where.status = 'PENDING';
-                where.expiryDate = { gte: startOfToday };
-                break;
-            case 'expiring': {
-                where.expiryDate = { gte: startOfToday, lte: fortyEightHoursLater };
-                break;
+        if (query.filter && query.filter !== 'all') {
+            switch (query.filter) {
+                case 'pending':
+                    where.status = 'PENDING';
+                    where.expiryDate = { gte: startOfToday };
+                    break;
+                case 'expiring': {
+                    where.status = 'PENDING';
+                    where.expiryDate = { gte: startOfToday, lte: fortyEightHoursLater };
+                    break;
+                }
+                case 'expired':
+                    where.status = 'PENDING';
+                    where.expiryDate = { lt: startOfToday };
+                    break;
+                case 'completed':
+                    where.status = { in: ['INVOICE_COMPLETED', 'INVOICE_GENERATED', 'CHALLAN_COMPLETED'] } as any;
+                    break;
+                case 'deleted':
+                    where.status = 'DELETED';
+                    break;
+                default:
+                    break;
             }
-            case 'expired':
-                where.expiryDate = { lt: startOfToday };
-                break;
-            case 'completed':
-                where.status = { in: ['INVOICE_COMPLETED', 'INVOICE_GENERATED'] } as any;
-                break;
-            case 'deleted':
-                where.status = 'DELETED';
-                break;
-            default:
-                break;
+        } else {
+            where.status = { not: 'DELETED' };
         }
 
         if (query.search) {
@@ -398,6 +423,8 @@ export class SalesOrderService {
                 poDate: updateDto.poDate !== undefined ? (updateDto.poDate ? new Date(updateDto.poDate) : null) : so.poDate,
                 poExpiryDate: updateDto.poExpiryDate !== undefined ? (updateDto.poExpiryDate ? new Date(updateDto.poExpiryDate) : null) : so.poExpiryDate,
                 customerAmt: updateDto.customerAmt !== undefined ? (updateDto.customerAmt !== null ? Number(updateDto.customerAmt) : null) : so.customerAmt,
+                customerAmtExclTax: updateDto.customerAmtExclTax !== undefined ? (updateDto.customerAmtExclTax !== null ? Number(updateDto.customerAmtExclTax) : null) : so.customerAmtExclTax,
+                customerAmtInclTax: updateDto.customerAmtInclTax !== undefined ? (updateDto.customerAmtInclTax !== null ? Number(updateDto.customerAmtInclTax) : null) : so.customerAmtInclTax,
                 customerPoFile: removeAttachment ? null : (uploadedFilePath ?? so.customerPoFile),
                 status: updateDto.status ?? (so.status as any),
                 address: updateDto.address ?? so.address,
@@ -421,7 +448,7 @@ export class SalesOrderService {
 
             if (updateDto.items) {
                 const userGstDoc = await tx.sellerDocument.findFirst({
-                    where: { uploadedByUserId: userId, type: 'GST' },
+                    where: { uploadedByUserId: userId, type: 'GST', url: 'N/A' },
                     select: { name: true }
                 });
                 const isValidGst = (name?: string | null) => Boolean(
@@ -456,6 +483,28 @@ export class SalesOrderService {
                 };
 
                 await tx.salesOrderItem.deleteMany({ where: { salesOrderId: id } });
+            }
+
+            const finalPoNumber = data.customerPoNumber;
+            const isFinalWrittenPo = finalPoNumber && finalPoNumber.trim().toLowerCase() !== 'verbal';
+            if (isFinalWrittenPo) {
+                const finalAmtExcl = data.customerAmtExclTax;
+                const finalAmtIncl = data.customerAmtInclTax;
+                const finalTotalAmount = data.totalAmount !== undefined ? data.totalAmount : so.totalAmount;
+                const finalGrandTotal = data.grandTotal !== undefined ? data.grandTotal : so.grandTotal;
+
+                if (finalAmtExcl === undefined || finalAmtExcl === null) {
+                    throw new BadRequestException('Customer PO Amount (Excl. Tax) is required for Written PO Type.');
+                }
+                if (finalAmtIncl === undefined || finalAmtIncl === null) {
+                    throw new BadRequestException('Customer PO Amount (Incl. Tax) is required for Written PO Type.');
+                }
+                if (Math.abs(Number(finalAmtExcl) - finalTotalAmount) >= 0.01) {
+                    throw new BadRequestException(`Customer PO Amount (Excl. Tax) must match Sub Total (₹${finalTotalAmount.toFixed(2)})`);
+                }
+                if (Math.abs(Number(finalAmtIncl) - finalGrandTotal) >= 0.01) {
+                    throw new BadRequestException(`Customer PO Amount (Incl. Tax) must match Grand Total (₹${finalGrandTotal.toFixed(2)})`);
+                }
             }
 
             return tx.salesOrder.update({
@@ -684,8 +733,8 @@ export class SalesOrderService {
             expDate.setHours(23, 59, 59, 999);
             const currentTime = new Date();
 
-            if (status === 'INVOICE_COMPLETED') return 'COMPLETED';
-            if (status === 'DELETED') return 'DELETED';
+            if (status === 'INVOICE_COMPLETED' || status === 'INVOICE_GENERATED' || status === 'CHALLAN_COMPLETED' || status === 'COMPLETED' || status === 'completed') return 'COMPLETED';
+            if (status === 'DELETED' || status === 'deleted') return 'DELETED';
             if (expDate < currentTime) return 'EXPIRED';
 
             const diffHrs = (expDate.getTime() - currentTime.getTime()) / (1000 * 60 * 60);

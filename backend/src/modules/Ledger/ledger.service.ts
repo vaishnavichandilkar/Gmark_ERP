@@ -176,11 +176,26 @@ export class LedgerService {
 
     if (!account) throw new NotFoundException('Account not found');
 
-    let isCreditorLedger = account.accountType === AccountType.Creditor;
-    if (type) {
+    let isCreditorLedger = false;
+    if (type && (type === 'Sundry Creditors' || type === 'Sundry Debtors')) {
       isCreditorLedger = type === 'Sundry Creditors';
-    } else if (account.groupName.includes('SUNDRY_CREDITORS')) {
-      isCreditorLedger = true;
+    } else {
+      if (account.accountType) {
+        const atUpper = account.accountType.toUpperCase();
+        if (atUpper === 'CREDITOR' || atUpper === 'SUPPLIER') {
+          isCreditorLedger = true;
+        } else if (atUpper === 'DEBTOR' || atUpper === 'CUSTOMER') {
+          isCreditorLedger = false;
+        }
+      } else if (account.groupName && account.groupName.length > 0) {
+        const hasCreditorGroup = account.groupName.some(g => g.toUpperCase().includes('CREDITOR'));
+        const hasDebtorGroup = account.groupName.some(g => g.toUpperCase().includes('DEBTOR'));
+        if (hasCreditorGroup) {
+          isCreditorLedger = true;
+        } else if (hasDebtorGroup) {
+          isCreditorLedger = false;
+        }
+      }
     }
 
     const isBankOrCash = 
@@ -394,8 +409,8 @@ export class LedgerService {
     additionalPayments.forEach(p => settlementRefMap.set(`PAYMENT_${p.id}`, { no: p.voucherNumber, date: p.voucherDate, narration: p.narration, type: 'Payment', updatedAt: p.updatedAt }));
     additionalReceipts.forEach(r => settlementRefMap.set(`RECEIPT_${r.id}`, { no: r.voucherNumber, date: r.voucherDate, narration: r.narration, type: 'Bank Receipt', updatedAt: r.updatedAt }));
     // Just in case JOURNAL is ever implemented or handled in voucher_type
-    additionalSales.forEach(s => settlementRefMap.set(`INVOICE_${s.id}`, { no: s.invoiceNumber, date: s.invoiceDate, narration: '-', type: 'Sales Invoice', updatedAt: s.updatedAt }));
-    additionalPurchases.forEach(p => settlementRefMap.set(`INVOICE_${p.id}`, { no: p.invoiceNumber, date: p.invoiceDate, narration: '-', type: 'Purchase Invoice', updatedAt: p.updatedAt }));
+    additionalSales.forEach(s => settlementRefMap.set(`SALES_INVOICE_${s.id}`, { no: s.invoiceNumber, date: s.invoiceDate, narration: '-', type: 'Sales Invoice', updatedAt: s.updatedAt }));
+    additionalPurchases.forEach(p => settlementRefMap.set(`PURCHASE_INVOICE_${p.id}`, { no: p.invoiceNumber, date: p.invoiceDate, narration: '-', type: 'Purchase Invoice', updatedAt: p.updatedAt }));
 
     let pageCumulativeBalance = 0;
     for (const transaction of paginatedTransactions) {
@@ -436,8 +451,10 @@ export class LedgerService {
              unallocated = Number(transaction.amount);
              
              // Map allocations for this invoice (SETTLED_ADVANCE, SETTLED_ON_ACCOUNT, and AGAINST_REFERENCE are visible)
+             const targetVoucherType = transaction.transactionType === TransactionType.Sales ? 'RECEIPT' : 'PAYMENT';
              const invSettlements = allSettlements.filter(s => 
                s.invoice_id === invId && 
+               s.voucher_type === targetVoucherType &&
                (s.settlement_type === 'SETTLED_ADVANCE' || s.settlement_type === 'SETTLED_ON_ACCOUNT' || s.settlement_type === 'AGAINST_REFERENCE')
              );
              allocations = invSettlements.map(s => {
@@ -469,7 +486,8 @@ export class LedgerService {
                s.invoice_id !== null && 
                (s.settlement_type === 'SETTLED_ADVANCE' || s.settlement_type === 'SETTLED_ON_ACCOUNT' || s.settlement_type === 'AGAINST_REFERENCE')
              ).map(s => {
-                 const ref = settlementRefMap.get(`INVOICE_${s.invoice_id}`);
+                 const refKey = s.voucher_type === 'PAYMENT' ? `PURCHASE_INVOICE_${s.invoice_id}` : `SALES_INVOICE_${s.invoice_id}`;
+                 const ref = settlementRefMap.get(refKey);
                  const isManual = ref?.updatedAt ? new Date(s.created_at).getTime() > new Date(ref.updatedAt).getTime() + 5000 : true;
                  return {
                      id: s.id,
@@ -506,6 +524,8 @@ export class LedgerService {
     return {
       accountName: account.accountName,
       openingBalance: effectiveOpeningBalance,
+      isCreditorOrDebtor: !isBankOrCash,
+      isCreditorLedger,
       items: ledgerItems,
       total: totalTransactionsInRange,
       periodDebit,

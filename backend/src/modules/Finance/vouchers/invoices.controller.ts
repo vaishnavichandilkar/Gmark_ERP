@@ -128,6 +128,7 @@ export class InvoicesController {
     @Request() req,
     @Param('ledgerId', ParseIntPipe) ledgerId: number,
     @Query('voucherType') voucherType: string,
+    @Query('excludeVoucherId') excludeVoucherId?: string,
   ) {
     if (!voucherType) {
       throw new BadRequestException('voucherType query parameter is required');
@@ -164,6 +165,11 @@ export class InvoicesController {
             invoice_id: invoice.id,
             voucher_type: 'RECEIPT',
             ledger_id: ledgerId,
+            ...(excludeVoucherId ? {
+              NOT: {
+                voucher_id: Number(excludeVoucherId)
+              }
+            } : {})
           },
         });
 
@@ -212,6 +218,11 @@ export class InvoicesController {
             invoice_id: invoice.id,
             voucher_type: 'PAYMENT',
             ledger_id: ledgerId,
+            ...(excludeVoucherId ? {
+              NOT: {
+                voucher_id: Number(excludeVoucherId)
+              }
+            } : {})
           },
         });
 
@@ -266,6 +277,41 @@ export class InvoicesController {
     if (!ledger) {
       throw new BadRequestException('Account not found or unauthorized');
     }
+
+    const getVoucherRole = async (voucherId: number, voucherType: string): Promise<string> => {
+      let voucherNumber = '';
+      if (voucherType === 'RECEIPT') {
+        const rv = await this.prisma.receiptVoucher.findUnique({
+          where: { id: voucherId },
+          select: { voucherNumber: true }
+        });
+        if (rv) voucherNumber = rv.voucherNumber;
+      } else {
+        const pv = await this.prisma.paymentVoucher.findUnique({
+          where: { id: voucherId },
+          select: { voucherNumber: true }
+        });
+        if (pv) voucherNumber = pv.voucherNumber;
+      }
+
+      if (!voucherNumber) return '';
+
+      const tx = await this.prisma.transaction.findFirst({
+        where: {
+          accountId: ledgerId,
+          invoiceNumber: voucherNumber,
+          userId: userId
+        },
+        select: { transactionType: true }
+      });
+
+      if (tx) {
+        if (tx.transactionType === 'Receipt') return 'CUSTOMER';
+        if (tx.transactionType === 'Payment') return 'SUPPLIER';
+      }
+
+      return '';
+    };
 
     const debitTransactions = [];
     const creditTransactions = [];
@@ -327,17 +373,21 @@ export class InvoicesController {
       });
 
       for (const p of payments) {
-        debitTransactions.push({
-          id: p.id,
-          invoiceId: null,
-          voucherId: p.voucher_id,
-          settlementId: p.id,
-          date: p.created_at.toISOString().split('T')[0],
-          type: p.settlement_type === 'ADVANCE' ? 'Advance' : p.settlement_type === 'ON_ACCOUNT' ? 'On Account' : p.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Payment',
-          refNo: `VS-${p.id}`,
-          totalAmt: Number(p.settled_amount),
-          balanceAmt: Number(p.settled_amount),
-        });
+        const role = await getVoucherRole(p.voucher_id, 'PAYMENT');
+        const isCustomer = role === 'CUSTOMER' || (!role && ledger.groupName.includes('SUNDRY_DEBTORS'));
+        if (isCustomer) {
+          debitTransactions.push({
+            id: p.id,
+            invoiceId: null,
+            voucherId: p.voucher_id,
+            settlementId: p.id,
+            date: p.created_at.toISOString().split('T')[0],
+            type: p.settlement_type === 'ADVANCE' ? 'Advance' : p.settlement_type === 'ON_ACCOUNT' ? 'On Account' : p.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Payment',
+            refNo: `VS-${p.id}`,
+            totalAmt: Number(p.settled_amount),
+            balanceAmt: Number(p.settled_amount),
+          });
+        }
       }
 
       // 2. Credit Transactions: Unapplied Customer Receipts (they paid us advance/on-account)
@@ -351,17 +401,21 @@ export class InvoicesController {
       });
 
       for (const r of receipts) {
-        creditTransactions.push({
-          id: r.id,
-          invoiceId: null,
-          voucherId: r.voucher_id,
-          settlementId: r.id,
-          date: r.created_at.toISOString().split('T')[0],
-          type: r.settlement_type === 'ADVANCE' ? 'Advance' : r.settlement_type === 'ON_ACCOUNT' ? 'On Account' : r.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Receipt',
-          refNo: `VS-${r.id}`,
-          totalAmt: Number(r.settled_amount),
-          balanceAmt: Number(r.settled_amount),
-        });
+        const role = await getVoucherRole(r.voucher_id, 'RECEIPT');
+        const isCustomer = role === 'CUSTOMER' || (!role && ledger.groupName.includes('SUNDRY_DEBTORS'));
+        if (isCustomer) {
+          creditTransactions.push({
+            id: r.id,
+            invoiceId: null,
+            voucherId: r.voucher_id,
+            settlementId: r.id,
+            date: r.created_at.toISOString().split('T')[0],
+            type: r.settlement_type === 'ADVANCE' ? 'Advance' : r.settlement_type === 'ON_ACCOUNT' ? 'On Account' : r.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Receipt',
+            refNo: `VS-${r.id}`,
+            totalAmt: Number(r.settled_amount),
+            balanceAmt: Number(r.settled_amount),
+          });
+        }
       }
     } else if (type === 'payment') {
       // Sundry Creditors (Supplier)
@@ -376,17 +430,21 @@ export class InvoicesController {
       });
 
       for (const p of payments) {
-        debitTransactions.push({
-          id: p.id,
-          invoiceId: null,
-          voucherId: p.voucher_id,
-          settlementId: p.id,
-          date: p.created_at.toISOString().split('T')[0],
-          type: p.settlement_type === 'ADVANCE' ? 'Advance' : p.settlement_type === 'ON_ACCOUNT' ? 'On Account' : p.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Payment',
-          refNo: `VS-${p.id}`,
-          totalAmt: Number(p.settled_amount),
-          balanceAmt: Number(p.settled_amount),
-        });
+        const role = await getVoucherRole(p.voucher_id, 'PAYMENT');
+        const isSupplier = role === 'SUPPLIER' || (!role && ledger.groupName.includes('SUNDRY_CREDITORS'));
+        if (isSupplier) {
+          debitTransactions.push({
+            id: p.id,
+            invoiceId: null,
+            voucherId: p.voucher_id,
+            settlementId: p.id,
+            date: p.created_at.toISOString().split('T')[0],
+            type: p.settlement_type === 'ADVANCE' ? 'Advance' : p.settlement_type === 'ON_ACCOUNT' ? 'On Account' : p.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Payment',
+            refNo: `VS-${p.id}`,
+            totalAmt: Number(p.settled_amount),
+            balanceAmt: Number(p.settled_amount),
+          });
+        }
       }
 
       // 2. Credit Transactions: Unpaid Purchase Invoices (we owe them money)
@@ -444,17 +502,21 @@ export class InvoicesController {
       });
 
       for (const r of receipts) {
-        creditTransactions.push({
-          id: r.id,
-          invoiceId: null,
-          voucherId: r.voucher_id,
-          settlementId: r.id,
-          date: r.created_at.toISOString().split('T')[0],
-          type: r.settlement_type === 'ADVANCE' ? 'Advance' : r.settlement_type === 'ON_ACCOUNT' ? 'On Account' : r.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Receipt',
-          refNo: `VS-${r.id}`,
-          totalAmt: Number(r.settled_amount),
-          balanceAmt: Number(r.settled_amount),
-        });
+        const role = await getVoucherRole(r.voucher_id, 'RECEIPT');
+        const isSupplier = role === 'SUPPLIER' || (!role && ledger.groupName.includes('SUNDRY_CREDITORS'));
+        if (isSupplier) {
+          creditTransactions.push({
+            id: r.id,
+            invoiceId: null,
+            voucherId: r.voucher_id,
+            settlementId: r.id,
+            date: r.created_at.toISOString().split('T')[0],
+            type: r.settlement_type === 'ADVANCE' ? 'Advance' : r.settlement_type === 'ON_ACCOUNT' ? 'On Account' : r.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Receipt',
+            refNo: `VS-${r.id}`,
+            totalAmt: Number(r.settled_amount),
+            balanceAmt: Number(r.settled_amount),
+          });
+        }
       }
     }
 

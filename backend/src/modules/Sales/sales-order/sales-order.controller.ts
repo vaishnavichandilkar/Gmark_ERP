@@ -30,6 +30,8 @@ export class SalesOrderController {
             customerId: body.customerId ? parseInt(body.customerId, 10) : undefined,
             creditDays: body.creditDays ? parseInt(body.creditDays, 10) : 0,
             customerAmt: (body.customerAmt !== undefined && body.customerAmt !== null && body.customerAmt !== '') ? parseFloat(body.customerAmt) : null,
+            customerAmtExclTax: (body.customerAmtExclTax !== undefined && body.customerAmtExclTax !== null && body.customerAmtExclTax !== '') ? parseFloat(body.customerAmtExclTax) : null,
+            customerAmtInclTax: (body.customerAmtInclTax !== undefined && body.customerAmtInclTax !== null && body.customerAmtInclTax !== '') ? parseFloat(body.customerAmtInclTax) : null,
         };
         return this.service.create(parsedDto, req.user.userId, file?.path);
     }
@@ -136,6 +138,8 @@ export class SalesOrderController {
             customerId: body.customerId ? parseInt(body.customerId, 10) : undefined,
             creditDays: (body.creditDays !== undefined && body.creditDays !== null && body.creditDays !== '') ? parseInt(body.creditDays, 10) : undefined,
             customerAmt: (body.customerAmt !== undefined && body.customerAmt !== null && body.customerAmt !== '') ? parseFloat(body.customerAmt) : undefined,
+            customerAmtExclTax: (body.customerAmtExclTax !== undefined && body.customerAmtExclTax !== null && body.customerAmtExclTax !== '') ? parseFloat(body.customerAmtExclTax) : undefined,
+            customerAmtInclTax: (body.customerAmtInclTax !== undefined && body.customerAmtInclTax !== null && body.customerAmtInclTax !== '') ? parseFloat(body.customerAmtInclTax) : undefined,
         };
         return this.service.update(id, parsedDto, req.user.userId, file?.path, body.removeAttachment === 'true');
     }

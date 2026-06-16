@@ -15,19 +15,28 @@ export class ReceiptVoucherService {
   async generateVoucherNumber(userId: number): Promise<string> {
     const prefix = 'RV-';
     const lastVoucher = await this.prisma.receiptVoucher.findFirst({
-      where: { createdBy: userId },
       orderBy: { id: 'desc' },
       select: { voucherNumber: true },
     });
 
-    if (!lastVoucher) {
-      return `${prefix}0001`;
+    let nextNumber = 1;
+    if (lastVoucher) {
+      const lastNumberStr = lastVoucher.voucherNumber.replace(prefix, '');
+      const lastNumber = parseInt(lastNumberStr, 10);
+      nextNumber = isNaN(lastNumber) ? 1 : lastNumber + 1;
     }
 
-    const lastNumberStr = lastVoucher.voucherNumber.replace(prefix, '');
-    const lastNumber = parseInt(lastNumberStr, 10);
-    const nextNumber = isNaN(lastNumber) ? 1 : lastNumber + 1;
-    return `${prefix}${nextNumber.toString().padStart(4, '0')}`;
+    while (true) {
+      const candidate = `${prefix}${nextNumber.toString().padStart(4, '0')}`;
+      const existing = await this.prisma.receiptVoucher.findUnique({
+        where: { voucherNumber: candidate },
+        select: { id: true },
+      });
+      if (!existing) {
+        return candidate;
+      }
+      nextNumber++;
+    }
   }
 
   async create(createDto: CreateVoucherDto, userId: number) {

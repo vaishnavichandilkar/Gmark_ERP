@@ -78,7 +78,7 @@ export class GrnService {
 
     // Fetch user's registered GST
     const userGstDoc = await this.prisma.sellerDocument.findFirst({
-        where: { uploadedByUserId: userId, type: 'GST' },
+        where: { uploadedByUserId: userId, type: 'GST', url: 'N/A' },
         select: { name: true }
     });
     const userGst = userGstDoc?.name;

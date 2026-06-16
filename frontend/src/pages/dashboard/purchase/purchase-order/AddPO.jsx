@@ -370,10 +370,21 @@ const AddPO = () => {
     }, [products, items, tableSearch]);
 
     const isGstApplicable = useMemo(() => {
-        return Boolean(formData.gst_number);
+        const gst = formData.gst_number;
+        return Boolean(
+            gst && 
+            gst.trim() !== '-' && 
+            gst.trim() !== '' && 
+            gst.trim().toUpperCase() !== 'N/A' &&
+            gst.trim().toUpperCase() !== 'NOT AVAILABLE' &&
+            gst.trim().length >= 10
+        );
     }, [formData.gst_number]);
 
     const isIntraState = useMemo(() => {
+        const totalTax = items.reduce((sum, item) => sum + (parseFloat(item.tax_amount) || 0), 0);
+        if (totalTax === 0 || !isGstApplicable) return true;
+
         const sellerGst = businessProfile?.gstNumber || businessProfile?.shopDetail?.gstNumber || "";
         const supplierGst = formData.gst_number || "";
         const sellerState = businessProfile?.shopDetail?.state || "";
@@ -388,7 +399,7 @@ const AddPO = () => {
         );
 
         return gstResult.gstType === 'CGST_SGST';
-    }, [businessProfile, formData.gst_number, formData.state]);
+    }, [isGstApplicable, businessProfile, formData.gst_number, formData.state, items]);
 
     useEffect(() => {
         if (!formData.supplier_id) return;
@@ -443,6 +454,8 @@ const AddPO = () => {
                 address: [details.addressLine1, details.addressLine2].filter(Boolean).join(', '),
                 gst_number: details.gstNo || '',
                 credit_days: details.supplierCreditDays || 0,
+                pan_number: details.panNo || '',
+                supplier_state: details.state || '',
             }));
             setSupplierSearch(details.accountName);
         } catch (error) {
@@ -455,6 +468,8 @@ const AddPO = () => {
                 address: supplier.addressLine1 + (supplier.addressLine2 ? ', ' + supplier.addressLine2 : ''),
                 gst_number: supplier.gstNo || '',
                 credit_days: supplier.supplierCreditDays || supplier.creditDays || 0,
+                pan_number: supplier.panNumber || supplier.panNo || '',
+                supplier_state: supplier.state || '',
             }));
             setSupplierSearch(supplier.accountName);
         }
@@ -815,7 +830,7 @@ const AddPO = () => {
 
         const fullPOData = {
             ...formData,
-            items: items.map(item => {
+            items: items.filter(item => item.product_name).map(item => {
                 const qty = parseFloat(item.quantity) || 0;
                 const rate = parseFloat(item.rate) || 0;
                 const discAmt = parseFloat(item.discount_amount) || 0;

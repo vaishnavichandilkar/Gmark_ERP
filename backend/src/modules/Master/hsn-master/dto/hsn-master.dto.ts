@@ -22,10 +22,10 @@ export class CreateHsnMasterDto {
     @IsIn([0, 5, 12, 18, 28], { message: 'Tax Rate must be one of: 0%, 5%, 12%, 18%, 28%' })
     taxRate: number;
 
-    @ApiProperty({ example: 'Goods taxation rate 18 percent', required: false })
-    @IsOptional()
-    @IsString()
-    description?: string;
+    @ApiProperty({ example: 'Goods taxation rate 18 percent', required: true })
+    @IsNotEmpty({ message: 'Description is required.' })
+    @IsString({ message: 'Description must be a string.' })
+    description: string;
 
     @ApiProperty({ example: true, required: false })
     @IsOptional()
@@ -54,7 +54,8 @@ export class UpdateHsnMasterDto {
 
     @ApiProperty({ example: 'Goods taxation rate 18 percent', required: false })
     @IsOptional()
-    @IsString()
+    @IsString({ message: 'Description must be a string.' })
+    @IsNotEmpty({ message: 'Description cannot be empty.' })
     description?: string;
 
     @ApiProperty({ example: true, required: false })

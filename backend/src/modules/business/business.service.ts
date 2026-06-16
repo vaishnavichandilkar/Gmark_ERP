@@ -26,7 +26,7 @@ export class BusinessService {
             name.trim().length >= 10;
 
         const gstDoc = user.sellerDocuments.find(
-            doc => doc.type === 'GST' && isValidGst(doc.name)
+            doc => doc.type === 'GST' && doc.url === 'N/A' && isValidGst(doc.name)
         );
         
         return {

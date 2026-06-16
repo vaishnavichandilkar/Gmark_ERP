@@ -139,6 +139,16 @@ export class CreateSalesOrderDto {
     customerAmt?: number;
 
     @ApiPropertyOptional()
+    @IsNumber()
+    @IsOptional()
+    customerAmtExclTax?: number;
+
+    @ApiPropertyOptional()
+    @IsNumber()
+    @IsOptional()
+    customerAmtInclTax?: number;
+
+    @ApiPropertyOptional()
     @IsDateString()
     @IsOptional()
     poDate?: string;
@@ -214,6 +224,16 @@ export class UpdateSalesOrderDto {
     @IsOptional()
     @IsNumber()
     customerAmt?: number;
+
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsNumber()
+    customerAmtExclTax?: number;
+
+    @ApiProperty({ required: false })
+    @IsOptional()
+    @IsNumber()
+    customerAmtInclTax?: number;
 
     @ApiProperty({ required: false })
     @IsOptional()

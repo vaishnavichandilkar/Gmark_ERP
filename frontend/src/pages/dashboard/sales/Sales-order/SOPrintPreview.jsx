@@ -119,6 +119,8 @@ const SOPrintPreview = () => {
         poDate, po_date,
         poExpiryDate, po_expiry_date,
         customerAmt, customer_amt,
+        customerAmtExclTax, customer_amt_excl_tax,
+        customerAmtInclTax, customer_amt_incl_tax,
         items = []
     } = soData;
 
@@ -133,6 +135,8 @@ const SOPrintPreview = () => {
     const final_po_date = poDate || po_date || null;
     const final_po_expiry_date = poExpiryDate || po_expiry_date || null;
     const final_customer_amt = customerAmt !== undefined ? customerAmt : (customer_amt !== undefined ? customer_amt : null);
+    const final_customer_amt_excl = customerAmtExclTax !== undefined ? customerAmtExclTax : (customer_amt_excl_tax !== undefined ? customer_amt_excl_tax : null);
+    const final_customer_amt_incl = customerAmtInclTax !== undefined ? customerAmtInclTax : (customer_amt_incl_tax !== undefined ? customer_amt_incl_tax : null);
 
     const subTotal = items.reduce((sum, item) => {
         const qty = parseFloat(item.quantity) || 0;
@@ -166,7 +170,13 @@ const SOPrintPreview = () => {
     let igst = 0;
     let totalTaxOnCombined = 0;
 
-    if (savedCgst > 0 || savedSgst > 0 || savedIgst > 0) {
+    if (!isGstApplicable) {
+        isIntraState = true;
+        cgst = 0;
+        sgst = 0;
+        igst = 0;
+        totalTaxOnCombined = 0;
+    } else if (savedCgst > 0 || savedSgst > 0 || savedIgst > 0) {
         if (savedIgst > 0) {
             isIntraState = false;
             igst = savedIgst;
@@ -178,7 +188,7 @@ const SOPrintPreview = () => {
         totalTaxOnCombined = cgst + sgst + igst;
     } else {
         // Fallback to calculation
-        const totalTaxOnCombinedCalculated = isGstApplicable ? materialTax : 0;
+        const totalTaxOnCombinedCalculated = materialTax;
         const sellerStateCode = sellerInfo?.gstNumber && /^\d{2}$/.test(sellerInfo.gstNumber.substring(0, 2)) ? sellerInfo.gstNumber.substring(0, 2) : "";
         const customerStateCode = final_gst_number && /^\d{2}$/.test(final_gst_number.substring(0, 2)) ? final_gst_number.substring(0, 2) : "";
         
@@ -187,6 +197,13 @@ const SOPrintPreview = () => {
         cgst = isIntraState ? totalTaxOnCombinedCalculated / 2 : 0;
         sgst = isIntraState ? totalTaxOnCombinedCalculated / 2 : 0;
         igst = isIntraState ? 0 : totalTaxOnCombinedCalculated;
+    }
+
+    if (totalTaxOnCombined === 0) {
+        isIntraState = true;
+        cgst = 0;
+        sgst = 0;
+        igst = 0;
     }
 
     const totalAmount = subTotal + totalTaxOnCombined;
@@ -366,16 +383,22 @@ const SOPrintPreview = () => {
                                     </div>
                                 </div>
                                 {final_customer_po_number === 'verbal' ? (
-                                    <div className="flex border-b border-black h-[34px]">
-                                        <div className="w-[45%] flex items-center px-4 gap-2">
-                                            <span className="font-black text-[10.5px] whitespace-nowrap">Customer PO No:</span>
-                                            <span className="font-semibold text-[10.5px] whitespace-nowrap">Verbal</span>
+                                    <>
+                                        <div className="flex border-b border-black h-[34px]">
+                                            <div className="w-[45%] flex items-center px-4 gap-2">
+                                                <span className="font-black text-[10.5px] whitespace-nowrap">Customer PO No:</span>
+                                                <span className="font-semibold text-[10.5px] whitespace-nowrap">Verbal</span>
+                                            </div>
+                                            <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                                <span className="font-black text-[10.5px] whitespace-nowrap"></span>
+                                                <span className="font-semibold text-[10.5px] whitespace-nowrap"></span>
+                                            </div>
                                         </div>
-                                        <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
-                                            <span className="font-black text-[10.5px] whitespace-nowrap"></span>
-                                            <span className="font-semibold text-[10.5px] whitespace-nowrap"></span>
+                                        <div className="flex border-b border-black h-[34px] items-center px-4 gap-2">
+                                            <span className="font-black text-[11px] min-w-[80px]">Pay. Terms</span>
+                                            <span className="font-semibold text-[11px]">{final_credit_days} Days</span>
                                         </div>
-                                    </div>
+                                    </>
                                 ) : (
                                     <>
                                         <div className="flex border-b border-black h-[34px]">
@@ -394,16 +417,22 @@ const SOPrintPreview = () => {
                                                 <span className="font-semibold text-[10.5px] whitespace-nowrap">{formatDate(final_po_expiry_date)}</span>
                                             </div>
                                             <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
-                                                <span className="font-black text-[10.5px] whitespace-nowrap">Cust. PO Amt:</span>
-                                                <span className="font-semibold text-[10.5px] whitespace-nowrap">{final_customer_amt !== null && final_customer_amt !== undefined && final_customer_amt !== '' ? `₹ ${parseFloat(final_customer_amt).toFixed(2)}` : '-'}</span>
+                                                <span className="font-black text-[10.5px] whitespace-nowrap">PO Amt (Excl):</span>
+                                                <span className="font-semibold text-[10.5px] whitespace-nowrap">{final_customer_amt_excl !== null && final_customer_amt_excl !== undefined && final_customer_amt_excl !== '' ? `₹ ${parseFloat(final_customer_amt_excl).toFixed(2)}` : '-'}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex border-b border-black h-[34px]">
+                                            <div className="w-[45%] flex items-center px-4 gap-2">
+                                                <span className="font-black text-[10.5px] whitespace-nowrap">PO Amt (Incl):</span>
+                                                <span className="font-semibold text-[10.5px] whitespace-nowrap">{final_customer_amt_incl !== null && final_customer_amt_incl !== undefined && final_customer_amt_incl !== '' ? `₹ ${parseFloat(final_customer_amt_incl).toFixed(2)}` : '-'}</span>
+                                            </div>
+                                            <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                                <span className="font-black text-[10.5px] whitespace-nowrap">Pay. Terms:</span>
+                                                <span className="font-semibold text-[10.5px] whitespace-nowrap">{final_credit_days} Days</span>
                                             </div>
                                         </div>
                                     </>
                                 )}
-                                <div className="flex border-b border-black h-[34px] items-center px-4 gap-2">
-                                    <span className="font-black text-[11px] min-w-[80px]">Pay. Terms</span>
-                                    <span className="font-semibold text-[11px]">{final_credit_days} Days</span>
-                                </div>
                                 <div className="flex items-center px-4 h-[34px] gap-2 border-b border-black">
                                     <span className="font-black text-[11px] min-w-[80px]">Expiry Date:</span>
                                     <span className="font-semibold text-[11px]">{formatDate(final_expiryDate)}</span>

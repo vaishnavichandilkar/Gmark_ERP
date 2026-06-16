@@ -2,10 +2,11 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
-  const c = await prisma.accountMaster.findFirst({
-    where: { accountName: 'vaishnavi pvt ltd' }
+  const pos = await prisma.purchaseOrder.findMany({
+    include: { items: true }
   });
-  console.log(c);
+  console.log(JSON.stringify(pos, null, 2));
 }
 
 main().finally(() => prisma.$disconnect());
+

@@ -168,9 +168,9 @@ const AddHsnModal = ({ isOpen, onClose, onSuccess, onShowToast, presetType = '' 
     if (!isOpen) return null;
 
     const codeLabel = formData.type === 'SAC' ? 'SAC Code' : formData.type === 'HSN' ? 'HSN Code' : 'Code';
-    const codePlaceholder = formData.type === 'SAC' ? 'Enter 6 digit code' : formData.type === 'HSN' ? 'Enter 6 or 8 digit code' : 'Enter 6-8 digit code';
-    const descLabel = formData.type === 'SAC' ? 'SAC Description' : formData.type === 'HSN' ? 'HSN Description' : 'Description';
-    const descPlaceholder = formData.type === 'SAC' ? 'Enter SAC description (optional)' : formData.type === 'HSN' ? 'Enter HSN description (optional)' : 'Enter description (optional)';
+    const codePlaceholder = formData.type === 'SAC' ? 'Enter 6 to 8 digit code' : formData.type === 'HSN' ? 'Enter 6 or 8 digit code' : 'Enter 6-8 digit code';
+    const descLabel = formData.type === 'SAC' ? 'SAC Description' : formData.type === 'HSN' ? 'HSN Description' : 'HSN/SAC Description';
+    const descPlaceholder = formData.type === 'SAC' ? 'Enter SAC description (optional)' : formData.type === 'HSN' ? 'Enter HSN description (optional)' : 'Enter HSN/SAC description (optional)';
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">

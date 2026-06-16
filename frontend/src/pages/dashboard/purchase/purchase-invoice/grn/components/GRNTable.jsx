@@ -144,6 +144,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
         }
 
         const baseAmount = qty * rate;
+        const isApplicable = typeof gstType === 'object' ? gstType?.gstType !== 'NONE' : gstType !== 'NONE';
         const taxAmt = !isApplicable ? 0 : (baseAmount * taxPct) / 100;
         const total = parseFloat((baseAmount + taxAmt).toFixed(2));
 
@@ -414,8 +415,8 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                         <input
                                             type="text"
                                             value={getStandardGstUom(item.uom)}
-                                            onChange={(e) => handleItemChange(index, 'uom', e.target.value)}
-                                            className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-[#6B7280] outline-none focus:border-[#073318]"
+                                            readOnly={true}
+                                            className="w-full h-[36px] bg-gray-50 border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-gray-500 cursor-not-allowed outline-none shadow-sm"
                                         />
                                     </td>
 

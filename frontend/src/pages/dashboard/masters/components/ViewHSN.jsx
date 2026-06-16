@@ -85,7 +85,7 @@ const ViewHSN = ({ initialData, onBack, onEdit }) => {
                         
                         <div className="flex flex-col sm:flex-row bg-[#F9FAFB]/30">
                             <div className="sm:w-1/4 py-3.5 px-4 md:px-6 text-[13px] text-[#6B7280] border-r border-[#E5E7EB] bg-white font-bold">
-                                {data.type === 'SAC' ? 'SAC Description:' : data.type === 'HSN' ? 'HSN Description:' : 'Description:'}
+                                {data.type === 'SAC' ? 'SAC Description:' : data.type === 'HSN' ? 'HSN Description:' : 'HSN/SAC Description:'}
                             </div>
                             <div className="flex-1 py-3.5 px-4 md:px-6 text-[13px] text-[#111827] bg-white font-medium">
                                 {data.description || '-'}

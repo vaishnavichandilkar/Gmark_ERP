@@ -45,7 +45,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         });
 
         const gstDoc = await this.prisma.sellerDocument.findFirst({
-            where: { uploadedByUserId: user.id, type: 'GST' },
+            where: { uploadedByUserId: user.id, type: 'GST', url: 'N/A' },
             select: { name: true }
         });
 

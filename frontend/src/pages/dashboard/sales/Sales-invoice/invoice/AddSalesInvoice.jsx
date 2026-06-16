@@ -368,10 +368,12 @@ const AddSalesInvoice = () => {
                         if (challan.items) {
                             for (const item of challan.items) {
                                 const product = products.find(p => p.id === item.productId || p.product_code === item.productCode);
-                                const printDesc = item.printDescription || item.print_description || item.description || item.productName || '';
+                                const soItem = selectedSO?.items?.find(soIt => soIt.productCode === item.productCode || soIt.productName === item.productName);
+                                const printDesc = item.printDescription || item.print_description || item.description || soItem?.printDescription || soItem?.print_description || soItem?.description || product?.description || item.productName || '';
                                 allItems.push({
                                     ...item,
                                     id: Date.now() + Math.random(),
+                                    productId: item.productId || product?.id,
                                     quantity: item.challanQty || item.quantity || 0,
                                     totalSoQty: item.challanQty || item.quantity || 0,
                                     hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
@@ -440,17 +442,18 @@ const AddSalesInvoice = () => {
                 const taxAmt = (befTax * taxPct) / 100;
                 const totalAmt = befTax + taxAmt;
 
-                const printDesc = item.printDescription || item.print_description || item.description || item.productName || '';
+                const product = products.find(p => p.id === item.productId || p.product_code === item.productCode);
+                const printDesc = item.printDescription || item.print_description || item.description || product?.description || item.productName || '';
                 return {
                     id: Date.now() + Math.random(),
-                    productId: item.productId,
+                    productId: item.productId || product?.id,
                     productCode: item.productCode,
                     productName: item.productName,
                     quantity: qty, 
                     totalSoQty: qty, 
                     rate: rate,
                     uom: item.uom,
-                    hsnCode: item.hsnCode || '',
+                    hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
                     taxPercent: taxPct,
                     discountAmount: discAmt,
                     discountPercent: item.discountPercent || 0,
@@ -490,6 +493,7 @@ const AddSalesInvoice = () => {
         try {
             // Auto-select SO if any of the selected challans have an associated SO
             let soFields = {};
+            let matchedSODetails = null;
             const selectedChallanObjects = (challans || []).filter(c => selectedIds.map(String).includes(String(c.id)));
             const firstWithSo = selectedChallanObjects.find(c => c.soId || c.soNumber);
             if (firstWithSo) {
@@ -505,6 +509,7 @@ const AddSalesInvoice = () => {
                             soNumber: soDetails.soNumber,
                             creditDays: soDetails.creditDays !== undefined && soDetails.creditDays !== null ? soDetails.creditDays : undefined
                         };
+                        matchedSODetails = soDetails;
                     } catch (e) {
                         console.error("Error fetching matching SO details:", e);
                         soFields = {
@@ -512,6 +517,7 @@ const AddSalesInvoice = () => {
                             soNumber: matchedSO.soNumber,
                             creditDays: matchedSO.creditDays !== undefined && matchedSO.creditDays !== null ? matchedSO.creditDays : undefined
                         };
+                        matchedSODetails = matchedSO;
                     }
                 }
             }
@@ -528,11 +534,12 @@ const AddSalesInvoice = () => {
                         for (const item of challan.items) {
                             // Find product in master for fallback HSN/Tax
                             const product = products.find(p => p.id === item.productId || p.product_code === item.productCode);
-                            
-                            const printDesc = item.printDescription || item.print_description || item.description || item.productName || '';
+                            const soItem = matchedSODetails?.items?.find(soIt => soIt.productCode === item.productCode || soIt.productName === item.productName);
+                            const printDesc = item.printDescription || item.print_description || item.description || soItem?.printDescription || soItem?.print_description || soItem?.description || product?.description || item.productName || '';
                             allItems.push({
                                 ...item,
                                 id: Date.now() + Math.random(),
+                                productId: item.productId || product?.id,
                                 quantity: item.challanQty || item.quantity || 0,
                                 totalSoQty: item.challanQty || item.quantity || 0, // Set limit for Invoice based on Challan Qty
                                 hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
@@ -808,7 +815,7 @@ const AddSalesInvoice = () => {
                 soId: (formData.soId && formData.soId !== '') ? parseInt(formData.soId) : null,
                 soNumbers: formData.soNumber ? [formData.soNumber] : [],
                 challanNumbers: formData.challanIds ? formData.challanIds.map(id => id.toString()) : [],
-                items: items.map(item => ({
+                items: items.filter(item => item.productId).map(item => ({
                     productId: parseInt(item.productId) || 0,
                     productCode: item.productCode || '',
                     productName: item.productName || '',
@@ -902,7 +909,7 @@ const AddSalesInvoice = () => {
             bookingDate: toIsoDate(formData.bookingDate),
             invoiceNumber: formData.customerInvoiceNumber,
             customerId: parseInt(formData.customerId) || 0,
-            items: updatedItems.map(item => ({
+            items: updatedItems.filter(item => item.productId).map(item => ({
                 ...item,
                 quantity: parseFloat(item.quantity) || 0,
                 rate: parseFloat(item.rate) || 0,

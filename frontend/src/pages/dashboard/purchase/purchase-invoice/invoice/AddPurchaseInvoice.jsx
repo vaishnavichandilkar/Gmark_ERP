@@ -233,7 +233,8 @@ const AddPurchaseInvoice = () => {
                                 beforeTaxAmount: item.beforeTaxAmount || befTax,
                                 taxAmount: item.taxAmount || taxAmt,
                                 totalAmount: item.totalAmount || (befTax + taxAmt),
-                                printDescription: item.productName,
+                                printDescription: item.printDescription || item.print_description || item.productName || '',
+                                originalPrintDescription: item.printDescription || item.print_description || item.productName || '',
                                 totalPoQty: item.totalPoQty || 0, 
                                 receivedPoQty: item.receivedPoQty || 0,
                                 remainingQty: (item.totalPoQty || 0) - (item.receivedPoQty || 0) - quantity
@@ -508,7 +509,8 @@ const AddPurchaseInvoice = () => {
                                 beforeTaxAmount: 0, 
                                 taxAmount: 0,
                                 totalAmount: 0,
-                                printDescription: item.productName
+                                printDescription: item.printDescription || item.print_description || item.productName || '',
+                                originalPrintDescription: item.printDescription || item.print_description || item.productName || ''
                             };
                         } else {
                             productMap[pid].quantity += itemQty;
@@ -641,7 +643,8 @@ const AddPurchaseInvoice = () => {
                                     beforeTaxAmount: 0, 
                                     taxAmount: 0,
                                     totalAmount: 0,
-                                    printDescription: item.productName
+                                    printDescription: item.printDescription || item.print_description || item.productName || '',
+                                    originalPrintDescription: item.printDescription || item.print_description || item.productName || ''
                                 };
                             } else {
                                 productMap[pid].quantity += itemQty;
@@ -751,7 +754,8 @@ const AddPurchaseInvoice = () => {
                         beforeTaxAmount: befTax,
                         taxAmount: taxAmt,
                         totalAmount: befTax + taxAmt,
-                        printDescription: item.productName,
+                        printDescription: item.printDescription || item.print_description || item.productName || '',
+                        originalPrintDescription: item.printDescription || item.print_description || item.productName || '',
                         totalPoQty: quantity,
                         receivedPoQty: receivedCount,
                         remainingQty: 0

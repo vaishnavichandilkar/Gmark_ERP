@@ -40,6 +40,16 @@ export const getPaymentVouchers = async () => {
     return response.data;
 };
 
+export const getReceiptVoucherById = async (id) => {
+    const response = await axiosInstance.get(`${RECEIPT_PATH}/${id}`);
+    return response.data;
+};
+
+export const getPaymentVoucherById = async (id) => {
+    const response = await axiosInstance.get(`${PAYMENT_PATH}/${id}`);
+    return response.data;
+};
+
 export const deleteReceiptVoucher = async (id) => {
     const response = await axiosInstance.delete(`${RECEIPT_PATH}/${id}`);
     return response.data;
@@ -68,6 +78,8 @@ export default {
     createPaymentVoucher,
     getReceiptVouchers,
     getPaymentVouchers,
+    getReceiptVoucherById,
+    getPaymentVoucherById,
     deleteReceiptVoucher,
     deletePaymentVoucher,
     updateReceiptVoucher,

@@ -577,6 +577,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                         ledgerName={formData.entries.find(e => e.id === activeEntryId)?.accountName}
                         accountType={formData.entries.find(e => e.id === activeEntryId)?.accountId ? String(formData.entries.find(e => e.id === activeEntryId)?.accountId).split('-')[1] : null}
                         initialData={formData.entries.find(e => e.id === activeEntryId)}
+                        voucherId={initialData?.id}
                         onSave={handleSaveSettlement}
                     />
                 )}

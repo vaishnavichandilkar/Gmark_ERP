@@ -90,6 +90,18 @@ const ViewPO = () => {
         return `${d}/${m}/${y}`;
     };
 
+    const isGstApplicable = useMemo(() => {
+        const gst = formData.gst_number;
+        return Boolean(
+            gst && 
+            gst.trim() !== '-' && 
+            gst.trim() !== '' && 
+            gst.trim().toUpperCase() !== 'N/A' &&
+            gst.trim().toUpperCase() !== 'NOT AVAILABLE' &&
+            gst.trim().length >= 10
+        );
+    }, [formData.gst_number]);
+
     const filteredSuppliers = [];
     const filteredProducts = [];
     const isSupplierDropdownOpen = false;
@@ -273,8 +285,7 @@ const ViewPO = () => {
                                         { label: t('modules:bef_tax_amount'), width: "150px", align: "right" },
                                         { label: t('modules:tax_amount'), width: "140px", align: "right" },
                                         { label: t('modules:amount_col'), width: "160px", align: "right" },
-                                        { label: t('common:description'), width: "250px" },
-                                        { label: t('common:action'), width: "80px", align: "center" }
+                                        { label: t('common:description'), width: "250px" }
                                     ].map((col, idx) => (
                                         <th
                                             key={idx}
@@ -310,10 +321,10 @@ const ViewPO = () => {
                                             <div className="px-2 text-right text-[13px]">{parseFloat(item.discountPercent).toFixed(2)}%</div>
                                         </td>
                                         <td className="px-4 py-4 text-[13px] border-l border-[#F3F4F6] text-[#6B7280]">{item.hsnCode}</td>
-                                        <td className="px-4 py-4 text-right text-[13px] border-l border-[#F3F4F6] text-[#6B7280]">{item.taxPercent}%</td>
+                                        <td className="px-4 py-4 text-right text-[13px] border-l border-[#F3F4F6] text-[#6B7280]">{isGstApplicable ? `${item.taxPercent}%` : '0%'}</td>
                                         <td className="px-4 py-4 text-right text-[13px] border-l border-[#F3F4F6] text-[#6B7280]">{(item.quantity * item.rate - item.discountAmount).toFixed(2)}</td>
-                                        <td className="px-4 py-4 text-right text-[13px] border-l border-[#F3F4F6] text-[#6B7280]">{parseFloat(((item.quantity * item.rate - item.discountAmount) * item.taxPercent / 100)).toFixed(2)}</td>
-                                        <td className="px-4 py-4 text-right text-[13px] border-l border-[#F3F4F6] font-bold text-[#073318]">₹ {(((item.quantity * item.rate - item.discountAmount) * (1 + item.taxPercent / 100))).toFixed(2)}</td>
+                                        <td className="px-4 py-4 text-right text-[13px] border-l border-[#F3F4F6] text-[#6B7280]">{parseFloat(isGstApplicable ? ((item.quantity * item.rate - item.discountAmount) * item.taxPercent / 100) : 0).toFixed(2)}</td>
+                                        <td className="px-4 py-4 text-right text-[13px] border-l border-[#F3F4F6] font-bold text-[#073318]">₹ {parseFloat(isGstApplicable ? ((item.quantity * item.rate - item.discountAmount) * (1 + item.taxPercent / 100)) : (item.quantity * item.rate - item.discountAmount)).toFixed(2)}</td>
                                         <td className="px-4 py-4 border-l border-[#F3F4F6]">
                                             <div className="text-[12px] text-[#6B7280] truncate max-w-[200px]" title={item.printDescription}>{item.description || item.printDescription || '-'}</div>
                                         </td>
@@ -336,12 +347,12 @@ const ViewPO = () => {
                                         {isLoading ? <div className="h-4 bg-gray-100 rounded w-16 ml-auto"></div> : items.reduce((s, i) => s + (parseFloat(i.quantity * i.rate - i.discountAmount) || 0), 0).toFixed(2)}
                                     </td>
                                     <td className="px-4 py-4 border-l border-[#F3F4F6] text-right">
-                                        {isLoading ? <div className="h-4 bg-gray-100 rounded w-16 ml-auto"></div> : items.reduce((s, i) => s + (parseFloat((i.quantity * i.rate - i.discountAmount) * i.taxPercent / 100) || 0), 0).toFixed(2)}
+                                        {isLoading ? <div className="h-4 bg-gray-100 rounded w-16 ml-auto"></div> : items.reduce((s, i) => s + (parseFloat(isGstApplicable ? ((i.quantity * i.rate - i.discountAmount) * i.taxPercent / 100) : 0) || 0), 0).toFixed(2)}
                                     </td>
                                     <td className="px-4 py-4 border-l border-[#F3F4F6] text-right text-[#073318]">
-                                        {isLoading ? <div className="h-5 bg-[#073318]/10 rounded w-24 ml-auto"></div> : `₹ ${items.reduce((s, i) => s + (parseFloat((i.quantity * i.rate - i.discountAmount) * (1 + i.taxPercent / 100)) || 0), 0).toFixed(2)}`}
+                                        {isLoading ? <div className="h-5 bg-[#073318]/10 rounded w-24 ml-auto"></div> : `₹ ${items.reduce((s, i) => s + (parseFloat(isGstApplicable ? ((i.quantity * i.rate - i.discountAmount) * (1 + i.taxPercent / 100)) : (i.quantity * i.rate - i.discountAmount)) || 0), 0).toFixed(2)}`}
                                     </td>
-                                    <td colSpan={2} className="border-l border-[#F3F4F6]"></td>
+                                    <td className="border-l border-[#F3F4F6]"></td>
                                 </tr>
                             </tfoot>
                         </table>

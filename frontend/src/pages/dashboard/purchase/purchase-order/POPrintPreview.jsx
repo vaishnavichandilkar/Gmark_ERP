@@ -16,6 +16,7 @@ const POPrintPreview = () => {
     const printRef = useRef(null);
     const [isDownloading, setIsDownloading] = useState(false);
     const [sellerInfo, setSellerInfo] = useState(null);
+    const [supplierDetails, setSupplierDetails] = useState(null);
 
     const getStateName = (gstin) => {
         if (!gstin || gstin.length < 2) return t('common:not_available', "Not Available");
@@ -31,6 +32,80 @@ const POPrintPreview = () => {
             "36": "TS", "37": "AD", "38": "LA"
         };
         return states[code] || t('common:not_available', "Not Available");
+    };
+
+    const getStateCodeFromName = (stateName) => {
+        if (!stateName) return t('common:not_available', "Not Available");
+        const cleanName = stateName.trim().toLowerCase();
+        
+        const codeMap = {
+            "01": "JK", "02": "HP", "03": "PB", "04": "CH", "05": "UK",
+            "06": "HR", "07": "DL", "08": "RJ", "09": "UP", "10": "BR",
+            "11": "SK", "12": "AR", "13": "NL", "14": "MN", "15": "MZ",
+            "16": "TR", "17": "ML", "18": "AS", "19": "WB", "20": "JH",
+            "21": "OR", "22": "CG", "23": "MP", "24": "GJ", "25": "DD",
+            "26": "DN", "27": "MH", "28": "AP", "29": "KA", "30": "GA",
+            "31": "LD", "32": "KL", "33": "TN", "34": "PY", "35": "AN",
+            "36": "TS", "37": "AD", "38": "LA"
+        };
+
+        const upperName = stateName.trim().toUpperCase();
+        if (Object.values(codeMap).includes(upperName)) {
+            const numCode = Object.keys(codeMap).find(key => codeMap[key] === upperName) || "";
+            return numCode ? `${numCode} - ${upperName}` : upperName;
+        }
+
+        const gstStateCodes = {
+            '01': 'Jammu And Kashmir',
+            '02': 'Himachal Pradesh',
+            '03': 'Punjab',
+            '04': 'Chandigarh',
+            '05': 'Uttarakhand',
+            '06': 'Haryana',
+            '07': 'Delhi',
+            '08': 'Rajasthan',
+            '09': 'Uttar Pradesh',
+            '10': 'Bihar',
+            '11': 'Sikkim',
+            '12': 'Arunachal Pradesh',
+            '13': 'Nagaland',
+            '14': 'Manipur',
+            '15': 'Mizoram',
+            '16': 'Tripura',
+            '17': 'Meghalaya',
+            '18': 'Assam',
+            '19': 'West Bengal',
+            '20': 'Jharkhand',
+            '21': 'Odisha',
+            '22': 'Chattisgarh',
+            '23': 'Madhya Pradesh',
+            '24': 'Gujarat',
+            '25': 'Daman And Diu',
+            '26': 'Dadra And Nagar Haveli And Daman And Diu',
+            '27': 'Maharashtra',
+            '28': 'Andhra Pradesh',
+            '29': 'Karnataka',
+            '30': 'Goa',
+            '31': 'Lakshadweep',
+            '32': 'Kerala',
+            '33': 'Tamil Nadu',
+            '34': 'Puducherry',
+            '35': 'Andaman And Nicobar Islands',
+            '36': 'Telangana',
+            '37': 'Andhra Pradesh (New)',
+            '38': 'Ladakh'
+        };
+
+        const foundNum = Object.keys(gstStateCodes).find(
+            key => gstStateCodes[key].toLowerCase() === cleanName
+        );
+
+        if (foundNum) {
+            const abbrev = codeMap[foundNum] || "";
+            return `${foundNum} - ${abbrev}`;
+        }
+
+        return stateName;
     };
 
     useEffect(() => {
@@ -58,6 +133,28 @@ const POPrintPreview = () => {
         fetchSellerInfo();
     }, []);
 
+    useEffect(() => {
+        const fetchSupplierDetails = async () => {
+            const name = poData?.supplierName || poData?.supplier_name || poData?.supplier_name_sn;
+            if (!name || name === "N/A") return;
+            try {
+                const response = await axiosInstance.get('/account-master', {
+                    params: { search: name }
+                });
+                const accounts = response.data?.data || response.data || [];
+                const matched = accounts.find(
+                    acc => acc.accountName?.toLowerCase() === name.toLowerCase()
+                );
+                if (matched) {
+                    setSupplierDetails(matched);
+                }
+            } catch (error) {
+                console.error("Error fetching supplier details:", error);
+            }
+        };
+        fetchSupplierDetails();
+    }, [poData]);
+
     const isGstApplicable = useMemo(() => {
         const gst = poData?.gstNumber || poData?.gst_number;
         return Boolean(
@@ -69,6 +166,24 @@ const POPrintPreview = () => {
             gst.trim().length >= 10
         );
     }, [poData]);
+
+    const supplier_pan = useMemo(() => {
+        const gst = poData?.gstNumber || poData?.gst_number || poData?.gstNo || "";
+        const pan = poData?.pan_number || poData?.panNo || poData?.panNumber || supplierDetails?.panNo || "";
+        if (pan && pan.trim() !== "" && pan !== "-") return pan.toUpperCase();
+        if (gst && gst.length >= 12 && gst !== "-") {
+            return gst.substring(2, 12).toUpperCase();
+        }
+        return "-";
+    }, [poData, supplierDetails]);
+
+    const supplier_state_info = useMemo(() => {
+        const state = poData?.supplier_state || poData?.supplierState || poData?.state || supplierDetails?.state || "";
+        if (state && state.trim() !== "" && state !== "-") {
+            return getStateCodeFromName(state);
+        }
+        return t('common:not_available', "Not Available");
+    }, [poData, supplierDetails, t]);
 
     if (!poData) {
         return (
@@ -127,6 +242,8 @@ const POPrintPreview = () => {
     const pan_number = panNumber || pan_number_sn || panNo || "-";
     const credit_days = creditDays || credit_days_sn || "0";
 
+
+
     const subTotal = items.reduce((sum, item) => {
         const qty = parseFloat(item.quantity) || 0;
         const rate = parseFloat(item.rate) || 0;
@@ -159,7 +276,13 @@ const POPrintPreview = () => {
     let igst = 0;
     let totalTaxOnCombined = 0;
 
-    if (savedCgst > 0 || savedSgst > 0 || savedIgst > 0) {
+    if (!isGstApplicable) {
+        isIntraState = true;
+        cgst = 0;
+        sgst = 0;
+        igst = 0;
+        totalTaxOnCombined = 0;
+    } else if (savedCgst > 0 || savedSgst > 0 || savedIgst > 0) {
         if (savedIgst > 0) {
             isIntraState = false;
             igst = savedIgst;
@@ -171,7 +294,7 @@ const POPrintPreview = () => {
         totalTaxOnCombined = cgst + sgst + igst;
     } else {
         // Fallback to calculation
-        const totalTaxOnCombinedCalculated = isGstApplicable ? materialTax : 0;
+        const totalTaxOnCombinedCalculated = materialTax;
         const gstResult = determinePurchaseGst(
             gst_number || "",
             sellerInfo?.gstNumber || "",
@@ -185,6 +308,13 @@ const POPrintPreview = () => {
         cgst = gstResult.cgstAmount;
         sgst = gstResult.sgstAmount;
         igst = gstResult.igstAmount;
+    }
+
+    if (totalTaxOnCombined === 0) {
+        isIntraState = true;
+        cgst = 0;
+        sgst = 0;
+        igst = 0;
     }
 
     const totalAmount = subTotal + totalTaxOnCombined;
@@ -372,10 +502,23 @@ const POPrintPreview = () => {
                                     <span className="font-black text-[12px] min-w-[80px]">{t('modules:expiry_date', 'Expiry Date')}:</span>
                                     <span className="font-semibold text-[12px]">{formatDate(expiry_date)}</span>
                                 </div>
-                                <div className="flex items-center px-4 h-[44px] gap-4">
-                                    <span className="font-black text-[12px] min-w-[80px]">{t('modules:gst_no', 'GST No')}:</span>
-                                    <span className="font-semibold text-[12px] uppercase">{gst_number || "N/A"}</span>
-                                </div>
+                                {isGstApplicable ? (
+                                    <div className="flex items-center px-4 h-[44px] gap-4">
+                                        <span className="font-black text-[12px] min-w-[80px]">{t('modules:gst_no', 'GST No')}:</span>
+                                        <span className="font-semibold text-[12px] uppercase">{gst_number || "N/A"}</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex h-[44px]">
+                                        <div className="w-[43%] flex items-center px-4 gap-4">
+                                            <span className="font-black text-[11px] whitespace-nowrap">{t('modules:pan_no', 'PAN No')} :</span>
+                                            <span className="font-semibold text-[11px] uppercase">{supplier_pan}</span>
+                                        </div>
+                                        <div className="flex-1 flex items-center px-4 gap-4 border-l" style={{ borderColor: 'rgba(0, 0, 0, 0.1)' }}>
+                                            <span className="font-black text-[11px] whitespace-nowrap">{t('modules:state_code', 'State Code')} :</span>
+                                            <span className="font-semibold text-[11px] uppercase">{supplier_state_info}</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

@@ -181,7 +181,12 @@ const InvoiceForm = ({
                         placeholder={t('modules:enter_credit_days_placeholder')}
                         value={formData.creditDays !== undefined && formData.creditDays !== null && formData.creditDays !== '' ? formData.creditDays : ''}
                         onChange={(e) => setFormData(prev => ({ ...prev, creditDays: e.target.value }))}
-                        className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm ${errors.creditDays ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                        readOnly={!!formData.soId || (formData.challanIds && formData.challanIds.length > 0)}
+                        className={`w-full h-[48px] border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all shadow-sm ${
+                            (formData.soId || (formData.challanIds && formData.challanIds.length > 0))
+                                ? 'bg-gray-50 border-[#E5E7EB] text-gray-500 cursor-not-allowed'
+                                : `bg-white focus:border-[#073318] ${errors.creditDays ? 'border-red-500' : 'border-[#E5E7EB]'}`
+                        }`}
                     />
                     {errors.creditDays && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.creditDays}</p>}
                 </div>

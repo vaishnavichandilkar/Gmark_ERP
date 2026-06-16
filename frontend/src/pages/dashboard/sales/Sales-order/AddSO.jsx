@@ -60,6 +60,8 @@ const AddSO = () => {
         po_date: '',
         po_expiry_date: '',
         customer_amt: '',
+        customer_amt_excl_tax: '',
+        customer_amt_incl_tax: '',
         attachment: null,
         removeAttachment: false
     });
@@ -291,6 +293,8 @@ const AddSO = () => {
                             po_date: soToEdit.poDate ? soToEdit.poDate.split('T')[0] : '',
                             po_expiry_date: soToEdit.poExpiryDate ? soToEdit.poExpiryDate.split('T')[0] : '',
                             customer_amt: soToEdit.customerAmt || '',
+                            customer_amt_excl_tax: soToEdit.customerAmtExclTax || '',
+                            customer_amt_incl_tax: soToEdit.customerAmtInclTax || '',
                             attachment: soToEdit.customerPoFile || null,
                             removeAttachment: false
                         });
@@ -385,22 +389,6 @@ const AddSO = () => {
         return Boolean(gst && gst.trim().toUpperCase() !== 'N/A' && gst.trim().length >= 10);
     }, [businessProfile]);
 
-    const isIntraState = useMemo(() => {
-        const sellerGst = businessProfile?.gstNumber || businessProfile?.shopDetail?.gstNumber || "";
-        const customerGst = formData.gst_number || "";
-        
-        // State comparison still useful for determining type if applicable
-        const sellerState = (businessProfile?.state || businessProfile?.shopDetail?.state || "").trim().toLowerCase();
-        const customerState = (formData.address_state || "").trim().toLowerCase(); // Might need to ensure state is available
-
-        const sellerCode = sellerGst.substring(0, 2);
-        const customerCode = customerGst.substring(0, 2);
-
-        if (sellerGst && customerGst && /^\d{2}$/.test(sellerCode) && /^\d{2}$/.test(customerCode)) {
-            return sellerCode === customerCode;
-        }
-        return true; // Default to Intra if can't determine
-    }, [businessProfile, formData.gst_number]);
 
     const isSellerMsme = useMemo(() => {
         if (!businessProfile) return false;
@@ -619,6 +607,26 @@ const AddSO = () => {
         }), { quantity: 0, beforeTax: 0, taxAmount: 0, total: 0 });
     }, [items]);
 
+    const isIntraState = useMemo(() => {
+        const totalTax = (tableTotals?.taxAmount || 0);
+        if (totalTax === 0) return true;
+
+        const sellerGst = businessProfile?.gstNumber || businessProfile?.shopDetail?.gstNumber || "";
+        const customerGst = formData.gst_number || "";
+        
+        // State comparison still useful for determining type if applicable
+        const sellerState = (businessProfile?.state || businessProfile?.shopDetail?.state || "").trim().toLowerCase();
+        const customerState = (formData.address_state || "").trim().toLowerCase(); // Might need to ensure state is available
+
+        const sellerCode = sellerGst.substring(0, 2);
+        const customerCode = customerGst.substring(0, 2);
+
+        if (sellerGst && customerGst && /^\d{2}$/.test(sellerCode) && /^\d{2}$/.test(customerCode)) {
+            return sellerCode === customerCode;
+        }
+        return true; // Default to Intra if can't determine
+    }, [businessProfile, formData.gst_number, tableTotals?.taxAmount]);
+
     const [tableItemsSearch, setTableItemsSearch] = useState('');
     const filteredTableItems = useMemo(() => {
         if (!tableItemsSearch.trim()) return items;
@@ -652,15 +660,28 @@ const AddSO = () => {
         if (validItems.length === 0) newErrors.items = true;
 
         if (poType === 'written') {
-            if (!formData.customer_amt) {
-                newErrors.customer_amt = "Customer PO Amount is required";
-                popupMsg = "Customer PO Amount is required for Written PO Type.";
+            if (!formData.customer_amt_excl_tax) {
+                newErrors.customer_amt_excl_tax = "Customer PO Amount (Excl. Tax) is required";
+                popupMsg = "Customer PO Amount (Excl. Tax) is required for Written PO Type.";
             } else {
-                const poAmt = parseFloat(formData.customer_amt) || 0;
+                const poAmtExcl = parseFloat(formData.customer_amt_excl_tax) || 0;
+                const beforeTaxTotal = tableTotals.beforeTax || 0;
+                if (Math.abs(poAmtExcl - beforeTaxTotal) >= 0.01) {
+                    newErrors.customer_amt_excl_tax = `Amount must match Sub Total (₹${beforeTaxTotal.toFixed(2)})`;
+                    popupMsg = `Customer PO Amount (Excl. Tax) (₹${poAmtExcl.toFixed(2)}) and Sub Total (₹${beforeTaxTotal.toFixed(2)}) must match in Sales Order.`;
+                    popupTitle = "Amount Mismatch";
+                }
+            }
+
+            if (!formData.customer_amt_incl_tax) {
+                newErrors.customer_amt_incl_tax = "Customer PO Amount (Incl. Tax) is required";
+                popupMsg = popupMsg || "Customer PO Amount (Incl. Tax) is required for Written PO Type.";
+            } else {
+                const poAmtIncl = parseFloat(formData.customer_amt_incl_tax) || 0;
                 const grandTotal = tableTotals.total || 0;
-                if (Math.abs(poAmt - grandTotal) >= 0.01) {
-                    newErrors.customer_amt = `Customer PO Amount must match Grand Total (₹${grandTotal.toFixed(2)})`;
-                    popupMsg = `Customer PO Amount (₹${poAmt.toFixed(2)}) and Grand Total (₹${grandTotal.toFixed(2)}) must match in Sales Order.`;
+                if (Math.abs(poAmtIncl - grandTotal) >= 0.01) {
+                    newErrors.customer_amt_incl_tax = `Amount must match Grand Total (₹${grandTotal.toFixed(2)})`;
+                    popupMsg = popupMsg || `Customer PO Amount (Incl. Tax) (₹${poAmtIncl.toFixed(2)}) and Grand Total (₹${grandTotal.toFixed(2)}) must match in Sales Order.`;
                     popupTitle = "Amount Mismatch";
                 }
             }
@@ -693,6 +714,8 @@ const AddSO = () => {
             poDate: formData.po_date ? formData.po_date : null,
             poExpiryDate: formData.po_expiry_date ? formData.po_expiry_date : null,
             customerAmt: formData.customer_amt ? parseFloat(formData.customer_amt) : null,
+            customerAmtExclTax: formData.customer_amt_excl_tax ? parseFloat(formData.customer_amt_excl_tax) : null,
+            customerAmtInclTax: formData.customer_amt_incl_tax ? parseFloat(formData.customer_amt_incl_tax) : null,
             creditDays: Number(formData.credit_days),
             items: items.filter(item => item.product_name).map(item => ({
                 productId: item.product_id,
@@ -974,7 +997,9 @@ const AddSO = () => {
                                             customer_po_number: 'verbal',
                                             po_date: '',
                                             po_expiry_date: '',
-                                            customer_amt: ''
+                                            customer_amt: '',
+                                            customer_amt_excl_tax: '',
+                                            customer_amt_incl_tax: ''
                                         }));
                                     } else if (val === 'written') {
                                         setFormData(prev => ({
@@ -987,7 +1012,9 @@ const AddSO = () => {
                                             customer_po_number: '',
                                             po_date: '',
                                             po_expiry_date: '',
-                                            customer_amt: ''
+                                            customer_amt: '',
+                                            customer_amt_excl_tax: '',
+                                            customer_amt_incl_tax: ''
                                         }));
                                     }
                                 }}
@@ -1061,20 +1088,44 @@ const AddSO = () => {
                             </div>
                         )}
 
-                        {/* Customer PO Amount */}
+                        {/* Customer PO Amount (Excl. Tax) */}
                         {poType === 'written' && (
                             <div className="space-y-2 animate-in fade-in duration-300">
-                                <label className="text-[14px] font-semibold text-[#374151]">Customer PO Amount</label>
+                                <label className="text-[14px] font-semibold text-[#374151]">Customer PO Amount (Excl. Tax) <span className="text-red-500">*</span></label>
                                 <input
                                     type="number"
                                     step="0.01"
                                     min="0"
-                                    value={formData.customer_amt || ''}
-                                    onChange={(e) => setFormData({ ...formData, customer_amt: e.target.value })}
-                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none font-medium ${errors.customer_amt ? 'border-red-500 focus:border-red-500 text-red-600' : 'border-[#E5E7EB] focus:border-[#073318] text-[#073318]'}`}
-                                    placeholder="Enter Customer PO Amount"
+                                    value={formData.customer_amt_excl_tax || ''}
+                                    onChange={(e) => setFormData({ 
+                                        ...formData, 
+                                        customer_amt_excl_tax: e.target.value 
+                                    })}
+                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none font-medium ${errors.customer_amt_excl_tax ? 'border-red-500 focus:border-red-500 text-red-600' : 'border-[#E5E7EB] focus:border-[#073318] text-[#073318]'}`}
+                                    placeholder="Enter Customer PO Amount (Excl. Tax)"
                                 />
-                                {errors.customer_amt && <p className="text-red-500 text-[12px] mt-1 italic font-medium">*{errors.customer_amt}</p>}
+                                {errors.customer_amt_excl_tax && <p className="text-red-500 text-[12px] mt-1 italic font-medium">*{errors.customer_amt_excl_tax}</p>}
+                            </div>
+                        )}
+
+                        {/* Customer PO Amount (Incl. Tax) */}
+                        {poType === 'written' && (
+                            <div className="space-y-2 animate-in fade-in duration-300">
+                                <label className="text-[14px] font-semibold text-[#374151]">Customer PO Amount (Incl. Tax) <span className="text-red-500">*</span></label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={formData.customer_amt_incl_tax || ''}
+                                    onChange={(e) => setFormData({ 
+                                        ...formData, 
+                                        customer_amt_incl_tax: e.target.value,
+                                        customer_amt: e.target.value // Backup to main amount
+                                    })}
+                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] outline-none font-medium ${errors.customer_amt_incl_tax ? 'border-red-500 focus:border-red-500 text-red-600' : 'border-[#E5E7EB] focus:border-[#073318] text-[#073318]'}`}
+                                    placeholder="Enter Customer PO Amount (Incl. Tax)"
+                                />
+                                {errors.customer_amt_incl_tax && <p className="text-red-500 text-[12px] mt-1 italic font-medium">*{errors.customer_amt_incl_tax}</p>}
                             </div>
                         )}
 

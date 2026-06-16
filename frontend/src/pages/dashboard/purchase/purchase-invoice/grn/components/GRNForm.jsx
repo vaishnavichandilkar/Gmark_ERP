@@ -177,7 +177,12 @@ const GRNForm = ({
                         placeholder="0"
                         value={formData.credit_days !== undefined && formData.credit_days !== null && formData.credit_days !== '' ? formData.credit_days : ''}
                         onChange={(e) => setFormData(prev => ({ ...prev, credit_days: e.target.value }))}
-                        className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none focus:border-[#073318] transition-all shadow-sm ${errors.credit_days ? 'border-red-500' : 'border-[#E5E7EB]'}`}
+                        readOnly={!!formData.po_id}
+                        className={`w-full h-[48px] border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all shadow-sm ${
+                            formData.po_id
+                                ? 'bg-gray-50 border-[#E5E7EB] text-gray-500 cursor-not-allowed'
+                                : `bg-white focus:border-[#073318] ${errors.credit_days ? 'border-red-500' : 'border-[#E5E7EB]'}`
+                        }`}
                     />
                     {errors.credit_days && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.credit_days}</p>}
                 </div>
