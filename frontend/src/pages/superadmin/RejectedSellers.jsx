@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Loader2, ChevronLeft, ChevronRight, X, FileText, ExternalLink, Info, Building, Eye, AlertTriangle, Check } from 'lucide-react';
 import { getRejectedSellersApi, approveSellerApi } from '../../services/superAdminService';
+import { getImageUrl } from '../../utils/url';
 
 const RejectedSellers = () => {
     const [sellers, setSellers] = useState([]);
@@ -253,12 +254,10 @@ const RejectedSellers = () => {
             {selectedSeller && (() => {
                 const seller = selectedSeller;
                 const docs = getSellerDocs(seller.sellerDocuments);
-                const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
                 
                 const viewDocumentFile = (url) => {
                     if (!url || url === 'N/A') return;
-                    const fullUrl = url.startsWith('http') ? url : `${BASE_URL}/${url}`;
-                    window.open(fullUrl, '_blank');
+                    window.open(getImageUrl(url), '_blank');
                 };
 
                 return (
@@ -429,7 +428,7 @@ const RejectedSellers = () => {
                                         <div className="w-full h-full bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm relative flex items-center justify-center">
                                             {(() => {
                                                 const url = previewDoc.url;
-                                                const fullUrl = url.startsWith('http') ? url : `${BASE_URL}/${url}`;
+                                                const fullUrl = getImageUrl(url);
                                                 const isPdf = url.toLowerCase().endsWith('.pdf') || previewDoc.name?.toLowerCase().endsWith('.pdf');
                                                 if (isPdf) {
                                                     return (

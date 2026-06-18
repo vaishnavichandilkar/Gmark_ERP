@@ -1,4 +1,6 @@
-export const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002/api/v1';
+import { API_BASE_URL } from '../config/api.config';
+
+export const BASE_URL = API_BASE_URL;
 export const AUTH_ENDPOINTS = {
   SEND_LOGIN_OTP: '/auth/send-login-otp',
   LOGIN: '/auth/login',

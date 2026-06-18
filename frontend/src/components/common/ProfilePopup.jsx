@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { getImageUrl } from '../../utils/url';
 const ProfilePopup = ({ isOpen, activeTrigger, onClose, user, onMyProfile, onLogout }) => {
     const { t } = useTranslation(['dashboard', 'common']);
     const [isVisible, setIsVisible] = useState(false);
@@ -82,7 +83,7 @@ const ProfilePopup = ({ isOpen, activeTrigger, onClose, user, onMyProfile, onLog
                     <div className="flex items-center p-5 border-b border-gray-100 bg-white">
                         <div className="w-[46px] h-[46px] rounded-full bg-[#65A30D] text-white flex items-center justify-center font-semibold text-[18px] shrink-0 overflow-hidden">
                             {user?.profileImage ? (
-                                <img src={`http://localhost:3000/${user.profileImage}`} alt="Profile" className="w-full h-full object-cover" />
+                                <img src={getImageUrl(user.profileImage)} alt="Profile" className="w-full h-full object-cover" />
                             ) : (
                                 <span className="block mt-0.5">{user?.name?.charAt(0) || 'U'}</span>
                             )}

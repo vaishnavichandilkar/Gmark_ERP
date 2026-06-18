@@ -3,6 +3,7 @@ import { Camera, X, User, Mail, Loader2 } from 'lucide-react';
 import axiosInstance from '../../services/axiosInstance';
 import { updateProfileApi } from '../../services/authService';
 import { useTranslation } from 'react-i18next';
+import { getImageUrl } from '../../utils/url';
 
 const EditProfileModal = ({ isOpen, onClose, user, onUpdateSuccess }) => {
     const { t } = useTranslation(['dashboard', 'common']);
@@ -121,7 +122,7 @@ const EditProfileModal = ({ isOpen, onClose, user, onUpdateSuccess }) => {
                         <div className="relative group">
                             <div className="w-[120px] h-[120px] rounded-full bg-[#65A30D] flex items-center justify-center overflow-hidden border-4 border-white shadow-lg ring-1 ring-gray-100 transition-transform duration-300 group-hover:scale-[1.02]">
                                 {previewImage ? (
-                                    <img src={previewImage.startsWith('data:') ? previewImage : `http://localhost:3000/${previewImage}`} alt="Profile" className="w-full h-full object-cover" />
+                                    <img src={getImageUrl(previewImage)} alt="Profile" className="w-full h-full object-cover" />
                                 ) : (
                                     <span className="text-white text-[48px] font-bold">{formData.name?.charAt(0) || 'U'}</span>
                                 )}

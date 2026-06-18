@@ -1,8 +1,9 @@
 import axios from 'axios';
-import { BASE_URL, AUTH_ENDPOINTS } from '../constants/apiConstants';
+import { API_BASE_URL } from '../config/api.config';
+import { AUTH_ENDPOINTS } from '../constants/apiConstants';
 
 const axiosInstance = axios.create({
-    baseURL: BASE_URL,
+    baseURL: API_BASE_URL,
     headers: {
         'ngrok-skip-browser-warning': 'true',
     },
@@ -66,7 +67,7 @@ axiosInstance.interceptors.response.use(
             if (refreshToken) {
                 try {
                     const axios = (await import('axios')).default;
-                    const response = await axios.post(`${BASE_URL}${AUTH_ENDPOINTS.REFRESH_TOKEN}`, {
+                    const response = await axios.post(`${API_BASE_URL}${AUTH_ENDPOINTS.REFRESH_TOKEN}`, {
                         refreshToken: refreshToken
                     });
 

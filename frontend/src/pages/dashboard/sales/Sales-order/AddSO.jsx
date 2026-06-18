@@ -25,7 +25,7 @@ import {
 import salesOrderService from '../../../../services/salesOrderService';
 import accountService from '../../../../services/accountService';
 import productService from '../../../../services/productService';
-import { BASE_URL } from '@/constants/apiConstants';
+import { getImageUrl } from '@/utils/url';
 import { useTranslation } from 'react-i18next';
 
 const AddSO = () => {
@@ -111,9 +111,8 @@ const AddSO = () => {
         }
 
         if (typeof formData.attachment === 'string') {
-            const root = BASE_URL.split('/api')[0];
             const normalizedPath = formData.attachment.replace(/\\/g, '/');
-            setPreviewUrl(`${root}/${normalizedPath}`);
+            setPreviewUrl(getImageUrl(normalizedPath));
             return;
         }
 

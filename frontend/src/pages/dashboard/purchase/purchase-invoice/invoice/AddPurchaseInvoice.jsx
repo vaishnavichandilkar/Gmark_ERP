@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { RefreshCw, ArrowLeft, Eye, EyeOff, Trash2, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ROUTES } from '@/constants/routes';
-import { BASE_URL } from '@/constants/apiConstants';
+import { getImageUrl } from '@/utils/url';
 
 import purchaseInvoiceService from '@/services/purchaseInvoiceService';
 import purchaseOrderService from '@/services/purchaseOrderService';
@@ -60,8 +60,7 @@ const AddPurchaseInvoice = () => {
         }
 
         if (typeof formData.attachment === 'string') {
-            const root = BASE_URL.split('/api')[0];
-            setPreviewUrl(`${root}/${formData.attachment}`);
+            setPreviewUrl(getImageUrl(formData.attachment));
             return;
         }
 

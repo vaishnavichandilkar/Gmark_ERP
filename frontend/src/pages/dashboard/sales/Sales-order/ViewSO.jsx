@@ -17,7 +17,7 @@ import {
 
 import salesOrderService from '../../../../services/salesOrderService';
 import { getStandardGstUom } from '@/utils/uomUtils';
-import { BASE_URL } from '@/constants/apiConstants';
+import { getImageUrl } from '@/utils/url';
 
 const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1, renderEdit2 }) => (
     <div className={`flex flex-col sm:flex-row border-[#E5E7EB] border-b last:border-0 font-outfit`}>
@@ -201,9 +201,8 @@ const ViewSO = () => {
                                             value1={
                                                 <button
                                                     onClick={() => {
-                                                        const root = BASE_URL.split('/api')[0];
                                                         const normalizedPath = formData.customer_po_file.replace(/\\/g, '/');
-                                                        window.open(`${root}/${normalizedPath}`, '_blank');
+                                                        window.open(getImageUrl(normalizedPath), '_blank');
                                                     }}
                                                     className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 text-emerald-800 rounded-md font-bold text-[12px] hover:bg-emerald-100 transition-colors border border-emerald-200 cursor-pointer shadow-sm active:scale-95 shrink-0"
                                                 >

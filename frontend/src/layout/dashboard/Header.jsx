@@ -10,6 +10,7 @@ import LanguageSwitcher from "../../components/common/LanguageSwitcher";
 import PaymentModal from "../../components/common/PaymentModal";
 import { getProfileApi } from "../../services/authService";
 import { useTranslation } from 'react-i18next';
+import { getImageUrl } from '../../utils/url';
 
 const Header = ({ sidebarOpen, setSidebarOpen }) => {
     const { t } = useTranslation(['dashboard', 'common', 'modules', 'terms']);
@@ -265,7 +266,7 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
                             }`}
                     >
                         {userData?.profileImage ? (
-                            <img src={`http://localhost:3000/${userData.profileImage}`} alt="Avatar" className="w-full h-full object-cover" />
+                            <img src={getImageUrl(userData.profileImage)} alt="Avatar" className="w-full h-full object-cover" />
                         ) : (
                             <User size={18} md:size={22} className="mt-0.5" strokeWidth={1.5} />
                         )}

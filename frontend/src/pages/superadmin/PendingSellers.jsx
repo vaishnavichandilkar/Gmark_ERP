@@ -5,6 +5,7 @@ import {
     Download, ExternalLink, ShieldAlert, ShieldCheck, FileText, Info
 } from 'lucide-react';
 import { getPendingSellersApi, approveSellerApi, rejectSellerApi } from '../../services/superAdminService';
+import { getImageUrl } from '../../utils/url';
 
 const REJECTION_REASONS = {
     firstName: [
@@ -332,11 +333,9 @@ const PendingSellers = () => {
     const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 
     // View file helper
-    const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
     const viewDocumentFile = (url) => {
         if (!url || url === 'N/A') return;
-        const fullUrl = url.startsWith('http') ? url : `${BASE_URL}/${url}`;
-        window.open(fullUrl, '_blank');
+        window.open(getImageUrl(url), '_blank');
     };
 
     return (
@@ -944,7 +943,7 @@ const PendingSellers = () => {
                                             {/* Preview Component */}
                                             {(() => {
                                                 const url = previewDoc.url;
-                                                const fullUrl = url.startsWith('http') ? url : `${BASE_URL}/${url}`;
+                                                const fullUrl = getImageUrl(url);
                                                 const isPdf = url.toLowerCase().endsWith('.pdf') || previewDoc.name?.toLowerCase().endsWith('.pdf');
                                                 if (isPdf) {
                                                     return (
