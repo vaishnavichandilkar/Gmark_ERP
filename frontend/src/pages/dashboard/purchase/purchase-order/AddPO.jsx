@@ -25,6 +25,8 @@ import accountService from '@/services/accountService';
 import productService from '@/services/productService';
 import { useTranslation } from 'react-i18next';
 import { determinePurchaseGst } from '@/utils/gstUtils';
+import { toDisplayDate, toIsoDate, isValidDDMMYYYY } from '@/utils/dateUtils';
+import DateInput from '@/components/common/DateInput';
 
 // Mock data removed in favor of API calls
 
@@ -55,7 +57,7 @@ const AddPO = () => {
         po_number: '',
         gst_number: '',
         credit_days: '',
-        creation_date: getLocalToday(),
+        creation_date: toDisplayDate(new Date()),
         expiry_date: '',
     });
 
@@ -245,8 +247,8 @@ const AddPO = () => {
                             po_number: poToEdit.poNumber,
                             gst_number: poToEdit.gstNumber,
                             credit_days: poToEdit.creditDays,
-                            creation_date: poToEdit.poCreationDate ? poToEdit.poCreationDate.split('T')[0] : formData.creation_date,
-                            expiry_date: poToEdit.expiryDate ? poToEdit.expiryDate.split('T')[0] : '',
+                            creation_date: poToEdit.poCreationDate ? toDisplayDate(poToEdit.poCreationDate) : formData.creation_date,
+                            expiry_date: poToEdit.expiryDate ? toDisplayDate(poToEdit.expiryDate) : '',
                         });
                         setSupplierSearch(poToEdit.supplierName);
                         if (poToEdit.items) {
@@ -298,31 +300,7 @@ const AddPO = () => {
     }, [formData, items]);
 
     // Helper: Smart Date Formatter
-    const toDisplayDate = (dateStr) => {
-        if (!dateStr) return "";
-        // If it's in ISO format YYYY-MM-DD
-        if (dateStr.length === 10 && dateStr.charAt(4) === '-') {
-            const [y, m, d] = dateStr.split("-");
-            return `${d}/${m}/${y.slice(-2)}`;
-        }
-        // If already DD-MM-YYYY or DD/MM/YYYY
-        const parts = dateStr.includes("-") ? dateStr.split("-") : dateStr.split("/");
-        if (parts.length === 3 && parts[2].length === 4) {
-            return `${parts[0]}/${parts[1]}/${parts[2].slice(-2)}`;
-        }
-        return dateStr;
-    };
-
-    // Helper: DD-MM-YYYY to YYYY-MM-DD
-    const toIsoDate = (displayDate) => {
-        if (!displayDate || !displayDate.includes("-")) return displayDate;
-        const parts = displayDate.split("-");
-        // Only convert if it looks like DD-MM-YYYY
-        if (parts.length === 3 && parts[0].length === 2 && parts[2].length === 4) {
-            return `${parts[2]}-${parts[1]}-${parts[0]}`;
-        }
-        return displayDate;
-    };
+    // Local date helpers removed in favor of @/utils/dateUtils imports
 
 
 
@@ -994,33 +972,13 @@ const AddPO = () => {
                             {errors.address && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.address}</p>}
                         </div>
 
-                        <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:creation_date')}</label>
-                            <div className="relative">
-                                <input
-                                    type="date"
-                                    ref={creationDateRef}
-                                    className="absolute opacity-0 pointer-events-none w-0 h-0"
-                                    value={formData.creation_date}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, creation_date: e.target.value }))}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="DD-MM-YYYY"
-                                    value={toDisplayDate(formData.creation_date)}
-                                    // Change to read/write if they want to type, but the previous instruction said "directly"
-                                    // Let's keep it readOnly for now as per previous session, 
-                                    // but allow the calendar icon to trigger the picker.
-                                    readOnly
-                                    className={`w-full h-[48px] bg-[#F9FAFB] border rounded-[10px] px-4 pr-11 text-[14px] outline-none cursor-not-allowed ${errors.creation_date ? 'border-red-500' : 'border-[#E5E7EB]'}`}
-                                />
-                                <Calendar
-                                    size={18}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"
-                                />
-                            </div>
-                            {errors.creation_date && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.creation_date}</p>}
-                        </div>
+                        <DateInput
+                            label={t('modules:creation_date')}
+                            value={formData.creation_date}
+                            isLocked={true}
+                            onChange={(val) => setFormData(prev => ({ ...prev, creation_date: val }))}
+                            error={errors.creation_date}
+                        />
 
                         {/* Row 3 */}
                         <div className="space-y-2 font-outfit">
@@ -1035,33 +993,14 @@ const AddPO = () => {
                             {errors.po_number && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.po_number}</p>}
                         </div>
 
-                        <div className="space-y-2 font-outfit">
-                            <label className="text-[14px] font-semibold text-[#374151]">{t('modules:expiry_date')} <span className="text-red-500">*</span></label>
-                            <div className="relative">
-                                <input
-                                    type="date"
-                                    ref={expiryDateRef}
-                                    className="absolute opacity-0 pointer-events-none w-0 h-0"
-                                    value={formData.expiry_date}
-                                    min={formData.creation_date || new Date().toISOString().split('T')[0]}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, expiry_date: e.target.value }))}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="DD-MM-YYYY"
-                                    value={toDisplayDate(formData.expiry_date)}
-                                    readOnly
-                                    onClick={() => expiryDateRef.current?.showPicker?.() || expiryDateRef.current?.focus()}
-                                    className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-11 text-[14px] outline-none cursor-pointer transition-all ${errors.expiry_date ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
-                                />
-                                <Calendar
-                                    size={18}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto shadow-sm hover:text-[#073318]"
-                                    onClick={() => expiryDateRef.current?.showPicker?.() || expiryDateRef.current?.focus()}
-                                />
-                            </div>
-                            {errors.expiry_date && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.expiry_date}</p>}
-                        </div>
+                        <DateInput
+                            label={t('modules:expiry_date')}
+                            required
+                            value={formData.expiry_date}
+                            minDate={formData.creation_date || toDisplayDate(new Date())}
+                            onChange={(val) => setFormData(prev => ({ ...prev, expiry_date: val }))}
+                            error={errors.expiry_date}
+                        />
 
                         {/* Row 4 */}
                         <div className="space-y-2 font-outfit">

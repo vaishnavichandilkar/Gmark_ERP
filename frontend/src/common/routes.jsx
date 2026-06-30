@@ -149,6 +149,7 @@ export const router = createBrowserRouter([
                     children: [
                       { index: true, element: <GroupMaster /> },
                       { path: "add", element: <GroupMaster /> },
+                      { path: "view/:id", element: <GroupMaster /> },
                       { path: "edit/:id", element: <GroupMaster /> },
                     ],
                   },

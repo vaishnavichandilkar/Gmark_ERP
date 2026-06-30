@@ -5,6 +5,7 @@ import { Prisma, PIStatus, TransactionType, BalanceType } from '@prisma/client';
 import { PurchaseOrderService } from '../purchase-order/purchase-order.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
+import { formatDate } from '../../../utils/dateFormatter';
 import { isValidGst, determinePurchaseGst } from '../../../common/utils/gst.helper';
 import { TransactionService } from '../../Finance/transaction.service';
 
@@ -127,6 +128,7 @@ export class PurchaseInvoiceService {
       },
       select: {
         id: true,
+        supplierCode: true,
         accountName: true,
         supplierCreditDays: true,
         addressLine1: true,
@@ -206,6 +208,8 @@ export class PurchaseInvoiceService {
     return filteredPos.map(po => ({
       id: po.id,
       poNumber: po.poNumber,
+      poCreationDate: po.poCreationDate,
+      totalAmount: po.totalAmount,
     }));
   }
 
@@ -225,12 +229,40 @@ export class PurchaseInvoiceService {
     return `INV-${(lastNumber + 1).toString().padStart(4, '0')}`;
   }
 
-  private async validateInvoiceDate(invoiceDate: Date, poIds?: string[], challanNumbers?: string[]) {
+  private async validateInvoiceDate(invoiceDate: Date, poIds: string[] | undefined, challanNumbers: string[] | undefined, userId: number) {
     const today = new Date();
     today.setHours(23, 59, 59, 999);
+
+    let resolvedPoIds: string[] = [];
+    if (poIds) {
+      if (typeof poIds === 'string') {
+        try {
+          resolvedPoIds = JSON.parse(poIds);
+        } catch {
+          resolvedPoIds = [poIds];
+        }
+      } else if (Array.isArray(poIds)) {
+        resolvedPoIds = poIds;
+      }
+    }
+    resolvedPoIds = resolvedPoIds.map(n => String(n).trim()).filter(Boolean);
+
+    let resolvedChallanNumbers: string[] = [];
+    if (challanNumbers) {
+      if (typeof challanNumbers === 'string') {
+        try {
+          resolvedChallanNumbers = JSON.parse(challanNumbers);
+        } catch {
+          resolvedChallanNumbers = [challanNumbers];
+        }
+      } else if (Array.isArray(challanNumbers)) {
+        resolvedChallanNumbers = challanNumbers;
+      }
+    }
+    resolvedChallanNumbers = resolvedChallanNumbers.map(n => String(n).trim()).filter(Boolean);
     
-    const hasPO = poIds && poIds.length > 0;
-    const hasGRN = challanNumbers && challanNumbers.length > 0;
+    const hasPO = resolvedPoIds.length > 0;
+    const hasGRN = resolvedChallanNumbers.length > 0;
 
     if (hasPO && hasGRN) {
       // Condition 1B: Supplier Invoice Date Validation (GRN Exists)
@@ -238,7 +270,7 @@ export class PurchaseInvoiceService {
       // Message: Supplier Invoice Date must be between Last GRN Date and Current Date.
       let lastGrnDate: Date | null = null;
       const grns = await this.prisma.grn.findMany({
-        where: { id: { in: challanNumbers.map(n => Number(n)) } }
+        where: { id: { in: resolvedChallanNumbers.map(n => Number(n)).filter(n => !isNaN(n)) }, userId }
       });
       grns.forEach(g => {
         if (!lastGrnDate || g.grnDate > lastGrnDate) lastGrnDate = g.grnDate;
@@ -263,9 +295,10 @@ export class PurchaseInvoiceService {
       let poDate: Date | null = null;
       const pos = await this.prisma.purchaseOrder.findMany({
         where: {
+          userId,
           OR: [
-            { poNumber: { in: poIds } },
-            { id: { in: poIds.map(id => Number(id)).filter(id => !isNaN(id)) } }
+            { poNumber: { in: resolvedPoIds } },
+            { id: { in: resolvedPoIds.map(id => Number(id)).filter(id => !isNaN(id)) } }
           ]
         }
       });
@@ -291,7 +324,7 @@ export class PurchaseInvoiceService {
       // Message: Supplier Invoice Date must be between GRN Date and Current Date.
       let grnDate: Date | null = null;
       const grns = await this.prisma.grn.findMany({
-        where: { id: { in: challanNumbers.map(n => Number(n)) } }
+        where: { id: { in: resolvedChallanNumbers.map(n => Number(n)).filter(n => !isNaN(n)) }, userId }
       });
       grns.forEach(g => {
         if (!grnDate || g.grnDate > grnDate) grnDate = g.grnDate;
@@ -333,7 +366,7 @@ export class PurchaseInvoiceService {
 
     const bookingDate = new Date(); // Enforced (Condition 1, 2, 3)
     const invoiceDate = new Date(createDto.invoiceDate || new Date());
-    await this.validateInvoiceDate(invoiceDate, createDto.poIds, createDto.challanNumbers);
+    await this.validateInvoiceDate(invoiceDate, createDto.poIds, createDto.challanNumbers, userId);
 
     // Supplier Logic
     const supplier = await this.prisma.accountMaster.findFirst({
@@ -521,40 +554,7 @@ export class PurchaseInvoiceService {
     }
 
     if (finalPoIds.length === 0) {
-        // Auto-create PO because none was provided
-        const expiryDate = new Date(createDto.bookingDate || new Date());
-        expiryDate.setDate(expiryDate.getDate() + 30); // Default 30 day validity
-
-        const autoPo = await this.poService.create({
-            supplierId: supplier.id,
-            creditDays: creditDays,
-            address: address,
-            gstNo: gstNo,
-            poCreationDate: createDto.bookingDate || new Date().toISOString(),
-            expiryDate: expiryDate.toISOString(),
-            items: itemsToCreate.map(it => ({
-                productCode: it.productCode,
-                productId: it.productId,
-                productName: it.productName,
-                hsnCode: it.hsnCode || '0000',
-                quantity: it.quantity,
-                rate: it.rate,
-                uom: it.uom,
-                taxPercent: it.taxPercent,
-                discountPercent: 0,
-                discountAmount: 0,
-                printDescription: it.productName
-            }))
-        }, userId);
-
-        autoPoId = autoPo.id;
-        resolvedPoId = autoPo.id;
-        resolvedPoNumberStr = autoPo.poNumber;
-        
-        await this.prisma.purchaseOrder.update({
-            where: { id: autoPoId },
-            data: { status: 'INVOICE_COMPLETED' }
-        });
+        // Do not auto-create PO when no PO is provided
     } else if (finalPoIds.length === 1) {
         const poVal = finalPoIds[0];
         if (!isNaN(Number(poVal))) {
@@ -583,6 +583,7 @@ export class PurchaseInvoiceService {
         data: {
           invoiceNumber: createDto.invoiceNumber || invoiceNumber,
           bookingDate: createDto.bookingDate ? new Date(createDto.bookingDate) : new Date(),
+          invoiceDate: createDto.invoiceDate ? new Date(createDto.invoiceDate) : new Date(),
           supplierInvoiceNumber: createDto.supplierInvoiceNumber,
           supplierInvoiceDate: createDto.invoiceDate ? new Date(createDto.invoiceDate) : new Date(),
           supplierId: supplier.id,
@@ -697,11 +698,43 @@ export class PurchaseInvoiceService {
 
     if (!company) throw new BadRequestException('Company detail not found');
 
-    const mergedPoIds = updateDto.poIds !== undefined ? updateDto.poIds : (existing.poId ? [existing.poId.toString()] : []);
-    const mergedChallanNumbers = updateDto.challanNumbers !== undefined ? updateDto.challanNumbers : (existing.challanNumber ? existing.challanNumber.split(',') : []);
+    let resolvedPoIds: string[] = [];
+    if (updateDto.poIds !== undefined) {
+      if (typeof updateDto.poIds === 'string') {
+        try {
+          resolvedPoIds = JSON.parse(updateDto.poIds);
+        } catch {
+          resolvedPoIds = [updateDto.poIds];
+        }
+      } else if (Array.isArray(updateDto.poIds)) {
+        resolvedPoIds = updateDto.poIds;
+      }
+    } else if (existing.poId) {
+      resolvedPoIds = [existing.poId.toString()];
+    }
+    resolvedPoIds = resolvedPoIds.map(n => String(n).trim()).filter(Boolean);
+
+    let resolvedChallanNumbers: string[] = [];
+    if (updateDto.challanNumbers !== undefined) {
+      if (typeof updateDto.challanNumbers === 'string') {
+        try {
+          resolvedChallanNumbers = JSON.parse(updateDto.challanNumbers);
+        } catch {
+          resolvedChallanNumbers = [updateDto.challanNumbers];
+        }
+      } else if (Array.isArray(updateDto.challanNumbers)) {
+        resolvedChallanNumbers = updateDto.challanNumbers;
+      }
+    } else if (existing.challanNumber) {
+      resolvedChallanNumbers = existing.challanNumber.split(',').map(n => n.trim()).filter(Boolean);
+    }
+    resolvedChallanNumbers = resolvedChallanNumbers.map(n => String(n).trim()).filter(Boolean);
+
+    const mergedPoIds = resolvedPoIds;
+    const mergedChallanNumbers = resolvedChallanNumbers;
     const mergedInvoiceDate = updateDto.invoiceDate ? new Date(updateDto.invoiceDate) : existing.supplierInvoiceDate;
 
-    await this.validateInvoiceDate(mergedInvoiceDate, mergedPoIds, mergedChallanNumbers);
+    await this.validateInvoiceDate(mergedInvoiceDate, mergedPoIds, mergedChallanNumbers, userId);
 
     const gstNo = updateDto.gstNumber || existing.gstNumber;
 
@@ -847,9 +880,9 @@ export class PurchaseInvoiceService {
         let resolvedPoId = existing.poId;
         let resolvedPoNumberStr = existing.poNumber;
 
-        if (updateDto.poIds && updateDto.poIds.length > 0) {
-            if (updateDto.poIds.length === 1) {
-                const poVal = updateDto.poIds[0];
+        if (updateDto.poIds && resolvedPoIds.length > 0) {
+            if (resolvedPoIds.length === 1) {
+                const poVal = resolvedPoIds[0];
                 if (!isNaN(Number(poVal))) {
                     resolvedPoId = Number(poVal);
                     const po = await tx.purchaseOrder.findUnique({ where: { id: resolvedPoId } });
@@ -864,7 +897,7 @@ export class PurchaseInvoiceService {
                     }
                 }
             } else {
-                resolvedPoNumberStr = updateDto.poIds.join(',');
+                resolvedPoNumberStr = resolvedPoIds.join(',');
                 resolvedPoId = null;
             }
         }
@@ -878,9 +911,9 @@ export class PurchaseInvoiceService {
             bookingDate: updateDto.bookingDate ? new Date(updateDto.bookingDate) : existing.bookingDate,
             supplierName: updateDto.supplierName ?? existing.supplierName,
             address: updateDto.address ?? existing.address,
-            poNumber: updateDto.poIds ? resolvedPoNumberStr : existing.poNumber,
+            poNumber: updateDto.poIds ? (resolvedPoIds.length > 0 ? resolvedPoNumberStr : null) : existing.poNumber,
             poId: updateDto.poIds ? resolvedPoId : existing.poId,
-            challanNumber: updateDto.challanNumbers ? updateDto.challanNumbers.join(',') : existing.challanNumber,
+            challanNumber: updateDto.challanNumbers ? (resolvedChallanNumbers.length > 0 ? resolvedChallanNumbers.join(',') : null) : existing.challanNumber,
             creditDays: updateDto.creditDays ?? existing.creditDays,
             status: (updateDto.status as any) ?? existing.status,
             uploadedFilePath: (updateDto as any).removeAttachment === 'true' ? null : (uploadedFilePath || existing.uploadedFilePath),
@@ -1022,8 +1055,8 @@ export class PurchaseInvoiceService {
           invoiceNumber: inv.invoiceNumber,
           supplierName: inv.supplierName,
           supplierInvoiceNumber: inv.supplierInvoiceNumber,
-          supplierInvoiceDate: inv.supplierInvoiceDate.toLocaleDateString(),
-          bookingDate: inv.bookingDate.toLocaleDateString(),
+          supplierInvoiceDate: formatDate(inv.supplierInvoiceDate),
+          bookingDate: formatDate(inv.bookingDate),
           poNumber: inv.poNumber || '-',
           taxableAmount: inv.taxableAmount,
           taxAmt: inv.cgstAmount + inv.sgstAmount,
@@ -1110,8 +1143,8 @@ export class PurchaseInvoiceService {
           doc.text(inv.invoiceNumber, colX[0], y);
           doc.text(inv.supplierName.substring(0, 30), colX[1], y, { width: 140 });
           doc.text(inv.supplierInvoiceNumber, colX[2], y);
-          doc.text(inv.supplierInvoiceDate.toLocaleDateString(), colX[3], y);
-          doc.text(inv.bookingDate.toLocaleDateString(), colX[4], y);
+          doc.text(formatDate(inv.supplierInvoiceDate), colX[3], y);
+          doc.text(formatDate(inv.bookingDate), colX[4], y);
           doc.text(inv.poNumber || '-', colX[5], y);
           doc.text(inv.taxableAmount.toFixed(2), colX[6], y);
           doc.text((inv.cgstAmount + inv.sgstAmount).toFixed(2), colX[7], y);
@@ -1221,8 +1254,8 @@ export class PurchaseInvoiceService {
   }
 
   async printPurchaseInvoice(id: number, userId: number) {
-    const inv = await this.prisma.purchaseInvoice.findUnique({
-      where: { id },
+    const inv = await this.prisma.purchaseInvoice.findFirst({
+      where: { id, userId },
       include: { items: true, user: { include: { shopDetail: true } } },
     });
     if (!inv) throw new NotFoundException('Invoice not found');
@@ -1248,10 +1281,10 @@ export class PurchaseInvoiceService {
       y += 30;
 
       doc.fontSize(9).text(`Inv No: ${inv.invoiceNumber}`, 30, y);
-      doc.text(`Booking Date: ${inv.bookingDate.toLocaleDateString()}`, 300, y);
+      doc.text(`Booking Date: ${formatDate(inv.bookingDate)}`, 300, y);
       y += 20;
       doc.text(`Supplier: ${inv.supplierName}`, 30, y);
-      doc.text(`Inv Date: ${inv.supplierInvoiceDate.toLocaleDateString()}`, 300, y);
+      doc.text(`Inv Date: ${formatDate(inv.supplierInvoiceDate)}`, 300, y);
       y += 40;
 
       const colX = [30, 200, 300, 400, 480];

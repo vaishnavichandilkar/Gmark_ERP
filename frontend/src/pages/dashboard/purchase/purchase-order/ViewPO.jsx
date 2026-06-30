@@ -16,6 +16,7 @@ import {
 import purchaseOrderService from '@/services/purchaseOrderService';
 import { useTranslation } from 'react-i18next';
 import { getStandardGstUom } from '@/utils/uomUtils';
+import { formatDate } from '@/utils/dateUtils';
 
 const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1, renderEdit2 }) => (
     <div className={`flex flex-col sm:flex-row border-[#E5E7EB] border-b last:border-0 font-outfit`}>
@@ -81,14 +82,7 @@ const ViewPO = () => {
         if (id) fetchPO();
     }, [id]);
 
-    const formatDate = (dateStr) => {
-        if (!dateStr) return "-";
-        const date = new Date(dateStr);
-        const d = String(date.getDate()).padStart(2, '0');
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const y = String(date.getFullYear()).slice(-2);
-        return `${d}/${m}/${y}`;
-    };
+
 
     const isGstApplicable = useMemo(() => {
         const gst = formData.gst_number;

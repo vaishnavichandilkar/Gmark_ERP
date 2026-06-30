@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Download, Search, FileText, FileSpreadsheet, RotateCcw, XSquare } from 'lucide-react';
+import { ChevronLeft, Download, Search, FileText, FileSpreadsheet, RotateCcw, XSquare, Upload } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import ScrollableTable from "@/components/common/ScrollableTable";
 import ledgerService from '../../../services/ledgerService';
 import toast from 'react-hot-toast';
+import DateInput from '@/components/common/DateInput';
+import { toDisplayDate, toIsoDate, formatDate } from '@/utils/dateUtils';
 
 const LedgerView = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -48,8 +50,8 @@ const LedgerView = () => {
     const handleFiscalYearChange = (year) => {
         setActiveFiscalYear(year);
         const [startYear, endYear] = year.split('-');
-        setStartDate(`${startYear}-04-01`);
-        setEndDate(`${endYear}-03-31`);
+        setStartDate(toDisplayDate(`${startYear}-04-01`));
+        setEndDate(toDisplayDate(`${endYear}-03-31`));
     };
 
     useEffect(() => {
@@ -57,7 +59,7 @@ const LedgerView = () => {
             if (!id) return;
             setLoading(true);
             try {
-                const params = { startDate, endDate, type, page: currentPage, limit: 14 };
+                const params = { startDate: toIsoDate(startDate), endDate: toIsoDate(endDate), type, page: currentPage, limit: 14 };
                 const response = await ledgerService.getDetailedLedger(id, params);
                 setTransactions(response.data.items || []);
                 setTotalPages(response.data.totalPages || 1);
@@ -95,7 +97,7 @@ const LedgerView = () => {
             
             // Refresh data
             setLoading(true);
-            const params = { startDate, endDate, type, page: currentPage, limit: 14 };
+            const params = { startDate: toIsoDate(startDate), endDate: toIsoDate(endDate), type, page: currentPage, limit: 14 };
             const response = await ledgerService.getDetailedLedger(id, params);
             setTransactions(response.data.items || []);
             setTotalPages(response.data.totalPages || 1);
@@ -118,8 +120,8 @@ const LedgerView = () => {
         const name = searchParams.get('name');
         const ledgerType = searchParams.get('type');
 
-        if (start) setStartDate(start);
-        if (end) setEndDate(end);
+        if (start) setStartDate(toDisplayDate(start));
+        if (end) setEndDate(toDisplayDate(end));
         if (name && name !== 'undefined') setAccountData(prev => ({ ...prev, name }));
         if (ledgerType) {
             setType(ledgerType);
@@ -284,7 +286,7 @@ const LedgerView = () => {
             const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "Unallocated", "DR", "CR", "Balance"];
             const tableRows = filteredTransactions.map((tx, idx) => [
                 idx + 1,
-                tx.date,
+                formatDate(tx.date),
                 tx.particulars,
                 (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
                 tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
@@ -330,7 +332,7 @@ const LedgerView = () => {
 
             const exportData = filteredTransactions.map((tx, idx) => ({
                 "Sr.No": idx + 1,
-                "Date": tx.date,
+                "Date": formatDate(tx.date),
                 "Particular": tx.particulars,
                 "Narration": (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
                 "Unallocated (₹)": tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated) : null,
@@ -520,20 +522,18 @@ const LedgerView = () => {
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">{t('common:from_date')}</span>
-                                    <input 
-                                        type="date" 
-                                        className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] transition-all cursor-pointer"
+                                    <DateInput 
                                         value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
+                                        onChange={(val) => setStartDate(val)}
+                                        className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] transition-all cursor-pointer"
                                     />
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">{t('common:to_date')}</span>
-                                    <input 
-                                        type="date" 
-                                        className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] transition-all cursor-pointer"
+                                    <DateInput 
                                         value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
+                                        onChange={(val) => setEndDate(val)}
+                                        className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] transition-all cursor-pointer"
                                     />
                                 </div>
                                 {(startDate || endDate) && (
@@ -560,7 +560,7 @@ const LedgerView = () => {
                                 className="h-[44px] px-6 bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] rounded-[12px] font-bold text-[15px] transition-all flex items-center gap-2 shadow-sm"
                                 onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}
                             >
-                                <Download size={18} />
+                                <Upload size={18} />
                                 {t('common:export')}
                             </button>
                             
@@ -573,14 +573,14 @@ const LedgerView = () => {
                                             onClick={handleExportPDF}
                                         >
                                             <FileText size={18} className="text-red-500" />
-                                            {t('modules:export_pdf')}
+                                            {t('common:pdf', 'PDF')}
                                         </button>
                                         <button 
                                             className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
                                             onClick={handleExportExcel}
                                         >
                                             <FileSpreadsheet size={18} className="text-emerald-500" />
-                                            {t('modules:export_excel')}
+                                            {t('common:excel', 'Excel')}
                                         </button>
                                     </div>
                                 </>
@@ -624,7 +624,7 @@ const LedgerView = () => {
                                                     {(tx.isBalanceRow || tx.particulars.toLowerCase().includes('balance')) ? '-' : ((currentPage - 1) * 14 + idx + 1)}
                                                 </td>
                                                 <td className="px-6 py-5 font-medium text-gray-700">
-                                                    {new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}
+                                                    {formatDate(tx.date)}
                                                 </td>
                                                 <td className="px-6 py-5 font-bold text-gray-900">{tx.particulars}</td>
                                                 <td className="px-6 py-5 text-gray-500 max-w-[300px]">
@@ -656,7 +656,7 @@ const LedgerView = () => {
                                                         <tr key={`alloc-${alloc.id}`} className="bg-[#FAFAFA] border-b border-[#F1F5F9]">
                                                             <td className="px-6 py-3"></td>
                                                             <td className="px-6 py-3 text-[13px] text-gray-500 font-medium">
-                                                                {new Date(alloc.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}
+                                                                {formatDate(alloc.date)}
                                                             </td>
                                                             <td className="px-6 py-3 text-[13px] font-bold text-gray-700">{alloc.type}</td>
                                                             <td className="px-6 py-3">

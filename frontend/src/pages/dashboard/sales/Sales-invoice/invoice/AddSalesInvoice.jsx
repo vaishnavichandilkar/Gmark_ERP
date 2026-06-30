@@ -13,25 +13,13 @@ import challanService from '@/services/challanService';
 import accountService from '@/services/accountService';
 import productService from '@/services/productService';
 import { getProfileApi } from '@/services/authService';
+import { toDisplayDate, toIsoDate } from '@/utils/dateUtils';
 
 import InvoiceForm from './components/InvoiceForm';
 import InvoiceTable from './components/InvoiceTable';
 import AccountTable from '../challan/components/AccountTable';
 
-const toIsoDate = (displayDate) => {
-    if (!displayDate) return "";
-    if (displayDate.includes("-") && displayDate.split("-")[0].length === 4) return displayDate; // Already ISO
-    const separator = displayDate.includes("/") ? "/" : "-";
-    const parts = displayDate.split(separator);
-    if (parts.length === 3) {
-        // Assume DD/MM/YYYY or DD-MM-YYYY
-        const day = parts[0].padStart(2, '0');
-        const month = parts[1].padStart(2, '0');
-        const year = parts[2];
-        if (year.length === 4) return `${year}-${month}-${day}`;
-    }
-    return displayDate;
-};
+// Local duplicate toIsoDate helper removed in favor of central import
 
 const AddSalesInvoice = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -51,6 +39,9 @@ const AddSalesInvoice = () => {
     const [companyInfo, setCompanyInfo] = useState(null);
     const [businessProfile, setBusinessProfile] = useState(null);
     const [gstType, setGstType] = useState({ type: 'INTRA', applicable: true, isRcm: false });
+    const isGstApplicable = useMemo(() => {
+        return gstType.applicable !== false && gstType.gstType !== 'NONE' && gstType.type !== 'NONE';
+    }, [gstType]);
 
     // Refs for date pickers
     const bookingDateRef = useRef(null);
@@ -67,7 +58,7 @@ const AddSalesInvoice = () => {
         challanIds: [],
         customerInvoiceNumber: '',
         customerInvoiceDate: '',
-        bookingDate: new Date().toISOString().split('T')[0],
+        bookingDate: toDisplayDate(new Date()),
     });
 
     const [items, setItems] = useState([{
@@ -177,8 +168,8 @@ const AddSalesInvoice = () => {
                         soNumber: soNum || '',
                         challanIds: matchedChallanIds,
                         customerInvoiceNumber: invoice.customerInvoiceNumber,
-                        customerInvoiceDate: invoice.customerInvoiceDate?.split('T')[0],
-                        bookingDate: invoice.bookingDate?.split('T')[0] || new Date().toISOString().split('T')[0],
+                        customerInvoiceDate: invoice.customerInvoiceDate ? toDisplayDate(invoice.customerInvoiceDate) : '',
+                        bookingDate: invoice.bookingDate ? toDisplayDate(invoice.bookingDate) : toDisplayDate(new Date()),
                     });
 
                     // MODULE: Load existing GST Type from saved data if available
@@ -297,14 +288,26 @@ const AddSalesInvoice = () => {
         const type = determineSalesGst(companyInfo?.gstNumber, customer.gstNo || "", companyInfo?.state || "", customer.state || "", 0, 0, 0);
         setGstType(type);
 
-        const mappedAddress = [customer.addressLine1, customer.addressLine2, customer.city, customer.state].filter(Boolean).join(', ');
+        const addressParts = [
+            customer.addressLine1,
+            customer.addressLine2,
+            customer.area,
+            customer.subDistrict,
+            customer.district,
+            customer.state
+        ].filter(p => p && String(p).trim() !== '');
+        
+        let mappedAddress = addressParts.join(', ');
+        if (customer.pincode && String(customer.pincode).trim() !== '') {
+            mappedAddress += ` - ${customer.pincode}`;
+        }
 
         setFormData(prev => ({
             ...prev,
             customerId: customer.id,
             customerName: customer.customerName || customer.accountName,
             customerType: customer.customerType || customer.accountType || 'industrial',
-            address: mappedAddress || customer.address || '',
+            address: mappedAddress || '',
             gstNo: customer.gstNo || '',
             creditDays: customer.customerCreditDays || 0,
             customerState: customer.state || '',
@@ -370,16 +373,31 @@ const AddSalesInvoice = () => {
                                 const product = products.find(p => p.id === item.productId || p.product_code === item.productCode);
                                 const soItem = selectedSO?.items?.find(soIt => soIt.productCode === item.productCode || soIt.productName === item.productName);
                                 const printDesc = item.printDescription || item.print_description || item.description || soItem?.printDescription || soItem?.print_description || soItem?.description || product?.description || item.productName || '';
+                                
+                                const qty = item.challanQty || item.quantity || 0;
+                                const rate = item.rate || 0;
+                                const discAmt = item.discountAmount || 0;
+                                const baseAmt = qty * rate;
+                                const befTax = Math.max(0, baseAmt - discAmt);
+                                const taxPct = (item.taxPercent !== undefined && item.taxPercent !== null && item.taxPercent !== '') 
+                                    ? parseFloat(item.taxPercent) 
+                                    : parseFloat(product?.tax_rate || product?.taxRate || 0);
+                                const taxAmt = isGstApplicable ? (befTax * taxPct) / 100 : 0;
+                                const totalAmt = befTax + taxAmt;
+
                                 allItems.push({
                                     ...item,
                                     id: Date.now() + Math.random(),
                                     productId: item.productId || product?.id,
-                                    quantity: item.challanQty || item.quantity || 0,
-                                    totalSoQty: item.challanQty || item.quantity || 0,
+                                    quantity: qty,
+                                    rate: rate,
+                                    totalSoQty: qty,
                                     hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
-                                    taxPercent: (item.taxPercent !== undefined && item.taxPercent !== null && item.taxPercent !== '') 
-                                        ? parseFloat(item.taxPercent) 
-                                        : parseFloat(product?.tax_rate || product?.taxRate || 0),
+                                    taxPercent: taxPct,
+                                    discountAmount: discAmt,
+                                    beforeTaxAmount: parseFloat(befTax.toFixed(2)),
+                                    taxAmount: parseFloat(taxAmt.toFixed(2)),
+                                    totalAmount: parseFloat(totalAmt.toFixed(2)),
                                     challanId: cid,
                                     challanNumber: challan.challanNumber,
                                     printDescription: printDesc,
@@ -439,7 +457,7 @@ const AddSalesInvoice = () => {
                 
                 const baseAmt = qty * rate;
                 const befTax = Math.max(0, baseAmt - discAmt);
-                const taxAmt = (befTax * taxPct) / 100;
+                const taxAmt = isGstApplicable ? (befTax * taxPct) / 100 : 0;
                 const totalAmt = befTax + taxAmt;
 
                 const product = products.find(p => p.id === item.productId || p.product_code === item.productCode);
@@ -536,16 +554,31 @@ const AddSalesInvoice = () => {
                             const product = products.find(p => p.id === item.productId || p.product_code === item.productCode);
                             const soItem = matchedSODetails?.items?.find(soIt => soIt.productCode === item.productCode || soIt.productName === item.productName);
                             const printDesc = item.printDescription || item.print_description || item.description || soItem?.printDescription || soItem?.print_description || soItem?.description || product?.description || item.productName || '';
+                            
+                            const qty = item.challanQty || item.quantity || 0;
+                            const rate = item.rate || 0;
+                            const discAmt = item.discountAmount || 0;
+                            const baseAmt = qty * rate;
+                            const befTax = Math.max(0, baseAmt - discAmt);
+                            const taxPct = (item.taxPercent !== undefined && item.taxPercent !== null && item.taxPercent !== '') 
+                                ? parseFloat(item.taxPercent) 
+                                : parseFloat(product?.tax_rate || product?.taxRate || 0);
+                            const taxAmt = isGstApplicable ? (befTax * taxPct) / 100 : 0;
+                            const totalAmt = befTax + taxAmt;
+
                             allItems.push({
                                 ...item,
                                 id: Date.now() + Math.random(),
                                 productId: item.productId || product?.id,
-                                quantity: item.challanQty || item.quantity || 0,
-                                totalSoQty: item.challanQty || item.quantity || 0, // Set limit for Invoice based on Challan Qty
+                                quantity: qty,
+                                rate: rate,
+                                totalSoQty: qty, // Set limit for Invoice based on Challan Qty
                                 hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
-                                taxPercent: (item.taxPercent !== undefined && item.taxPercent !== null && item.taxPercent !== '') 
-                                    ? parseFloat(item.taxPercent) 
-                                    : parseFloat(product?.tax_rate || product?.taxRate || 0),
+                                taxPercent: taxPct,
+                                discountAmount: discAmt,
+                                beforeTaxAmount: parseFloat(befTax.toFixed(2)),
+                                taxAmount: parseFloat(taxAmt.toFixed(2)),
+                                totalAmount: parseFloat(totalAmt.toFixed(2)),
                                 challanId: cid,
                                 challanNumber: challan.challanNumber,
                                 printDescription: printDesc,
@@ -823,11 +856,11 @@ const AddSalesInvoice = () => {
                     rate: parseFloat(item.rate) || 0,
                     uom: item.uom || 'Nos',
                     hsnCode: item.hsnCode || '',
-                    taxPercent: gstType.applicable ? (parseFloat(item.taxPercent) || 0) : 0,
+                    taxPercent: isGstApplicable ? (parseFloat(item.taxPercent) || 0) : 0,
                     discountAmount: parseFloat(item.discountAmount) || 0,
                     discountPercent: parseFloat(item.discountPercent) || 0,
                     beforeTaxAmount: parseFloat(item.beforeTaxAmount) || 0,
-                    taxAmount: gstType.applicable ? (parseFloat(item.taxAmount) || 0) : 0,
+                    taxAmount: isGstApplicable ? (parseFloat(item.taxAmount) || 0) : 0,
                     totalAmount: parseFloat(item.totalAmount) || 0,
                     printDescription: item.printDescription || '',
                     challanId: item.challanId ? parseInt(item.challanId) : null

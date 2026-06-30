@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 import axiosInstance from '@/services/axiosInstance';
 import { getStandardGstUom } from '@/utils/uomUtils';
 import { useTranslation } from 'react-i18next';
+import { formatDate } from '@/utils/dateUtils';
 
 const SIPrintPreview = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -17,7 +18,7 @@ const SIPrintPreview = () => {
     const [sellerInfo, setSellerInfo] = useState(null);
 
     const getStateName = (gstin) => {
-        if (!gstin || gstin.length < 2) return "Not Available";
+        if (!gstin || gstin.length < 2) return t('common:not_available', "Not Available");
         const code = gstin.substring(0, 2);
         const states = {
             "01": "JK", "02": "HP", "03": "PB", "04": "CH", "05": "UK",
@@ -29,7 +30,7 @@ const SIPrintPreview = () => {
             "31": "LD", "32": "KL", "33": "TN", "34": "PY", "35": "AN",
             "36": "TS", "37": "AD", "38": "LA"
         };
-        return states[code] || "Not Available";
+        return states[code] || t('common:not_available', "Not Available");
     };
 
     useEffect(() => {
@@ -45,9 +46,9 @@ const SIPrintPreview = () => {
                         phone: phone || "+91 2855943035",
                         email: email || "ardhya123@gmail.com",
                         website: websiteUrl || "",
-                        gstNumber: fullGst || "Not Available",
-                        panNumber: fullGst.length >= 12 ? fullGst.substring(2, 12) : "Not Available",
-                        stateInfo: fullGst.length >= 2 ? `${fullGst.substring(0, 2)} - ${getStateName(fullGst)}` : "Not Available"
+                        gstNumber: fullGst || t('common:not_available', "Not Available"),
+                        panNumber: fullGst.length >= 12 ? fullGst.substring(2, 12) : t('common:not_available', "Not Available"),
+                        stateInfo: fullGst.length >= 2 ? `${fullGst.substring(0, 2)} - ${getStateName(fullGst)}` : t('common:not_available', "Not Available")
                     });
                 }
             } catch (error) {
@@ -60,12 +61,12 @@ const SIPrintPreview = () => {
     if (!invoiceData) {
         return (
             <div className="flex flex-col items-center justify-center h-screen gap-4">
-                <p className="text-gray-500 font-outfit text-[13px]">No Invoice data found for preview.</p>
+                <p className="text-gray-500 font-outfit text-[13px]">{t('modules:no_invoice_data', 'No Invoice data found for preview.')}</p>
                 <button
                     onClick={() => navigate('/seller/sales/invoice/add?restore=true')}
                     className="px-6 py-2 bg-[#073318] text-white rounded-[10px] font-bold text-[13px]"
                 >
-                    Go Back
+                    {t('common:go_back', 'Go Back')}
                 </button>
             </div>
         );
@@ -75,24 +76,12 @@ const SIPrintPreview = () => {
         return (
             <div className="flex flex-col items-center justify-center h-screen gap-4">
                 <Loader2 className="animate-spin text-[#073318]" size={40} />
-                <p className="text-gray-500 font-outfit text-[14px] font-bold uppercase tracking-widest">Loading Seller Information...</p>
+                <p className="text-gray-500 font-outfit text-[14px] font-bold uppercase tracking-widest">{t('modules:loading_seller_info', 'Loading Seller Information...')}</p>
             </div>
         );
     }
 
-    const formatDate = (dateStr) => {
-        if (!dateStr || dateStr === "N/A") return "-";
-        try {
-            const date = new Date(dateStr);
-            if (isNaN(date.getTime())) return dateStr;
-            const d = String(date.getDate()).padStart(2, '0');
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const y = String(date.getFullYear()).slice(-2);
-            return `${d}/${m}/${y}`;
-        } catch (e) {
-            return dateStr;
-        }
-    };
+
 
     const {
         invoiceNumber, customerInvoiceNumber, invoice_number,
@@ -103,10 +92,18 @@ const SIPrintPreview = () => {
         soDate, so_date,
         gstNumber, gstNo, gst_number,
         creditDays, credit_days,
-        items = [],
+        items: rawItems = [],
         expenses = [],
         panNo, pan_number
     } = invoiceData;
+
+    const items = rawItems.filter(item => {
+        const name = (item.productName || item.product_name || "").trim();
+        const code = (item.productCode || item.product_code || "").trim();
+        const qty = parseFloat(item.quantity) || 0;
+        const rate = parseFloat(item.rate) || 0;
+        return name !== "" || code !== "" || qty > 0 || rate > 0;
+    });
 
     const final_invoice_no = invoiceNumber || customerInvoiceNumber || invoice_number || "N/A";
     const final_invoice_date = invoiceDate || customerInvoiceDate || invoice_date || "N/A";
@@ -223,10 +220,155 @@ const SIPrintPreview = () => {
         return (convert(total) + 'Rupees Only').toUpperCase();
     };
 
+    const wrapText = (text, limit = 35) => {
+        if (!text) return [];
+        const lines = text.split('\n');
+        const wrapped = [];
+        for (const line of lines) {
+            if (line.length <= limit) {
+                wrapped.push(line);
+            } else {
+                let current = line;
+                while (current.length > 0) {
+                    let cutIndex = limit;
+                    if (current.length > limit) {
+                        const lastSpace = current.lastIndexOf(' ', limit);
+                        if (lastSpace > 5) {
+                            cutIndex = lastSpace;
+                        }
+                    }
+                    wrapped.push(current.substring(0, cutIndex).trim());
+                    current = current.substring(cutIndex).trim();
+                }
+            }
+        }
+        while (wrapped.length > 0 && wrapped[wrapped.length - 1] === "") {
+            wrapped.pop();
+        }
+        return wrapped;
+    };
+
+    const getPageSchema = () => {
+        const ROW_LIMIT = 270; // Safer row limit to prevent page overflow and layout splitting
+
+        const pages = [];
+        let pageItems = [];
+        let currentRowsHeight = 0;
+
+        let i = 0;
+        let linesRemaining = null;
+        let currentItem = null;
+        let isCont = false;
+        let currentCombinedText = "";
+
+        while (i < items.length || linesRemaining !== null) {
+            // Load next item if no lines remaining from a split
+            if (linesRemaining === null) {
+                currentItem = items[i];
+                const prodName = (currentItem.productName || currentItem.product_name || "").trim();
+                const desc = (currentItem.printDescription || currentItem.print_description || currentItem.description || currentItem.product_description || "").trim();
+                currentCombinedText = (prodName + (desc ? ` (${desc})` : "")).trim();
+                linesRemaining = wrapText(currentCombinedText, 40);
+                if (linesRemaining.length === 0) {
+                    linesRemaining = [""];
+                }
+                isCont = false;
+            }
+
+            const lineCount = linesRemaining.length;
+            const rowHeight = lineCount * 16 + 12;
+
+            const remainingSpace = ROW_LIMIT - currentRowsHeight;
+
+            if (rowHeight <= remainingSpace) {
+                // Fits completely on the current page
+                pageItems.push({
+                    isContinuation: isCont,
+                    sn: isCont ? "" : i + 1,
+                    productName: isCont ? "" : (currentItem.productName || currentItem.product_name || "N/A"),
+                    printDescription: isCont ? linesRemaining.join(' ') : currentCombinedText,
+                    hsnCode: isCont ? "" : (currentItem.hsnCode || currentItem.hsn_code || currentItem.hsn || ""),
+                    taxPercent: isCont ? "" : (currentItem.taxPercent ?? currentItem.tax_percent ?? 0),
+                    quantity: isCont ? "" : currentItem.quantity,
+                    uom: isCont ? "" : currentItem.uom,
+                    rate: isCont ? "" : currentItem.rate,
+                    totalAmount: isCont ? 0 : parseFloat(currentItem.totalAmount || currentItem.total_amount || 0),
+                    rowHeight: rowHeight
+                });
+                currentRowsHeight += rowHeight;
+                linesRemaining = null;
+                i++;
+            } else {
+                // Does not fit completely. Try to fit at least 1 line.
+                const maxLines = Math.floor((remainingSpace - 12) / 16);
+
+                if (maxLines >= 1) {
+                    // Split the lines
+                    const linesToFit = linesRemaining.slice(0, maxLines);
+                    const linesForNext = linesRemaining.slice(maxLines);
+                    const fitRowHeight = linesToFit.length * 16 + 12;
+
+                    pageItems.push({
+                        isContinuation: isCont,
+                        sn: isCont ? "" : i + 1,
+                        productName: isCont ? "" : (currentItem.productName || currentItem.product_name || "N/A"),
+                        printDescription: linesToFit.join(' '),
+                        hsnCode: isCont ? "" : (currentItem.hsnCode || currentItem.hsn_code || currentItem.hsn || ""),
+                        taxPercent: isCont ? "" : (currentItem.taxPercent ?? currentItem.tax_percent ?? 0),
+                        quantity: isCont ? "" : currentItem.quantity,
+                        uom: isCont ? "" : currentItem.uom,
+                        rate: isCont ? "" : currentItem.rate,
+                        totalAmount: isCont ? 0 : parseFloat(currentItem.totalAmount || currentItem.total_amount || 0),
+                        rowHeight: fitRowHeight
+                    });
+                    currentRowsHeight += fitRowHeight;
+                    linesRemaining = linesForNext;
+                    isCont = true;
+                }
+
+                // Current page is full, push it and start a new one
+                pages.push({
+                    pageNumber: pages.length + 1,
+                    showHeader: true,
+                    showCustomerInfo: true,
+                    items: pageItems,
+                    showTotals: true,
+                    showSignatory: true
+                });
+                pageItems = [];
+                currentRowsHeight = 0;
+
+                if (maxLines < 1) {
+                    // If we couldn't even fit 1 line, we do NOT change linesRemaining.
+                    // It will be processed on the fresh page in the next iteration.
+                }
+            }
+        }
+
+        // Push the last page if there are leftover items
+        if (pageItems.length > 0) {
+            pages.push({
+                pageNumber: pages.length + 1,
+                showHeader: true,
+                showCustomerInfo: true,
+                items: pageItems,
+                showTotals: true,
+                showSignatory: true
+            });
+        }
+
+        return pages;
+    };
+
+    const pages = getPageSchema();
+
     const handleDownloadPDF = async () => {
         try {
             setIsDownloading(true);
             const loadToastId = toast.loading('Generating Pixel-Perfect PDF...');
+
+            // Defer execution to allow React state updates and browser rendering
+            await new Promise((resolve) => setTimeout(resolve, 300));
 
             const element = printRef.current;
             const opt = {
@@ -245,7 +387,8 @@ const SIPrintPreview = () => {
                     unit: 'mm',
                     format: 'a4',
                     orientation: 'portrait'
-                }
+                },
+                pagebreak: { mode: ['css', 'legacy'] }
             };
 
             await html2pdf().set(opt).from(element).save();
@@ -264,21 +407,57 @@ const SIPrintPreview = () => {
             <style>{`
                 @media print {
                     @page { size: A4; margin: 0; }
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
                     aside, nav, header, footer, .no-print, [role="navigation"], .sidebar-container, .top-navigation { 
                         display: none !important; width: 0 !important; height: 0 !important; overflow: hidden !important;
                     }
-                    body, #root, #root > div { margin: 0 !important; padding: 0 !important; width: 100% !important; height: auto !important; display: block !important; overflow: visible !important; }
+                    html, body, #root, #root > div, div:has(.print-container) { margin: 0 !important; padding: 0 !important; width: 100% !important; height: auto !important; min-height: 0 !important; display: block !important; overflow: visible !important; background: transparent !important; }
                     main, .main-content { margin: 0 !important; padding: 0 !important; display: block !important; }
-                    .print-container { width: 210mm; height: 297mm; padding: 10mm; margin: 0 !important; border: none !important; background: white !important; position: absolute; left: 0; top: 0; z-index: 9999; }
+                    .print-container { width: 210mm !important; height: 296mm !important; max-height: 296mm !important; padding: 10mm !important; margin: 0 auto !important; border: none !important; background: white !important; position: relative !important; z-index: 9999; box-sizing: border-box !important; overflow: hidden !important; }
                     body > *:not(.print-container) { display: none !important; }
+                    tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+                    .page-break-avoid { page-break-inside: avoid !important; break-inside: avoid !important; }
+                }
+                /* Hide scrollbars globally on this page (both screen and print) */
+                ::-webkit-scrollbar {
+                    display: none !important;
+                }
+                * {
+                    scrollbar-width: none !important;
+                    -ms-overflow-style: none !important;
                 }
                 .black-border { border: 1.5px solid black; }
                 .border-b-black { border-bottom: 1px solid black; }
                 .border-r-black { border-right: 1px solid black; }
                 .border-t-black { border-top: 1px solid black; }
                 .border-l-black { border-left: 1px solid black; }
-                table { border-collapse: collapse; width: 100%; }
-                th, td { border: 1px solid black; }
+                table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+                div.no-print-bg .print-container table th {
+                    background-color: #014A36 !important;
+                    color: white !important;
+                    border-bottom: 1px solid black !important;
+                    border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+                    border-top: none !important;
+                    border-left: none !important;
+                    vertical-align: middle !important;
+                    height: 40px;
+                }
+                div.no-print-bg .print-container table td {
+                    border-bottom: 1px solid black !important;
+                    border-right: 1px solid black !important;
+                    border-top: none !important;
+                    border-left: none !important;
+                    vertical-align: top !important;
+                }
+                div.no-print-bg .print-container table th:last-child,
+                div.no-print-bg .print-container table td:last-child {
+                    border-right: none !important;
+                }
+                tr { page-break-inside: avoid; break-inside: avoid; }
+                .page-break-avoid { page-break-inside: avoid; break-inside: avoid; }
                 .no-scrollbar::-webkit-scrollbar { display: none; }
             `}</style>
 
@@ -302,170 +481,220 @@ const SIPrintPreview = () => {
                         const needsRestore = targetUrl.includes('/add') || targetUrl.includes('/edit');
                         navigate(targetUrl + (needsRestore ? (targetUrl.includes('?') ? '&' : '?') + 'restore=true' : ''));
                     }} className="px-6 h-[40px] border border-gray-300 rounded-[10px] font-bold text-[14px] flex items-center justify-center gap-2">
-                        <ArrowLeft size={16} /> {t('common:back', 'Back')}
+                        <ArrowLeft size={16} />
+                        {t('common:back', 'Back')}
                     </button>
                 </div>
             </div>
 
-            <div className="no-print-bg flex justify-center p-6 bg-gray-50/50 min-h-screen">
-                <div ref={printRef} className="print-container w-[210mm] h-[296mm] max-h-[296mm] bg-white black-border flex flex-col font-outfit text-black leading-tight overflow-hidden p-[10mm] box-border">
-                    <div className="w-full border-black border flex flex-col">
-                        <div className="border-b border-black p-4 py-3 flex items-center justify-center relative min-h-[85px]">
-                            <div className="absolute left-6 w-14 h-14 bg-[#014A36] rounded-full"></div>
-                            <h1 className="text-[26px] font-black uppercase text-center">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</h1>
-                        </div>
-                        <div className="border-b border-black py-2.5 text-center text-[12.5px] font-semibold">
-                            {sellerInfo?.address || "Near Mahalaxmi Temple, Hitani"}
-                        </div>
-                        <div className="border-b border-black py-2.5 text-center text-[11px] font-semibold tracking-wide">
-                            {t('common:phone', 'Phone No.')}: {sellerInfo?.phone || "+91 2855943035"} &nbsp; {t('common:email', 'Email Id')}: {sellerInfo?.email || "ardhya123@gmail.com"} {sellerInfo?.website && ` &nbsp; ${t('common:website', 'Website')}: ${sellerInfo.website}`}
-                        </div>
-                        <div className="border-b border-black py-3 text-center font-black text-[15px] uppercase tracking-[3px]">
-                            {t('modules:sales_invoice', 'SALES INVOICE')}
-                        </div>
+            <div 
+                ref={printRef} 
+                className={`no-print-bg flex flex-col items-center min-h-screen ${
+                    isDownloading ? 'p-0 gap-0 bg-white' : 'p-6 gap-6 bg-gray-50/50'
+                }`}
+            >
+                {pages.map((page, pageIdx) => (
+                    <div 
+                        key={pageIdx} 
+                        className={`print-container w-[210mm] h-[296mm] max-h-[296mm] bg-white flex flex-col font-outfit text-black leading-tight p-[10mm] box-border relative ${
+                            isDownloading ? 'border-none shadow-none' : 'black-border shadow-md'
+                        }`}
+                        style={{ 
+                            pageBreakAfter: pageIdx === pages.length - 1 ? 'avoid' : 'always',
+                            breakAfter: pageIdx === pages.length - 1 ? 'avoid' : 'page'
+                        }}
+                    >
+                        <div className="flex flex-col h-full w-full relative">
+                            <div className="w-full border-black border h-full relative">
+                                {page.showHeader && (
+                                    <>
+                                        <div className="border-b border-black p-4 py-3 flex items-center justify-center relative min-h-[85px]">
+                                            <div className="absolute left-6 w-14 h-14 bg-[#014A36] rounded-full"></div>
+                                            <h1 className="text-[26px] font-black uppercase text-center">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</h1>
+                                        </div>
+                                        <div className="border-b border-black py-2.5 text-center text-[12.5px] font-semibold">
+                                            {sellerInfo?.address || "Near Mahalaxmi Temple, Hitani"}
+                                        </div>
+                                        <div className="border-b border-black py-2.5 text-center text-[11px] font-semibold tracking-wide">
+                                            {t('common:phone', 'Phone No.')}: {sellerInfo?.phone || "+91 2855943035"} &nbsp; {t('common:email', 'Email Id')}: {sellerInfo?.email || "ardhya123@gmail.com"} {sellerInfo?.website && ` &nbsp; ${t('common:website', 'Website')}: ${sellerInfo.website}`}
+                                        </div>
+                                        <div className="border-b border-black py-3 text-center font-black text-[15px] uppercase tracking-[3px]">
+                                            {t('modules:sales_invoice', 'SALES INVOICE')}
+                                        </div>
 
-                        <div className="flex border-b border-black text-[12px] font-black uppercase">
-                            <div className="w-[38%] py-3 px-4">{t('common:gstin', 'GSTIN')} : {sellerInfo?.gstNumber}</div>
-                            <div className="w-[30%] py-3 px-4 text-center">{t('common:state_code', 'State Code')} : {sellerInfo?.stateInfo}</div>
-                            <div className="flex-1 py-3 px-4 text-right pr-6 whitespace-nowrap">{t('common:pan_no', 'PAN No')} : {sellerInfo?.panNumber}</div>
-                        </div>
+                                        <div className="flex border-b border-black text-[12px] font-black uppercase">
+                                            <div className="w-[38%] py-3 px-4">{t('common:gstin', 'GSTIN')} : {sellerInfo?.gstNumber}</div>
+                                            <div className="w-[30%] py-3 px-4 text-center">{t('common:state_code', 'State Code')} : {sellerInfo?.stateInfo}</div>
+                                            <div className="flex-1 py-3 px-4 text-right pr-6 whitespace-nowrap">{t('common:pan_no', 'PAN No')} : {sellerInfo?.panNumber}</div>
+                                        </div>
+                                    </>
+                                )}
 
-                        <div className="flex border-b border-black min-h-[160px]">
-                            <div className="w-1/2 flex flex-col border-r border-black">
-                                <div className="border-b border-black flex items-center px-4 h-[44px] gap-4">
-                                    <span className="font-black text-[12px] min-w-[30px]">M/S.</span>
-                                    <span className="font-black text-[12px] uppercase">{final_customer_name}</span>
+                                {page.showCustomerInfo && (
+                                    <div className="flex border-b border-black min-h-[160px] page-break-avoid">
+                                        <div className="w-1/2 flex flex-col border-r border-black">
+                                            <div className="border-b border-black flex items-center px-4 h-[44px] gap-4">
+                                                <span className="font-black text-[12px] min-w-[30px]">{t('modules:ms', 'M/S.')}</span>
+                                                <span className="font-black text-[12px] uppercase">{final_customer_name}</span>
+                                            </div>
+                                            <div className="flex-1 px-4 py-3 text-[11.5px] leading-relaxed font-semibold overflow-hidden">{address}</div>
+                                            <div className="border-t border-black flex items-center px-4 h-[44px] gap-4">
+                                                <span className="font-black text-[12px] min-w-[70px]">{t('modules:customer_code', 'Customer Code')}</span>
+                                                <span className="font-black text-[12px]">{invoiceData?.customerCode || invoiceData?.customer_code || "CU00001"}</span>
+                                            </div>
+                                        </div>
+                                        <div className="w-1/2 flex flex-col">
+                                            <div className="flex border-b border-black h-[44px]">
+                                                <div className="w-[45%] flex items-center px-4 gap-2">
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:invoice_no', 'Invoice No')}:</span>
+                                                    <span className="font-semibold text-[11px] whitespace-nowrap">{final_invoice_no}</span>
+                                                </div>
+                                                <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:invoice_date', 'Invoice Date')}:</span>
+                                                    <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(final_invoice_date)}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex border-b border-black h-[44px]">
+                                                <div className="w-[45%] flex items-center px-4 gap-2">
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:so_no', 'SO No.')} :</span>
+                                                    <span className="font-semibold text-[11px] whitespace-nowrap">{soNumber || t('common:n_a', 'N/A')}</span>
+                                                </div>
+                                                <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:so_date', 'SO Date')} :</span>
+                                                    <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(soDate)}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex border-b border-black h-[44px]">
+                                                <div className="w-[45%] flex items-center px-4 gap-2">
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:pay_terms', 'Pay. Terms')} :</span>
+                                                    <span className="font-semibold text-[11px] whitespace-nowrap">{creditDays || credit_days || "0"} {t('common:days', 'Days')}</span>
+                                                </div>
+                                                <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                                    <span className="font-black text-[11px] whitespace-nowrap"></span>
+                                                    <span className="font-semibold text-[11px] whitespace-nowrap"></span>
+                                                </div>
+                                            </div>
+                                            <div className="flex h-[44px]">
+                                                <div className="w-[45%] flex items-center px-4 gap-2">
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('common:gst_no', 'GST No')} :</span>
+                                                    <span className="font-semibold text-[11px] uppercase">{final_gst_number || "N/A"}</span>
+                                                </div>
+                                                <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('common:pan_no', 'PAN No')} :</span>
+                                                    <span className="font-semibold text-[11px] uppercase">{panNo || pan_number || (final_gst_number?.length >= 12 ? final_gst_number.substring(2, 12).toUpperCase() : "-")}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {page.items.length > 0 && (
+                                    <table className="w-full border-none m-0">
+                                        <thead>
+                                            <tr className="text-[11px] font-black h-[40px]">
+                                                <th className="w-[35px] border-b border-r border-black">{t('common:sn', 'Sn.')}</th>
+                                                <th className="border-b border-r border-black px-4 text-left">{t('common:description', 'Description')}</th>
+                                                <th className="w-[70px] border-b border-r border-black">{t('common:hsn_sac', 'HSN/SAC')}</th>
+                                                <th className="w-[45px] border-b border-r border-black text-center">{t('common:tax_percent', 'Tax%')}</th>
+                                                <th className="w-[70px] border-b border-r border-black text-center">{t('common:quantity', 'Quantity')}</th>
+                                                <th className="w-[45px] border-b border-r border-black text-center">{t('common:units', 'Units')}</th>
+                                                <th className="w-[60px] border-b border-r border-black text-center">{t('common:rate', 'Rate')}</th>
+                                                <th className="w-[80px] border-b border-black text-right px-4">{t('common:amount', 'Amount')}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                             {page.items.map((item, idx) => (
+                                                 <tr key={idx} className="text-[12px] font-semibold">
+                                                     <td className="text-center py-[6px]">{item.sn}</td>
+                                                     <td className="px-2 py-[6px]">
+                                                         <div className="font-bold text-[13px] whitespace-pre-wrap text-justify" style={{ lineHeight: '16px', textAlign: 'justify', textAlignLast: 'left', WebkitTextAlignLast: 'left', hyphens: 'auto', WebkitHyphens: 'auto' }}>
+                                                             {item.printDescription}
+                                                         </div>
+                                                     </td>
+                                                     <td className="text-center py-[6px]">{item.hsnCode}</td>
+                                                     <td className="text-center py-[6px]">{item.taxPercent !== "" ? item.taxPercent : ""}</td>
+                                                     <td className="text-center py-[6px]">{item.quantity}</td>
+                                                     <td className="text-center uppercase py-[6px]">{item.uom ? getStandardGstUom(item.uom) : ""}</td>
+                                                     <td className="text-center py-[6px]">{item.rate}</td>
+                                                     <td className="text-right px-4 py-[6px] font-black">
+                                                         {item.isContinuation ? "" : (parseFloat(item.totalAmount) || 0).toFixed(2)}
+                                                     </td>
+                                                 </tr>
+                                             ))}
+                                        </tbody>
+                                    </table>
+                                )}
+
+                                <div className="w-full flex flex-col bg-white">
+                                    {page.showTotals && (
+                                        <div className="w-full bg-white page-break-avoid">
+                                            <div className="flex border-b border-black h-[30px]">
+                                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('modules:material_sub_total', 'Material Sub Total')}</div>
+                                                <div className="w-[80px] border-l border-black flex items-center justify-end pr-4 pl-1 font-black text-[11px] whitespace-nowrap">{subTotal.toFixed(2)}</div>
+                                            </div>
+                                            
+                                            {expenses.filter(e => !e.isPostGst).map((exp, idx) => (
+                                                <div key={idx} className="flex border-b border-black h-[30px]">
+                                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px] italic">{exp.groupName}</div>
+                                                    <div className="w-[80px] border-l border-black flex items-center justify-end pr-4 pl-1 font-black text-[11px] whitespace-nowrap">{parseFloat(exp.amount).toFixed(2)}</div>
+                                                </div>
+                                            ))}
+
+                                            <div className="flex border-b border-black h-[40px] bg-gray-50/50">
+                                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[12px] uppercase tracking-wide">{t('modules:taxable_sub_total', 'Taxable Sub Total')}</div>
+                                                <div className="w-[80px] border-l border-black flex items-center justify-end pr-4 pl-1 font-black text-[12px] whitespace-nowrap">{subtotalWithBeforeGstExpenses.toFixed(2)}</div>
+                                            </div>
+
+                                            {!isInterState ? (
+                                                <>
+                                                    <div className="flex border-b border-black h-[30px]">
+                                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('common:cgst', 'CGST')}</div>
+                                                        <div className="w-[80px] border-l border-black flex items-center justify-end pr-4 pl-1 font-black text-[11px] whitespace-nowrap">{cgst.toFixed(2)}</div>
+                                                    </div>
+                                                    <div className="flex border-b border-black h-[30px]">
+                                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('common:sgst', 'SGST')}</div>
+                                                        <div className="w-[80px] border-l border-black flex items-center justify-end pr-4 pl-1 font-black text-[11px] whitespace-nowrap">{sgst.toFixed(2)}</div>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="flex border-b border-black h-[30px]">
+                                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('common:igst', 'IGST')}</div>
+                                                    <div className="w-[80px] border-l border-black flex items-center justify-end pr-4 pl-1 font-black text-[11px] whitespace-nowrap">{igst.toFixed(2)}</div>
+                                                </div>
+                                            )}
+
+                                            {expenses.filter(e => e.isPostGst).map((exp, idx) => (
+                                                <div key={idx} className="flex border-b border-black h-[30px]">
+                                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px] italic">{exp.groupName}</div>
+                                                    <div className="w-[80px] border-l border-black flex items-center justify-end pr-4 pl-1 font-black text-[11px] whitespace-nowrap">{parseFloat(exp.amount).toFixed(2)}</div>
+                                                </div>
+                                            ))}
+
+                                            <div className="flex h-[45px]">
+                                                <div className="flex-1 border-r border-black p-4 py-2 font-black text-[10px] flex items-center">
+                                                    <span className="mr-2">{t('common:amount_in_words', 'Amount In Words')} :</span>
+                                                    <span className="uppercase underline leading-none">{numberToWords(grandTotal)}</span>
+                                                </div>
+                                                <div className="w-[100px] border-r border-black flex items-center justify-center font-black text-[11px] uppercase">{t('common:grand_total', 'Grand Total')}</div>
+                                                <div className="w-[80px] flex items-center justify-end pr-4 pl-1 font-black text-[13px] whitespace-nowrap">₹{grandTotal.toFixed(2)}</div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {page.showSignatory && (
+                                        <div className="w-full border-t border-black p-4 py-3 bg-white text-right page-break-avoid block">
+                                            <p className="font-black text-[11px]" style={{ marginBottom: '50px' }}>{t('common:for', 'For')} <span className="uppercase">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</span></p>
+                                            <p className="font-black text-[10px] uppercase underline underline-offset-4">{t('common:authorised_signatory', 'Authorised Signatory')}</p>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="flex-1 px-4 py-3 text-[11.5px] leading-relaxed font-semibold overflow-hidden">{address}</div>
                             </div>
-                            <div className="w-1/2 flex flex-col">
-                                <div className="flex border-b border-black h-[44px]">
-                                    <div className="flex-1 flex items-center px-4 gap-4 border-r border-black">
-                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:invoice_no', 'Invoice No')}:</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{final_invoice_no}</span>
-                                    </div>
-                                    <div className="w-[48%] flex items-center px-4 gap-4">
-                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:invoice_date', 'Invoice Date')}:</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(final_invoice_date)}</span>
-                                    </div>
-                                </div>
-                                <div className="flex border-b border-black h-[44px]">
-                                    <div className="flex-1 flex items-center px-4 gap-4 border-r border-black">
-                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:so_no', 'SO No.')} :</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{soNumber || t('common:n_a', 'N/A')}</span>
-                                    </div>
-                                    <div className="w-[48%] flex items-center px-4 gap-4">
-                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:so_date', 'SO Date')} :</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(soDate)}</span>
-                                    </div>
-                                </div>
-                                <div className="flex-1 border-b border-black flex items-center px-4 py-2.5 gap-4">
-                                    <span className="font-black text-[12px] min-w-[80px]">{t('modules:pay_terms', 'Pay. Terms')}:</span>
-                                    <span className="font-semibold text-[12px]">{creditDays} {t('common:days', 'Days')}</span>
-                                </div>
-                                <div className="flex items-center px-4 h-[44px] gap-4">
-                                    <span className="font-black text-[12px] min-w-[80px]">{t('common:gst_no', 'GST No')}:</span>
-                                    <span className="font-semibold text-[12px] uppercase">{final_gst_number}</span>
-                                </div>
+                            <div className="absolute bottom-[4mm] left-0 right-0 text-center text-[10px] font-semibold text-gray-500">
+                                Page {page.pageNumber} of {pages.length}
                             </div>
-                        </div>
-
-                        <table className="w-full border-none m-0">
-                            <thead>
-                                <tr className="text-[11px] font-black h-[40px]">
-                                    <th className="w-[45px] border-b border-r border-black">{t('common:sn', 'Sn.')}</th>
-                                    <th className="border-b border-r border-black px-4 text-left">{t('common:description', 'Description')}</th>
-                                    <th className="w-[85px] border-b border-r border-black">{t('common:hsn_sac', 'HSN/SAC')}</th>
-                                    <th className="w-[50px] border-b border-r border-black text-center">{t('common:tax_percent', 'Tax%')}</th>
-                                    <th className="w-[65px] border-b border-r border-black text-center">{t('common:quantity', 'Quantity')}</th>
-                                    <th className="w-[65px] border-b border-r border-black text-center">{t('common:units', 'Units')}</th>
-                                    <th className="w-[85px] border-b border-r border-black text-center">{t('common:rate', 'Rate')}</th>
-                                    <th className="w-[110px] border-b border-black text-right px-4">{t('common:amount', 'Amount')}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                 {items.map((item, idx) => (
-                                     <tr key={item.id || idx} className="text-[12px] font-semibold min-h-[40px]">
-                                         <td className="border-b border-r border-black text-center">{idx + 1}</td>
-                                         <td className="border-b border-r border-black px-4 py-2 leading-tight">
-                                             <div className="font-bold text-[13px]">
-                                                 {item.productName || item.product_name || t('common:n_a', 'N/A')}
-                                                 {(() => {
-                                                     const desc = item.printDescription || item.print_description || item.description || item.product_description;
-                                                     return desc ? ` (${desc})` : '';
-                                                 })()}
-                                             </div>
-                                         </td>
-                                         <td className="border-b border-r border-black text-center">{item.hsnCode || item.hsn_code || item.hsn}</td>
-                                         <td className="border-b border-r border-black text-center">{item.taxPercent || item.tax_percent}</td>
-                                         <td className="border-b border-r border-black text-center">{item.quantity}</td>
-                                         <td className="border-b border-r border-black text-center uppercase">{getStandardGstUom(item.uom)}</td>
-                                         <td className="border-b border-r border-black text-center">{item.rate}</td>
-                                         <td className="border-b border-black text-right px-4 font-black">{(parseFloat(item.totalAmount || item.total_amount) || 0).toFixed(2)}</td>
-                                     </tr>
-                                 ))}
-                            </tbody>
-                        </table>
-
-                        <div className="w-full border-t border-black bg-white">
-                            <div className="flex border-b border-black h-[30px]">
-                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('modules:material_sub_total', 'Material Sub Total')}</div>
-                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{subTotal.toFixed(2)}</div>
-                            </div>
-                            
-                            {expenses.filter(e => !e.isPostGst).map((exp, idx) => (
-                                <div key={idx} className="flex border-b border-black h-[30px]">
-                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px] italic">{exp.groupName}</div>
-                                    <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{parseFloat(exp.amount).toFixed(2)}</div>
-                                </div>
-                            ))}
-
-                            <div className="flex border-b border-black h-[40px] bg-gray-50/50">
-                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[12px] uppercase tracking-wide">{t('modules:taxable_sub_total', 'Taxable Sub Total')}</div>
-                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[12px]">{subtotalWithBeforeGstExpenses.toFixed(2)}</div>
-                            </div>
-
-                            {!isInterState ? (
-                                <>
-                                    <div className="flex border-b border-black h-[30px]">
-                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('common:cgst', 'CGST')}</div>
-                                        <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{cgst.toFixed(2)}</div>
-                                    </div>
-                                    <div className="flex border-b border-black h-[30px]">
-                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('common:sgst', 'SGST')}</div>
-                                        <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{sgst.toFixed(2)}</div>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="flex border-b border-black h-[30px]">
-                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('common:igst', 'IGST')}</div>
-                                    <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{igst.toFixed(2)}</div>
-                                </div>
-                            )}
-
-                            {expenses.filter(e => e.isPostGst).map((exp, idx) => (
-                                <div key={idx} className="flex border-b border-black h-[30px]">
-                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px] italic">{exp.groupName}</div>
-                                    <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{parseFloat(exp.amount).toFixed(2)}</div>
-                                </div>
-                            ))}
-
-                            <div className="flex h-[45px]">
-                                <div className="flex-1 border-r border-black p-4 py-2 font-black text-[10px] flex items-center">
-                                    <span className="mr-2">{t('common:amount_in_words', 'Amount In Words')} :</span>
-                                    <span className="uppercase underline">{numberToWords(grandTotal)}</span>
-                                </div>
-                                <div className="w-[100px] border-r border-black flex items-center justify-center font-black text-[11px] uppercase">{t('common:grand_total', 'Grand Total')}</div>
-                                <div className="w-[110px] flex items-center justify-end px-4 font-black text-[14px]">₹ {grandTotal.toFixed(2)}</div>
-                            </div>
-                        </div>
-
-                        <div className="w-full border-t border-black p-6 flex flex-col justify-between min-h-[140px] bg-white text-right">
-                            <p className="font-black text-[11px]">{t('common:for', 'For')} <span className="uppercase">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</span></p>
-                            <p className="font-black text-[10px] uppercase underline underline-offset-4">{t('common:authorised_signatory', 'authorised Signatory')}</p>
                         </div>
                     </div>
-                </div>
+                ))}
             </div>
         </div>
     );

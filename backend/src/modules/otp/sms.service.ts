@@ -45,8 +45,11 @@ export class SmsService {
 
             await this.snsClient.send(command);
         } catch (error) {
-            console.error('AWS SNS Error:', error);
-            const isDev = this.configService.get('NODE_ENV') !== 'production' || !this.configService.get('AWS_ACCESS_KEY_ID');
+            const isDev = 
+                this.configService.get('NODE_ENV') !== 'production' || 
+                !this.configService.get('AWS_ACCESS_KEY_ID') ||
+                this.configService.get('ENABLE_DEV_OTP') === 'true' ||
+                process.env.ENABLE_DEV_OTP === 'true';
             
             if (isDev) {
                 console.log('-------------------------------');

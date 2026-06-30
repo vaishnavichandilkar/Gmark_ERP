@@ -17,10 +17,11 @@ const PurchaseLayout = () => {
         return <Navigate to="/seller/purchase/order" replace />;
     }
 
-    // Hide tabs and header when in detail views (add/edit/view)
+    // Hide tabs and header when in detail views (add/edit/view/print)
     const isDetailView = location.pathname.includes('/add') || 
                          location.pathname.includes('/edit/') || 
-                         location.pathname.includes('/view/');
+                         location.pathname.includes('/view/') ||
+                         location.pathname.includes('/print');
  
     return (
         <div className="flex flex-col w-full max-w-[1400px] mx-auto pb-10 font-['Plus_Jakarta_Sans'] transition-all duration-300">

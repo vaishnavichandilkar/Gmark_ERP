@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import {
   ReportQueryDto,
   TrendQueryDto,
@@ -11,12 +12,18 @@ import {
   PurchaseReportResponseDto,
   SalesReportResponseDto,
   TrendInterval,
+  ProfitLossQueryDto,
+  TradingProfitLossResponseDto,
+  StockValuationMethod,
 } from './dto/reports.dto';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class ReportsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditService: AuditService,
+  ) {}
 
   async getSummary(userId: number): Promise<SummaryResponseDto> {
     const [purchaseSummary, salesSummary, invoiceCount] = await Promise.all([
@@ -288,7 +295,7 @@ export class ReportsService {
         _sum: { grandTotal: true, igstAmount: true, cgstAmount: true, sgstAmount: true },
       }),
       this.prisma.salesInvoice.count({
-        where: { userId, status: 'COMPLETED' as any },
+        where: { userId, status: { not: 'DELETED' as any } },
       }),
     ]);
 
@@ -299,5 +306,426 @@ export class ReportsService {
       totalTaxCollected: totalTax,
       completedSales: count,
     };
+  }
+
+  async getProfitLoss(
+    userId: number,
+    queryParam: ProfitLossQueryDto | string,
+    legacyEndDate?: string,
+  ): Promise<TradingProfitLossResponseDto> {
+    let query: ProfitLossQueryDto;
+    if (typeof queryParam === 'string' || !queryParam) {
+      query = {
+        fromDate: queryParam as string,
+        toDate: legacyEndDate,
+      };
+    } else {
+      query = queryParam;
+    }
+
+    const fromDateStr = query.fromDate || query.startDate;
+    const toDateStr = query.toDate || query.endDate;
+
+    let fromDateObj: Date | undefined;
+    let toDateObj: Date | undefined;
+
+    if (fromDateStr) {
+      fromDateObj = new Date(fromDateStr);
+      if (isNaN(fromDateObj.getTime())) {
+        throw new BadRequestException('Invalid fromDate parameter');
+      }
+    }
+
+    if (toDateStr) {
+      toDateObj = new Date(toDateStr);
+      if (isNaN(toDateObj.getTime())) {
+        throw new BadRequestException('Invalid toDate parameter');
+      }
+    }
+
+    if (fromDateObj && toDateObj && fromDateObj > toDateObj) {
+      throw new BadRequestException('fromDate must be less than or equal to toDate');
+    }
+
+    if (query.financialYearId !== undefined && query.financialYearId !== null) {
+      if (typeof query.financialYearId === 'string' && query.financialYearId.trim() === '') {
+        throw new BadRequestException('Financial Year not found');
+      }
+    }
+
+    if (query.branchId !== undefined && query.branchId !== null) {
+      if (typeof query.branchId === 'string' && query.branchId.trim() === '') {
+        throw new BadRequestException('Branch not found');
+      }
+    }
+
+    if (query.godownId !== undefined && query.godownId !== null) {
+      if (typeof query.godownId === 'string' && query.godownId.trim() === '') {
+        throw new BadRequestException('Godown not found');
+      }
+    }
+
+    if (query.costCenterId !== undefined && query.costCenterId !== null) {
+      if (typeof query.costCenterId === 'string' && query.costCenterId.trim() === '') {
+        throw new BadRequestException('Cost Center not found');
+      }
+    }
+
+    // Audit log generation
+    try {
+      await this.auditService.createLog({
+        userId,
+        action: 'GENERATE_PROFIT_LOSS_REPORT',
+        resource: 'Reports',
+        details: { query },
+      });
+    } catch (e) {
+      // Ignore audit log failure to avoid blocking report generation
+    }
+
+    const accounts = await this.prisma.accountMaster.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        accountName: true,
+        groupName: true,
+        supplierOpeningBalance: true,
+        supplierBalanceType: true,
+        customerOpeningBalance: true,
+        customerBalanceType: true,
+      },
+    });
+
+    const txWhere: Prisma.TransactionWhereInput = { userId };
+    if (fromDateObj || toDateObj) {
+      txWhere.bookingDate = {};
+      if (fromDateObj) txWhere.bookingDate.gte = fromDateObj;
+      if (toDateObj) txWhere.bookingDate.lte = toDateObj;
+    }
+
+    const txAggregations = await this.prisma.transaction.groupBy({
+      by: ['accountId', 'entryType'],
+      where: txWhere,
+      _sum: {
+        amount: true,
+      },
+    });
+
+    const txMap: Record<number, { Dr: number; Cr: number }> = {};
+    txAggregations.forEach((agg) => {
+      if (!txMap[agg.accountId]) {
+        txMap[agg.accountId] = { Dr: 0, Cr: 0 };
+      }
+      const amt = agg._sum.amount ? Number(agg._sum.amount) : 0;
+      if (agg.entryType === 'Dr') txMap[agg.accountId].Dr += amt;
+      if (agg.entryType === 'Cr') txMap[agg.accountId].Cr += amt;
+    });
+
+    let purchase = 0;
+    let purchaseReturn = 0;
+    let directExpenses = 0;
+    let directIncome = 0;
+    let sales = 0;
+    let salesReturn = 0;
+    let indirectIncome = 0;
+    let indirectExpenses = 0;
+    let ledgerOpeningStock = 0;
+    let ledgerClosingStock = 0;
+
+    const matchGroup = (groups: string[], keywords: string[], exclude: string[] = []): boolean => {
+      if (!groups || groups.length === 0) return false;
+      return groups.some((g) => {
+        const lower = g.toLowerCase();
+        const matchesKey = keywords.some((k) => lower.includes(k.toLowerCase()));
+        const isExcluded = exclude.some((ex) => lower.includes(ex.toLowerCase()));
+        return matchesKey && !isExcluded;
+      });
+    };
+
+    accounts.forEach((account) => {
+      const groups = account.groupName || [];
+      const tx = txMap[account.id] || { Dr: 0, Cr: 0 };
+
+      const opBal = Number(account.supplierOpeningBalance || account.customerOpeningBalance || 0);
+      const opType = account.supplierBalanceType || account.customerBalanceType || 'Dr';
+
+      const getDebitBal = () => {
+        let bal = opType === 'Dr' ? opBal : -opBal;
+        bal += tx.Dr - tx.Cr;
+        return bal;
+      };
+
+      const getCreditBal = () => {
+        let bal = opType === 'Cr' ? opBal : -opBal;
+        bal += tx.Cr - tx.Dr;
+        return bal;
+      };
+
+      if (matchGroup(groups, ['purchase return', 'purchase returns'])) {
+        purchaseReturn += getCreditBal();
+      } else if (matchGroup(groups, ['purchase', 'purchase accounts'], ['return'])) {
+        purchase += getDebitBal();
+      }
+
+      if (matchGroup(groups, ['sales return', 'sales returns', 'sale return'])) {
+        salesReturn += getDebitBal();
+      } else if (matchGroup(groups, ['sale', 'sales', 'sales accounts'], ['return'])) {
+        sales += getCreditBal();
+      }
+
+      if (matchGroup(groups, ['direct expense', 'direct expenses', 'manufacturing', 'freight', 'carriage inward', 'expense'])) {
+        const activity = Math.abs(tx.Dr - tx.Cr);
+        const bal = getDebitBal();
+        directExpenses += Math.max(bal, activity);
+      }
+
+      if (matchGroup(groups, ['direct income', 'direct incomes', 'direct sale', 'direct revenue'])) {
+        const activity = Math.abs(tx.Cr - tx.Dr);
+        const bal = getCreditBal();
+        directIncome += Math.max(bal, activity);
+      }
+
+      if (matchGroup(groups, ['indirect income', 'indirect incomes', 'other income'])) {
+        const activity = Math.abs(tx.Cr - tx.Dr);
+        const bal = getCreditBal();
+        indirectIncome += Math.max(bal, activity);
+      }
+
+      if (matchGroup(groups, ['indirect expense', 'indirect expenses', 'administrative', 'selling expense', 'operating expense'])) {
+        const activity = Math.abs(tx.Dr - tx.Cr);
+        const bal = getDebitBal();
+        indirectExpenses += Math.max(bal, activity);
+      }
+
+      if (matchGroup(groups, ['opening stock'])) {
+        ledgerOpeningStock += getDebitBal();
+      }
+
+      if (matchGroup(groups, ['closing stock'])) {
+        ledgerClosingStock += getCreditBal();
+      }
+    });
+
+    // Query Purchase Invoice and Sales Invoice aggregates
+    const piWhereInput: Prisma.PurchaseInvoiceWhereInput = {
+      userId,
+      status: { in: ['GENERATED', 'COMPLETED'] as any },
+    };
+    const siWhereInput: Prisma.SalesInvoiceWhereInput = {
+      userId,
+      status: { in: ['GENERATED', 'COMPLETED'] as any },
+    };
+
+    if (fromDateObj || toDateObj) {
+      piWhereInput.bookingDate = {};
+      siWhereInput.bookingDate = {};
+      if (fromDateObj) {
+        piWhereInput.bookingDate.gte = fromDateObj;
+        siWhereInput.bookingDate.gte = fromDateObj;
+      }
+      if (toDateObj) {
+        piWhereInput.bookingDate.lte = toDateObj;
+        siWhereInput.bookingDate.lte = toDateObj;
+      }
+    }
+
+    const [piAgg, siAgg] = await Promise.all([
+      this.prisma.purchaseInvoice.aggregate({
+        where: piWhereInput,
+        _sum: { grandTotal: true },
+      }),
+      this.prisma.salesInvoice.aggregate({
+        where: siWhereInput,
+        _sum: { grandTotal: true },
+      }),
+    ]);
+
+    const invoicePurchases = piAgg._sum.grandTotal ? Number(piAgg._sum.grandTotal) : 0;
+    const invoiceSales = siAgg._sum.grandTotal ? Number(siAgg._sum.grandTotal) : 0;
+
+    if (invoicePurchases > purchase) purchase = invoicePurchases;
+    if (invoiceSales > sales) sales = invoiceSales;
+
+    // Calculate dynamic stock valuation
+    const valuationMethod = query.valuationMethod || 'Weighted Average';
+    const computedOpeningStock = await this.calculateStockValuation(userId, fromDateObj, valuationMethod);
+    const computedClosingStock = await this.calculateStockValuation(userId, toDateObj || new Date(), valuationMethod);
+
+    const openingStock = computedOpeningStock > 0 ? computedOpeningStock : Math.max(0, ledgerOpeningStock);
+    const closingStock = computedClosingStock > 0 ? computedClosingStock : Math.max(0, ledgerClosingStock);
+
+    const netPurchase = Math.max(0, Number((purchase - purchaseReturn).toFixed(2)));
+    const netSales = Math.max(0, Number((sales - salesReturn).toFixed(2)));
+
+    const rawOpeningStock = Number(Math.max(0, openingStock).toFixed(2));
+    const rawDirectExpenses = Number(Math.max(0, directExpenses).toFixed(2));
+    const rawDirectIncome = Number(Math.max(0, directIncome).toFixed(2));
+    const rawClosingStock = Number(Math.max(0, closingStock).toFixed(2));
+    const rawIndirectIncome = Number(Math.max(0, indirectIncome).toFixed(2));
+    const rawIndirectExpenses = Number(Math.max(0, indirectExpenses).toFixed(2));
+
+    const grossProfitCalc = (netSales + rawClosingStock + rawDirectIncome) - (rawOpeningStock + netPurchase + rawDirectExpenses);
+
+    let grossProfit = 0;
+    let grossLoss = 0;
+    if (grossProfitCalc >= 0) {
+      grossProfit = Number(grossProfitCalc.toFixed(2));
+      grossLoss = 0;
+    } else {
+      grossProfit = 0;
+      grossLoss = Number(Math.abs(grossProfitCalc).toFixed(2));
+    }
+
+    const income = grossProfit + rawIndirectIncome;
+    const expense = grossLoss + rawIndirectExpenses;
+    const netProfitCalc = income - expense;
+
+    let netProfit = 0;
+    let netLoss = 0;
+    if (netProfitCalc >= 0) {
+      netProfit = Number(netProfitCalc.toFixed(2));
+      netLoss = 0;
+    } else {
+      netProfit = 0;
+      netLoss = Number(Math.abs(netProfitCalc).toFixed(2));
+    }
+
+    return {
+      trading: {
+        openingStock: rawOpeningStock,
+        purchase: Number(Math.max(0, purchase).toFixed(2)),
+        purchaseReturn: Number(Math.max(0, purchaseReturn).toFixed(2)),
+        netPurchase,
+        directExpenses: rawDirectExpenses,
+        directIncome: rawDirectIncome,
+        sales: Number(Math.max(0, sales).toFixed(2)),
+        salesReturn: Number(Math.max(0, salesReturn).toFixed(2)),
+        netSales,
+        closingStock: rawClosingStock,
+        grossProfit,
+        grossLoss,
+      },
+      profitLoss: {
+        indirectIncome: rawIndirectIncome,
+        indirectExpenses: rawIndirectExpenses,
+        netProfit,
+        netLoss,
+      },
+    };
+  }
+
+  private async calculateStockValuation(userId: number, cutoffDate?: Date, method: string = 'Weighted Average'): Promise<number> {
+    try {
+      const piWhere: Prisma.PurchaseInvoiceWhereInput = {
+        userId,
+        status: { in: ['GENERATED', 'COMPLETED'] as any },
+      };
+      if (cutoffDate) {
+        piWhere.bookingDate = { lte: cutoffDate };
+      }
+
+      const purchaseItems = await this.prisma.purchaseInvoiceItem.findMany({
+        where: { purchaseInvoice: piWhere },
+        select: {
+          productId: true,
+          productCode: true,
+          quantity: true,
+          rate: true,
+          beforeTaxAmount: true,
+          amount: true,
+          purchaseInvoice: { select: { bookingDate: true } },
+        },
+        orderBy: { purchaseInvoice: { bookingDate: 'asc' } },
+      });
+
+      if (!purchaseItems || purchaseItems.length === 0) return 0;
+
+      const siWhere: Prisma.SalesInvoiceWhereInput = {
+        userId,
+        status: { in: ['GENERATED', 'COMPLETED'] as any },
+      };
+      if (cutoffDate) {
+        siWhere.bookingDate = { lte: cutoffDate };
+      }
+
+      const salesItems = await this.prisma.salesInvoiceItem.findMany({
+        where: { salesInvoice: siWhere },
+        select: {
+          productId: true,
+          productCode: true,
+          quantity: true,
+        },
+      });
+
+      const salesQtyMap: Record<string, number> = {};
+      salesItems.forEach((si) => {
+        const key = si.productId ? String(si.productId) : si.productCode;
+        salesQtyMap[key] = (salesQtyMap[key] || 0) + Number(si.quantity || 0);
+      });
+
+      const productPurchases: Record<string, typeof purchaseItems> = {};
+      purchaseItems.forEach((pi) => {
+        const key = pi.productId ? String(pi.productId) : pi.productCode;
+        if (!productPurchases[key]) productPurchases[key] = [];
+        productPurchases[key].push(pi);
+      });
+
+      let totalValuation = 0;
+      const normalizedMethod = method.toUpperCase().replace(/\s+/g, '_');
+
+      for (const key of Object.keys(productPurchases)) {
+        const purchases = productPurchases[key];
+        const totalPurQty = purchases.reduce((acc, p) => acc + Number(p.quantity || 0), 0);
+        const totalPurAmt = purchases.reduce((acc, p) => acc + Number(p.beforeTaxAmount || p.amount || (p.quantity * p.rate)), 0);
+        const soldQty = salesQtyMap[key] || 0;
+        const remainingQty = totalPurQty - soldQty;
+
+        if (remainingQty <= 0) continue;
+
+        if (normalizedMethod === 'FIFO') {
+          let remToValue = remainingQty;
+          let prodVal = 0;
+          for (let i = purchases.length - 1; i >= 0; i--) {
+            const p = purchases[i];
+            const q = Number(p.quantity || 0);
+            const r = Number(p.rate || 0);
+            if (remToValue <= q) {
+              prodVal += remToValue * r;
+              remToValue = 0;
+              break;
+            } else {
+              prodVal += q * r;
+              remToValue -= q;
+            }
+          }
+          totalValuation += prodVal;
+        } else if (normalizedMethod === 'LIFO') {
+          let remToValue = remainingQty;
+          let prodVal = 0;
+          for (let i = 0; i < purchases.length; i++) {
+            const p = purchases[i];
+            const q = Number(p.quantity || 0);
+            const r = Number(p.rate || 0);
+            if (remToValue <= q) {
+              prodVal += remToValue * r;
+              remToValue = 0;
+              break;
+            } else {
+              prodVal += q * r;
+              remToValue -= q;
+            }
+          }
+          totalValuation += prodVal;
+        } else {
+          // WEIGHTED_AVERAGE
+          const avgRate = totalPurQty > 0 ? totalPurAmt / totalPurQty : 0;
+          totalValuation += remainingQty * avgRate;
+        }
+      }
+
+      return Number(totalValuation.toFixed(2));
+    } catch (err) {
+      return 0;
+    }
   }
 }

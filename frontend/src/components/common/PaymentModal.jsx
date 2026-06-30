@@ -6,10 +6,12 @@ import voucherService from '../../services/voucherService';
 import AccountSearchDropdown from './AccountSearchDropdown';
 import toast from 'react-hot-toast';
 import SettlementModal from './SettlementModal';
+import DateInput from './DateInput';
+import { toDisplayDate, toIsoDate } from '../../utils/dateUtils';
 
 const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null }) => {
     const [formData, setFormData] = useState({
-        date: new Date().toISOString().split('T')[0],
+        date: toDisplayDate(new Date()),
         bankCashLedgerId: '',
         entries: [{ id: Date.now(), accountId: '', accountName: '', amount: '' }],
         narration: '',
@@ -22,12 +24,21 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
     const [bankCashOptions, setBankCashOptions] = useState([]);
     const [customers, setCustomers] = useState([]);
     const [suppliers, setSuppliers] = useState([]);
+    const [allActiveAccounts, setAllActiveAccounts] = useState([]);
     const [isSettlementOpen, setIsSettlementOpen] = useState(false);
     const [activeEntryId, setActiveEntryId] = useState(null);
-
+    const [searchFilter, setSearchFilter] = useState('');
     const getRowOptions = (filterMode) => {
-        if (filterMode === 'Customer') return customers;
-        if (filterMode === 'Supplier') return suppliers;
+        if (filterMode === 'Customer' || filterMode === 'Supplier') {
+            return [...customers, ...suppliers];
+        }
+        if (filterMode === 'BankCash') {
+            if (type === 'Contra' && formData.bankCashLedgerId) {
+                return bankCashOptions.filter(opt => Number(opt.id) !== Number(formData.bankCashLedgerId));
+            }
+            return bankCashOptions;
+        }
+        if (filterMode === 'All') return allActiveAccounts;
         return [...customers, ...suppliers];
     };
 
@@ -47,16 +58,28 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                 const bankCashRes = await voucherService.getBankCashAccounts();
                 setBankCashOptions(bankCashRes || []);
                 
-                // Fetch both Customer and Supplier accounts concurrently
-                const [customersRes, suppliersRes] = await Promise.all([
-                    voucherService.getCustomers(),
-                    voucherService.getSuppliers()
-                ]);
-                setCustomers(customersRes || []);
-                setSuppliers(suppliersRes || []);
+                let initialLedgerId = '';
+                if (type === 'Journal') {
+                    const allActiveRes = await voucherService.getActiveAccounts();
+                    setAllActiveAccounts(allActiveRes || []);
+                    if (allActiveRes?.length > 0) {
+                        initialLedgerId = allActiveRes[0].id;
+                    }
+                } else {
+                    // Fetch both Customer and Supplier accounts concurrently
+                    const [customersRes, suppliersRes] = await Promise.all([
+                        voucherService.getCustomers(),
+                        voucherService.getSuppliers()
+                    ]);
+                    setCustomers(customersRes || []);
+                    setSuppliers(suppliersRes || []);
+                    if (bankCashRes?.length > 0) {
+                        initialLedgerId = bankCashRes[0].id;
+                    }
+                }
 
-                if (bankCashRes?.length > 0 && !formData.bankCashLedgerId) {
-                    setFormData(prev => ({ ...prev, bankCashLedgerId: bankCashRes[0].id }));
+                if (initialLedgerId && !formData.bankCashLedgerId) {
+                    setFormData(prev => ({ ...prev, bankCashLedgerId: initialLedgerId }));
                 }
             } catch (err) {
                 console.error('Failed to fetch voucher data', err);
@@ -68,7 +91,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
             if (initialData && initialData.id) {
                 // Edit Mode!
                 setFormData({
-                    date: initialData.voucherDate ? initialData.voucherDate.split('T')[0] : new Date().toISOString().split('T')[0],
+                    date: initialData.voucherDate ? toDisplayDate(initialData.voucherDate) : toDisplayDate(new Date()),
                     bankCashLedgerId: initialData.bankCashLedgerId || '',
                     entries: initialData.items?.map(item => {
                         const settlements = item.settlements || [];
@@ -82,12 +105,15 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                 summaryParts.push(`Against Ref: [₹${s.settledAmount}]`);
                             }
                         });
+                        const fallbackType = type === 'Receipt' ? 'CUSTOMER' : (type === 'Journal' ? 'LEDGER' : (type === 'Contra' ? 'BANK' : 'SUPPLIER'));
+                        const fMode = type === 'Journal' ? 'All' : (type === 'Contra' ? 'BankCash' : (type === 'Receipt' || item.accountType === 'CUSTOMER' ? 'Customer' : 'Supplier'));
+                        
                         return {
                             id: item.id || Date.now() + Math.random(),
-                            accountId: `${item.accountId}-${item.accountType || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER')}`,
+                            accountId: `${item.accountId}-${item.accountType || fallbackType}`,
                             accountName: item.account?.accountName || '',
                             amount: item.amount || '',
-                            filterMode: (item.accountType || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER')) === 'CUSTOMER' ? 'Customer' : 'Supplier',
+                            filterMode: fMode,
                             settlementType: settlements.length > 0 ? (settlements.length === 1 ? settlements[0].settlementType : 'MIXED') : null,
                             settlements: settlements.map(s => ({
                                 invoiceId: s.invoiceId,
@@ -102,14 +128,14 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                 });
             } else {
                 setFormData({
-                    date: new Date().toISOString().split('T')[0],
+                    date: toDisplayDate(new Date()),
                     bankCashLedgerId: '',
                     entries: [{ 
                         id: Date.now(), 
-                        accountId: initialData?.accountId ? `${initialData.accountId}-${initialData.accountType || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER')}` : '', 
+                        accountId: initialData?.accountId ? `${initialData.accountId}-${initialData.accountType || (type === 'Receipt' ? 'CUSTOMER' : (type === 'Journal' ? 'LEDGER' : (type === 'Contra' ? 'BANK' : 'SUPPLIER')))}` : '', 
                         accountName: initialData?.account || '', 
                         amount: '',
-                        filterMode: (initialData?.accountType || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER')) === 'CUSTOMER' ? 'Customer' : 'Supplier'
+                        filterMode: type === 'Receipt' ? 'Customer' : (type === 'Journal' ? 'All' : (type === 'Contra' ? 'BankCash' : 'Supplier'))
                     }],
                     narration: '',
                     paymentMode: 'NET_BANKING'
@@ -141,7 +167,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
         setIsSubmitting(true);
         try {
             const payload = {
-                voucherDate: formData.date,
+                voucherDate: toIsoDate(formData.date),
                 bankCashLedgerId: Number(formData.bankCashLedgerId),
                 paymentMode: formData.paymentMode,
                 narration: formData.narration,
@@ -150,7 +176,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                     return {
                         accountId: Number(parts[0]),
                         amount: Number(e.amount),
-                        accountType: parts[1] || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER'),
+                        accountType: parts[1] || (type === 'Receipt' ? 'CUSTOMER' : (type === 'Journal' ? 'CUSTOMER' : 'SUPPLIER')),
                         settlements: e.settlements || []
                     };
                 })
@@ -159,12 +185,20 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
             if (initialData && initialData.id) {
                 if (type === 'Receipt') {
                     await voucherService.updateReceiptVoucher(initialData.id, payload);
+                } else if (type === 'Journal') {
+                    await voucherService.updateJournalVoucher(initialData.id, payload);
+                } else if (type === 'Contra') {
+                    await voucherService.updateContraVoucher(initialData.id, payload);
                 } else {
                     await voucherService.updatePaymentVoucher(initialData.id, payload);
                 }
             } else {
                 if (type === 'Receipt') {
                     await voucherService.createReceiptVoucher(payload);
+                } else if (type === 'Journal') {
+                    await voucherService.createJournalVoucher(payload);
+                } else if (type === 'Contra') {
+                    await voucherService.createContraVoucher(payload);
                 } else {
                     await voucherService.createPaymentVoucher(payload);
                 }
@@ -210,8 +244,8 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                     if (field === 'amount' && (entry.settlementType === 'ADVANCE' || entry.settlementType === 'ON_ACCOUNT')) {
                         const amtNum = parseFloat(value) || 0;
                         const label = entry.settlementType === 'ADVANCE' 
-                            ? (type === 'Receipt' ? 'Advance Receipt' : 'Advance Payment')
-                            : (type === 'Receipt' ? 'On Account Receipt' : 'On Account Payment');
+                            ? (type === 'Receipt' ? 'Advance Receipt' : (type === 'Journal' ? 'Advance Journal' : 'Advance Payment'))
+                            : (type === 'Receipt' ? 'On Account Receipt' : (type === 'Journal' ? 'On Account Journal' : 'On Account Payment'));
                         
                         updatedSettlement = {
                             settlements: [{ settlementType: entry.settlementType, settledAmount: amtNum }],
@@ -242,6 +276,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
     };
 
     const handleAmountClick = (entry) => {
+        if (type === 'Contra' || type === 'Journal') return;
         if (!entry.accountId) {
             toast.error(`Please select a ${type === 'Receipt' ? 'Customer' : 'Supplier'} first`);
             return;
@@ -286,7 +321,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                 accountId: '', 
                 accountName: '', 
                 amount: '',
-                filterMode: type === 'Receipt' ? 'Customer' : 'Supplier'
+                filterMode: type === 'Receipt' ? 'Customer' : (type === 'Journal' ? 'All' : (type === 'Contra' ? 'BankCash' : 'Supplier'))
             }]
         }));
     };
@@ -301,7 +336,32 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
     };
 
     const handleSelectChange = (name, value) => {
-        setFormData(prev => ({ ...prev, [name]: value }));
+        setFormData(prev => {
+            let updatedEntries = prev.entries;
+            if (type === 'Contra' && name === 'bankCashLedgerId') {
+                updatedEntries = prev.entries.map(entry => {
+                    if (entry.accountId) {
+                        const [idStr] = String(entry.accountId).split('-');
+                        if (Number(idStr) === Number(value)) {
+                            return {
+                                ...entry,
+                                accountId: '',
+                                accountName: '',
+                                settlementType: null,
+                                settlements: [],
+                                settlementSummary: ''
+                            };
+                        }
+                    }
+                    return entry;
+                });
+            }
+            return {
+                ...prev,
+                [name]: value,
+                entries: updatedEntries
+            };
+        });
         setActiveDropdown(null);
     };
 
@@ -348,26 +408,29 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                             <div className="space-y-2">
                                 <label className="text-[13px] font-bold text-[#6B7280] tracking-wider">Voucher Date</label>
                                 <div className="relative">
-                                    <input 
-                                        type="date"
-                                        name="date"
+                                    <DateInput 
                                         value={formData.date}
-                                        onChange={handleChange}
+                                        onChange={(val) => setFormData(prev => ({ ...prev, date: val }))}
                                         className="w-full h-11 px-4 bg-white border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[15px] transition-all"
                                         required
                                     />
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[13px] font-bold text-[#6B7280] tracking-wider">Bank / Cash Account</label>
+                                <label className="text-[13px] font-bold text-[#6B7280] tracking-wider">
+                                    {type === 'Contra' ? 'Bank / Cash Account(Giver)' : (type === 'Journal' ? 'Account (First Party)' : 'Bank / Cash Account')}
+                                </label>
                                 <div className="relative">
                                     <button
                                         type="button"
-                                        onClick={() => setActiveDropdown(activeDropdown === 'bankCash' ? null : 'bankCash')}
+                                        onClick={() => {
+                                            setActiveDropdown(activeDropdown === 'bankCash' ? null : 'bankCash');
+                                            setSearchFilter('');
+                                        }}
                                         className="w-full h-11 px-4 bg-white border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[15px] flex items-center justify-between transition-all"
                                     >
                                         <span className={formData.bankCashLedgerId ? 'text-gray-800 font-medium' : 'text-gray-400'}>
-                                            {bankCashOptions.find(o => o.id === formData.bankCashLedgerId)?.ledgerName || 'Select Account'}
+                                            {((type === 'Journal' ? allActiveAccounts : bankCashOptions).find(o => Number(o.id) === Number(formData.bankCashLedgerId))?.ledgerName || 'Select Account')}
                                         </span>
                                         <ChevronDown size={18} className={`text-[#6B7280] transition-transform duration-200 ${activeDropdown === 'bankCash' ? 'rotate-180' : ''}`} />
                                     </button>
@@ -380,18 +443,41 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                                    className="absolute top-12 left-0 right-0 bg-white border border-[#E5E7EB] rounded-xl shadow-xl z-50 py-2 overflow-hidden max-h-[250px] overflow-y-auto"
+                                                    className="absolute top-12 left-0 right-0 bg-white border border-[#E5E7EB] rounded-xl shadow-xl z-50 py-2 overflow-hidden max-h-[300px] flex flex-col"
                                                 >
-                                                    {bankCashOptions.map((opt) => (
-                                                        <button
-                                                            key={opt.id}
-                                                            type="button"
-                                                            onClick={() => handleSelectChange('bankCashLedgerId', opt.id)}
-                                                            className={`w-full px-4 py-2.5 text-left text-[14px] font-medium transition-colors hover:bg-gray-50 ${formData.bankCashLedgerId === opt.id ? 'text-[#073318] bg-[#073318]/5' : 'text-gray-700'}`}
-                                                        >
-                                                            {opt.ledgerName}
-                                                        </button>
-                                                    ))}
+                                                    {type === 'Journal' && (
+                                                        <div className="px-3 pb-2 border-b border-gray-100">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Search Account..."
+                                                                value={searchFilter}
+                                                                onChange={(e) => setSearchFilter(e.target.value)}
+                                                                className="w-full h-9 px-3 bg-gray-50 border border-[#E5E7EB] rounded-lg text-[13px] outline-none focus:border-[#073318] focus:ring-2 focus:ring-[#073318]/5"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    <div className="overflow-y-auto flex-1 max-h-[220px]">
+                                                        {(() => {
+                                                            const optionsToRender = type === 'Journal' ? allActiveAccounts : bankCashOptions;
+                                                            const filteredOptions = optionsToRender.filter(o => 
+                                                                String(o.ledgerName).toLowerCase().includes(searchFilter.toLowerCase())
+                                                            );
+                                                            if (filteredOptions.length === 0) {
+                                                                return <div className="px-4 py-3 text-center text-gray-400 text-sm">No accounts found</div>;
+                                                            }
+                                                            return filteredOptions.map((opt) => (
+                                                                <button
+                                                                    key={opt.id}
+                                                                    type="button"
+                                                                    onClick={() => handleSelectChange('bankCashLedgerId', opt.id)}
+                                                                    className={`w-full px-4 py-2.5 text-left text-[14px] font-medium transition-colors hover:bg-gray-50 ${Number(formData.bankCashLedgerId) === Number(opt.id) ? 'text-[#073318] bg-[#073318]/5' : 'text-gray-700'}`}
+                                                                >
+                                                                    {opt.ledgerName}
+                                                                </button>
+                                                            ));
+                                                        })()}
+                                                    </div>
                                                 </motion.div>
                                             </>
                                         )}
@@ -417,7 +503,9 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                 <table className="w-full border-collapse">
                                     <thead>
                                         <tr className="bg-[#F3F4F6] border-b border-[#E5E7EB]">
-                                            <th className="px-6 py-3 text-left text-[12px] font-bold text-[#6B7280] tracking-wider">Account</th>
+                                            <th className="px-6 py-3 text-left text-[12px] font-bold text-[#6B7280] tracking-wider">
+                                                {type === 'Contra' ? 'Bank / Cash Account(Receiver)' : (type === 'Journal' ? 'Account (2nd Party)' : 'Account')}
+                                            </th>
                                             <th className="px-6 py-3 text-right text-[12px] font-bold text-[#6B7280] tracking-wider w-[200px]">Amount (₹)</th>
                                             <th className="w-[50px]"></th>
                                         </tr>
@@ -428,9 +516,9 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                                 <td className="px-4 py-3">
                                                     <AccountSearchDropdown 
                                                         value={entry.accountId}
-                                                        options={getRowOptions('Both')}
+                                                        options={getRowOptions(entry.filterMode)}
                                                         onChange={(id, name) => handleEntryChange(entry.id, 'accountId', id, { accountName: name })}
-                                                        placeholder="Search Customer/Supplier..."
+                                                        placeholder={type === 'Contra' ? "Search Bank/Cash Account..." : (type === 'Journal' ? "Search Account (2nd Party)..." : "Search Customer/Supplier...")}
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3">
@@ -438,11 +526,13 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                                         type="number"
                                                         placeholder="0.00"
                                                         value={entry.amount}
-                                                        readOnly={entry.settlementType === 'AGAINST_REFERENCE'}
-                                                        onClick={(!entry.settlementType || entry.settlementType === 'AGAINST_REFERENCE') ? () => handleAmountClick(entry) : undefined}
+                                                        readOnly={type !== 'Contra' && type !== 'Journal' && entry.settlementType === 'AGAINST_REFERENCE'}
+                                                        onClick={(type !== 'Contra' && type !== 'Journal' && (!entry.settlementType || entry.settlementType === 'AGAINST_REFERENCE')) ? () => handleAmountClick(entry) : undefined}
                                                         onChange={(e) => handleEntryChange(entry.id, 'amount', e.target.value)}
                                                         className={`w-full h-10 px-3 border border-transparent rounded-lg outline-none text-[14px] text-right font-bold text-[#073318] transition-all ${
-                                                            entry.settlementType === 'AGAINST_REFERENCE'
+                                                            (type === 'Contra' || type === 'Journal')
+                                                            ? 'bg-[#F9FAFB] focus:bg-white focus:border-[#073318]'
+                                                            : entry.settlementType === 'AGAINST_REFERENCE'
                                                             ? 'bg-[#073318]/5 border-[#073318]/20 cursor-pointer hover:bg-[#073318]/10' 
                                                             : entry.settlementType
                                                             ? 'bg-[#073318]/5 border-[#073318]/20 focus:bg-white focus:border-[#073318]'
@@ -450,7 +540,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                                         }`}
                                                         required
                                                     />
-                                                    {entry.settlementType && (
+                                                    {type !== 'Contra' && type !== 'Journal' && entry.settlementType && (
                                                         <div 
                                                             onClick={() => handleAmountClick(entry)}
                                                             className="text-[10px] text-gray-500 mt-1 font-semibold text-right leading-tight max-w-[200px] ml-auto cursor-pointer hover:text-[#073318] transition-colors"

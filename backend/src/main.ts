@@ -21,7 +21,7 @@ async function bootstrap() {
     // Global Config
     app.setGlobalPrefix('api/v1');
     app.enableCors();
-    
+
     app.use((req, res, next) => {
         console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - Content-Type: ${req.headers['content-type']}`);
         next();
@@ -41,7 +41,7 @@ async function bootstrap() {
     setupSwagger(app);
 
     const configService = app.get(ConfigService);
-    const port = configService.get('PORT') || configService.get('port') || 3000;
+    const port = configService.get('PORT') || configService.get('port') || 3001;
     await app.listen(port);
     console.log(`Application is running on: http://localhost:${port}`);
     console.log(`Swagger Docs available at: http://localhost:${port}${process.env.SWAGGER_PATH || '/api/docs'}`);

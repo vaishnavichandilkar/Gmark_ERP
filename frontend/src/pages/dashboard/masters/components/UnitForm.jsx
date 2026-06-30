@@ -13,6 +13,7 @@ const CustomSelect = ({ label, options, value, onChange, placeholder, isSearchab
     const [newValue, setNewValue] = useState('');
     const [subError, setSubError] = useState(false);
     const dropdownRef = useRef(null);
+    const triggerRef = useRef(null);
 
     const filteredOptions = isSearchable && searchTerm
         ? options.filter(opt => opt?.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -51,12 +52,28 @@ const CustomSelect = ({ label, options, value, onChange, placeholder, isSearchab
                 {label} {showAsterisk && <span className="text-red-500">*</span>}
             </label>
             <div
-                className={`w-full h-[46px] flex items-center justify-between px-4 border rounded-[10px] bg-white transition-all 
+                ref={triggerRef}
+                tabIndex={disabled ? -1 : 0}
+                className={`w-full h-[46px] flex items-center justify-between px-4 border rounded-[10px] bg-white transition-all outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10
                     ${disabled ? 'cursor-not-allowed border-[#E5E7EB] bg-[#F9FAFB]' :
                         error ? 'border-red-500 ring-1 ring-red-500/10' :
                             isOpen ? 'border-[#073318] ring-1 ring-[#073318]/10 cursor-pointer' :
                                 'border-[#E5E7EB] hover:border-gray-300 cursor-pointer'}`}
                 onClick={() => !disabled && setIsOpen(!isOpen)}
+                onKeyDown={(e) => {
+                    if (disabled) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setIsOpen(!isOpen);
+                    } else if (e.key === "ArrowDown" && !isOpen) {
+                        e.preventDefault();
+                        setIsOpen(true);
+                    } else if (e.key === "Escape" && isOpen) {
+                        e.preventDefault();
+                        setIsOpen(false);
+                        setSearchTerm('');
+                    }
+                }}
             >
                 {isSearchable && isOpen ? (
                     <input
@@ -67,6 +84,14 @@ const CustomSelect = ({ label, options, value, onChange, placeholder, isSearchab
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full h-full bg-transparent outline-none text-[14px] text-[#111827] placeholder:text-gray-400 font-medium"
                         onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                                e.preventDefault();
+                                setIsOpen(false);
+                                setSearchTerm('');
+                                triggerRef.current?.focus();
+                            }
+                        }}
                     />
                 ) : (
                     <span className={`text-[14px] truncate font-medium ${value ? 'text-[#111827]' : 'text-gray-400'}`}>
@@ -85,11 +110,27 @@ const CustomSelect = ({ label, options, value, onChange, placeholder, isSearchab
                                 filteredOptions.map((opt, idx) => (
                                     <div
                                         key={idx}
-                                        className={`px-4 py-3 text-[14px] cursor-pointer transition-colors ${value === opt ? 'bg-[#F9FAFB] text-[#073318] font-bold' : 'text-[#4B5563] hover:bg-gray-50'}`}
+                                        tabIndex={0}
+                                        className={`px-4 py-3 text-[14px] cursor-pointer transition-colors outline-none focus:bg-[#F9FAFB] focus:text-[#073318] ${value === opt ? 'bg-[#F9FAFB] text-[#073318] font-bold' : 'text-[#4B5563] hover:bg-gray-50'}`}
                                         onClick={() => {
                                             onChange(opt);
                                             setIsOpen(false);
                                             setSearchTerm('');
+                                            triggerRef.current?.focus();
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                                e.preventDefault();
+                                                onChange(opt);
+                                                setIsOpen(false);
+                                                setSearchTerm('');
+                                                triggerRef.current?.focus();
+                                            } else if (e.key === "Escape") {
+                                                e.preventDefault();
+                                                setIsOpen(false);
+                                                setSearchTerm('');
+                                                triggerRef.current?.focus();
+                                            }
                                         }}
                                     >
                                         {translateDynamic(opt, t)}

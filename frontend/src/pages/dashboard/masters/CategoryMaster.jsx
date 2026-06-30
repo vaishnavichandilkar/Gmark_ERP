@@ -26,6 +26,7 @@ import {
   ArrowLeft as LeftIcon,
   ArrowRight as RightIcon,
   ChevronsUpDown,
+  Trash2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
@@ -277,6 +278,27 @@ const CategoryMaster = () => {
       );
       fetchCategories(); // Revert on failure
     } finally {
+      setActiveRowDropdown(null);
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId, categoryName) => {
+    const confirmDelete = window.confirm(`Are you sure you want to delete the category "${categoryName}"?`);
+    if (!confirmDelete) return;
+
+    setIsLoading(true);
+    try {
+      await categoryService.deleteCategory(categoryId);
+      showToast("Category deleted successfully");
+      fetchCategories();
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      showToast(
+        error.response?.data?.message || error.message || "Failed to delete category",
+        "error"
+      );
+    } finally {
+      setIsLoading(false);
       setActiveRowDropdown(null);
     }
   };
@@ -863,6 +885,17 @@ const CategoryMaster = () => {
                                 ? t("common:active")
                                 : t("common:inactive")}
                             </button>
+                            <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteCategory(section.id, section.name);
+                              }}
+                              className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+                            >
+                              <Trash2 size={18} className="text-red-500" />
+                              {t("common:delete", "Delete")}
+                            </button>
                           </div>
                         )}
                       </div>
@@ -985,6 +1018,17 @@ const CategoryMaster = () => {
                                           ? t("common:active")
                                           : t("common:inactive")}
                                       </button>
+                                      <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteCategory(item.id, item.name);
+                                        }}
+                                        className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+                                      >
+                                        <Trash2 size={18} className="text-red-500" />
+                                        {t("common:delete", "Delete")}
+                                      </button>
                                     </div>
                                   )}
                                 </div>
@@ -1085,6 +1129,17 @@ const CategoryMaster = () => {
                                                 {subSub.status === "INACTIVE"
                                                   ? t("common:active")
                                                   : t("common:inactive")}
+                                              </button>
+                                              <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteCategory(subSub.id, subSub.name);
+                                                }}
+                                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+                                              >
+                                                <Trash2 size={18} className="text-red-500" />
+                                                {t("common:delete", "Delete")}
                                               </button>
                                             </div>
                                           )}

@@ -1,9 +1,14 @@
-import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
-import { TransactionType, BalanceType, AccountType } from '@prisma/client';
+import { TransactionType, BalanceType } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
+@ApiTags('Finance')
 @Controller('finance')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class FinanceController {
   constructor(
     private transactionService: TransactionService,
@@ -11,10 +16,27 @@ export class FinanceController {
   ) {}
 
   @Post('payment')
+  @ApiOperation({ summary: 'Create a payment transaction' })
   async createPayment(@Body() data: any, @Request() req: any) {
-    const userId = req.user?.id || 1;
+    const userId = req.user?.userId || req.user?.id;
     
     return this.prisma.$transaction(async (tx) => {
+      // Verify account and bank/cash belong to user
+      const account = await tx.accountMaster.findFirst({
+        where: { id: data.accountId, userId }
+      });
+      if (!account) {
+        throw new BadRequestException('Account not found or unauthorized');
+      }
+      if (data.bankCashAccountId) {
+        const bankCash = await tx.accountMaster.findFirst({
+          where: { id: data.bankCashAccountId, userId }
+        });
+        if (!bankCash) {
+          throw new BadRequestException('Bank/Cash account not found or unauthorized');
+        }
+      }
+
       // Record the payment transaction for the account (Supplier/Bank/Cash)
       const transaction = await this.transactionService.recordTransaction({
         accountId: data.accountId,
@@ -43,10 +65,27 @@ export class FinanceController {
   }
 
   @Post('receipt')
+  @ApiOperation({ summary: 'Create a receipt transaction' })
   async createReceipt(@Body() data: any, @Request() req: any) {
-    const userId = req.user?.id || 1;
+    const userId = req.user?.userId || req.user?.id;
 
     return this.prisma.$transaction(async (tx) => {
+      // Verify account and bank/cash belong to user
+      const account = await tx.accountMaster.findFirst({
+        where: { id: data.accountId, userId }
+      });
+      if (!account) {
+        throw new BadRequestException('Account not found or unauthorized');
+      }
+      if (data.bankCashAccountId) {
+        const bankCash = await tx.accountMaster.findFirst({
+          where: { id: data.bankCashAccountId, userId }
+        });
+        if (!bankCash) {
+          throw new BadRequestException('Bank/Cash account not found or unauthorized');
+        }
+      }
+
       // Record the receipt transaction for the account (Customer)
       const transaction = await this.transactionService.recordTransaction({
         accountId: data.accountId,
@@ -74,3 +113,4 @@ export class FinanceController {
     });
   }
 }
+

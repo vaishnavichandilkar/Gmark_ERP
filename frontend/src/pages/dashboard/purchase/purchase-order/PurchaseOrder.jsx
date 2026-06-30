@@ -33,6 +33,7 @@ import ScrollableTable from "@/components/common/ScrollableTable";
 import FilterDropdown from "@/pages/dashboard/masters/components/FilterDropdown";
 import ImportModal from "@/pages/dashboard/masters/components/ImportModal";
 import CustomSelect from "@/components/common/CustomSelect";
+import { formatDate } from "@/utils/dateUtils";
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting, t }) => {
   if (!isOpen) return null;
@@ -113,19 +114,7 @@ const PurchaseOrder = () => {
   const filterRef = useRef(null);
 
   // Helper: Date Format
-  const formatDate = (dateStr) => {
-    if (!dateStr || dateStr === "N/A") return "-";
-    try {
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
-      const d = String(date.getDate()).padStart(2, '0');
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const y = String(date.getFullYear()).slice(-2);
-      return `${d}/${m}/${y}`;
-    } catch (e) {
-      return dateStr;
-    }
-  };
+
 
   // Helper: Date Parse
   const parseDate = (dateStr) => {

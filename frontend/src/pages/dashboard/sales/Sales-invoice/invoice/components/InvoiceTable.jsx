@@ -35,7 +35,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             
             const baseAmount = qty * rate;
             const befTax = baseAmount - discAmt;
-            const isApplicable = typeof gstType === 'object' ? gstType?.gstType !== 'NONE' : gstType !== 'NONE';
+            const isApplicable = gstType?.applicable !== false && gstType?.gstType !== 'NONE' && gstType?.type !== 'NONE';
             const taxAmt = isApplicable ? (befTax * taxPct) / 100 : 0;
             
             return {
@@ -117,7 +117,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             }
 
             const befTax = (baseAmount - discAmt);
-            const isApplicable = typeof gstType === 'object' ? gstType?.gstType !== 'NONE' : gstType !== 'NONE';
+            const isApplicable = gstType?.applicable !== false && gstType?.gstType !== 'NONE' && gstType?.type !== 'NONE';
             const taxAmt = isApplicable ? (befTax * taxPct) / 100 : 0;
 
             item.quantity = qty;
@@ -138,7 +138,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
         const qty = 1;
         const taxPct = (parseFloat(product.tax_rate) || (product.hsn?.gst_rate ? parseFloat(product.hsn.gst_rate) : 0));
         const baseAmount = qty * rate;
-        const isApplicable = typeof gstType === 'object' ? gstType?.gstType !== 'NONE' : gstType !== 'NONE';
+        const isApplicable = gstType?.applicable !== false && gstType?.gstType !== 'NONE' && gstType?.type !== 'NONE';
         const taxAmt = isApplicable ? (baseAmount * taxPct) / 100 : 0;
         const total = parseFloat((baseAmount + taxAmt).toFixed(2));
 

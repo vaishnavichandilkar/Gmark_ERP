@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { getPendingSellersApi, approveSellerApi, rejectSellerApi } from '../../services/superAdminService';
 import { getImageUrl } from '../../utils/url';
+import { formatDate } from '../../utils/dateUtils';
 
 const REJECTION_REASONS = {
     firstName: [
@@ -415,7 +416,7 @@ const PendingSellers = () => {
                                     <tr key={seller.id} className="hover:bg-gray-50/70 transition-colors group">
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium">#{seller.id}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {seller.createdAt || seller.created_at ? new Date(seller.createdAt || seller.created_at).toLocaleDateString('en-GB') : 'N/A'}
+                                            {seller.createdAt || seller.created_at ? formatDate(seller.createdAt || seller.created_at) : 'N/A'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center gap-3">

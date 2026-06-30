@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchAllAccounts, toggleAccountStatus } from '../../../redux/account/accountSlice';
-import { Search, Download, Upload, Filter, MoreVertical, Eye, Edit3, CheckCircle2, ChevronDown, RefreshCw, ArrowLeft, ArrowRight, ChevronsUpDown, X, FileText, FileSpreadsheet, Plus, Database, Check } from 'lucide-react';
+import { Search, Download, Upload, Filter, MoreVertical, Eye, Edit3, CheckCircle2, ChevronDown, RefreshCw, ArrowLeft, ArrowRight, ChevronsUpDown, X, FileText, FileSpreadsheet, Plus, Database, Check, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import accountService from '../../../services/accountService';
 import AddAccount from './components/AddAccount';
@@ -350,6 +350,24 @@ const AccountMaster = () => {
         dispatch(fetchAllAccounts({ page: currentPage, limit: rowsPerPage, search: searchQuery, ...appliedFilters }));
         showToast(`Account ${newStatus === 'ACTIVE' ? 'activated' : 'inactivated'} successfully`);
         setDropdownIndex(null);
+    };
+
+    const handleDeleteAccount = async (accountId, accountName) => {
+        const confirmDelete = window.confirm(`Are you sure you want to delete the account "${accountName}"?`);
+        if (!confirmDelete) return;
+
+        try {
+            const response = await accountService.deleteAccount(accountId);
+            if (response.success) {
+                showToast("Account deleted successfully");
+                handleRefresh();
+            } else {
+                showToast(response.message || "Failed to delete account", "error");
+            }
+        } catch (err) {
+            console.error('Error deleting account:', err);
+            showToast(err.response?.data?.message || err.message || 'Server error', 'error');
+        }
     };
 
     if (currentView === 'add' || currentView === 'edit') {
@@ -722,11 +740,19 @@ const AccountMaster = () => {
                                                 </button>
                                                 <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
                                                 <button 
-                                                    onClick={(e) => toggleStatus(row, e)} 
+                                                    onClick={(e) => { e.stopPropagation(); toggleStatus(row, e); }} 
                                                     className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
                                                 >
                                                     <CheckCircle2 size={18} className={row.status === 'ACTIVE' ? 'text-gray-400' : 'text-[#073318]'} />
                                                     {row.status === 'ACTIVE' ? t('common:inactive') : t('common:active')}
+                                                </button>
+                                                <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); setDropdownIndex(null); handleDeleteAccount(row.id, row.accountName); }} 
+                                                    className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap font-bold"
+                                                >
+                                                    <Trash2 size={18} className="text-red-500" />
+                                                    {t('common:delete', 'Delete')}
                                                 </button>
                                             </div>
                                         )}

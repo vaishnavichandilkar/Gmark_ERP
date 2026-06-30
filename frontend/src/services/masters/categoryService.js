@@ -111,6 +111,10 @@ const categoryService = {
         document.body.appendChild(link);
         link.click();
         link.remove();
+    },
+    deleteCategory: async (id) => {
+        const response = await axiosInstance.delete(`/category-master/${id}`);
+        return response.data;
     }
 };
 

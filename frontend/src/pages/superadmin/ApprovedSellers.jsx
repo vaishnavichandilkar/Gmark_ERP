@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Loader2, ChevronLeft, ChevronRight, X, FileText, ExternalLink, Info, Building, Eye, Check, AlertTriangle } from 'lucide-react';
 import { getApprovedSellersApi, rejectSellerApi } from '../../services/superAdminService';
 import { getImageUrl } from '../../utils/url';
+import { formatDate } from '../../utils/dateUtils';
 
 const ApprovedSellers = () => {
     const [sellers, setSellers] = useState([]);
@@ -159,7 +160,7 @@ const ApprovedSellers = () => {
                                     <tr key={seller.id} className="hover:bg-gray-50 transition-colors group">
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium">#{seller.id}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {seller.createdAt || seller.created_at ? new Date(seller.createdAt || seller.created_at).toLocaleDateString('en-GB') : 'N/A'}
+                                            {seller.createdAt || seller.created_at ? formatDate(seller.createdAt || seller.created_at) : 'N/A'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div 
@@ -302,7 +303,7 @@ const ApprovedSellers = () => {
                                                     <DetailItem label="Full Name" value={`${seller.firstName || seller.first_name || ''} ${seller.lastName || seller.last_name || ''}`} />
                                                     <DetailItem label="Email Address" value={seller.email || 'N/A'} />
                                                     <DetailItem label="Phone Number" value={seller.phone || 'N/A'} />
-                                                    <DetailItem label="Registered On" value={seller.createdAt || seller.created_at ? new Date(seller.createdAt || seller.created_at).toLocaleDateString('en-GB') : 'N/A'} />
+                                                    <DetailItem label="Registered On" value={seller.createdAt || seller.created_at ? formatDate(seller.createdAt || seller.created_at) : 'N/A'} />
                                                 </div>
                                             </div>
 

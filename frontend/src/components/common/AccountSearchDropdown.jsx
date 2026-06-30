@@ -32,6 +32,21 @@ const AccountSearchDropdown = ({
         if (opt.accountType === 'CUSTOMER') {
             return 'Customer';
         }
+        if (opt.accountType === 'BANK') {
+            return 'Bank/Cash';
+        }
+        if (opt.groupName) {
+            const grpList = Array.isArray(opt.groupName) ? opt.groupName : [opt.groupName];
+            const grp = grpList[grpList.length - 1];
+            if (grp) {
+                if (grp === 'SUNDRY_DEBTORS') return 'Customer';
+                if (grp === 'SUNDRY_CREDITORS') return 'Supplier';
+                if (grp.toLowerCase() === (opt.accountName || opt.ledgerName || '').toLowerCase()) {
+                    return 'Ledger';
+                }
+                return grp.replace(/_/g, ' ');
+            }
+        }
 
         // Fallback using code prefixes
         const code = (opt.supplierCode || opt.customerCode || '').toUpperCase();
@@ -48,7 +63,10 @@ const AccountSearchDropdown = ({
         if (opt.customerCode) {
             return 'Customer';
         }
-        return null;
+        if (opt.accountType === 'LEDGER') {
+            return 'Ledger';
+        }
+        return opt.accountType || null;
     };
 
     // Find the selected option to display its label
@@ -138,7 +156,7 @@ const AccountSearchDropdown = ({
                             {filteredOptions.length > 0 ? (
                                 filteredOptions.map((opt) => (
                                     <button
-                                        key={opt.id}
+                                        key={opt.accountType ? `${opt.id}-${opt.accountType}` : opt.id}
                                         type="button"
                                         onClick={() => handleSelect(opt)}
                                         className="w-full px-4 py-2 text-left text-[13px] flex items-center justify-between hover:bg-[#073318]/5 transition-colors group"

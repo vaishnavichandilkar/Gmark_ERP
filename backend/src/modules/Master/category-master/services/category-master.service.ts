@@ -4,10 +4,14 @@ import { CategoryMasterRepository } from '../repositories/category-master.reposi
 import { CreateCategoryDto, CreateSubCategoryDto, CreateSubSubCategoryDto, ToggleStatusDto, UpdateCategoryDto, UpdateSubCategoryDto, UpdateSubSubCategoryDto, MoveCategoryDto } from '../dto/category.dto';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
+import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
 
 @Injectable()
 export class CategoryMasterService {
-    constructor(private repository: CategoryMasterRepository) { }
+    constructor(
+        private repository: CategoryMasterRepository,
+        private prisma: PrismaService
+    ) { }
 
     async calculateLevel(category: any): Promise<number> {
         let level = 1;
@@ -385,7 +389,7 @@ export class CategoryMasterService {
             const row = worksheet.getRow(r);
             let foundHeaders = false;
             row.eachCell((cell, colNumber) => {
-                const val = String(cell.value || '').trim().toLowerCase();
+                const val = String(cell.value || '').trim().toLowerCase().replace(/[*]/g, '');
                 if (val === 'category' || val === 'category name') { colMap['categoryName'] = colNumber; foundHeaders = true; }
                 if (val === 'sub category' || val === 'sub category name') colMap['subCategoryName'] = colNumber;
                 if (val === 'sub sub category' || val === 'sub sub category name') colMap['subSubCategoryName'] = colNumber;
@@ -678,5 +682,34 @@ export class CategoryMasterService {
             filename: 'Category_Master_Sample.xlsx',
             mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         };
+    }
+
+    async deleteCategory(id: string, userId: number) {
+        const category = await this.prisma.category.findFirst({
+            where: { id, user_id: userId }
+        });
+        if (!category) {
+            throw new NotFoundException(`Category not found`);
+        }
+
+        // 1. Check if the category has sub-categories
+        const hasChildren = await this.prisma.category.findFirst({
+            where: { parent_id: id }
+        });
+        if (hasChildren) {
+            throw new BadRequestException('Cannot delete category because it has sub-categories');
+        }
+
+        // 2. Check if the category is currently linked to any active products
+        const hasProducts = await this.prisma.product.findFirst({
+            where: { category_id: id, is_deleted: false }
+        });
+        if (hasProducts) {
+            throw new BadRequestException('Cannot delete category because it is in use by one or more products');
+        }
+
+        return this.prisma.category.delete({
+            where: { id }
+        });
     }
 }

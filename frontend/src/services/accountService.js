@@ -42,6 +42,11 @@ export const updateAccount = async (id, data) => {
     return response.data;
 };
 
+export const deleteAccount = async (id) => {
+    const response = await axiosInstance.delete(`${API_PATH}/${id}`);
+    return response.data;
+};
+
 export const toggleStatus = async (id, status, customerStatus, supplierStatus) => {
     // Backend expects { status: 'ACTIVE' | 'INACTIVE', customerStatus, supplierStatus } in the body
     const response = await axiosInstance.patch(`${API_PATH}/${id}/status`, { status, customerStatus, supplierStatus });
@@ -124,5 +129,6 @@ export default {
     getActiveSuppliers,
     getReceiptEligibleCustomers,
     getPaymentEligibleSuppliers,
-    checkMsmeUser
+    checkMsmeUser,
+    deleteAccount
 };

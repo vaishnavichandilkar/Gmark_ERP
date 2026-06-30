@@ -1,10 +1,10 @@
 import purchaseInvoiceService from './purchaseInvoiceService';
 import salesOrderService from './salesOrderService';
 import purchaseOrderService from './purchaseOrderService';
-import productService from './productService';
 import grnService from './grnService';
 import salesInvoiceService from './salesInvoiceService';
 import challanService from './challanService';
+import axiosInstance from './axiosInstance';
 
 const reportService = {
     getReportData: async () => {
@@ -13,7 +13,6 @@ const reportService = {
             const purchaseRes = await purchaseInvoiceService.getAllInvoices({ limit: 10000 });
             const salesRes = await salesOrderService.getSalesOrders({ limit: 10000 });
             const poRes = await purchaseOrderService.getPurchaseOrders({ limit: 10000 });
-            const productsRes = await productService.getProducts({ limit: 10000 });
             const grnRes = await grnService.getAllGRNs({ limit: 10000 });
             const salesInvoicesRes = await salesInvoiceService.getAllInvoices({ limit: 10000 });
             const challanRes = await challanService.getAllChallans({ limit: 10000 });
@@ -23,7 +22,6 @@ const reportService = {
                 salesOrders: salesRes?.data || salesRes || [],
                 salesInvoices: salesInvoicesRes?.data || salesInvoicesRes || [],
                 purchaseOrders: poRes?.data || poRes || [],
-                products: productsRes?.data || productsRes || [],
                 grnData: grnRes?.data || grnRes || [],
                 challanData: challanRes?.data || challanRes || [],
             };
@@ -31,6 +29,10 @@ const reportService = {
             console.error("ReportService Error:", error);
             throw error;
         }
+    },
+    getProfitLoss: async (params) => {
+        const response = await axiosInstance.get('/reports/profit-loss', { params });
+        return response.data;
     }
 };
 

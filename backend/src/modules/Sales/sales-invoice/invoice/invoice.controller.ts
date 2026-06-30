@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Request, ParseIntPipe, UseInterceptors, UploadedFile, Res, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Request, ParseIntPipe, UseInterceptors, UploadedFile, Res, Delete, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { SalesInvoiceService } from './invoice.service';
 import { CreateSalesInvoiceDto, UpdateSalesInvoiceDto } from './dto/invoice.dto';
@@ -178,20 +178,30 @@ export class SalesInvoiceController {
     @Body() body: any,
     @Request() req
   ) {
-    const items = body.items ? (typeof body.items === 'string' ? JSON.parse(body.items) : body.items) : undefined;
-    const expenses = body.expenses ? (typeof body.expenses === 'string' ? JSON.parse(body.expenses) : body.expenses) : undefined;
+    try {
+      const items = body.items ? (typeof body.items === 'string' ? JSON.parse(body.items) : body.items) : undefined;
+      const expenses = body.expenses ? (typeof body.expenses === 'string' ? JSON.parse(body.expenses) : body.expenses) : undefined;
+      const soNumbers = body.soNumbers ? (typeof body.soNumbers === 'string' ? JSON.parse(body.soNumbers) : body.soNumbers) : undefined;
+      const challanNumbers = body.challanNumbers ? (typeof body.challanNumbers === 'string' ? JSON.parse(body.challanNumbers) : body.challanNumbers) : undefined;
 
-    const updateDto: UpdateSalesInvoiceDto = {
-      ...body,
-      items,
-      expenses,
-      customerId: body.customerId ? parseInt(body.customerId, 10) : undefined,
-      soId: (body.soId && body.soId !== 'null' && body.soId !== '') ? parseInt(body.soId, 10) : undefined,
-      creditDays: body.creditDays ? parseInt(body.creditDays, 10) : undefined,
-      taxableAmount: body.taxableAmount ? parseFloat(body.taxableAmount) : undefined,
-    };
+      const updateDto: UpdateSalesInvoiceDto = {
+        ...body,
+        items,
+        expenses,
+        soNumbers,
+        challanNumbers,
+        customerId: body.customerId ? parseInt(body.customerId, 10) : undefined,
+        soId: (body.soId && body.soId !== 'null' && body.soId !== '') ? parseInt(body.soId, 10) : undefined,
+        creditDays: body.creditDays ? parseInt(body.creditDays, 10) : undefined,
+        taxableAmount: body.taxableAmount ? parseFloat(body.taxableAmount) : undefined,
+      };
 
-    return this.service.update(id, updateDto, req.user.id, file?.path);
+      return await this.service.update(id, updateDto, req.user.id, file?.path);
+    } catch (e: any) {
+      const fs = require('fs');
+      fs.appendFileSync('./service_error.log', `[${new Date().toISOString()}] CONTROLLER UPDATE ERROR: ${e.message}\n${e.stack}\n\n`);
+      throw new BadRequestException("Controller failed: " + e.message);
+    }
   }
 
   @Delete(':id')

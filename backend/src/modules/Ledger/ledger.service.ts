@@ -100,6 +100,103 @@ export class LedgerService {
     }).filter(acc => acc.debit !== 0 || acc.credit !== 0);
   }
 
+  async getGroupLedgersSummary(query: LedgerQueryDto, userId: number) {
+    const accounts = await this.prisma.accountMaster.findMany({
+      where: {
+        userId,
+      },
+      include: {
+        transactions: {
+          where: {
+            bookingDate: {
+              gte: query.startDate ? new Date(query.startDate) : undefined,
+              lte: query.endDate ? new Date(query.endDate) : undefined,
+            },
+          },
+        },
+      },
+    });
+
+    const mapped = accounts.map((account) => {
+      const opBal = Number(account.supplierOpeningBalance || account.customerOpeningBalance || 0);
+      const opType = account.supplierBalanceType || account.customerBalanceType || 'Dr';
+      const openingBalance = opType === 'Cr' ? opBal : -opBal;
+
+      const debit = account.transactions
+        .filter((t) => t.entryType === BalanceType.Dr)
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+      const credit = account.transactions
+        .filter((t) => t.entryType === BalanceType.Cr)
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+      const closingBalance = openingBalance + credit - debit;
+
+      let groupList = Array.isArray(account.groupName) ? [...account.groupName] : [account.groupName || 'General'];
+      const accType = String(account.accountType || '').toUpperCase();
+      
+      const gStr = groupList.map(g => String(g).toUpperCase()).join(' ');
+      if (accType.includes('BANK') || accType.includes('CASH') || gStr.includes('BANK') || gStr.includes('CASH')) {
+        groupList = ['Assets', 'Current Assets', 'Bank & Cash'];
+      } else if (accType.includes('DEBTOR') || accType.includes('CUSTOMER') || gStr.includes('DEBTOR') || gStr.includes('CUSTOMER')) {
+        groupList = ['Assets', 'Current Assets', 'Customers'];
+      } else if (accType.includes('CREDITOR') || accType.includes('SUPPLIER') || gStr.includes('CREDITOR') || gStr.includes('SUPPLIER')) {
+        groupList = ['Liabilities', 'Current Liabilities', 'Suppliers'];
+      }
+
+      const groupNameStr = groupList.length > 0 ? groupList[groupList.length - 1] : 'General';
+      const primaryGroup = groupList[0];
+
+      return {
+        id: account.id,
+        accountName: account.accountName,
+        groupName: groupNameStr,
+        primaryGroup,
+        allGroups: groupList,
+        accountType: account.accountType,
+        openingBalance,
+        debit,
+        credit,
+        closingBalance,
+      };
+    });
+
+    const masterSequence = [
+      'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock', 
+      'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock', 
+      'Liabilities', 'Assets', 'SUNDRY_DEBTORS', 'SUNDRY_CREDITORS', 'Bank & Cash'
+    ];
+
+    mapped.sort((a, b) => {
+      const idxA = masterSequence.indexOf(a.primaryGroup);
+      const idxB = masterSequence.indexOf(b.primaryGroup);
+      if (idxA !== -1 && idxB !== -1) {
+        if (idxA !== idxB) return idxA - idxB;
+      } else if (idxA !== -1) {
+        return -1;
+      } else if (idxB !== -1) {
+        return 1;
+      }
+      return a.accountName.localeCompare(b.accountName);
+    });
+
+    let result = mapped.filter(acc => acc.groupName !== 'General');
+    if (query.search) {
+      const s = query.search.trim().toLowerCase();
+      result = result.filter(acc => 
+        acc.accountName.toLowerCase().includes(s) || 
+        acc.allGroups.some(g => String(g).toLowerCase().includes(s))
+      );
+    }
+
+    if (query.group && query.group.trim().toUpperCase() !== 'ALL' && query.group.trim().toLowerCase() !== 'all groups') {
+      const searchGrp = query.group.trim().toLowerCase();
+      result = result.filter(acc => 
+        acc.allGroups.some(g => String(g).trim().toLowerCase() === searchGrp)
+      );
+    }
+
+    return result;
+  }
+
   async getBankCashSummary(query: LedgerQueryDto, userId: number) {
     // Sync groups under "Bank & Cash" parent group with ledger accounts
     await syncBankCashAccounts(this.prisma, userId);
@@ -128,11 +225,13 @@ export class LedgerService {
       where: {
         userId,
         accountType: targetType,
+        accountName: query.search 
+          ? { notIn: ['Bank & Cash', 'Bank and Cash', 'Cash in hand', 'Cash-in-hand'], contains: query.search, mode: 'insensitive' } 
+          : { notIn: ['Bank & Cash', 'Bank and Cash', 'Cash in hand', 'Cash-in-hand'] },
         OR: [
           { groupName: { hasSome: groupNames } },
           { accountType: targetType },
         ],
-        accountName: query.search ? { contains: query.search, mode: 'insensitive' } : undefined,
       },
       include: {
         transactions: {
@@ -147,7 +246,10 @@ export class LedgerService {
     });
 
     return accounts.map((account) => {
-      const openingBalance = Number(account.supplierOpeningBalance || account.customerOpeningBalance || 0);
+      const balType = account.supplierBalanceType || account.customerBalanceType || BalanceType.Dr;
+      const rawOpening = Number(account.supplierOpeningBalance || account.customerOpeningBalance || 0);
+      const openingBalance = balType === BalanceType.Cr ? -rawOpening : rawOpening;
+      
       const debit = account.transactions
         .filter((t) => t.entryType === BalanceType.Dr)
         .reduce((sum, t) => sum + Number(t.amount), 0);
@@ -208,10 +310,10 @@ export class LedgerService {
       (type && (type === 'Bank' || type === 'Cash'));
 
     const allowedTypes = isBankOrCash
-      ? [TransactionType.Payment, TransactionType.Receipt]
+      ? [TransactionType.Payment, TransactionType.Receipt, TransactionType.Journal, TransactionType.Contra]
       : isCreditorLedger
-        ? [TransactionType.Purchase, TransactionType.Payment]
-        : [TransactionType.Sales, TransactionType.Receipt];
+        ? [TransactionType.Purchase, TransactionType.Payment, TransactionType.Journal]
+        : [TransactionType.Sales, TransactionType.Receipt, TransactionType.Journal];
 
     let baseOpeningBalance = 0;
     if (isBankOrCash) {
@@ -251,7 +353,7 @@ export class LedgerService {
 
     if (startDate) {
       // Calculate balance before startDate
-      const transactionsBefore = await this.prisma.transaction.findMany({
+      let transactionsBefore = await this.prisma.transaction.findMany({
         where: {
           accountId,
           userId,
@@ -260,6 +362,8 @@ export class LedgerService {
           amount: { gt: 0 },
         },
       });
+
+      transactionsBefore = await this.filterTransactions(transactionsBefore, isCreditorLedger, isBankOrCash);
 
       for (const t of transactionsBefore) {
         const amount = Number(t.amount);
@@ -275,7 +379,7 @@ export class LedgerService {
     }
 
     // Get transactions in range
-    const transactionsInRange = await this.prisma.transaction.findMany({
+    let transactionsInRange = await this.prisma.transaction.findMany({
       where: {
         accountId,
         userId,
@@ -288,6 +392,8 @@ export class LedgerService {
       },
       orderBy: { bookingDate: 'asc' },
     });
+
+    transactionsInRange = await this.filterTransactions(transactionsInRange, isCreditorLedger, isBankOrCash);
 
     const totalTransactionsInRange = transactionsInRange.length;
     const paginatedTransactions = transactionsInRange.slice(skip, skip + limit);
@@ -369,22 +475,34 @@ export class LedgerService {
     });
 
     const paymentInvoices = paginatedTransactions
-      .filter(t => t.invoiceNumber && (t.invoiceNumber.startsWith('PV-') || (!t.invoiceNumber.startsWith('RV-') && t.transactionType === TransactionType.Payment)))
+      .filter(t => t.invoiceNumber && (t.invoiceNumber.startsWith('PV-') || (!t.invoiceNumber.startsWith('RV-') && !t.invoiceNumber.startsWith('JV-') && !t.invoiceNumber.startsWith('CV-') && t.transactionType === TransactionType.Payment)))
       .map(t => t.invoiceNumber as string);
     const receiptInvoices = paginatedTransactions
-      .filter(t => t.invoiceNumber && (t.invoiceNumber.startsWith('RV-') || (!t.invoiceNumber.startsWith('PV-') && t.transactionType === TransactionType.Receipt)))
+      .filter(t => t.invoiceNumber && (t.invoiceNumber.startsWith('RV-') || (!t.invoiceNumber.startsWith('PV-') && !t.invoiceNumber.startsWith('JV-') && !t.invoiceNumber.startsWith('CV-') && t.transactionType === TransactionType.Receipt)))
+      .map(t => t.invoiceNumber as string);
+    const journalInvoices = paginatedTransactions
+      .filter(t => t.invoiceNumber && (t.invoiceNumber.startsWith('JV-') || (!t.invoiceNumber.startsWith('PV-') && !t.invoiceNumber.startsWith('RV-') && !t.invoiceNumber.startsWith('CV-') && t.transactionType === TransactionType.Journal)))
+      .map(t => t.invoiceNumber as string);
+    const contraInvoices = paginatedTransactions
+      .filter(t => t.invoiceNumber && (t.invoiceNumber.startsWith('CV-') || (!t.invoiceNumber.startsWith('PV-') && !t.invoiceNumber.startsWith('RV-') && !t.invoiceNumber.startsWith('JV-') && t.transactionType === TransactionType.Contra)))
       .map(t => t.invoiceNumber as string);
     
-    const [payments, receipts] = await Promise.all([
+    const [payments, receipts, journals, contras] = await Promise.all([
       paymentInvoices.length > 0 ? this.prisma.paymentVoucher.findMany({ where: { voucherNumber: { in: paymentInvoices } } }) : Promise.resolve([]),
-      receiptInvoices.length > 0 ? this.prisma.receiptVoucher.findMany({ where: { voucherNumber: { in: receiptInvoices } } }) : Promise.resolve([])
+      receiptInvoices.length > 0 ? this.prisma.receiptVoucher.findMany({ where: { voucherNumber: { in: receiptInvoices } } }) : Promise.resolve([]),
+      journalInvoices.length > 0 ? this.prisma.journalVoucher.findMany({ where: { voucherNumber: { in: journalInvoices } } }) : Promise.resolve([]),
+      contraInvoices.length > 0 ? this.prisma.contraVoucher.findMany({ where: { voucherNumber: { in: contraInvoices } } }) : Promise.resolve([])
     ]);
     
     const paymentNarrationMap = new Map(payments.map(p => [p.voucherNumber, p.narration]));
     const receiptNarrationMap = new Map(receipts.map(r => [r.voucherNumber, r.narration]));
+    const journalNarrationMap = new Map(journals.map(j => [j.voucherNumber, j.narration]));
+    const contraNarrationMap = new Map(contras.map(c => [c.voucherNumber, c.narration]));
     const voucherIdMap = new Map();
     payments.forEach(p => voucherIdMap.set(p.voucherNumber, { id: p.id, type: 'PAYMENT' }));
     receipts.forEach(r => voucherIdMap.set(r.voucherNumber, { id: r.id, type: 'RECEIPT' }));
+    journals.forEach(j => voucherIdMap.set(j.voucherNumber, { id: j.id, type: 'JOURNAL' }));
+    contras.forEach(c => voucherIdMap.set(c.voucherNumber, { id: c.id, type: 'CONTRA' }));
 
     // Fetch details for allocations
     const neededVoucherIds = new Set<number>();
@@ -398,9 +516,10 @@ export class LedgerService {
       }
     }
 
-    const [additionalPayments, additionalReceipts, additionalSales, additionalPurchases] = await Promise.all([
+    const [additionalPayments, additionalReceipts, additionalJournals, additionalSales, additionalPurchases] = await Promise.all([
       neededVoucherIds.size > 0 ? this.prisma.paymentVoucher.findMany({ where: { id: { in: Array.from(neededVoucherIds) } }, select: { id: true, voucherNumber: true, voucherDate: true, narration: true, updatedAt: true } }) : Promise.resolve([]),
       neededVoucherIds.size > 0 ? this.prisma.receiptVoucher.findMany({ where: { id: { in: Array.from(neededVoucherIds) } }, select: { id: true, voucherNumber: true, voucherDate: true, narration: true, updatedAt: true } }) : Promise.resolve([]),
+      neededVoucherIds.size > 0 ? this.prisma.journalVoucher.findMany({ where: { id: { in: Array.from(neededVoucherIds) } }, select: { id: true, voucherNumber: true, voucherDate: true, narration: true, updatedAt: true } }) : Promise.resolve([]),
       neededInvoiceIds.size > 0 ? this.prisma.salesInvoice.findMany({ where: { id: { in: Array.from(neededInvoiceIds) } }, select: { id: true, invoiceNumber: true, invoiceDate: true, updatedAt: true } }) : Promise.resolve([]),
       neededInvoiceIds.size > 0 ? this.prisma.purchaseInvoice.findMany({ where: { id: { in: Array.from(neededInvoiceIds) } }, select: { id: true, invoiceNumber: true, invoiceDate: true, updatedAt: true } }) : Promise.resolve([])
     ]);
@@ -408,7 +527,7 @@ export class LedgerService {
     const settlementRefMap = new Map();
     additionalPayments.forEach(p => settlementRefMap.set(`PAYMENT_${p.id}`, { no: p.voucherNumber, date: p.voucherDate, narration: p.narration, type: 'Payment', updatedAt: p.updatedAt }));
     additionalReceipts.forEach(r => settlementRefMap.set(`RECEIPT_${r.id}`, { no: r.voucherNumber, date: r.voucherDate, narration: r.narration, type: 'Bank Receipt', updatedAt: r.updatedAt }));
-    // Just in case JOURNAL is ever implemented or handled in voucher_type
+    additionalJournals.forEach(j => settlementRefMap.set(`JOURNAL_${j.id}`, { no: j.voucherNumber, date: j.voucherDate, narration: j.narration, type: 'Journal Entry', updatedAt: j.updatedAt }));
     additionalSales.forEach(s => settlementRefMap.set(`SALES_INVOICE_${s.id}`, { no: s.invoiceNumber, date: s.invoiceDate, narration: '-', type: 'Sales Invoice', updatedAt: s.updatedAt }));
     additionalPurchases.forEach(p => settlementRefMap.set(`PURCHASE_INVOICE_${p.id}`, { no: p.invoiceNumber, date: p.invoiceDate, narration: '-', type: 'Purchase Invoice', updatedAt: p.updatedAt }));
 
@@ -433,11 +552,23 @@ export class LedgerService {
         } else if (transaction.invoiceNumber.startsWith('RV-')) {
           const n = receiptNarrationMap.get(transaction.invoiceNumber);
           displayNarration = n || '-';
+        } else if (transaction.invoiceNumber.startsWith('JV-')) {
+          const n = journalNarrationMap.get(transaction.invoiceNumber);
+          displayNarration = n || '-';
+        } else if (transaction.invoiceNumber.startsWith('CV-')) {
+          const n = contraNarrationMap.get(transaction.invoiceNumber);
+          displayNarration = n || '-';
         } else if (transaction.transactionType === TransactionType.Payment) {
           const n = paymentNarrationMap.get(transaction.invoiceNumber);
           displayNarration = n || '-';
         } else if (transaction.transactionType === TransactionType.Receipt) {
           const n = receiptNarrationMap.get(transaction.invoiceNumber);
+          displayNarration = n || '-';
+        } else if (transaction.transactionType === TransactionType.Journal) {
+          const n = journalNarrationMap.get(transaction.invoiceNumber);
+          displayNarration = n || '-';
+        } else if (transaction.transactionType === TransactionType.Contra) {
+          const n = contraNarrationMap.get(transaction.invoiceNumber);
           displayNarration = n || '-';
         }
       }
@@ -540,12 +671,16 @@ export class LedgerService {
     if (invoiceNumber) {
       if (invoiceNumber.startsWith('RV-')) return 'Receipt';
       if (invoiceNumber.startsWith('PV-')) return 'Payment';
+      if (invoiceNumber.startsWith('JV-')) return 'Journal';
+      if (invoiceNumber.startsWith('CV-')) return 'Contra';
     }
     switch (type) {
       case TransactionType.Purchase: return 'Purchase';
       case TransactionType.Sales: return 'Sales';
       case TransactionType.Payment: return 'Payment';
       case TransactionType.Receipt: return 'Receipt';
+      case TransactionType.Journal: return 'Journal';
+      case TransactionType.Contra: return 'Contra';
       default: return 'Transaction';
     }
   }
@@ -577,6 +712,7 @@ export class LedgerService {
     const accounts = await this.prisma.accountMaster.findMany({
       where: {
         userId,
+        accountName: { notIn: ['Bank & Cash', 'Bank and Cash', 'Cash in hand', 'Cash-in-hand'] },
         OR: [
           { groupName: { hasSome: Array.from(groupNames) } },
           { accountType: { in: [AccountType.Bank, AccountType.Cash] } },
@@ -599,10 +735,18 @@ export class LedgerService {
     }));
   }
 
-  async deleteAllocation(id: number) {
+  async deleteAllocation(id: number, userId: number) {
     const settlement = await this.prisma.voucherSettlement.findUnique({ where: { id } });
     if (!settlement) {
       throw new NotFoundException('Allocation not found');
+    }
+
+    // Verify ownership of the allocation via the ledger account
+    const ledger = await this.prisma.accountMaster.findFirst({
+      where: { id: settlement.ledger_id, userId },
+    });
+    if (!ledger) {
+      throw new NotFoundException('Allocation not found or unauthorized');
     }
 
     let targetType = 'ON_ACCOUNT';
@@ -648,5 +792,57 @@ export class LedgerService {
     }
 
     return updated;
+  }
+
+  private async filterTransactions(transactions: any[], isCreditorLedger: boolean, isBankOrCash: boolean = false) {
+    if (isBankOrCash) {
+      return transactions;
+    }
+
+    const jvNumbers = transactions
+      .filter((t) => t.invoiceNumber?.startsWith('JV-'))
+      .map((t) => t.invoiceNumber);
+
+    let jvs = [];
+    if (jvNumbers.length > 0) {
+      jvs = await this.prisma.journalVoucher.findMany({
+        where: { voucherNumber: { in: jvNumbers } },
+      });
+    }
+
+    const jvNarrationMap = new Map(jvs.map((j: any) => [j.voucherNumber, j.narration || '']));
+
+    return transactions.filter((t) => {
+      const isPV = t.invoiceNumber?.startsWith('PV-');
+      const isRV = t.invoiceNumber?.startsWith('RV-');
+      const isJV = t.invoiceNumber?.startsWith('JV-');
+
+      if (isCreditorLedger) {
+        // Supplier Ledger (Sundry Creditors):
+        // Exclude Receipt Vouchers (customer entries)
+        if (isRV) return false;
+
+        // Exclude customer-side Journal Vouchers (child JVs from RV)
+        if (isJV) {
+          const narration = jvNarrationMap.get(t.invoiceNumber) || '';
+          if (narration.includes('[Parent RV ID:')) {
+            return false;
+          }
+        }
+      } else {
+        // Customer Ledger (Sundry Debtors):
+        // Exclude Payment Vouchers (supplier entries)
+        if (isPV) return false;
+
+        // Exclude supplier-side Journal Vouchers (both child JVs with Parent PV and standalone JVs created as Dr)
+        if (isJV) {
+          const narration = jvNarrationMap.get(t.invoiceNumber) || '';
+          if (narration.includes('[Parent PV ID:') || t.entryType === BalanceType.Dr) {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
   }
 }

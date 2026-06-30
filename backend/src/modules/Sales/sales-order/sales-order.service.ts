@@ -5,6 +5,7 @@ import { CreateSalesOrderDto, UpdateSalesOrderDto } from './dto/sales-order.dto'
 import { Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
+import { formatDate } from '../../../utils/dateFormatter';
 
 @Injectable()
 export class SalesOrderService {
@@ -94,6 +95,7 @@ export class SalesOrderService {
             const isMsmeUser = await this.isCustomerMsme(customer.mobileNo, customer.emailId, customer.gstNo);
             return {
                 id: customer.id,
+                customerCode: customer.customerCode,
                 customerName: customer.accountName,
                 customerType: customer.customerType,
                 address: customer.addressLine1 + (customer.addressLine2 ? ', ' + customer.addressLine2 : ''),
@@ -160,8 +162,8 @@ export class SalesOrderService {
     }
 
     async create(createDto: CreateSalesOrderDto, userId: number, uploadedFilePath?: string) {
-        const fullCustomer = await this.prisma.accountMaster.findUnique({
-            where: { id: createDto.customerId }
+        const fullCustomer = await this.prisma.accountMaster.findFirst({
+            where: { id: createDto.customerId, userId }
         });
         if (!fullCustomer) {
             throw new BadRequestException('Customer not found');
@@ -562,8 +564,8 @@ export class SalesOrderService {
     }
 
     async printSalesOrder(id: number, userId: number) {
-        const so = await this.prisma.salesOrder.findUnique({
-            where: { id },
+        const so = await this.prisma.salesOrder.findFirst({
+            where: { id, userId },
             include: { items: true, user: { include: { shopDetail: true } } },
         });
 
@@ -629,7 +631,7 @@ export class SalesOrderService {
             doc.fontSize(9).font('Helvetica-Bold').text('SO No. :', startX + 290, y + 10);
             doc.font('Helvetica').text(so.soNumber, startX + 340, y + 10);
             doc.font('Helvetica-Bold').text('SO Creation Date :', startX + 420, y + 10);
-            doc.font('Helvetica').text(new Date(so.soCreationDate).toLocaleDateString(), startX + 500, y + 10);
+            doc.font('Helvetica').text(formatDate(so.soCreationDate), startX + 500, y + 10);
 
             doc.font('Helvetica-Bold').text('Pay. Terms :', startX + 290, y + 35);
             doc.font('Helvetica').text(`${so.creditDays} days`, startX + 345, y + 35);
@@ -640,7 +642,7 @@ export class SalesOrderService {
             doc.font('Helvetica-Bold').text('Customer Code :', startX + 10, y + 8);
             doc.font('Helvetica').text('CU00001', startX + 80, y + 8);
             doc.font('Helvetica-Bold').text('Expiry Date :', startX + 290, y + 8);
-            doc.font('Helvetica').text(new Date(so.expiryDate).toLocaleDateString(), startX + 350, y + 8);
+            doc.font('Helvetica').text(formatDate(so.expiryDate), startX + 350, y + 8);
             y += 25;
 
             const colX = [startX, startX + 25, startX + 220, startX + 270, startX + 310, startX + 360, startX + 400, startX + 450, startX + 490];
@@ -721,11 +723,6 @@ export class SalesOrderService {
         const now = new Date();
         const pad = (n: number) => n.toString().padStart(2, '0');
         const timestamp = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-
-        const formatDate = (date: Date) => {
-            const d = new Date(date);
-            return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
-        };
 
         const getDerivedStatus = (order: any) => {
             const status = order.status;

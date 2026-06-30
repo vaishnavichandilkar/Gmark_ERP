@@ -138,3 +138,72 @@ export interface SalesReportResponseDto {
   totalTaxCollected: number;
   completedSales: number;
 }
+
+export enum StockValuationMethod {
+  FIFO = 'FIFO',
+  LIFO = 'LIFO',
+  WEIGHTED_AVERAGE = 'Weighted Average',
+  WEIGHTED_AVERAGE_ALT = 'WEIGHTED_AVERAGE',
+}
+
+export class ProfitLossQueryDto {
+  @IsOptional()
+  @IsDateString()
+  fromDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  toDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  financialYearId?: string;
+
+  @IsOptional()
+  @IsString()
+  branchId?: string;
+
+  @IsOptional()
+  @IsString()
+  godownId?: string;
+
+  @IsOptional()
+  @IsString()
+  costCenterId?: string;
+
+  @IsOptional()
+  @IsString()
+  valuationMethod?: string;
+}
+
+export interface TradingProfitLossResponseDto {
+  trading: {
+    openingStock: number;
+    purchase: number;
+    purchaseReturn: number;
+    netPurchase: number;
+    directExpenses: number;
+    directIncome: number;
+    sales: number;
+    salesReturn: number;
+    netSales: number;
+    closingStock: number;
+    grossProfit: number;
+    grossLoss: number;
+  };
+  profitLoss: {
+    indirectIncome: number;
+    indirectExpenses: number;
+    netProfit: number;
+    netLoss: number;
+  };
+}
+

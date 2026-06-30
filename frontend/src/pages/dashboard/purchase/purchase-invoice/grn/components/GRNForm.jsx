@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { ROUTES } from "@/constants/routes";
 import GRNMultiSelect from './GRNMultiSelect';
 import { useTranslation } from 'react-i18next';
+import { toDisplayDate } from '@/utils/dateUtils';
+import DateInput from '@/components/common/DateInput';
 
 const GRNForm = ({
     formData,
@@ -43,42 +45,7 @@ const GRNForm = ({
         );
     }, [supplierSearch, suppliers]);
 
-    const toDisplayDate = (dateStr) => {
-        if (!dateStr) return "";
-        // If it already contains / and parts are short, it might be already formatted
-        const partsSlash = dateStr.split("/");
-        if (partsSlash.length === 3 && partsSlash[2].length === 2) return dateStr;
-        
-        // If it looks like ISO YYYY-MM-DD or DD/MM/YYYY
-        const separator = dateStr.includes("-") ? "-" : "/";
-        const parts = dateStr.split(separator);
-        
-        if (parts.length === 3) {
-            // ISO Case: YYYY-MM-DD
-            if (parts[0].length === 4) {
-                const yearShort = parts[0].slice(-2);
-                return `${parts[2]}/${parts[1]}/${yearShort}`;
-            }
-            // DD/MM/YYYY Case
-            const yearShort = parts[2].slice(-2);
-            return `${parts[0]}/${parts[1]}/${yearShort}`;
-        }
-        return dateStr;
-    };
-
-    const handleDateTextChange = (e, field) => {
-        if (isDocumentDateReadOnly) return;
-        const val = e.target.value;
-        const digits = val.replace(/\D/g, '').substring(0, 8);
-        
-        // Auto-format as they type
-        let formatted = digits;
-        if (digits.length >= 3) formatted = digits.substring(0, 2) + '/' + digits.substring(2);
-        if (digits.length >= 5) formatted = formatted.substring(0, 5) + '/' + digits.substring(5);
-
-        // Update state with formatted string to allow typing
-        setFormData(prev => ({ ...prev, [field]: formatted }));
-    };
+    // Local duplicate date helpers removed in favor of central import
 
     return (
         <div className="space-y-8 font-outfit">
@@ -266,60 +233,24 @@ const GRNForm = ({
                 )}
 
                 {/* 7. Challan/Invoice Date */}
-                <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">{isGRN ? t('modules:supplier_challan_date', 'Supplier Challan Date') : t('modules:supplier_invoice_date', 'Supplier Invoice Date')} <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                        <input
-                            type="date"
-                            ref={challanDateRef}
-                            className="absolute opacity-0 pointer-events-none w-0 h-0"
-                            value={formData.document_date || ''}
-                            min={minDate}
-                            max={maxDate || new Date().toISOString().split('T')[0]}
-                            onChange={(e) => setFormData({ ...formData, document_date: e.target.value })}
-                            readOnly={isDocumentDateReadOnly}
-                        />
-                        <input
-                            type="text"
-                            placeholder="DD/MM/YYYY"
-                            value={toDisplayDate(formData.document_date)}
-                            readOnly={true}
-                            onClick={() => !isDocumentDateReadOnly && (challanDateRef.current?.showPicker?.() || challanDateRef.current?.focus())}
-                            className={`w-full h-[48px] rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all ${
-                                isDocumentDateReadOnly 
-                                    ? 'bg-gray-50 border-[#E5E7EB] text-gray-500 cursor-not-allowed' 
-                                    : `bg-white border cursor-pointer ${errors.document_date ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`
-                            }`}
-                        />
-                        <Calendar
-                            size={18}
-                            className={`absolute right-4 top-1/2 -translate-y-1/2 shadow-sm ${
-                                isDocumentDateReadOnly 
-                                    ? 'text-gray-300 pointer-events-none' 
-                                    : 'text-gray-400 cursor-pointer pointer-events-auto hover:text-[#073318]'
-                            }`}
-                            onClick={() => !isDocumentDateReadOnly && challanDateRef.current?.showPicker?.()}
-                        />
-                    </div>
-                    {errors.document_date && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.document_date}</p>}
-                </div>
+                <DateInput
+                    label={isGRN ? t('modules:supplier_challan_date', 'Supplier Challan Date') : t('modules:supplier_invoice_date', 'Supplier Invoice Date')}
+                    required
+                    value={toDisplayDate(formData.document_date)}
+                    minDate={minDate}
+                    maxDate={maxDate || toDisplayDate(new Date())}
+                    isLocked={isDocumentDateReadOnly}
+                    onChange={(val) => setFormData({ ...formData, document_date: val })}
+                    error={errors.document_date}
+                />
 
                 {/* 8. Booking Date - Frozen current date */}
-                <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:booking_date', 'Booking Date')}</label>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            value={toDisplayDate(formData.booking_date)}
-                            readOnly
-                            className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-500 cursor-not-allowed"
-                        />
-                        <Calendar
-                            size={18}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"
-                        />
-                    </div>
-                </div>
+                <DateInput
+                    label={t('modules:booking_date', 'Booking Date')}
+                    value={toDisplayDate(formData.booking_date)}
+                    isLocked={true}
+                    onChange={() => {}}
+                />
             </div>
         </div>
     );

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Loader2, ChevronLeft, ChevronRight, X, FileText, ExternalLink, Info, Building, Eye, AlertTriangle, Check } from 'lucide-react';
 import { getRejectedSellersApi, approveSellerApi } from '../../services/superAdminService';
 import { getImageUrl } from '../../utils/url';
+import { formatDate } from '../../utils/dateUtils';
 
 const RejectedSellers = () => {
     const [sellers, setSellers] = useState([]);
@@ -322,7 +323,7 @@ const RejectedSellers = () => {
                                                     <DetailItem label="Full Name" value={`${seller.firstName || seller.first_name || ''} ${seller.lastName || seller.last_name || ''}`} />
                                                     <DetailItem label="Email Address" value={seller.email || 'N/A'} />
                                                     <DetailItem label="Phone Number" value={seller.phone || 'N/A'} />
-                                                    <DetailItem label="Registered On" value={seller.createdAt || seller.created_at ? new Date(seller.createdAt || seller.created_at).toLocaleDateString('en-GB') : 'N/A'} />
+                                                    <DetailItem label="Registered On" value={seller.createdAt || seller.created_at ? formatDate(seller.createdAt || seller.created_at) : 'N/A'} />
                                                 </div>
                                             </div>
 

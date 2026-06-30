@@ -367,7 +367,7 @@ export class InvoicesController {
         where: {
           ledger_id: ledgerId,
           voucher_type: 'PAYMENT',
-          invoice_id: null,
+          settlement_type: { in: ['ADVANCE', 'ON_ACCOUNT', 'CANCELLED_SETTLEMENT'] },
         },
         orderBy: { created_at: 'asc' },
       });
@@ -395,7 +395,7 @@ export class InvoicesController {
         where: {
           ledger_id: ledgerId,
           voucher_type: 'RECEIPT',
-          invoice_id: null,
+          settlement_type: { in: ['ADVANCE', 'ON_ACCOUNT', 'CANCELLED_SETTLEMENT'] },
         },
         orderBy: { created_at: 'asc' },
       });
@@ -424,7 +424,7 @@ export class InvoicesController {
         where: {
           ledger_id: ledgerId,
           voucher_type: 'PAYMENT',
-          invoice_id: null,
+          settlement_type: { in: ['ADVANCE', 'ON_ACCOUNT', 'CANCELLED_SETTLEMENT'] },
         },
         orderBy: { created_at: 'asc' },
       });
@@ -496,7 +496,7 @@ export class InvoicesController {
         where: {
           ledger_id: ledgerId,
           voucher_type: 'RECEIPT',
-          invoice_id: null,
+          settlement_type: { in: ['ADVANCE', 'ON_ACCOUNT', 'CANCELLED_SETTLEMENT'] },
         },
         orderBy: { created_at: 'asc' },
       });

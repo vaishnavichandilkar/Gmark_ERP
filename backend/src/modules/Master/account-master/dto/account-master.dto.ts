@@ -15,7 +15,7 @@ import {
   IsUrl,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import { ContactPrefix, MasterStatus, BalanceType, RegUnder, RegType, CustomerType } from '@prisma/client';
 
 export enum GroupNameEnum {
@@ -49,7 +49,8 @@ export class CreateAccountMasterDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  @Matches(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: 'PAN must be a valid Indian PAN format (e.g., ABCDE1234F)' })
+  @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value)
+  @Matches(/^[A-Z]{3}[PCHFATBLJG][A-Z]{1}[0-9]{4}[A-Z]{1}$/, { message: 'Invalid PAN format. Must be a valid 10-character PAN (e.g., ABCPE1234F) where the 4th character is one of: P, C, H, F, A, T, B, L, J, G' })
   panNo: string;
 
   @ApiProperty()
@@ -129,44 +130,51 @@ export class CreateAccountMasterDto {
 
   // Supplier Details
   @ApiPropertyOptional()
+  @ValidateIf(o => o.groupName?.includes(GroupNameEnum.SUNDRY_CREDITORS))
   @Type(() => Number)
   @IsNumber()
-  @IsOptional()
+  @IsNotEmpty({ message: 'Supplier credit days is required' })
   supplierCreditDays?: number;
 
   @ApiPropertyOptional()
+  @ValidateIf(o => o.groupName?.includes(GroupNameEnum.SUNDRY_CREDITORS))
   @Type(() => Number)
   @IsNumber()
-  @IsOptional()
+  @IsNotEmpty({ message: 'Supplier opening balance is required' })
   supplierOpeningBalance?: number;
 
   @ApiPropertyOptional({ enum: BalanceType })
+  @ValidateIf(o => o.groupName?.includes(GroupNameEnum.SUNDRY_CREDITORS))
   @IsEnum(BalanceType)
-  @IsOptional()
+  @IsNotEmpty({ message: 'Supplier balance type is required' })
   supplierBalanceType?: BalanceType;
 
   // Customer Details
   @ApiPropertyOptional()
+  @ValidateIf(o => o.groupName?.includes(GroupNameEnum.SUNDRY_DEBTORS))
   @Type(() => Number)
   @IsNumber()
-  @IsOptional()
+  @IsNotEmpty({ message: 'Customer credit days is required' })
   customerCreditDays?: number;
 
   @ApiPropertyOptional()
+  @ValidateIf(o => o.groupName?.includes(GroupNameEnum.SUNDRY_DEBTORS))
   @Type(() => Number)
   @IsNumber()
-  @IsOptional()
+  @IsNotEmpty({ message: 'Customer opening balance is required' })
   customerOpeningBalance?: number;
 
   @ApiPropertyOptional({ enum: BalanceType })
+  @ValidateIf(o => o.groupName?.includes(GroupNameEnum.SUNDRY_DEBTORS))
   @IsEnum(BalanceType)
-  @IsOptional()
+  @IsNotEmpty({ message: 'Customer balance type is required' })
   customerBalanceType?: BalanceType;
 
   // MSME Details
   @ApiPropertyOptional({ enum: CustomerType })
+  @ValidateIf(o => o.groupName?.includes(GroupNameEnum.SUNDRY_DEBTORS))
   @IsEnum(CustomerType)
-  @IsOptional()
+  @IsNotEmpty({ message: 'Customer type is required' })
   customerType?: CustomerType;
 
   @ApiPropertyOptional()

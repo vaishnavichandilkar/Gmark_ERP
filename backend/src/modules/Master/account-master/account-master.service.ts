@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CreateAccountMasterDto, GroupNameEnum, UpdateAccountMasterDto, UpdateAccountStatusDto } from './dto/account-master.dto';
 import { Prisma, MasterStatus, ContactPrefix, AccountType } from '@prisma/client';
+import { GroupMasterService } from '../group-master/services/group.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import * as fs from 'fs';
@@ -11,7 +12,10 @@ import * as path from 'path';
 export class AccountMasterService {
   private cachedSampleFile: { buffer: Buffer; filename: string; mimetype: string } | null = null;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly groupMasterService: GroupMasterService
+  ) {}
 
   private async isSellerMsme(userId: number): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
@@ -213,7 +217,7 @@ export class AccountMasterService {
     }
   }
 
-  async create(createDto: CreateAccountMasterDto, userId: number, files?: any) {
+  async create(createDto: CreateAccountMasterDto, userId: number, files?: any, skipSync: boolean = false) {
     const existingAccount = await this.prisma.accountMaster.findFirst({
       where: {
         accountName: { equals: createDto.accountName, mode: 'insensitive' },
@@ -223,6 +227,10 @@ export class AccountMasterService {
 
     if (existingAccount) {
       throw new BadRequestException('account name should be unique');
+    }
+
+    if (createDto.panNo) {
+      createDto.panNo = createDto.panNo.trim().toUpperCase();
     }
 
     let { subDistrict, district, country, state } = createDto;
@@ -366,6 +374,10 @@ export class AccountMasterService {
 
     await this.handleFileUploads(account, files, createDto.otherDocumentNames as string[]);
     
+    if (!skipSync) {
+      await this.groupMasterService.syncUserGroupBalances(userId);
+    }
+    
     return {
       success: true,
       message: "Account created successfully",
@@ -391,6 +403,27 @@ export class AccountMasterService {
     userId: number;
   }) {
     const where: Prisma.AccountMasterWhereInput = { userId: filter.userId };
+    
+    // Fetch all active group names to exclude shadow accounts representing groups from the Account Master list
+    const [groups, subGroups, subSubGroups, subSubSubGroups, subSubSubSubGroups] = await Promise.all([
+      this.prisma.group.findMany({ where: { OR: [{ userId: filter.userId }, { userId: null }] }, select: { group_name: true } }),
+      this.prisma.subGroup.findMany({ where: { OR: [{ userId: filter.userId }, { userId: null }] }, select: { subgroup_name: true } }),
+      this.prisma.subSubGroup.findMany({ where: { OR: [{ userId: filter.userId }, { userId: null }] }, select: { name: true } }),
+      this.prisma.subSubSubGroup.findMany({ where: { OR: [{ userId: filter.userId }, { userId: null }] }, select: { name: true } }),
+      this.prisma.subSubSubSubGroup.findMany({ where: { OR: [{ userId: filter.userId }, { userId: null }] }, select: { name: true } })
+    ]);
+
+    const groupNames = [
+      ...groups.map(g => g.group_name),
+      ...subGroups.map(sg => sg.subgroup_name),
+      ...subSubGroups.map(ssg => ssg.name),
+      ...subSubSubGroups.map(sssg => sssg.name),
+      ...subSubSubSubGroups.map(ssssg => ssssg.name)
+    ];
+
+    where.accountName = {
+      notIn: groupNames
+    };
     
     if (filter.groupName) {
       const groupNameStr = String(filter.groupName);
@@ -487,13 +520,25 @@ export class AccountMasterService {
 
     if (!filter.groupName) {
       // Strictly exclude Bank and Cash accounts from the general Account Master view
-      where.OR = [
-        { accountType: { notIn: [AccountType.Bank, AccountType.Cash] } },
-        { accountType: null }
-      ];
+      const bankCashExclusion = {
+        OR: [
+          { accountType: { notIn: [AccountType.Bank, AccountType.Cash] } },
+          { accountType: null }
+        ]
+      };
       where.NOT = {
         groupName: { hasSome: ['BANK', 'CASH', 'Bank & Cash'] }
       };
+
+      if (where.OR) {
+        where.AND = [
+          { OR: where.OR },
+          bankCashExclusion
+        ];
+        delete where.OR;
+      } else {
+        where.OR = bankCashExclusion.OR;
+      }
     }
 
     if (filter.isExport) {
@@ -587,6 +632,308 @@ export class AccountMasterService {
       panNumber: acc.panNo,
       state: acc.state,
     }));
+  }
+
+  private async syncAllGroupsToAccounts(userId: number) {
+    try {
+      // 1. Fetch all active groups at all levels
+      const [groups, subGroups, subSubGroups, subSubSubGroups, subSubSubSubGroups] = await Promise.all([
+        this.prisma.group.findMany({ where: { status: 'ACTIVE', OR: [{ userId }, { userId: null }] }, include: { parent: true } }),
+        this.prisma.subGroup.findMany({ where: { status: 'ACTIVE', OR: [{ userId }, { userId: null }] }, include: { group: true } }),
+        this.prisma.subSubGroup.findMany({ where: { status: 'ACTIVE', OR: [{ userId }, { userId: null }] }, include: { sub_group: { include: { group: true } } } }),
+        this.prisma.subSubSubGroup.findMany({ where: { status: 'ACTIVE', OR: [{ userId }, { userId: null }] }, include: { sub_sub_group: { include: { sub_group: { include: { group: true } } } } } }),
+        this.prisma.subSubSubSubGroup.findMany({ where: { status: 'ACTIVE', OR: [{ userId }, { userId: null }] }, include: { sub_sub_sub_group: { include: { sub_sub_group: { include: { sub_group: { include: { group: true } } } } } } } })
+      ]);
+
+      // 2. Fetch existing accounts for this user
+      const existingAccounts = await this.prisma.accountMaster.findMany({
+        where: { userId }
+      });
+      const existingNames = new Set(existingAccounts.map((acc: any) => acc.accountName.toLowerCase()));
+
+      const accountsToCreate: any[] = [];
+      const excludedNames = ['bank & cash', 'bank and cash', 'cash in hand', 'cash-in-hand'];
+
+      // A. Level 1 Groups
+      for (const g of groups) {
+        const nameLower = g.group_name.toLowerCase();
+        if (excludedNames.includes(nameLower)) continue;
+        if (!existingNames.has(nameLower)) {
+          const path = g.parent ? [g.parent.group_name, g.group_name] : [g.group_name];
+          accountsToCreate.push({
+            accountName: g.group_name,
+            groupName: path,
+            accountType: null,
+            userId,
+            status: 'ACTIVE',
+            panNo: 'ABCDE1234F',
+            addressLine1: 'Default Address',
+            pincode: '000000',
+            state: 'Unknown',
+            prefix: 'Mr',
+            contactPersonName: 'Admin',
+            mobileNo: '0000000000'
+          });
+          existingNames.add(nameLower);
+        }
+      }
+
+      // B. Level 2 SubGroups
+      for (const sg of subGroups) {
+        const nameLower = sg.subgroup_name.toLowerCase();
+        if (excludedNames.includes(nameLower)) continue;
+        if (!existingNames.has(nameLower)) {
+          const path = [sg.group?.group_name, sg.subgroup_name].filter(Boolean);
+          accountsToCreate.push({
+            accountName: sg.subgroup_name,
+            groupName: path,
+            accountType: null,
+            userId,
+            status: 'ACTIVE',
+            panNo: 'ABCDE1234F',
+            addressLine1: 'Default Address',
+            pincode: '000000',
+            state: 'Unknown',
+            prefix: 'Mr',
+            contactPersonName: 'Admin',
+            mobileNo: '0000000000'
+          });
+          existingNames.add(nameLower);
+        }
+      }
+
+      // C. Level 3 SubSubGroups
+      for (const ssg of subSubGroups) {
+        const nameLower = ssg.name.toLowerCase();
+        if (excludedNames.includes(nameLower)) continue;
+        if (!existingNames.has(nameLower)) {
+          const path = [
+            ssg.sub_group?.group?.group_name,
+            ssg.sub_group?.subgroup_name,
+            ssg.name
+          ].filter(Boolean);
+          accountsToCreate.push({
+            accountName: ssg.name,
+            groupName: path,
+            accountType: null,
+            userId,
+            status: 'ACTIVE',
+            panNo: 'ABCDE1234F',
+            addressLine1: 'Default Address',
+            pincode: '000000',
+            state: 'Unknown',
+            prefix: 'Mr',
+            contactPersonName: 'Admin',
+            mobileNo: '0000000000'
+          });
+          existingNames.add(nameLower);
+        }
+      }
+
+      // D. Level 4 SubSubSubGroups
+      for (const sssg of subSubSubGroups) {
+        const nameLower = sssg.name.toLowerCase();
+        if (excludedNames.includes(nameLower)) continue;
+        if (!existingNames.has(nameLower)) {
+          const path = [
+            sssg.sub_sub_group?.sub_group?.group?.group_name,
+            sssg.sub_sub_group?.sub_group?.subgroup_name,
+            sssg.sub_sub_group?.name,
+            sssg.name
+          ].filter(Boolean);
+          accountsToCreate.push({
+            accountName: sssg.name,
+            groupName: path,
+            accountType: null,
+            userId,
+            status: 'ACTIVE',
+            panNo: 'ABCDE1234F',
+            addressLine1: 'Default Address',
+            pincode: '000000',
+            state: 'Unknown',
+            prefix: 'Mr',
+            contactPersonName: 'Admin',
+            mobileNo: '0000000000'
+          });
+          existingNames.add(nameLower);
+        }
+      }
+
+      // E. Level 5 SubSubSubSubGroups
+      for (const ssssg of subSubSubSubGroups) {
+        const nameLower = ssssg.name.toLowerCase();
+        if (excludedNames.includes(nameLower)) continue;
+        if (!existingNames.has(nameLower)) {
+          const path = [
+            ssssg.sub_sub_sub_group?.sub_sub_group?.sub_group?.group?.group_name,
+            ssssg.sub_sub_sub_group?.sub_sub_group?.sub_group?.subgroup_name,
+            ssssg.sub_sub_sub_group?.sub_sub_group?.name,
+            ssssg.sub_sub_sub_group?.name,
+            ssssg.name
+          ].filter(Boolean);
+          accountsToCreate.push({
+            accountName: ssssg.name,
+            groupName: path,
+            accountType: null,
+            userId,
+            status: 'ACTIVE',
+            panNo: 'ABCDE1234F',
+            addressLine1: 'Default Address',
+            pincode: '000000',
+            state: 'Unknown',
+            prefix: 'Mr',
+            contactPersonName: 'Admin',
+            mobileNo: '0000000000'
+          });
+          existingNames.add(nameLower);
+        }
+      }
+
+      if (accountsToCreate.length > 0) {
+        await this.prisma.accountMaster.createMany({
+          data: accountsToCreate
+        });
+      }
+    } catch (error) {
+      console.error('Error syncing groups to account master:', error);
+    }
+  }
+
+  async findActiveAccounts(userId: number) {
+    await this.syncAllGroupsToAccounts(userId);
+
+    // Get all parent group names to filter out group-accounts that are parent groups
+    const [
+      groupsWithChildren,
+      subGroupsWithChildren,
+      subSubGroupsWithChildren,
+      subSubSubGroupsWithChildren,
+      allG1,
+      allG2,
+      allG3,
+      allG4,
+      allG5,
+      userG1,
+      userG2,
+      userG3,
+      userG4,
+      userG5
+    ] = await Promise.all([
+      this.prisma.group.findMany({
+        where: { sub_groups: { some: {} }, OR: [{ userId }, { userId: null }] },
+        select: { group_name: true }
+      }),
+      this.prisma.subGroup.findMany({
+        where: { sub_sub_groups: { some: {} }, OR: [{ userId }, { userId: null }] },
+        select: { subgroup_name: true }
+      }),
+      this.prisma.subSubGroup.findMany({
+        where: { sub_sub_sub_groups: { some: {} }, OR: [{ userId }, { userId: null }] },
+        select: { name: true }
+      }),
+      this.prisma.subSubSubGroup.findMany({
+        where: { sub_sub_sub_sub_groups: { some: {} }, OR: [{ userId }, { userId: null }] },
+        select: { name: true }
+      }),
+      this.prisma.group.findMany({ where: { OR: [{ userId }, { userId: null }] }, select: { group_name: true } }),
+      this.prisma.subGroup.findMany({ where: { OR: [{ userId }, { userId: null }] }, select: { subgroup_name: true } }),
+      this.prisma.subSubGroup.findMany({ where: { OR: [{ userId }, { userId: null }] }, select: { name: true } }),
+      this.prisma.subSubSubGroup.findMany({ where: { OR: [{ userId }, { userId: null }] }, select: { name: true } }),
+      this.prisma.subSubSubSubGroup.findMany({ where: { OR: [{ userId }, { userId: null }] }, select: { name: true } }),
+      this.prisma.group.findMany({ where: { userId }, select: { group_name: true } }),
+      this.prisma.subGroup.findMany({ where: { userId }, select: { subgroup_name: true } }),
+      this.prisma.subSubGroup.findMany({ where: { userId }, select: { name: true } }),
+      this.prisma.subSubSubGroup.findMany({ where: { userId }, select: { name: true } }),
+      this.prisma.subSubSubSubGroup.findMany({ where: { userId }, select: { name: true } })
+    ]);
+
+    const parentGroupNames = new Set<string>();
+    groupsWithChildren.forEach(g => parentGroupNames.add(g.group_name.toLowerCase()));
+    subGroupsWithChildren.forEach(sg => parentGroupNames.add(sg.subgroup_name.toLowerCase()));
+    subSubGroupsWithChildren.forEach(ssg => parentGroupNames.add(ssg.name.toLowerCase()));
+    subSubSubGroupsWithChildren.forEach(sssg => parentGroupNames.add(sssg.name.toLowerCase()));
+
+    const groupNames = new Set<string>();
+    allG1.forEach(g => groupNames.add(g.group_name.toLowerCase()));
+    allG2.forEach(sg => groupNames.add(sg.subgroup_name.toLowerCase()));
+    allG3.forEach(ssg => groupNames.add(ssg.name.toLowerCase()));
+    allG4.forEach(sssg => groupNames.add(sssg.name.toLowerCase()));
+    allG5.forEach(ssssg => groupNames.add(ssssg.name.toLowerCase()));
+
+    const userGroupNames = new Set<string>();
+    userG1.forEach(g => userGroupNames.add(g.group_name.toLowerCase()));
+    userG2.forEach(sg => userGroupNames.add(sg.subgroup_name.toLowerCase()));
+    userG3.forEach(ssg => userGroupNames.add(ssg.name.toLowerCase()));
+    userG4.forEach(sssg => userGroupNames.add(sssg.name.toLowerCase()));
+    userG5.forEach(ssssg => userGroupNames.add(ssssg.name.toLowerCase()));
+
+    const accounts = await this.prisma.accountMaster.findMany({
+      where: {
+        userId,
+        status: MasterStatus.ACTIVE,
+      },
+      orderBy: { accountName: 'asc' },
+    });
+
+    // To check if a group has child accounts:
+    const groupsWithChildAccounts = new Set<string>();
+    accounts.forEach(acc => {
+      acc.groupName.forEach(g => {
+        if (g.toLowerCase() !== acc.accountName.toLowerCase()) {
+          groupsWithChildAccounts.add(g.toLowerCase());
+        }
+      });
+    });
+
+    // Merge both sources of children (subgroups and accounts)
+    groupsWithChildAccounts.forEach(g => parentGroupNames.add(g));
+
+    const filteredAccounts = accounts.filter(acc => {
+      const lowerName = acc.accountName.toLowerCase();
+      // If it matches a group name, it's a group shadow account.
+      if (groupNames.has(lowerName)) {
+        // Only keep if it is a user-created group AND it is not a parent group
+        return userGroupNames.has(lowerName) && !parentGroupNames.has(lowerName);
+      }
+      // Keep all normal/ledger accounts (supplier, customer, bank, cash, etc.)
+      return true;
+    });
+
+    const result = [];
+    for (const acc of filteredAccounts) {
+      const isCustomer = acc.groupName.includes('SUNDRY_DEBTORS') || acc.accountType === 'Debtor' || acc.accountType === 'CUSTOMER';
+      const isSupplier = acc.groupName.includes('SUNDRY_CREDITORS') || acc.accountType === 'Creditor' || acc.accountType === 'SUPPLIER';
+      const isBank = acc.groupName.some(g => ['BANK', 'CASH', 'Bank & Cash'].includes(g)) || acc.accountType === 'Bank' || acc.accountType === 'Cash' || acc.accountType === 'BANK' || acc.accountType === 'CASH';
+
+      const baseObj = {
+        id: acc.id,
+        accountName: acc.accountName,
+        customerCreditDays: acc.customerCreditDays || 0,
+        supplierCreditDays: acc.supplierCreditDays || 0,
+        address: acc.addressLine1 + (acc.addressLine2 ? ', ' + acc.addressLine2 : ''),
+        gstNumber: acc.gstNo,
+        panNumber: acc.panNo,
+        state: acc.state,
+        customerType: acc.customerType,
+        customerCode: acc.customerCode,
+        supplierCode: acc.supplierCode,
+        groupName: acc.groupName
+      };
+
+      if (isCustomer && isSupplier) {
+        result.push({ ...baseObj, accountType: 'CUSTOMER' });
+        result.push({ ...baseObj, accountType: 'SUPPLIER' });
+      } else if (isCustomer) {
+        result.push({ ...baseObj, accountType: 'CUSTOMER' });
+      } else if (isSupplier) {
+        result.push({ ...baseObj, accountType: 'SUPPLIER' });
+      } else if (isBank) {
+        result.push({ ...baseObj, accountType: 'BANK' });
+      } else {
+        result.push({ ...baseObj, accountType: 'LEDGER' });
+      }
+    }
+    return result;
   }
 
   async findReceiptEligibleCustomers(userId: number) {
@@ -777,6 +1124,10 @@ export class AccountMasterService {
       }
     }
 
+    if (updateDto.panNo) {
+      updateDto.panNo = updateDto.panNo.trim().toUpperCase();
+    }
+
     let supplierCreditDays = updateDto.supplierCreditDays;
     let customerCreditDays = updateDto.customerCreditDays;
 
@@ -897,11 +1248,13 @@ export class AccountMasterService {
     console.log('Update Account Edit - Cleaned Data sent to Prisma:', data);
 
     const updated = await this.prisma.accountMaster.update({
-      where: { id },
+      where: { id, userId },
       data,
     });
     
     await this.handleFileUploads(updated, files, updateDto.otherDocumentNames as string[]);
+    
+    await this.groupMasterService.syncUserGroupBalances(userId);
     
     return {
       success: true,
@@ -1464,12 +1817,49 @@ export class AccountMasterService {
         return s === 'yes' || s === 'true' || s === 'y' || s === '1';
     };
 
+    // Pass 1: Scan all rows to count occurrences of accountName and panNo within the sheet (internal duplicates)
+    const nameFrequency = new Map<string, number>();
+    const panFrequency = new Map<string, number>();
+
+    for (let i = headerRowIndex + 1; i <= rowCount; i++) {
+        const row = worksheet.getRow(i);
+        const nameVal = getVal(row, 'accountName');
+        const rawName = (nameVal !== undefined && nameVal !== null ? String(nameVal).trim() : '');
+        if (!rawName || rawName === '-' || rawName === 'null' || rawName === 'undefined') continue;
+
+        const keyName = rawName.toUpperCase();
+        nameFrequency.set(keyName, (nameFrequency.get(keyName) || 0) + 1);
+
+        const panVal = getVal(row, 'panNo');
+        const rawPan = (panVal !== undefined && panVal !== null ? String(panVal).trim() : '');
+        if (rawPan && rawPan !== '-' && rawPan !== 'null' && rawPan !== 'undefined') {
+            const keyPan = rawPan.toUpperCase();
+            panFrequency.set(keyPan, (panFrequency.get(keyPan) || 0) + 1);
+        }
+    }
+
+    // Pass 2: Process and import rows, skipping internal and external database duplicates
     for (let i = headerRowIndex + 1; i <= rowCount; i++) {
         const row = worksheet.getRow(i);
         
         const val = getVal(row, 'accountName');
         const rawAccountName = (val !== undefined && val !== null ? String(val).trim() : '');
         if (!rawAccountName || rawAccountName === '-' || rawAccountName === 'null' || rawAccountName === 'undefined') continue; // Skip empty rows
+
+        // Check if this accountName is duplicated within the Excel sheet itself
+        if ((nameFrequency.get(rawAccountName.toUpperCase()) || 0) > 1) {
+            duplicates++;
+            continue;
+        }
+
+        const panValForCheck = getVal(row, 'panNo');
+        const rawPanNoForCheck = (panValForCheck !== undefined && panValForCheck !== null ? String(panValForCheck).trim() : '');
+        if (rawPanNoForCheck && rawPanNoForCheck !== '-' && rawPanNoForCheck !== 'null' && rawPanNoForCheck !== 'undefined') {
+            if ((panFrequency.get(rawPanNoForCheck.toUpperCase()) || 0) > 1) {
+                duplicates++;
+                continue;
+            }
+        }
 
         try {
             const accountName = rawAccountName;
@@ -1589,7 +1979,7 @@ export class AccountMasterService {
                 }
             }
 
-            await this.create(dto, userId);
+            await this.create(dto, userId, null, true);
             imported++;
 
         } catch (error) {
@@ -1613,10 +2003,75 @@ export class AccountMasterService {
         throw new BadRequestException('No data found to import');
     }
 
+    if (imported > 0) {
+        await this.groupMasterService.syncUserGroupBalances(userId);
+    }
+
     return {
         success: true,
         message: `Successfully imported ${imported} accounts. ${duplicates} duplicate rows were skipped.${failed > 0 ? ' ' + failed + ' failed.' : ''}`,
         errors: failed > 0 ? errors : undefined,
+    };
+  }
+
+  async delete(id: number, userId: number) {
+    const account = await this.prisma.accountMaster.findFirst({
+      where: { id, userId }
+    });
+
+    if (!account) {
+      throw new NotFoundException(`Account with ID ${id} not found`);
+    }
+
+    // 1. Check transactions
+    const hasTx = await this.prisma.transaction.findFirst({ where: { accountId: id } });
+    if (hasTx) throw new ForbiddenException('Cannot delete account because it has transactional history');
+
+    // 2. Check vouchers
+    const hasReceipt = await this.prisma.receiptVoucherItem.findFirst({ where: { accountId: id } });
+    if (hasReceipt) throw new ForbiddenException('Cannot delete account because it is in use in receipt vouchers');
+
+    const hasPayment = await this.prisma.paymentVoucherItem.findFirst({ where: { accountId: id } });
+    if (hasPayment) throw new ForbiddenException('Cannot delete account because it is in use in payment vouchers');
+
+    const hasJournal = await this.prisma.journalVoucherItem.findFirst({ where: { accountId: id } });
+    if (hasJournal) throw new ForbiddenException('Cannot delete account because it is in use in journal vouchers');
+
+    const hasContra = await this.prisma.contraVoucherItem.findFirst({ where: { accountId: id } });
+    if (hasContra) throw new ForbiddenException('Cannot delete account because it is in use in contra vouchers');
+
+    const hasReceiptBC = await this.prisma.receiptVoucher.findFirst({ where: { bankCashLedgerId: id } });
+    if (hasReceiptBC) throw new ForbiddenException('Cannot delete account because it is in use as bank/cash in receipt vouchers');
+
+    const hasPaymentBC = await this.prisma.paymentVoucher.findFirst({ where: { bankCashLedgerId: id } });
+    if (hasPaymentBC) throw new ForbiddenException('Cannot delete account because it is in use as bank/cash in payment vouchers');
+
+    const hasJournalBC = await this.prisma.journalVoucher.findFirst({ where: { bankCashLedgerId: id } });
+    if (hasJournalBC) throw new ForbiddenException('Cannot delete account because it is in use as bank/cash in journal vouchers');
+
+    const hasContraBC = await this.prisma.contraVoucher.findFirst({ where: { bankCashLedgerId: id } });
+    if (hasContraBC) throw new ForbiddenException('Cannot delete account because it is in use as bank/cash in contra vouchers');
+
+    // 3. Check SalesInvoice and PurchaseInvoice
+    const hasSalesInvoice = await this.prisma.salesInvoice.findFirst({ where: { customerId: id } });
+    if (hasSalesInvoice) throw new ForbiddenException('Cannot delete account because it has associated sales invoices');
+
+    const hasPurchaseInvoice = await this.prisma.purchaseInvoice.findFirst({ where: { supplierId: id } });
+    if (hasPurchaseInvoice) throw new ForbiddenException('Cannot delete account because it has associated purchase invoices');
+
+    // 4. Check settlements
+    const hasSettlement = await this.prisma.voucherSettlement.findFirst({ where: { ledger_id: id } });
+    if (hasSettlement) throw new ForbiddenException('Cannot delete account because it is in use in voucher settlements');
+
+    await this.prisma.accountMaster.delete({
+      where: { id }
+    });
+
+    await this.groupMasterService.syncUserGroupBalances(userId);
+
+    return {
+      success: true,
+      message: 'Account deleted successfully'
     };
   }
 }

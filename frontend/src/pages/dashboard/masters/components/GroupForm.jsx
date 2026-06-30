@@ -10,6 +10,7 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
     const [selectedGroup, setSelectedGroup] = useState(null);
     const [openingBalance, setOpeningBalance] = useState('');
     const [balanceType, setBalanceType] = useState('Dr');
+    const isParentGroup = mode === 'edit' && initialData && initialData.children && initialData.children.length > 0;
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [allGroups, setAllGroups] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -58,6 +59,13 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
         }
         if (!selectedGroup) {
             newErrors.parent_group = t('modules:parent_group_required') || 'Parent group is required';
+        }
+
+        if (!isParentGroup && openingBalance !== '') {
+            const val = Number(openingBalance);
+            if (isNaN(val) || val < 0) {
+                newErrors.opening_balance = t('modules:error_opening_balance_negative') || 'Opening balance cannot be negative';
+            }
         }
 
         if (Object.keys(newErrors).length > 0) {
@@ -249,41 +257,53 @@ const GroupForm = ({ mode = 'add', initialData = null, onBack, onSuccess }) => {
 
                     {/* Opening Balance and Balance Type */}
                     {!(selectedGroup ? isExpenseGroup(selectedGroup, allGroups) : false) && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full animate-in fade-in slide-in-from-top-2 duration-300">
-                            {/* Opening Balance */}
-                            <div className="flex flex-col gap-2">
-                                <label className="text-[14px] font-bold text-[#374151]">
-                                    {t('modules:openingBalance', 'Opening Balance')}
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={openingBalance}
-                                    onChange={(e) => {
-                                        setOpeningBalance(e.target.value);
-                                        if (errors.opening_balance) setErrors(prev => ({ ...prev, opening_balance: '' }));
-                                    }}
-                                    placeholder={t('modules:enter_op_balance', 'Enter opening balance')}
-                                    className={`w-full h-[46px] border rounded-[10px] px-4 outline-none transition-all placeholder:text-gray-400 text-[14px] text-[#111827] bg-white
-                                        ${errors.opening_balance ? 'border-red-300 ring-1 ring-red-50' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10'}`}
-                                />
-                                {errors.opening_balance && <span className="text-red-500 text-[11px] mt-0.5 ml-1 animate-in fade-in slide-in-from-top-1 duration-200 font-medium">*{errors.opening_balance}</span>}
-                            </div>
+                        <div className="flex flex-col gap-4 w-full">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full animate-in fade-in slide-in-from-top-2 duration-300">
+                                {/* Opening Balance */}
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[14px] font-bold text-[#374151]">
+                                        {t('modules:openingBalance', 'Opening Balance')}
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        disabled={isParentGroup}
+                                        value={openingBalance}
+                                        onChange={(e) => {
+                                            setOpeningBalance(e.target.value);
+                                            if (errors.opening_balance) setErrors(prev => ({ ...prev, opening_balance: '' }));
+                                        }}
+                                        placeholder={t('modules:enter_op_balance', 'Enter opening balance')}
+                                        className={`w-full h-[46px] border rounded-[10px] px-4 outline-none transition-all placeholder:text-gray-400 text-[14px] text-[#111827] bg-white
+                                            ${errors.opening_balance ? 'border-red-300 ring-1 ring-red-50' : 'border-[#E5E7EB] focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10'}
+                                            ${isParentGroup ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                                    />
+                                    {errors.opening_balance && <span className="text-red-500 text-[11px] mt-0.5 ml-1 animate-in fade-in slide-in-from-top-1 duration-200 font-medium">*{errors.opening_balance}</span>}
+                                </div>
 
-                            {/* Balance Type */}
-                            <div className="flex flex-col gap-2">
-                                <label className="text-[14px] font-bold text-[#374151]">
-                                    {t('modules:balanceType', 'Balance Type')}
-                                </label>
-                                <select
-                                    value={balanceType}
-                                    onChange={(e) => setBalanceType(e.target.value)}
-                                    className="w-full h-[46px] border border-[#E5E7EB] rounded-[10px] px-4 outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all text-[14px] text-[#111827] bg-white cursor-pointer"
-                                >
-                                    <option value="Dr">Dr</option>
-                                    <option value="Cr">Cr</option>
-                                </select>
+                                {/* Balance Type */}
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[14px] font-bold text-[#374151]">
+                                        {t('modules:balanceType', 'Balance Type')}
+                                    </label>
+                                    <select
+                                        disabled={isParentGroup}
+                                        value={balanceType}
+                                        onChange={(e) => setBalanceType(e.target.value)}
+                                        className={`w-full h-[46px] border border-[#E5E7EB] rounded-[10px] px-4 outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all text-[14px] text-[#111827] bg-white cursor-pointer
+                                            ${isParentGroup ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                                    >
+                                        <option value="Dr">Dr</option>
+                                        <option value="Cr">Cr</option>
+                                    </select>
+                                </div>
                             </div>
+                            {isParentGroup && (
+                                <span className="text-[12px] text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-4 py-2.5 font-semibold animate-in fade-in slide-in-from-top-1 duration-200">
+                                    💡 This is a parent group containing child groups or accounts. Its opening balance and balance type are automatically calculated.
+                                </span>
+                            )}
                         </div>
                     )}
                 </div>

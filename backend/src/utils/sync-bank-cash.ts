@@ -10,30 +10,46 @@ function arraysEqual(a: string[], b: string[]): boolean {
 }
 
 export async function syncBankCashAccounts(prisma: any, userId: number) {
+  // Cleanup any invalid shadow/subsubsubgroups that might have been created
+  await prisma.subSubSubGroup.deleteMany({
+    where: {
+      userId,
+      name: { in: ['Bank & Cash', 'Bank and Cash', 'Cash in hand', 'Cash-in-hand'] }
+    }
+  });
+
+  await prisma.accountMaster.deleteMany({
+    where: {
+      userId,
+      accountName: { in: ['Bank & Cash', 'Bank and Cash', 'Cash in hand', 'Cash-in-hand'] }
+    }
+  });
+
   // 1. Find the "Bank & Cash" SubSubGroup
   const bankCashGroup = await prisma.subSubGroup.findFirst({
-    where: {
-      name: { equals: 'Bank & Cash', mode: 'insensitive' }
-    }
+    where: { name: { equals: 'Bank & Cash', mode: 'insensitive' } }
   });
 
-  if (!bankCashGroup) {
-    return;
-  }
+  if (!bankCashGroup) return;
 
-  // 2. Fetch all current SubSubSubGroup records under "Bank & Cash" for this user
+  // 2. Get all active SubSubSubGroups under "Bank & Cash"
   const bankCashSubGroups = await prisma.subSubSubGroup.findMany({
-    where: {
-      sub_sub_group_id: bankCashGroup.id,
-      userId: userId,
+    where: { 
+      sub_sub_group_id: bankCashGroup.id, 
+      userId,
+      name: { notIn: ['Bank & Cash', 'Bank and Cash', 'Cash in hand', 'Cash-in-hand'] }
     }
   });
 
-  // 3. Fetch all current AccountMaster records for this user that are under "Bank & Cash" group
+  // 3. Get all existing shadow AccountMaster records
   const bankCashAccounts = await prisma.accountMaster.findMany({
     where: {
       userId,
-      groupName: { has: 'Bank & Cash' }
+      accountName: { notIn: ['Bank & Cash', 'Bank and Cash', 'Cash in hand', 'Cash-in-hand'] },
+      OR: [
+        { groupName: { has: 'Bank & Cash' } },
+        { accountType: { in: [AccountType.Bank, AccountType.Cash] } }
+      ]
     }
   });
 
@@ -44,13 +60,12 @@ export async function syncBankCashAccounts(prisma: any, userId: number) {
 
   // A. Sync from Groups to Accounts
   for (const group of bankCashSubGroups) {
-    const isGroupActive = group.status === MasterStatus.ACTIVE;
-    const existingAccount = bankCashAccounts.find(
-      (acc) => acc.accountName.toLowerCase() === group.name.toLowerCase()
-    );
-
-    if (isGroupActive) {
+    if (group.status === MasterStatus.ACTIVE) {
       activeGroupNames.add(group.name.toLowerCase());
+      
+      const existingAccount = bankCashAccounts.find(
+        (acc: any) => acc.accountName.toLowerCase() === group.name.toLowerCase()
+      );
 
       if (!existingAccount) {
         // Create shadow account
@@ -107,6 +122,9 @@ export async function syncBankCashAccounts(prisma: any, userId: number) {
       }
     } else {
       // Group is inactive, make account inactive
+      const existingAccount = bankCashAccounts.find(
+        (acc: any) => acc.accountName.toLowerCase() === group.name.toLowerCase()
+      );
       if (existingAccount && existingAccount.status === MasterStatus.ACTIVE) {
         updateOperations.push(
           prisma.accountMaster.update({
@@ -118,13 +136,11 @@ export async function syncBankCashAccounts(prisma: any, userId: number) {
     }
   }
 
-  // B. Sync from Accounts to Groups (Bidirectional Restoration)
+  // B. Sync from Accounts to Groups
   for (const acc of bankCashAccounts) {
-    const isAccActive = acc.status === MasterStatus.ACTIVE;
-    
-    if (isAccActive) {
+    if (acc.status === MasterStatus.ACTIVE) {
       const existingGroup = bankCashSubGroups.find(
-        (g) => g.name.toLowerCase() === acc.accountName.toLowerCase()
+        (g: any) => g.name.toLowerCase() === acc.accountName.toLowerCase()
       );
 
       if (!existingGroup) {
@@ -151,7 +167,7 @@ export async function syncBankCashAccounts(prisma: any, userId: number) {
     }
   }
 
-  // C. Inactivate shadow accounts that no longer have a corresponding active group
+  // C. Deactivate accounts if their corresponding group is deleted/not active
   for (const acc of bankCashAccounts) {
     if (!activeGroupNames.has(acc.accountName.toLowerCase())) {
       if (acc.status === MasterStatus.ACTIVE) {

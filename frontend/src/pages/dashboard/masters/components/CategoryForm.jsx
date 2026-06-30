@@ -37,7 +37,7 @@ const CategoryForm = ({ mode = 'add', initialData = null, onBack, onSuccess, onS
             if ((mode === 'edit' || mode === 'view') && (initialData?.type === 'sub_category' || initialData?.type === 'Sub Category')) {
                 const parentId = initialData.category_id || initialData.parent_id || initialData.parentCategoryId;
                 if (parentId) {
-                    const parent = data.find(c => Number(c.id) === Number(parentId));
+                    const parent = data.find(c => String(c.id) === String(parentId));
                     if (parent) setParentCategory(parent);
                 }
             }

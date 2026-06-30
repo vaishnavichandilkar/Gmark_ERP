@@ -5,6 +5,7 @@ import { CreateGrnDto, UpdateGrnDto } from './dto/grn.dto';
 import { PurchaseOrderService } from '../../purchase-order/purchase-order.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
+import { formatDate } from '../../../../utils/dateFormatter';
 
 @Injectable()
 export class GrnService {
@@ -20,17 +21,16 @@ export class GrnService {
     today.setHours(23, 59, 59, 999);
 
     if (dto.poId) {
-      const po = await this.prisma.purchaseOrder.findUnique({ where: { id: Number(dto.poId) } });
-      const poDate = po ? new Date(po.poCreationDate) : null;
-      if (poDate) {
-        poDate.setHours(0, 0, 0, 0);
-        const grnOnlyDate = new Date(grnDate);
-        grnOnlyDate.setHours(0, 0, 0, 0);
-        
-        if (grnOnlyDate < poDate || grnDate > today) {
-          throw new BadRequestException('Supplier Challan Date must be between PO Date and Current Date.');
-        }
-      } else if (grnDate > today) {
+      const po = await this.prisma.purchaseOrder.findFirst({ where: { id: Number(dto.poId), userId } });
+      if (!po) {
+        throw new BadRequestException('Purchase Order not found or unauthorized');
+      }
+      const poDate = new Date(po.poCreationDate);
+      poDate.setHours(0, 0, 0, 0);
+      const grnOnlyDate = new Date(grnDate);
+      grnOnlyDate.setHours(0, 0, 0, 0);
+      
+      if (grnOnlyDate < poDate || grnDate > today) {
         throw new BadRequestException('Supplier Challan Date must be between PO Date and Current Date.');
       }
     } else {
@@ -691,7 +691,7 @@ export class GrnService {
         worksheet.addRow({
           supplierName: g.supplierName,
           challanNumber: g.challanNumber || '-',
-          bookingDate: g.bookingDate.toLocaleDateString(),
+          bookingDate: formatDate(g.bookingDate),
           poNumber: g.poNumber || '-',
           totalQuantity: g.totalQuantity,
           taxableAmount: g.taxableAmount,
@@ -777,7 +777,7 @@ export class GrnService {
           doc.fontSize(7);
           doc.text(g.supplierName.substring(0, 30), colX[0], y, { width: 140 });
           doc.text(g.challanNumber || '-', colX[1], y);
-          doc.text(g.bookingDate.toLocaleDateString(), colX[2], y);
+          doc.text(formatDate(g.bookingDate), colX[2], y);
           doc.text(g.poNumber || '-', colX[3], y);
           doc.text(String(g.totalQuantity), colX[4], y);
           doc.text(g.taxableAmount.toFixed(2), colX[5], y);
@@ -792,8 +792,8 @@ export class GrnService {
   }
 
   async printGrn(id: number, userId: number) {
-    const grn = await this.prisma.grn.findUnique({
-      where: { id },
+    const grn = await this.prisma.grn.findFirst({
+      where: { id, userId },
       include: { items: true, user: { include: { shopDetail: true } } },
     });
     if (!grn) throw new NotFoundException('GRN not found');

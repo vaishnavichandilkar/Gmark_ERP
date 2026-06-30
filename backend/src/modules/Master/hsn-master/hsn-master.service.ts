@@ -198,7 +198,67 @@ export class HsnMasterService {
     }
 
     async deleteHsnMaster(id: string, userId: number) {
-        await this.getHsnMasterById(id, userId);
+        const hsnRecord = await this.getHsnMasterById(id, userId);
+
+        // Check if used in any non-deleted products
+        const usedInProduct = await this.prisma.product.findFirst({
+            where: {
+                hsnMasterId: id,
+                is_deleted: false
+            }
+        });
+        if (usedInProduct) {
+            throw new BadRequestException('Cannot delete HSN/SAC because it is currently linked to one or more active products');
+        }
+
+        // Check if used in Purchase Orders
+        const usedInPO = await this.prisma.purchaseOrderItem.findFirst({
+            where: { hsnCode: hsnRecord.code }
+        });
+        if (usedInPO) {
+            throw new BadRequestException('Cannot delete HSN/SAC because it is in use in Purchase Orders');
+        }
+
+        // Check if used in Sales Orders
+        const usedInSO = await this.prisma.salesOrderItem.findFirst({
+            where: { hsnCode: hsnRecord.code }
+        });
+        if (usedInSO) {
+            throw new BadRequestException('Cannot delete HSN/SAC because it is in use in Sales Orders');
+        }
+
+        // Check if used in Purchase Invoices
+        const usedInPI = await this.prisma.purchaseInvoiceItem.findFirst({
+            where: { hsnCode: hsnRecord.code }
+        });
+        if (usedInPI) {
+            throw new BadRequestException('Cannot delete HSN/SAC because it is in use in Purchase Invoices');
+        }
+
+        // Check if used in Goods Receipt Notes (GRN)
+        const usedInGRN = await this.prisma.grnItem.findFirst({
+            where: { hsnCode: hsnRecord.code }
+        });
+        if (usedInGRN) {
+            throw new BadRequestException('Cannot delete HSN/SAC because it is in use in Goods Receipt Notes (GRN)');
+        }
+
+        // Check if used in Sales Invoices
+        const usedInSI = await this.prisma.salesInvoiceItem.findFirst({
+            where: { hsnCode: hsnRecord.code }
+        });
+        if (usedInSI) {
+            throw new BadRequestException('Cannot delete HSN/SAC because it is in use in Sales Invoices');
+        }
+
+        // Check if used in Sales Challans
+        const usedInSC = await this.prisma.salesChallanItem.findFirst({
+            where: { hsnCode: hsnRecord.code }
+        });
+        if (usedInSC) {
+            throw new BadRequestException('Cannot delete HSN/SAC because it is in use in Sales Challans');
+        }
+
         return this.prisma.hsnMaster.delete({
             where: { id }
         });

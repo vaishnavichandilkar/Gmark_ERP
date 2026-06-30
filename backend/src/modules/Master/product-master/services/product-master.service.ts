@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ProductMasterRepository } from '../repositories/product-master.repository';
 import { CreateProductDto, UpdateProductDto, ToggleProductStatusDto } from '../dto/product.dto';
-import { MasterStatus, ProductType } from '@prisma/client';
+import { MasterStatus, ProductType, Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { HsnMasterService } from '../../hsn-master/hsn-master.service';
@@ -458,6 +458,70 @@ export class ProductMasterService {
     async deleteProduct(id: number, userId: number) {
         const product = await this.repository.findProductById(id);
         if (!product || product.created_by !== userId) throw new NotFoundException('Product not found');
+
+        // Check if used in Purchase Orders
+        const usedInPO = await this.prisma.purchaseOrderItem.findFirst({
+            where: {
+                OR: [
+                    { productId: id },
+                    { productCode: product.product_code }
+                ]
+            }
+        });
+        if (usedInPO) throw new BadRequestException('Cannot delete product because it is in use in Purchase Orders');
+
+        // Check if used in Sales Orders
+        const usedInSO = await this.prisma.salesOrderItem.findFirst({
+            where: {
+                productCode: product.product_code
+            }
+        });
+        if (usedInSO) throw new BadRequestException('Cannot delete product because it is in use in Sales Orders');
+
+        // Check if used in Purchase Invoices
+        const usedInPI = await this.prisma.purchaseInvoiceItem.findFirst({
+            where: {
+                OR: [
+                    { productId: id },
+                    { productCode: product.product_code }
+                ]
+            }
+        });
+        if (usedInPI) throw new BadRequestException('Cannot delete product because it is in use in Purchase Invoices');
+
+        // Check if used in Goods Receipt Notes (GRN)
+        const usedInGRN = await this.prisma.grnItem.findFirst({
+            where: {
+                OR: [
+                    { productId: id },
+                    { productCode: product.product_code }
+                ]
+            }
+        });
+        if (usedInGRN) throw new BadRequestException('Cannot delete product because it is in use in Goods Receipt Notes (GRN)');
+
+        // Check if used in Sales Invoices
+        const usedInSI = await this.prisma.salesInvoiceItem.findFirst({
+            where: {
+                OR: [
+                    { productId: id },
+                    { productCode: product.product_code }
+                ]
+            }
+        });
+        if (usedInSI) throw new BadRequestException('Cannot delete product because it is in use in Sales Invoices');
+
+        // Check if used in Sales Challans
+        const usedInSC = await this.prisma.salesChallanItem.findFirst({
+            where: {
+                OR: [
+                    { productId: id },
+                    { productCode: product.product_code }
+                ]
+            }
+        });
+        if (usedInSC) throw new BadRequestException('Cannot delete product because it is in use in Sales Challans');
+
         return this.repository.softDelete(id);
     }
 
@@ -466,7 +530,7 @@ export class ProductMasterService {
         const worksheet = workbook.addWorksheet('Sample Data');
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-        const headers = ['Type*', 'Product Name*', 'UOM*', 'Category*', 'Sub Category*', 'Sub Sub Category', 'HSN/SAC Code*', 'Product Description', 'Status'];
+        const headers = ['Type*', 'Product Name*', 'UOM*', 'Category*', 'Sub Category*', 'Sub Sub Category', 'HSN/SAC Code*', 'Tax Rate (%)*', 'Product Description', 'Status'];
         worksheet.addRow(headers);
 
         const headerRow = worksheet.getRow(1);
@@ -486,13 +550,21 @@ export class ProductMasterService {
                 promptTitle: 'Select Type',
                 prompt: 'Choose one of:\nGOODS,\nSERVICES'
             };
-            worksheet.getCell(`I${i}`).dataValidation = {
+            worksheet.getCell(`J${i}`).dataValidation = {
                 type: 'list',
                 allowBlank: true,
                 formulae: ['"ACTIVE,INACTIVE"'],
                 showInputMessage: true,
                 promptTitle: 'Select Status',
                 prompt: 'Choose one of:\nACTIVE,\nINACTIVE'
+            };
+            worksheet.getCell(`H${i}`).dataValidation = {
+                type: 'list',
+                allowBlank: true,
+                formulae: ['"0%,5%,12%,18%,28%"'],
+                showInputMessage: true,
+                promptTitle: 'Select Tax Rate',
+                prompt: 'Choose one of:\n0%,\n5%,\n12%,\n18%,\n28%'
             };
             worksheet.getCell(`G${i}`).numFmt = '@';
         }
@@ -543,6 +615,7 @@ export class ProductMasterService {
                 if (val.includes('sub category')) colMap['subCategory'] = colNumber;
                 if (val.includes('sub sub category') || val.includes('sub-sub category') || val.includes('sub-subcategory')) colMap['subSubCategory'] = colNumber;
                 if (val.includes('hsn') || val.includes('sac')) colMap['hsn'] = colNumber;
+                if (val.includes('tax rate') || val.includes('tax %') || val.includes('taxrate') || val.includes('taxpercent') || val.includes('tax percent')) colMap['taxRate'] = colNumber;
                 if (val.includes('product description') || val.includes('description') || val.includes('service description')) colMap['description'] = colNumber;
                 if (val === 'status') colMap['status'] = colNumber;
             });
@@ -649,20 +722,86 @@ export class ProductMasterService {
                 }
 
                 let hsnCode = String(getVal(row, 'hsn')).trim();
-                if (/^\d+$/.test(hsnCode) && hsnCode.length % 2 !== 0) {
-                    hsnCode = '0' + hsnCode;
-                }
                 
                 let hsnMasterId = '';
                 let taxRateValue = 0;
                 let hsnDescValue = '';
 
                 if (hsnCode && hsnCode !== '-') {
-                    const hsnMaster = await prisma.hsnMaster.findFirst({
-                        where: { code: hsnCode, createdBy: userId }
-                    });
+                    const codeVariations = [hsnCode];
+                    if (/^\d+$/.test(hsnCode)) {
+                        if (hsnCode.length % 2 !== 0) {
+                            codeVariations.push('0' + hsnCode);
+                        }
+                        if (hsnCode.length < 6) {
+                            codeVariations.push(hsnCode.padStart(6, '0'));
+                        }
+                        if (hsnCode.length < 8) {
+                            codeVariations.push(hsnCode.padStart(8, '0'));
+                        }
+                    }
+                    const uniqueVariations = Array.from(new Set(codeVariations));
+
+                    let hsnMaster = null;
+                    for (const codeVar of uniqueVariations) {
+                        hsnMaster = await prisma.hsnMaster.findFirst({
+                            where: { code: codeVar, createdBy: userId }
+                        });
+                        if (hsnMaster) {
+                            hsnCode = codeVar;
+                            break;
+                        }
+                    }
+                    
                     if (!hsnMaster) {
-                        throw new BadRequestException(`${productType === ProductType.SERVICES ? 'SAC' : 'HSN'} Code does not exist in HSN Master.`);
+                        let excelTaxRate: number | null = null;
+                        const taxRateStr = String(getVal(row, 'taxRate')).trim();
+                        if (taxRateStr && taxRateStr !== '-') {
+                            const parsedTax = parseFloat(taxRateStr.replace(/[^0-9.]/g, ''));
+                            if ([0, 5, 12, 18, 28].includes(parsedTax)) {
+                                excelTaxRate = parsedTax;
+                            } else {
+                                throw new BadRequestException(`Invalid Tax Rate '${taxRateStr}' in Excel. Must be one of: 0%, 5%, 12%, 18%, 28%`);
+                            }
+                        }
+
+                        // Fallback: search in legacy hsn table or use Excel tax rate to auto-create
+                        for (const codeVar of uniqueVariations) {
+                            const legacyHsn = await prisma.hsn.findUnique({
+                                where: { hsnCode: codeVar },
+                                include: { taxDetails: true }
+                            });
+                            if (legacyHsn || excelTaxRate !== null) {
+                                hsnCode = codeVar;
+                                let taxRate = 18; // default fallback
+                                if (excelTaxRate !== null) {
+                                    taxRate = excelTaxRate;
+                                } else if (legacyHsn?.taxDetails && legacyHsn.taxDetails.length > 0) {
+                                    const parsedTax = parseFloat(legacyHsn.taxDetails[0].rateOfTax || '18');
+                                    if ([0, 5, 12, 18, 28].includes(parsedTax)) {
+                                        taxRate = parsedTax;
+                                    }
+                                }
+                                const description = legacyHsn?.description || legacyHsn?.taxDetails?.[0]?.description || 'Auto-created from Excel import';
+                                const type = (legacyHsn?.type && legacyHsn.type.toUpperCase() === 'SAC') ? 'SAC' : (productType === ProductType.SERVICES ? 'SAC' : 'HSN');
+                                hsnMaster = await prisma.hsnMaster.create({
+                                    data: {
+                                        type,
+                                        code: hsnCode,
+                                        taxRate: new Prisma.Decimal(taxRate),
+                                        description: description.substring(0, 200),
+                                        isActive: true,
+                                        createdBy: userId,
+                                        updatedBy: userId
+                                    }
+                                });
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!hsnMaster) {
+                        throw new BadRequestException(`${productType === ProductType.SERVICES ? 'SAC' : 'HSN'} Code (${hsnCode}) does not exist in HSN Master. Please add it to the HSN Master first.`);
                     }
                     if (productType === ProductType.SERVICES && hsnMaster.type !== 'SAC') {
                         throw new BadRequestException('Please select a valid SAC Code for Services.');

@@ -2,17 +2,27 @@ import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { ReportsService } from './reports.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import {
   POReportQueryDto,
   TrendQueryDto,
+  ProfitLossQueryDto,
 } from './dto/reports.dto';
 
 @ApiTags('Reports')
 @Controller('reports')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @ApiBearerAuth()
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
+
+  @Get('profit-loss')
+  @RequirePermission('reports_view')
+  @ApiOperation({ summary: 'Get Trading & Profit and Loss report data' })
+  async getProfitLoss(@Query() query: ProfitLossQueryDto, @Request() req) {
+    return this.reportsService.getProfitLoss(req.user.userId, query);
+  }
 
   @Get('summary')
   @ApiOperation({ summary: 'Get total purchases, sales, net flow, and invoice count' })

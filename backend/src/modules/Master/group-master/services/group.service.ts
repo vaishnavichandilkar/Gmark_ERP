@@ -56,7 +56,20 @@ export class GroupMasterService {
         // 3. Save to the correct table based on target level
         let data;
         const opening_balance = dto.opening_balance !== undefined && dto.opening_balance !== null && dto.opening_balance !== '' ? Number(dto.opening_balance) : null;
-        const balance_type = dto.balance_type || null;
+        let balance_type = dto.balance_type || null;
+
+        if (opening_balance !== null) {
+            if (opening_balance < 0) {
+                throw new BadRequestException('Opening balance cannot be negative');
+            }
+            if (opening_balance === 0 && !balance_type) {
+                balance_type = 'Dr';
+            }
+            if (!balance_type || (balance_type !== 'Dr' && balance_type !== 'Cr')) {
+                throw new BadRequestException('Balance type is mandatory and must be Dr or Cr when opening balance is entered');
+            }
+        }
+
         switch (targetLevel) {
             case 2:
                 data = await this.groupRepository.createSubGroup({ subgroup_name: group_name, group_id: parent_raw_id, userId, opening_balance, balance_type });
@@ -94,8 +107,13 @@ export class GroupMasterService {
         const level = info.level;
         const raw_id = info.data.id;
 
+        const groupData = info.data as any;
+        if (groupData.userId === null || groupData.userId === undefined) {
+            throw new ForbiddenException('Predefined groups cannot be edited. Only user-created groups can be edited.');
+        }
+
         if (level === 1) {
-            if ((info.data as any)?.is_header) {
+            if (groupData.is_header) {
                 throw new ForbiddenException('Header groups cannot be edited');
             }
         }
@@ -119,14 +137,50 @@ export class GroupMasterService {
             throw new ConflictException(`Group "${group_name}" already exists under this parent`);
         }
 
+        const oldName = level === 4 ? groupData.name : (level === 2 ? groupData.subgroup_name : (level === 1 ? groupData.group_name : groupData.name));
+
+        if (level === 4 && oldName && oldName.toLowerCase() !== group_name.toLowerCase()) {
+            const parentSubSub = await this.groupRepository.findSubSubGroupById(groupData.sub_sub_group_id);
+            if (parentSubSub && parentSubSub.name.toLowerCase() === 'bank & cash') {
+                await this.groupRepository.renameAccountMasterName(oldName, group_name, userId);
+            }
+        }
+
+        const isParent = await this.groupRepository.isGroupParent(raw_id, level, oldName, userId);
         const opening_balance = dto.opening_balance !== undefined && dto.opening_balance !== null && dto.opening_balance !== '' ? Number(dto.opening_balance) : null;
-        const balance_type = dto.balance_type || null;
+        let balance_type = dto.balance_type || null;
+
+        if (opening_balance !== null) {
+            if (opening_balance < 0) {
+                throw new BadRequestException('Opening balance cannot be negative');
+            }
+            if (opening_balance === 0 && !balance_type) {
+                balance_type = 'Dr';
+            }
+            if (!balance_type || (balance_type !== 'Dr' && balance_type !== 'Cr')) {
+                throw new BadRequestException('Balance type is mandatory and must be Dr or Cr when opening balance is entered');
+            }
+        }
+
+        if (isParent) {
+            const dbBalance = groupData.opening_balance !== null && groupData.opening_balance !== undefined ? Number(groupData.opening_balance) : 0;
+            const newBalance = opening_balance !== null ? Number(opening_balance) : 0;
+            const dbType = groupData.balance_type || 'Dr';
+            const newType = balance_type || 'Dr';
+
+            if (dbBalance !== newBalance || dbType !== newType) {
+                throw new BadRequestException('Parent group balance is auto-calculated and cannot be edited manually');
+            }
+        }
+
         const data = await this.groupRepository.updateGroupName(raw_id, level, {
             group_name,
             parent_id: parent_raw_id,
             opening_balance,
             balance_type,
         }, userId);
+
+        await this.groupRepository.syncUserGroupBalances(userId);
 
         return {
             success: true,
@@ -526,5 +580,15 @@ export class GroupMasterService {
         }
 
         throw new BadRequestException('Invalid format. Use xlsx or pdf.');
+    }
+
+    async deleteGroup(id: string, userId: number) {
+        const res = await this.groupRepository.deleteGroup(id, userId);
+        await this.groupRepository.syncUserGroupBalances(userId);
+        return res;
+    }
+
+    async syncUserGroupBalances(userId: number) {
+        return this.groupRepository.syncUserGroupBalances(userId);
     }
 }

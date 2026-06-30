@@ -2,6 +2,8 @@ import axiosInstance from './axiosInstance';
 
 const RECEIPT_PATH = '/receipt-voucher';
 const PAYMENT_PATH = '/payment-voucher';
+const JOURNAL_PATH = '/journal-voucher';
+const CONTRA_PATH = '/contra-voucher';
 const ACCOUNT_PATH = '/account-master';
 const LEDGER_PATH = '/ledger';
 
@@ -17,6 +19,11 @@ export const getCustomers = async () => {
 
 export const getSuppliers = async () => {
     const response = await axiosInstance.get(`${ACCOUNT_PATH}/suppliers/payment-eligible`);
+    return response.data;
+};
+
+export const getActiveAccounts = async () => {
+    const response = await axiosInstance.get(`${ACCOUNT_PATH}/active-accounts`);
     return response.data;
 };
 
@@ -70,18 +77,79 @@ export const updatePaymentVoucher = async (id, data) => {
     return response.data;
 };
 
+export const createJournalVoucher = async (data) => {
+    const response = await axiosInstance.post(JOURNAL_PATH, data);
+    return response.data;
+};
+
+export const getJournalVouchers = async () => {
+    const response = await axiosInstance.get(JOURNAL_PATH);
+    return response.data;
+};
+
+export const getJournalVoucherById = async (id) => {
+    const response = await axiosInstance.get(`${JOURNAL_PATH}/${id}`);
+    return response.data;
+};
+
+export const deleteJournalVoucher = async (id) => {
+    const response = await axiosInstance.delete(`${JOURNAL_PATH}/${id}`);
+    return response.data;
+};
+
+export const updateJournalVoucher = async (id, data) => {
+    const response = await axiosInstance.put(`${JOURNAL_PATH}/${id}`, data);
+    return response.data;
+};
+
+export const createContraVoucher = async (data) => {
+    const response = await axiosInstance.post(CONTRA_PATH, data);
+    return response.data;
+};
+
+export const getContraVouchers = async () => {
+    const response = await axiosInstance.get(CONTRA_PATH);
+    return response.data;
+};
+
+export const getContraVoucherById = async (id) => {
+    const response = await axiosInstance.get(`${CONTRA_PATH}/${id}`);
+    return response.data;
+};
+
+export const deleteContraVoucher = async (id) => {
+    const response = await axiosInstance.delete(`${CONTRA_PATH}/${id}`);
+    return response.data;
+};
+
+export const updateContraVoucher = async (id, data) => {
+    const response = await axiosInstance.put(`${CONTRA_PATH}/${id}`, data);
+    return response.data;
+};
+
 export default {
     getBankCashAccounts,
     getCustomers,
     getSuppliers,
+    getActiveAccounts,
     createReceiptVoucher,
     createPaymentVoucher,
+    createJournalVoucher,
     getReceiptVouchers,
     getPaymentVouchers,
+    getJournalVouchers,
     getReceiptVoucherById,
     getPaymentVoucherById,
+    getJournalVoucherById,
     deleteReceiptVoucher,
     deletePaymentVoucher,
+    deleteJournalVoucher,
+    deleteContraVoucher,
     updateReceiptVoucher,
-    updatePaymentVoucher
+    updatePaymentVoucher,
+    updateJournalVoucher,
+    updateContraVoucher,
+    createContraVoucher,
+    getContraVouchers,
+    getContraVoucherById
 };

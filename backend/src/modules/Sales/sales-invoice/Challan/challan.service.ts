@@ -4,6 +4,7 @@ import { CreateChallanDto, UpdateChallanDto } from './dto/challan.dto';
 import { SalesOrderService } from '../../sales-order/sales-order.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
+import { formatDate } from '../../../../utils/dateFormatter';
 import { determineSalesGst } from '../../../../common/utils/gst.helper';
 
 @Injectable()
@@ -684,8 +685,8 @@ export class ChallanService {
         worksheet.addRow({
           challanNumber: ch.challanNumber,
           customerName: ch.customerName,
-          challanDate: ch.challanDate.toLocaleDateString(),
-          bookingDate: ch.bookingDate.toLocaleDateString(),
+          challanDate: formatDate(ch.challanDate),
+          bookingDate: formatDate(ch.bookingDate),
           soNumber: ch.soNumber || '-',
           taxableAmount: ch.taxableAmount,
           grandTotal: ch.grandTotal,
@@ -758,8 +759,8 @@ export class ChallanService {
           doc.fontSize(7);
           doc.text(ch.challanNumber, colX[0], y);
           doc.text(ch.customerName.substring(0, 30), colX[1], y);
-          doc.text(ch.challanDate.toLocaleDateString(), colX[2], y);
-          doc.text(ch.bookingDate.toLocaleDateString(), colX[3], y);
+          doc.text(formatDate(ch.challanDate), colX[2], y);
+          doc.text(formatDate(ch.bookingDate), colX[3], y);
           doc.text(ch.soNumber || '-', colX[4], y);
           doc.text(ch.taxableAmount.toFixed(2), colX[5], y);
           doc.text(ch.grandTotal.toFixed(2), colX[6], y);

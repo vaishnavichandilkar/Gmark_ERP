@@ -17,7 +17,8 @@ import {
   ChevronsUpDown,
   CheckCircle2,
   RefreshCw,
-  ChevronDown
+  ChevronDown,
+  Trash2
 } from "lucide-react";
 import { getStandardGstUom } from "@/utils/uomUtils";
 import { useTranslation } from "react-i18next";
@@ -203,7 +204,7 @@ const ProductMaster = () => {
           link.parentNode.removeChild(link);
         }}
         sampleFileName="Product_Master_Sample.xlsx"
-        sampleHeaders={['Type*', 'Product Name*', 'UOM*', 'Category*', 'Sub Category*', 'Sub Sub Category', 'HSN/SAC Code*', 'Product Description', 'Status']}
+        sampleHeaders={['Type*', 'Product Name*', 'UOM*', 'Category*', 'Sub Category*', 'Sub Sub Category', 'HSN/SAC Code*', 'Tax Rate (%)*', 'Product Description', 'Status']}
       />
 
       <button
@@ -228,6 +229,24 @@ const ProductMaster = () => {
     } catch (error) {
       console.error("Error toggling status:", error);
       showToast(error.response?.data?.message || t("common:error_updating_status"), "error");
+    } finally {
+      setLoading(false);
+      setActiveDropdown(null);
+    }
+  };
+
+  const handleDeleteProduct = async (productId, productName) => {
+    const confirmDelete = window.confirm(`Are you sure you want to delete the product "${productName}"?`);
+    if (!confirmDelete) return;
+
+    setLoading(true);
+    try {
+      await productService.deleteProduct(productId);
+      showToast("Product deleted successfully");
+      fetchProducts();
+    } catch (err) {
+      console.error('Error deleting product:', err);
+      showToast(err.response?.data?.message || err.message || 'Server error', 'error');
     } finally {
       setLoading(false);
       setActiveDropdown(null);
@@ -718,23 +737,34 @@ const ProductMaster = () => {
                               </button>
                               <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
                               <button
-                                onClick={() =>
-                                  handleToggleStatus(row.id, row.status)
-                                }
-                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
-                              >
-                                <CheckCircle2
-                                  size={18}
-                                  className={
-                                    row.status.toUpperCase() === "ACTIVE"
-                                      ? "text-gray-400"
-                                      : "text-[#073318]"
-                                  }
-                                />
-                                {row.status.toUpperCase() === "ACTIVE"
-                                  ? t("common:inactive")
-                                  : t("common:active")}
-                              </button>
+                                 onClick={() =>
+                                   handleToggleStatus(row.id, row.status)
+                                 }
+                                 className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap font-bold"
+                               >
+                                 <CheckCircle2
+                                   size={18}
+                                   className={
+                                     row.status.toUpperCase() === "ACTIVE"
+                                       ? "text-gray-400"
+                                       : "text-[#073318]"
+                                   }
+                                 />
+                                 {row.status.toUpperCase() === "ACTIVE"
+                                   ? t("common:inactive")
+                                   : t("common:active")}
+                               </button>
+                               <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
+                               <button
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   handleDeleteProduct(row.id, row.product_name);
+                                 }}
+                                 className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap font-bold"
+                               >
+                                 <Trash2 size={18} className="text-red-500" />
+                                 {t("common:delete", "Delete")}
+                               </button>
                             </div>
                           )}
                         </td>

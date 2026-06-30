@@ -1,1 +1,0 @@
-SELECT "supplierName" FROM "grns";

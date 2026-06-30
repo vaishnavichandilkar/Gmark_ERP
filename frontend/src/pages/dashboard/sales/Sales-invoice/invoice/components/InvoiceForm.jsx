@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ROUTES } from "@/constants/routes";
 import ChallanMultiSelect from '../../challan/components/ChallanMultiSelect';
+import { toDisplayDate } from '@/utils/dateUtils';
+import DateInput from '@/components/common/DateInput';
 
 const InvoiceForm = ({
     formData,
@@ -44,22 +46,7 @@ const InvoiceForm = ({
         );
     }, [customerSearch, customers]);
 
-    const toDisplayDate = (dateStr) => {
-        if (!dateStr) return "";
-        const separator = dateStr.includes("-") ? "-" : "/";
-        const parts = dateStr.split(separator);
-        if (parts.length === 3) {
-            // If ISO (YYYY-MM-DD), convert to DD/MM/YY
-            if (parts[0].length === 4) {
-                const yearShort = parts[0].slice(-2);
-                return `${parts[2]}/${parts[1]}/${yearShort}`;
-            }
-            // If already DD/MM/YYYY or DD-MM-YYYY, convert to DD/MM/YY
-            const lastPart = parts[2].slice(-2);
-            return `${parts[0]}/${parts[1]}/${lastPart}`;
-        }
-        return dateStr;
-    };
+    // Local toDisplayDate duplicate removed in favor of central import
 
     const handleDateTextChange = (e, field) => {
         // Handled via readOnly + picker
@@ -248,57 +235,25 @@ const InvoiceForm = ({
                 </div>
 
                 {/* 7. Customer Invoice Date */}
-                <div className="space-y-2 font-outfit">
-                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:customer_invoice_date')} <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                        <input
-                            type="date"
-                            ref={invoiceDateRef}
-                            className="absolute opacity-0 pointer-events-none w-0 h-0"
-                            value={formData.customerInvoiceDate || ''}
-                            min={minDate}
-                            max={maxDate}
-                            onKeyDown={(e) => e.preventDefault()}
-                            onChange={(e) => setFormData({ ...formData, customerInvoiceDate: e.target.value })}
-                        />
-                        <input
-                            type="text"
-                            placeholder={t('modules:date_placeholder')}
-                            value={toDisplayDate(formData.customerInvoiceDate)}
-                            readOnly
-                            onClick={() => !isLocked && invoiceDateRef.current?.showPicker?.()}
-                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all shadow-sm ${
-                                isLocked ? 'bg-gray-50 text-gray-500 cursor-not-allowed border-[#E5E7EB]' : 
-                                `cursor-pointer ${errors.customerInvoiceDate ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`
-                            }`}
-                        />
-                        <Calendar
-                            size={18}
-                            className={`absolute right-4 top-1/2 -translate-y-1/2 transition-colors ${
-                                isLocked ? 'text-gray-300 pointer-events-none' : 'text-gray-400 cursor-pointer pointer-events-auto hover:text-[#073318]'
-                            }`}
-                            onClick={() => !isLocked && invoiceDateRef.current?.showPicker?.()}
-                        />
-                    </div>
-                </div>
+                <DateInput
+                    label={t('modules:customer_invoice_date')}
+                    required
+                    value={formData.customerInvoiceDate}
+                    minDate={minDate}
+                    maxDate={maxDate}
+                    isLocked={isLocked}
+                    onChange={(val) => setFormData({ ...formData, customerInvoiceDate: val })}
+                    error={errors.customerInvoiceDate}
+                />
 
                 {/* 8. Booking Date */}
-                <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:booking_date_current')} <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            value={toDisplayDate(new Date().toISOString().split('T')[0])}
-                            readOnly
-                            className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all text-gray-500 cursor-not-allowed shadow-sm"
-                            placeholder={t('modules:date_placeholder')}
-                        />
-                        <Calendar
-                            size={18}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"
-                        />
-                    </div>
-                </div>
+                <DateInput
+                    label={t('modules:booking_date_current')}
+                    required
+                    value={formData.bookingDate}
+                    isLocked={true}
+                    onChange={() => {}}
+                />
 
                 {/* 9. Customer Invoice Number */}
                 <div className="space-y-2">

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { determinePurchaseGst } from '@/utils/gstUtils';
 import axiosInstance from '../../../../services/axiosInstance';
 import { getStandardGstUom } from '../../../../utils/uomUtils';
+import { formatDate } from '@/utils/dateUtils';
 
 const POPrintPreview = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -208,19 +209,7 @@ const POPrintPreview = () => {
         );
     }
 
-    const formatDate = (dateStr) => {
-        if (!dateStr || dateStr === "N/A") return "-";
-        try {
-            const date = new Date(dateStr);
-            if (isNaN(date.getTime())) return dateStr;
-            const d = String(date.getDate()).padStart(2, '0');
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const y = String(date.getFullYear()).slice(-2);
-            return `${d}/${m}/${y}`;
-        } catch (e) {
-            return dateStr;
-        }
-    };
+
 
     const {
         poNumber, po_number,
@@ -231,8 +220,16 @@ const POPrintPreview = () => {
         gstNumber, gst_number: gst_number_sn,
         panNumber, pan_number: pan_number_sn, panNo,
         creditDays, credit_days: credit_days_sn,
-        items = []
+        items: rawItems = []
     } = poData;
+
+    const items = rawItems.filter(item => {
+        const name = (item.productName || item.product_name || "").trim();
+        const code = (item.productCode || item.product_code || "").trim();
+        const qty = parseFloat(item.quantity) || 0;
+        const rate = parseFloat(item.rate) || 0;
+        return name !== "" || code !== "" || qty > 0 || rate > 0;
+    });
 
     const po_no = poNumber || po_number || "N/A";
     const supplier_name = supplierName || supplier_name_sn || "N/A";
@@ -360,10 +357,157 @@ const POPrintPreview = () => {
         return (convert(total) + 'Rupees Only').toUpperCase();
     };
 
+    const wrapText = (text, limit = 35) => {
+        if (!text) return [];
+        const lines = text.split('\n');
+        const wrapped = [];
+        for (const line of lines) {
+            if (line.length <= limit) {
+                wrapped.push(line);
+            } else {
+                let current = line;
+                while (current.length > 0) {
+                    let cutIndex = limit;
+                    if (current.length > limit) {
+                        const lastSpace = current.lastIndexOf(' ', limit);
+                        if (lastSpace > 5) {
+                            cutIndex = lastSpace;
+                        }
+                    }
+                    wrapped.push(current.substring(0, cutIndex).trim());
+                    current = current.substring(cutIndex).trim();
+                }
+            }
+        }
+        while (wrapped.length > 0 && wrapped[wrapped.length - 1] === "") {
+            wrapped.pop();
+        }
+        return wrapped;
+    };
+
+    const getPageSchema = () => {
+        const ROW_LIMIT = 310; // Safer row limit to prevent page overflow and layout splitting
+
+        const pages = [];
+        let pageItems = [];
+        let currentRowsHeight = 0;
+
+        let i = 0;
+        let linesRemaining = null;
+        let currentItem = null;
+        let isCont = false;
+        let currentCombinedText = "";
+
+        while (i < items.length || linesRemaining !== null) {
+            // Load next item if no lines remaining from a split
+            if (linesRemaining === null) {
+                currentItem = items[i];
+                const prodName = (currentItem.productName || currentItem.product_name || "").trim();
+                const desc = (currentItem.printDescription || currentItem.print_description || currentItem.description || currentItem.product_description || "").trim();
+                currentCombinedText = (prodName + (desc ? ` (${desc})` : "")).trim();
+                linesRemaining = wrapText(currentCombinedText, 35);
+                if (linesRemaining.length === 0) {
+                    linesRemaining = [""];
+                }
+                isCont = false;
+            }
+
+            const lineCount = linesRemaining.length;
+            const rowHeight = lineCount * 16 + 12;
+
+            const remainingSpace = ROW_LIMIT - currentRowsHeight;
+
+            if (rowHeight <= remainingSpace) {
+                // Fits completely on the current page
+                pageItems.push({
+                    isContinuation: isCont,
+                    sn: isCont ? "" : i + 1,
+                    productName: isCont ? "" : (currentItem.productName || currentItem.product_name || "N/A"),
+                    printDescription: isCont ? linesRemaining.join(' ') : currentCombinedText,
+                    hsnCode: isCont ? "" : (currentItem.hsnCode || currentItem.hsn_code || currentItem.hsn || ""),
+                    taxPercent: isCont ? "" : (currentItem.taxPercent ?? currentItem.tax_percent ?? 0),
+                    quantity: isCont ? "" : currentItem.quantity,
+                    uom: isCont ? "" : currentItem.uom,
+                    rate: isCont ? "" : currentItem.rate,
+                    discountPercent: isCont ? "" : (currentItem.discountPercent || currentItem.discount_percent || 0),
+                    totalAmount: isCont ? 0 : parseFloat(currentItem.before_tax || currentItem.beforeTaxAmount || (currentItem.quantity * currentItem.rate - (currentItem.discountAmount || currentItem.discount_amount || 0))),
+                    rowHeight: rowHeight
+                });
+                currentRowsHeight += rowHeight;
+                linesRemaining = null;
+                i++;
+            } else {
+                // Does not fit completely. Try to fit at least 1 line.
+                const maxLines = Math.floor((remainingSpace - 12) / 16);
+
+                if (maxLines >= 1) {
+                    // Split the lines
+                    const linesToFit = linesRemaining.slice(0, maxLines);
+                    const linesForNext = linesRemaining.slice(maxLines);
+                    const fitRowHeight = linesToFit.length * 16 + 12;
+
+                    pageItems.push({
+                        isContinuation: isCont,
+                        sn: isCont ? "" : i + 1,
+                        productName: isCont ? "" : (currentItem.productName || currentItem.product_name || "N/A"),
+                        printDescription: linesToFit.join(' '),
+                        hsnCode: isCont ? "" : (currentItem.hsnCode || currentItem.hsn_code || currentItem.hsn || ""),
+                        taxPercent: isCont ? "" : (currentItem.taxPercent ?? currentItem.tax_percent ?? 0),
+                        quantity: isCont ? "" : currentItem.quantity,
+                        uom: isCont ? "" : currentItem.uom,
+                        rate: isCont ? "" : currentItem.rate,
+                        discountPercent: isCont ? "" : (currentItem.discountPercent || currentItem.discount_percent || 0),
+                        totalAmount: isCont ? 0 : parseFloat(currentItem.before_tax || currentItem.beforeTaxAmount || (currentItem.quantity * currentItem.rate - (currentItem.discountAmount || currentItem.discount_amount || 0))),
+                        rowHeight: fitRowHeight
+                    });
+                    currentRowsHeight += fitRowHeight;
+                    linesRemaining = linesForNext;
+                    isCont = true;
+                }
+
+                // Current page is full, push it and start a new one
+                pages.push({
+                    pageNumber: pages.length + 1,
+                    showHeader: true,
+                    showSupplierInfo: true,
+                    items: pageItems,
+                    showTotals: true,
+                    showSignatory: true
+                });
+                pageItems = [];
+                currentRowsHeight = 0;
+
+                if (maxLines < 1) {
+                    // If we couldn't even fit 1 line, we do NOT change linesRemaining.
+                    // It will be processed on the fresh page in the next iteration.
+                }
+            }
+        }
+
+        // Push the last page if there are leftover items
+        if (pageItems.length > 0) {
+            pages.push({
+                pageNumber: pages.length + 1,
+                showHeader: true,
+                showSupplierInfo: true,
+                items: pageItems,
+                showTotals: true,
+                showSignatory: true
+            });
+        }
+
+        return pages;
+    };
+
+    const pages = getPageSchema();
+
     const handleDownloadPDF = async () => {
         try {
             setIsDownloading(true);
             const loadToastId = toast.loading('Generating Pixel-Perfect PDF...');
+
+            // Defer execution to allow React state updates and browser rendering
+            await new Promise((resolve) => setTimeout(resolve, 300));
 
             const element = printRef.current;
             const opt = {
@@ -382,7 +526,8 @@ const POPrintPreview = () => {
                     unit: 'mm',
                     format: 'a4',
                     orientation: 'portrait'
-                }
+                },
+                pagebreak: { mode: ['css', 'legacy'] }
             };
 
             await html2pdf().set(opt).from(element).save();
@@ -402,21 +547,57 @@ const POPrintPreview = () => {
             <style>{`
                 @media print {
                     @page { size: A4; margin: 0; }
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
                     aside, nav, header, footer, .no-print, [role="navigation"], .sidebar-container, .top-navigation { 
                         display: none !important; width: 0 !important; height: 0 !important; overflow: hidden !important;
                     }
-                    body, #root, #root > div { margin: 0 !important; padding: 0 !important; width: 100% !important; height: auto !important; display: block !important; overflow: visible !important; }
+                    html, body, #root, #root > div, div:has(.print-container) { margin: 0 !important; padding: 0 !important; width: 100% !important; height: auto !important; min-height: 0 !important; display: block !important; overflow: visible !important; background: transparent !important; }
                     main, .main-content { margin: 0 !important; padding: 0 !important; display: block !important; }
-                    .print-container { width: 210mm; height: 297mm; padding: 10mm; margin: 0 !important; border: none !important; background: white !important; position: absolute; left: 0; top: 0; z-index: 9999; }
+                    .print-container { width: 210mm !important; height: 296mm !important; max-height: 296mm !important; padding: 10mm !important; margin: 0 auto !important; border: none !important; background: white !important; position: relative !important; z-index: 9999; box-sizing: border-box !important; overflow: hidden !important; }
                     body > *:not(.print-container) { display: none !important; }
+                    tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+                    .page-break-avoid { page-break-inside: avoid !important; break-inside: avoid !important; }
+                }
+                /* Hide scrollbars globally on this page (both screen and print) */
+                ::-webkit-scrollbar {
+                    display: none !important;
+                }
+                * {
+                    scrollbar-width: none !important;
+                    -ms-overflow-style: none !important;
                 }
                 .black-border { border: 1.5px solid black; }
                 .border-b-black { border-bottom: 1px solid black; }
                 .border-r-black { border-right: 1px solid black; }
                 .border-t-black { border-top: 1px solid black; }
                 .border-l-black { border-left: 1px solid black; }
-                table { border-collapse: collapse; width: 100%; }
-                th, td { border: 1px solid black; }
+                table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+                div.no-print-bg .print-container table th {
+                    background-color: #014A36 !important;
+                    color: white !important;
+                    border-bottom: 1px solid black !important;
+                    border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+                    border-top: none !important;
+                    border-left: none !important;
+                    vertical-align: middle !important;
+                    height: 40px;
+                }
+                div.no-print-bg .print-container table td {
+                    border-bottom: 1px solid black !important;
+                    border-right: 1px solid black !important;
+                    border-top: none !important;
+                    border-left: none !important;
+                    vertical-align: top !important;
+                }
+                div.no-print-bg .print-container table th:last-child,
+                div.no-print-bg .print-container table td:last-child {
+                    border-right: none !important;
+                }
+                tr { page-break-inside: avoid; break-inside: avoid; }
+                .page-break-avoid { page-break-inside: avoid; break-inside: avoid; }
                 .no-scrollbar::-webkit-scrollbar { display: none; }
             `}</style>
 
@@ -448,157 +629,198 @@ const POPrintPreview = () => {
                 </div>
             </div>
 
-            <div className="no-print-bg flex justify-center p-6 bg-gray-50/50 min-h-screen">
-                <div ref={printRef} className="print-container w-[210mm] h-[296mm] max-h-[296mm] bg-white black-border flex flex-col font-outfit text-black leading-tight overflow-hidden p-[10mm] box-border">
-                    <div className="w-full border-black border flex flex-col">
-                        <div className="border-b border-black p-4 py-3 flex items-center justify-center relative min-h-[85px]">
-                            <div className="absolute left-6 w-14 h-14 bg-[#014A36] rounded-full"></div>
-                            <h1 className="text-[26px] font-black uppercase text-center">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</h1>
-                        </div>
-                        <div className="border-b border-black py-2.5 text-center text-[12.5px] font-semibold">
-                            {sellerInfo?.address || "Near Mahalaxmi Temple, Hitani"}
-                        </div>
-                        <div className="border-b border-black py-2.5 text-center text-[11px] font-semibold tracking-wide">
-                            {t('modules:phone_no', 'Phone No.')}: {sellerInfo?.phone || "+91 2855943035"} &nbsp; {t('modules:email_id', 'Email Id')}: {sellerInfo?.email || "ardhya123@gmail.com"} {sellerInfo?.website && ` &nbsp; ${t('modules:website', 'Website')}: ${sellerInfo.website}`}
-                        </div>
-                        <div className="border-b border-black py-3 text-center font-black text-[15px] uppercase tracking-[3px]">
-                            {t('modules:purchase_order', 'PURCHASE ORDER')}
-                        </div>
-
-                        <div className="flex border-b border-black text-[12px] font-black uppercase">
-                            <div className="w-[38%] py-3 px-4">{t('modules:gstin', 'GSTIN')} : {sellerInfo?.gstNumber}</div>
-                            <div className="w-[30%] py-3 px-4 text-center">{t('modules:state_code', 'State Code')} : {sellerInfo?.stateInfo}</div>
-                            <div className="flex-1 py-3 px-4 text-right pr-6 whitespace-nowrap">{t('modules:pan_no', 'PAN No')} : {sellerInfo?.panNumber}</div>
-                        </div>
-
-                        <div className="flex border-b border-black min-h-[160px]">
-                            <div className="w-1/2 flex flex-col border-r border-black">
-                                <div className="border-b border-black flex items-center px-4 h-[44px] gap-4">
-                                    <span className="font-black text-[12px] min-w-[30px]">{t('modules:ms', 'M/S.')}</span>
-                                    <span className="font-black text-[12px] uppercase">{supplier_name}</span>
-                                </div>
-                                <div className="flex-1 px-4 py-3 text-[11.5px] leading-relaxed font-semibold overflow-hidden">{address}</div>
-                                <div className="border-t border-black flex items-center px-4 h-[44px] gap-4">
-                                    <span className="font-black text-[12px] min-w-[70px]">{t('modules:supplier_code', 'Supplier Code')}</span>
-                                    <span className="font-black text-[12px]">{poData?.supplierCode || poData?.supplier_code || "SP00001"}</span>
-                                </div>
-                            </div>
-                            <div className="w-1/2 flex flex-col">
-                                <div className="flex border-b border-black h-[44px]">
-                                    <div className="w-[43%] flex items-center px-4 gap-4">
-                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:po_no_colon', 'PO No.')} :</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{po_no}</span>
-                                    </div>
-                                    <div className="flex-1 flex items-center px-4 gap-4 border-l" style={{ borderColor: 'rgba(0, 0, 0, 0.1)' }}>
-                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:po_creation_date', 'PO Creation Date')} :</span>
-                                        <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(po_creation_date)}</span>
-                                    </div>
-                                </div>
-                                <div className="flex-1 border-b border-black flex items-center px-4 py-2.5 gap-4">
-                                    <span className="font-black text-[12px] min-w-[80px]">{t('modules:pay_terms', 'Pay. Terms')}</span>
-                                    <span className="font-semibold text-[12px]">{credit_days} {t('modules:days', 'Days')}</span>
-                                </div>
-                                <div className="flex items-center px-4 h-[44px] gap-4 border-b border-black">
-                                    <span className="font-black text-[12px] min-w-[80px]">{t('modules:expiry_date', 'Expiry Date')}:</span>
-                                    <span className="font-semibold text-[12px]">{formatDate(expiry_date)}</span>
-                                </div>
-                                {isGstApplicable ? (
-                                    <div className="flex items-center px-4 h-[44px] gap-4">
-                                        <span className="font-black text-[12px] min-w-[80px]">{t('modules:gst_no', 'GST No')}:</span>
-                                        <span className="font-semibold text-[12px] uppercase">{gst_number || "N/A"}</span>
-                                    </div>
-                                ) : (
-                                    <div className="flex h-[44px]">
-                                        <div className="w-[43%] flex items-center px-4 gap-4">
-                                            <span className="font-black text-[11px] whitespace-nowrap">{t('modules:pan_no', 'PAN No')} :</span>
-                                            <span className="font-semibold text-[11px] uppercase">{supplier_pan}</span>
+            <div 
+                ref={printRef} 
+                className={`no-print-bg flex flex-col items-center min-h-screen ${
+                    isDownloading ? 'p-0 gap-0 bg-white' : 'p-6 gap-6 bg-gray-50/50'
+                }`}
+            >
+                {pages.map((page, pageIdx) => (
+                    <div 
+                        key={pageIdx} 
+                        className={`print-container w-[210mm] h-[296mm] max-h-[296mm] bg-white flex flex-col font-outfit text-black leading-tight p-[10mm] box-border relative ${
+                            isDownloading ? 'border-none shadow-none' : 'black-border shadow-md'
+                        }`}
+                         style={{ 
+                            pageBreakAfter: pageIdx === pages.length - 1 ? 'avoid' : 'always',
+                            breakAfter: pageIdx === pages.length - 1 ? 'avoid' : 'page'
+                        }}
+                    >
+                        <div className="flex flex-col h-full w-full relative">
+                            <div className="w-full border-black border h-full relative">
+                                {page.showHeader && (
+                                    <>
+                                        <div className="border-b border-black p-4 py-3 flex items-center justify-center relative min-h-[85px]">
+                                            <div className="absolute left-6 w-14 h-14 bg-[#014A36] rounded-full"></div>
+                                            <h1 className="text-[26px] font-black uppercase text-center">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</h1>
                                         </div>
-                                        <div className="flex-1 flex items-center px-4 gap-4 border-l" style={{ borderColor: 'rgba(0, 0, 0, 0.1)' }}>
-                                            <span className="font-black text-[11px] whitespace-nowrap">{t('modules:state_code', 'State Code')} :</span>
-                                            <span className="font-semibold text-[11px] uppercase">{supplier_state_info}</span>
+                                        <div className="border-b border-black py-2.5 text-center text-[12.5px] font-semibold">
+                                            {sellerInfo?.address || "Near Mahalaxmi Temple, Hitani"}
+                                        </div>
+                                        <div className="border-b border-black py-2.5 text-center text-[11px] font-semibold tracking-wide">
+                                            {t('modules:phone_no', 'Phone No.')}: {sellerInfo?.phone || "+91 2855943035"} &nbsp; {t('modules:email_id', 'Email Id')}: {sellerInfo?.email || "ardhya123@gmail.com"} {sellerInfo?.website && ` &nbsp; ${t('modules:website', 'Website')}: ${sellerInfo.website}`}
+                                        </div>
+                                        <div className="border-b border-black py-3 text-center font-black text-[15px] uppercase tracking-[3px]">
+                                            {t('modules:purchase_order', 'PURCHASE ORDER')}
+                                        </div>
+
+                                        <div className="flex border-b border-black text-[12px] font-black uppercase">
+                                            <div className="w-[38%] py-3 px-4">{t('modules:gstin', 'GSTIN')} : {sellerInfo?.gstNumber}</div>
+                                            <div className="w-[30%] py-3 px-4 text-center">{t('modules:state_code', 'State Code')} : {sellerInfo?.stateInfo}</div>
+                                            <div className="flex-1 py-3 px-4 text-right pr-6 whitespace-nowrap">{t('modules:pan_no', 'PAN No')} : {sellerInfo?.panNumber}</div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {page.showSupplierInfo && (
+                                    <div className="flex border-b border-black min-h-[160px] page-break-avoid">
+                                        <div className="w-1/2 flex flex-col flex-1 border-r border-black">
+                                            <div className="border-b border-black flex items-center px-4 h-[44px] gap-4">
+                                                <span className="font-black text-[12px] min-w-[30px]">{t('modules:ms', 'M/S.')}</span>
+                                                <span className="font-black text-[12px] uppercase">{supplier_name}</span>
+                                            </div>
+                                            <div className="flex-1 px-4 py-3 text-[11.5px] leading-relaxed font-semibold overflow-hidden">{address}</div>
+                                            <div className="border-t border-black flex items-center px-4 h-[44px] gap-4">
+                                                <span className="font-black text-[12px] min-w-[70px]">{t('modules:supplier_code', 'Supplier Code')}</span>
+                                                <span className="font-black text-[12px]">{poData?.supplierCode || poData?.supplier_code || "SP00001"}</span>
+                                            </div>
+                                        </div>
+                                        <div className="w-1/2 flex flex-col flex-1">
+                                            <div className="flex border-b border-black h-[44px] w-full">
+                                                <div className="w-[45%] shrink-0 flex items-center px-4 gap-2">
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:po_no_colon', 'PO No.')} :</span>
+                                                    <span className="font-semibold text-[11px] whitespace-nowrap">{po_no}</span>
+                                                </div>
+                                                <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:po_creation_date', 'PO Creation Date')} :</span>
+                                                    <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(po_creation_date)}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 border-b border-black flex min-h-[44px] w-full">
+                                                <div className="w-[45%] shrink-0 flex items-center px-4 gap-2">
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:pay_terms', 'Pay. Terms')} :</span>
+                                                    <span className="font-semibold text-[11px] whitespace-nowrap">{credit_days} {t('modules:days', 'Days')}</span>
+                                                </div>
+                                                <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:expiry_date', 'Expiry Date')} :</span>
+                                                    <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(expiry_date)}</span>
+                                                </div>
+                                            </div>
+                                            {isGstApplicable ? (
+                                                <div className="flex h-[44px] w-full">
+                                                    <div className="w-[45%] shrink-0 flex items-center px-4 gap-2">
+                                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:gst_no', 'GST No')} :</span>
+                                                        <span className="font-semibold text-[11px] uppercase">{gst_number || "N/A"}</span>
+                                                    </div>
+                                                    <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:pan_no', 'PAN No')} :</span>
+                                                        <span className="font-semibold text-[11px] uppercase">{supplier_pan}</span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex h-[44px] w-full">
+                                                    <div className="w-[45%] shrink-0 flex items-center px-4 gap-2">
+                                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:pan_no', 'PAN No')} :</span>
+                                                        <span className="font-semibold text-[11px] uppercase">{supplier_pan}</span>
+                                                    </div>
+                                                    <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
+                                                        <span className="font-black text-[11px] whitespace-nowrap">{t('modules:state_code', 'State Code')} :</span>
+                                                        <span className="font-semibold text-[11px] uppercase">{supplier_state_info}</span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
-                            </div>
-                        </div>
 
-                        <table className="w-full border-none m-0">
-                            <thead>
-                                <tr className="text-[11px] font-black h-[40px]">
-                                    <th className="w-[45px] border-b border-r border-black">{t('modules:sn', 'Sn.')}</th>
-                                    <th className="border-b border-r border-black px-4 text-left">{t('modules:description', 'Description')}</th>
-                                    <th className="w-[85px] border-b border-r border-black">{t('modules:hsn_sac', 'HSN/SAC')}</th>
-                                    <th className="w-[50px] border-b border-r border-black text-center">{t('modules:tax_percent', 'Tax%')}</th>
-                                    <th className="w-[65px] border-b border-r border-black text-center">{t('modules:quantity', 'Quantity')}</th>
-                                    <th className="w-[65px] border-b border-r border-black text-center">{t('modules:units', 'Units')}</th>
-                                    <th className="w-[85px] border-b border-r border-black text-center">{t('modules:rate', 'Rate')}</th>
-                                    <th className="w-[55px] border-b border-r border-black text-center">{t('modules:dis_percent', 'Dis%')}</th>
-                                    <th className="w-[110px] border-b border-black text-right px-4">{t('modules:amount', 'Amount')}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                 {items.map((item, idx) => (
-                                    <tr key={item.id || idx} className="text-[12px] font-semibold min-h-[40px]">
-                                        <td className="border-b border-r border-black text-center">{idx + 1}</td>
-                                        <td className="border-b border-r border-black px-4 py-2 leading-tight">
-                                            <div className="font-bold text-[13px] transition-all">
-                                                {item.productName || item.product_name || "N/A"}
-                                                {(() => {
-                                                    const desc = item.printDescription || item.print_description || item.description || item.product_description;
-                                                    return desc ? ` (${desc})` : '';
-                                                })()}
+                                {(page.items.length > 0 || page.showTotals) && (
+                                    <table className="w-full border-none m-0">
+                                        <thead>
+                                            <tr className="text-[11px] font-black h-[40px]">
+                                                <th className="w-[35px] border-b border-r border-black">{t('modules:sn', 'Sn.')}</th>
+                                                <th className="border-b border-r border-black px-4 text-left">{t('modules:description', 'Description')}</th>
+                                                <th className="w-[70px] border-b border-r border-black">{t('modules:hsn_sac', 'HSN/SAC')}</th>
+                                                <th className="w-[45px] border-b border-r border-black text-center">{t('modules:tax_percent', 'Tax%')}</th>
+                                                <th className="w-[70px] border-b border-r border-black text-center">{t('modules:quantity', 'Quantity')}</th>
+                                                <th className="w-[45px] border-b border-r border-black text-center">{t('modules:units', 'Units')}</th>
+                                                <th className="w-[60px] border-b border-r border-black text-center">{t('modules:rate', 'Rate')}</th>
+                                                <th className="w-[40px] border-b border-r border-black text-center">{t('modules:dis_percent', 'Dis%')}</th>
+                                                <th className="w-[80px] border-b border-black text-right px-4">{t('modules:amount', 'Amount')}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                             {page.items.map((item, idx) => (
+                                                 <tr key={idx} className="text-[12px] font-semibold">
+                                                     <td className="text-center py-[6px]">{item.sn}</td>
+                                                     <td className="px-2 py-[6px]">
+                                                         <div className="font-bold text-[13px] whitespace-pre-wrap text-justify" style={{ lineHeight: '16px', textAlign: 'justify', textAlignLast: 'left', WebkitTextAlignLast: 'left', hyphens: 'auto', WebkitHyphens: 'auto' }}>
+                                                             {item.printDescription}
+                                                         </div>
+                                                     </td>
+                                                     <td className="text-center py-[6px]">{item.hsnCode}</td>
+                                                     <td className="text-center py-[6px]">{item.taxPercent !== "" ? item.taxPercent : ""}</td>
+                                                     <td className="text-center py-[6px]">{item.quantity}</td>
+                                                     <td className="text-center uppercase py-[6px]">{item.uom ? getStandardGstUom(item.uom) : ""}</td>
+                                                     <td className="text-center py-[6px]">{item.rate}</td>
+                                                     <td className="text-center py-[6px]">{item.discountPercent !== "" ? item.discountPercent : ""}</td>
+                                                     <td className="text-right px-4 py-[6px] font-black">
+                                                         {item.isContinuation ? "" : (parseFloat(item.totalAmount) || 0).toFixed(2)}
+                                                     </td>
+                                                 </tr>
+                                             ))}
+                                        </tbody>
+                                    </table>
+                                )}
+
+                                <div className="w-full flex flex-col bg-white">
+                                    {page.showTotals && (
+                                        <div className="w-full bg-white page-break-avoid">
+                                            <div className="flex border-b border-black h-[30px]">
+                                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('modules:material_sub_total', 'Material Sub Total')}</div>
+                                                <div className="w-[80px] border-l border-black flex items-center justify-end pr-4 pl-1 font-black text-[11px] whitespace-nowrap">{Number(subTotal || 0).toFixed(2)}</div>
                                             </div>
-                                        </td>
-                                        <td className="border-b border-r border-black text-center">{item.hsnCode || item.hsn}</td>
-                                        <td className="border-b border-r border-black text-center">{item.taxPercent || item.tax_percent}</td>
-                                        <td className="border-b border-r border-black text-center">{item.quantity}</td>
-                                        <td className="border-b border-r border-black text-center uppercase">{getStandardGstUom(item.uom)}</td>
-                                        <td className="border-b border-r border-black text-center">{item.rate}</td>
-                                        <td className="border-b border-r border-black text-center">{item.discountPercent || item.discount_percent || 0}</td>
-                                        <td className="border-b border-black text-right px-4 font-black">{(parseFloat(item.before_tax || item.beforeTaxAmount || (item.quantity * item.rate - (item.discountAmount || item.discount_amount || 0)))).toFixed(2)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                            {isIntraState ? (
+                                                <>
+                                                    <div className="flex border-b border-black h-[30px]">
+                                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">CGST</div>
+                                                        <div className="w-[80px] border-l border-black flex items-center justify-end pr-4 pl-1 font-black text-[11px] whitespace-nowrap">{Number(cgst || 0).toFixed(2)}</div>
+                                                    </div>
+                                                    <div className="flex border-b border-black h-[30px]">
+                                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">SGST</div>
+                                                        <div className="w-[80px] border-l border-black flex items-center justify-end pr-4 pl-1 font-black text-[11px] whitespace-nowrap">{Number(sgst || 0).toFixed(2)}</div>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="flex border-b border-black h-[30px]">
+                                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">IGST</div>
+                                                    <div className="w-[80px] border-l border-black flex items-center justify-end pr-4 pl-1 font-black text-[11px] whitespace-nowrap">{Number(igst || 0).toFixed(2)}</div>
+                                                </div>
+                                            )}
+                                            <div className="flex h-[45px]">
+                                                <div className="flex-1 border-r border-black p-4 py-2 font-black text-[10px] flex items-center">
+                                                    <span className="mr-2">{t('modules:amount_in_words', 'Amount In Words')} :</span>
+                                                    <span className="uppercase underline leading-none">{numberToWords(totalAmount)}</span>
+                                                </div>
+                                                <div className="w-[100px] border-r border-black flex items-center justify-center font-black text-[11px] uppercase">{t('modules:grand_total', 'Grand Total')}</div>
+                                                <div className="w-[80px] flex items-center justify-end pr-4 pl-1 font-black text-[13px] whitespace-nowrap">₹{Number(totalAmount || 0).toFixed(2)}</div>
+                                            </div>
+                                        </div>
+                                    )}
 
-                        <div className="w-full border-t border-black bg-white">
-                            <div className="flex border-b border-black h-[30px]">
-                                <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">{t('modules:material_sub_total', 'Material Sub Total')}</div>
-                                <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(subTotal || 0).toFixed(2)}</div>
-                            </div>
-                            {isIntraState ? (
-                                <>
-                                    <div className="flex border-b border-black h-[30px]">
-                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">CGST</div>
-                                        <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(cgst || 0).toFixed(2)}</div>
-                                    </div>
-                                    <div className="flex border-b border-black h-[30px]">
-                                        <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">SGST</div>
-                                        <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(sgst || 0).toFixed(2)}</div>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="flex border-b border-black h-[30px]">
-                                    <div className="flex-1 flex justify-end items-center pr-4 font-black text-[11px]">IGST</div>
-                                    <div className="w-[110px] border-l border-black flex items-center justify-end px-4 font-black text-[11px]">{Number(igst || 0).toFixed(2)}</div>
+                                    {page.showSignatory && (
+                                        <div className="w-full border-t border-black p-4 py-3 bg-white text-right page-break-avoid block">
+                                            <p className="font-black text-[11px]" style={{ marginBottom: '50px' }}>{t('modules:for', 'For')} <span className="uppercase">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</span></p>
+                                            <p className="font-black text-[10px] uppercase underline underline-offset-4">{t('modules:authorised_signatory', 'authorised Signatory')}</p>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                            <div className="flex h-[45px]">
-                                <div className="flex-1 border-r border-black p-4 py-2 font-black text-[10px] flex items-center">
-                                    <span className="mr-2">{t('modules:amount_in_words', 'Amount In Words')} :</span>
-                                    <span className="uppercase underline leading-none">{numberToWords(totalAmount)}</span>
-                                </div>
-                                <div className="w-[100px] border-r border-black flex items-center justify-center font-black text-[11px] uppercase">{t('modules:grand_total', 'Grand Total')}</div>
-                                <div className="w-[110px] flex items-center justify-end px-4 font-black text-[14px]">₹ {Number(totalAmount || 0).toFixed(2)}</div>
                             </div>
                         </div>
-
-                        <div className="w-full border-t border-black p-6 flex flex-col justify-between min-h-[140px] bg-white text-right">
-                            <p className="font-black text-[11px]">{t('modules:for', 'For')} <span className="uppercase">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</span></p>
-                            <p className="font-black text-[10px] uppercase underline underline-offset-4">{t('modules:authorised_signatory', 'authorised Signatory')}</p>
+                        <div className="absolute bottom-[4mm] left-0 right-0 text-center text-[10px] font-semibold text-gray-500">
+                            Page {page.pageNumber} of {pages.length}
                         </div>
                     </div>
-                </div>
+                ))}
             </div>
         </div>
     );

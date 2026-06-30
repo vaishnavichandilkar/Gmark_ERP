@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, ParseIntPipe, UseGuards, Request, UploadedFile, UseInterceptors, BadRequestException, Res, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Delete, ParseIntPipe, UseGuards, Request, UploadedFile, UseInterceptors, BadRequestException, Res, Query } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -72,6 +72,16 @@ export class GroupMasterController {
         @Body() dto: UpdateGroupStatusDto,
     ) {
         return this.groupService.updateStatus(id, dto, req.user.userId);
+    }
+
+    @Delete(':id')
+    @ApiOperation({ summary: 'Delete a group' })
+    @ApiResponse({ status: 200, description: 'Group deleted successfully' })
+    async deleteGroup(
+        @Request() req,
+        @Param('id') id: string, // Accept virtual UID string
+    ) {
+        return this.groupService.deleteGroup(id, req.user.userId);
     }
 
     @Get('sample-excel')

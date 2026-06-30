@@ -29,6 +29,13 @@ export class LedgerController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('group')
+  async getGroupLedgers(@Query() query: LedgerQueryDto, @Request() req: any) {
+    const userId = req.user?.userId || req.user?.id || 1;
+    return this.ledgerService.getGroupLedgersSummary(query, userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('bank-cash-accounts')
   async getBankCashAccounts(@Request() req: any) {
     const userId = req.user?.userId || req.user?.id || 1;
@@ -60,7 +67,8 @@ export class LedgerController {
 
   @UseGuards(JwtAuthGuard)
   @Delete('allocation/:id')
-  async deleteAllocation(@Param('id', ParseIntPipe) id: number) {
-    return this.ledgerService.deleteAllocation(id);
+  async deleteAllocation(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    const userId = req.user?.userId || req.user?.id || 1;
+    return this.ledgerService.deleteAllocation(id, userId);
   }
 }

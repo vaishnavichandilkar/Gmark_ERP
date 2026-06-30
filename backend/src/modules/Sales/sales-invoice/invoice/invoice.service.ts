@@ -6,6 +6,7 @@ import { SalesOrderService } from '../../sales-order/sales-order.service';
 import { TransactionService } from '../../../Finance/transaction.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
+import { formatDate } from '../../../../utils/dateFormatter';
 import { isValidGst, determineSalesGst } from '../../../../common/utils/gst.helper';
 
 @Injectable()
@@ -67,13 +68,19 @@ export class SalesInvoiceService {
       },
       select: {
         id: true,
+        customerCode: true,
         accountName: true,
         customerCreditDays: true,
         addressLine1: true,
         addressLine2: true,
+        pincode: true,
+        area: true,
+        subDistrict: true,
+        district: true,
+        state: true,
+        country: true,
         gstNo: true,
         panNo: true,
-        state: true,
         customerType: true,
         msmeEnabled: true,
         regType: true,
@@ -93,13 +100,19 @@ export class SalesInvoiceService {
         );
         return {
           id: customer.id,
+          customerCode: customer.customerCode,
           customerName: customer.accountName,
           customerCreditDays: customer.customerCreditDays,
           addressLine1: customer.addressLine1,
           addressLine2: customer.addressLine2,
+          pincode: customer.pincode,
+          area: customer.area,
+          subDistrict: customer.subDistrict,
+          district: customer.district,
+          state: customer.state,
+          country: customer.country,
           gstNo: customer.gstNo,
           panNo: customer.panNo,
-          state: customer.state,
           customerType: customer.customerType,
           msmeEnabled: customer.msmeEnabled,
           regType: customer.regType,
@@ -220,27 +233,55 @@ export class SalesInvoiceService {
     const today = new Date();
     today.setHours(23, 59, 59, 999);
 
+    let resolvedSoNumbers: string[] = [];
+    if (soNumbers) {
+      if (typeof soNumbers === 'string') {
+        try {
+          resolvedSoNumbers = JSON.parse(soNumbers);
+        } catch {
+          resolvedSoNumbers = [soNumbers];
+        }
+      } else if (Array.isArray(soNumbers)) {
+        resolvedSoNumbers = soNumbers;
+      }
+    }
+    resolvedSoNumbers = resolvedSoNumbers.map(n => String(n).trim()).filter(Boolean);
+
+    let resolvedChallanNumbers: string[] = [];
+    if (challanNumbers) {
+      if (typeof challanNumbers === 'string') {
+        try {
+          resolvedChallanNumbers = JSON.parse(challanNumbers);
+        } catch {
+          resolvedChallanNumbers = [challanNumbers];
+        }
+      } else if (Array.isArray(challanNumbers)) {
+        resolvedChallanNumbers = challanNumbers;
+      }
+    }
+    resolvedChallanNumbers = resolvedChallanNumbers.map(n => String(n).trim()).filter(Boolean);
+
     let resolvedSoId = soId;
-    if (!resolvedSoId && soNumbers && soNumbers.length > 0) {
+    if (!resolvedSoId && resolvedSoNumbers.length > 0) {
       const soRecord = await this.prisma.salesOrder.findFirst({
-        where: { soNumber: { in: soNumbers } }
+        where: { soNumber: { in: resolvedSoNumbers } }
       });
       if (soRecord) {
         resolvedSoId = soRecord.id;
       }
     }
 
-    const hasChallan = challanNumbers && challanNumbers.length > 0;
+    const hasChallan = resolvedChallanNumbers.length > 0;
     const hasSo = !!resolvedSoId;
 
     if (hasSo && hasChallan) {
       let latestChallanDate: Date | null = null;
-      const challanIds = challanNumbers.map(n => Number(n)).filter(n => !isNaN(n));
+      const challanIds = resolvedChallanNumbers.map(n => Number(n)).filter(n => !isNaN(n));
       const challanRecords = await this.prisma.salesChallan.findMany({
         where: {
           OR: [
             { id: { in: challanIds } },
-            { challanNumber: { in: challanNumbers } }
+            { challanNumber: { in: resolvedChallanNumbers } }
           ]
         }
       });
@@ -285,12 +326,12 @@ export class SalesInvoiceService {
       }
     } else if (!hasSo && hasChallan) {
       let latestChallanDate: Date | null = null;
-      const challanIds = challanNumbers.map(n => Number(n)).filter(n => !isNaN(n));
+      const challanIds = resolvedChallanNumbers.map(n => Number(n)).filter(n => !isNaN(n));
       const challanRecords = await this.prisma.salesChallan.findMany({
         where: {
           OR: [
             { id: { in: challanIds } },
-            { challanNumber: { in: challanNumbers } }
+            { challanNumber: { in: resolvedChallanNumbers } }
           ]
         }
       });
@@ -491,6 +532,7 @@ export class SalesInvoiceService {
             invoiceNumber: createDto.invoiceNumber || invoiceNumber,
             customerInvoiceNumber: createDto.customerInvoiceNumber || customerInvoiceNumber,
             customerInvoiceDate: (createDto.customerInvoiceDate && createDto.customerInvoiceDate.trim() !== "") ? new Date(createDto.customerInvoiceDate) : (createDto.invoiceDate && createDto.invoiceDate.trim() !== "" ? new Date(createDto.invoiceDate) : new Date()),
+            invoiceDate: (createDto.invoiceDate && createDto.invoiceDate.trim() !== "") ? new Date(createDto.invoiceDate) : ((createDto.customerInvoiceDate && createDto.customerInvoiceDate.trim() !== "") ? new Date(createDto.customerInvoiceDate) : new Date()),
             bookingDate: (createDto.bookingDate && createDto.bookingDate.trim() !== "") ? new Date(createDto.bookingDate) : new Date(),
             customerId: customer.id,
             soId: soId,
@@ -567,7 +609,37 @@ export class SalesInvoiceService {
       this.prisma.salesInvoice.count({ where })
     ]);
 
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    const mappedData = await Promise.all(
+      data.map(async (invoice) => {
+        let updatedAddress = invoice.address;
+        if (invoice.customerId) {
+          const customer = await this.prisma.accountMaster.findUnique({
+            where: { id: invoice.customerId }
+          });
+          if (customer) {
+            const parts = [
+              customer.addressLine1,
+              customer.addressLine2,
+              customer.area,
+              customer.subDistrict,
+              customer.district,
+              customer.state
+            ].filter(p => p && String(p).trim() !== '');
+            let formatted = parts.join(', ');
+            if (customer.pincode && String(customer.pincode).trim() !== '') {
+              formatted += ` - ${customer.pincode}`;
+            }
+            updatedAddress = formatted || invoice.address;
+          }
+        }
+        return {
+          ...invoice,
+          address: updatedAddress
+        };
+      })
+    );
+
+    return { data: mappedData, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
   async findOne(id: number, userId: number) {
@@ -592,14 +664,38 @@ export class SalesInvoiceService {
       customerChallanIds = challanRecords.map(c => c.id);
     }
 
+    let updatedAddress = invoice.address;
+    if (invoice.customerId) {
+      const customer = await this.prisma.accountMaster.findUnique({
+        where: { id: invoice.customerId }
+      });
+      if (customer) {
+        const parts = [
+          customer.addressLine1,
+          customer.addressLine2,
+          customer.area,
+          customer.subDistrict,
+          customer.district,
+          customer.state
+        ].filter(p => p && String(p).trim() !== '');
+        let formatted = parts.join(', ');
+        if (customer.pincode && String(customer.pincode).trim() !== '') {
+          formatted += ` - ${customer.pincode}`;
+        }
+        updatedAddress = formatted || invoice.address;
+      }
+    }
+
     return {
       ...invoice,
+      address: updatedAddress,
       customerChallanIds
     };
   }
 
   async update(id: number, updateDto: UpdateSalesInvoiceDto, userId: number, uploadedFilePath?: string) {
-    const existing = await this.prisma.salesInvoice.findUnique({
+    try {
+      const existing = await this.prisma.salesInvoice.findUnique({
       where: { id, userId },
       include: { items: true, expenses: true },
     });
@@ -610,17 +706,35 @@ export class SalesInvoiceService {
     
     let resolvedChallanNumbers: string[] = [];
     if (updateDto.challanNumbers !== undefined) {
-      resolvedChallanNumbers = updateDto.challanNumbers;
+      if (typeof updateDto.challanNumbers === 'string') {
+        try {
+          resolvedChallanNumbers = JSON.parse(updateDto.challanNumbers);
+        } catch {
+          resolvedChallanNumbers = [updateDto.challanNumbers];
+        }
+      } else if (Array.isArray(updateDto.challanNumbers)) {
+        resolvedChallanNumbers = updateDto.challanNumbers;
+      }
     } else if (existing.challanNumber) {
       resolvedChallanNumbers = existing.challanNumber.split(',').map(n => n.trim()).filter(Boolean);
     }
+    resolvedChallanNumbers = resolvedChallanNumbers.map(n => String(n).trim()).filter(Boolean);
 
     let resolvedSoNumbers: string[] = [];
     if (updateDto.soNumbers !== undefined) {
-      resolvedSoNumbers = updateDto.soNumbers;
+      if (typeof updateDto.soNumbers === 'string') {
+        try {
+          resolvedSoNumbers = JSON.parse(updateDto.soNumbers);
+        } catch {
+          resolvedSoNumbers = [updateDto.soNumbers];
+        }
+      } else if (Array.isArray(updateDto.soNumbers)) {
+        resolvedSoNumbers = updateDto.soNumbers;
+      }
     } else if (existing.soNumber) {
       resolvedSoNumbers = existing.soNumber.split(',').map(n => n.trim()).filter(Boolean);
     }
+    resolvedSoNumbers = resolvedSoNumbers.map(n => String(n).trim()).filter(Boolean);
 
     await this.validateInvoiceDate(
       resolvedInvoiceDate,
@@ -765,9 +879,9 @@ export class SalesInvoiceService {
           address: updateDto.address,
           creditDays: updateDto.creditDays,
           gstNumber: updateDto.gstNumber,
-          soNumber: updateDto.soNumbers ? updateDto.soNumbers.join(',') : undefined,
-          challanNumber: updateDto.challanNumbers ? updateDto.challanNumbers.join(',') : undefined,
-          soId: updateDto.soId ?? (updateDto.soNumbers && updateDto.soNumbers.length === 1 && !isNaN(Number(updateDto.soNumbers[0])) ? Number(updateDto.soNumbers[0]) : existing.soId),
+          soNumber: updateDto.soNumbers !== undefined ? (resolvedSoNumbers.length > 0 ? resolvedSoNumbers.join(',') : null) : undefined,
+          challanNumber: updateDto.challanNumbers !== undefined ? (resolvedChallanNumbers.length > 0 ? resolvedChallanNumbers.join(',') : null) : undefined,
+          soId: updateDto.soId ?? (updateDto.soNumbers !== undefined ? (resolvedSoNumbers.length === 1 && !isNaN(Number(resolvedSoNumbers[0])) ? Number(resolvedSoNumbers[0]) : null) : existing.soId),
           status: updateDto.status as any,
           taxableAmount: totalTaxable,
           cgstAmount: cgst,
@@ -795,6 +909,12 @@ export class SalesInvoiceService {
       await this.updateCompletionStatusesAfterInvoice(inv.id, tx);
       return inv;
     });
+    } catch (e: any) {
+      const fs = require('fs');
+      fs.appendFileSync('./service_error.log', `[${new Date().toISOString()}] UPDATE ERROR: ${e.message}\n${e.stack}\n\n`);
+      console.error("Error in updateSalesInvoice:", e);
+      throw new BadRequestException("Failed to update Sales Invoice: " + e.message);
+    }
   }
 
   async remove(id: number, userId: number) {
@@ -974,8 +1094,8 @@ export class SalesInvoiceService {
           invoiceNumber: inv.invoiceNumber,
           customerName: inv.customerName,
           customerInvoiceNumber: inv.customerInvoiceNumber,
-          customerInvoiceDate: inv.customerInvoiceDate.toLocaleDateString(),
-          bookingDate: inv.bookingDate.toLocaleDateString(),
+          customerInvoiceDate: formatDate(inv.customerInvoiceDate),
+          bookingDate: formatDate(inv.bookingDate),
           soNumber: inv.soNumber || '-',
           taxableAmount: inv.taxableAmount,
           grandTotal: inv.grandTotal,
@@ -1050,8 +1170,8 @@ export class SalesInvoiceService {
           doc.text(inv.invoiceNumber, colX[0], y);
           doc.text(inv.customerName.substring(0, 30), colX[1], y);
           doc.text(inv.customerInvoiceNumber, colX[2], y);
-          doc.text(inv.customerInvoiceDate.toLocaleDateString(), colX[3], y);
-          doc.text(inv.bookingDate.toLocaleDateString(), colX[4], y);
+          doc.text(formatDate(inv.customerInvoiceDate), colX[3], y);
+          doc.text(formatDate(inv.bookingDate), colX[4], y);
           doc.text(inv.soNumber || '-', colX[5], y);
           doc.text(inv.taxableAmount.toFixed(2), colX[6], y);
           doc.text(inv.grandTotal.toFixed(2), colX[7], y);

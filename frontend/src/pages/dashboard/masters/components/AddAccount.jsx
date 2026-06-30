@@ -36,6 +36,7 @@ const CustomSelect = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef(null);
+  const triggerRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -71,8 +72,24 @@ const CustomSelect = ({
         </label>
       )}
       <div
-        className={`w-full h-[44px] flex items-center justify-between px-4 border rounded-[8px] transition-colors ${disabled ? "cursor-not-allowed border-[#E5E7EB] bg-gray-50" : error ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : isOpen ? "border-[#014A36] ring-1 ring-[#014A36]/10" : "border-[#E5E7EB] hover:border-gray-300 bg-white"} ${!isSearchable && !disabled ? "cursor-pointer" : ""}`}
+        ref={triggerRef}
+        tabIndex={disabled ? -1 : isSearchable ? -1 : 0}
+        className={`w-full h-[44px] flex items-center justify-between px-4 border rounded-[8px] transition-colors outline-none focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10 ${disabled ? "cursor-not-allowed border-[#E5E7EB] bg-gray-50" : error ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : isOpen ? "border-[#014A36] ring-1 ring-[#014A36]/10" : "border-[#E5E7EB] hover:border-gray-300 bg-white"} ${!isSearchable && !disabled ? "cursor-pointer" : ""}`}
         onClick={() => !isSearchable && !disabled && setIsOpen(!isOpen)}
+        onKeyDown={(e) => {
+          if (disabled || isSearchable) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsOpen(!isOpen);
+          } else if (e.key === "ArrowDown" && !isOpen) {
+            e.preventDefault();
+            setIsOpen(true);
+          } else if (e.key === "Escape" && isOpen) {
+            e.preventDefault();
+            setIsOpen(false);
+            setSearchTerm("");
+          }
+        }}
       >
         {isSearchable ? (
           <input
@@ -96,6 +113,13 @@ const CustomSelect = ({
               }
             }}
             onBlur={onBlur}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setIsOpen(false);
+                setSearchTerm("");
+              }
+            }}
           />
         ) : (
           <span
@@ -132,11 +156,27 @@ const CustomSelect = ({
               filteredOptions.map((opt, idx) => (
                 <div
                   key={idx}
-                  className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors ${value === opt ? "bg-[#F9FAFB] text-[#014A36] font-medium" : "text-[#4B5563] hover:bg-gray-50"}`}
+                  tabIndex={0}
+                  className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors outline-none focus:bg-[#F9FAFB] focus:text-[#014A36] ${value === opt ? "bg-[#F9FAFB] text-[#014A36] font-medium" : "text-[#4B5563] hover:bg-gray-50"}`}
                   onClick={() => {
                     onChange(opt);
                     setIsOpen(false);
                     setSearchTerm("");
+                    if (!isSearchable) triggerRef.current?.focus();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onChange(opt);
+                      setIsOpen(false);
+                      setSearchTerm("");
+                      if (!isSearchable) triggerRef.current?.focus();
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      setIsOpen(false);
+                      setSearchTerm("");
+                      if (!isSearchable) triggerRef.current?.focus();
+                    }
                   }}
                 >
                   {renderValue ? renderValue(opt) : opt}
@@ -323,14 +363,14 @@ onUpdateAccount,
           supplierCode: initialData.supplierCode || "",
           gstNo: initialData.gstNo || "",
           panNo: initialData.panNo || "",
-          customerCreditDays: initialData.customerCreditDays
+          customerCreditDays: (initialData.customerCreditDays !== undefined && initialData.customerCreditDays !== null && initialData.customerCreditDays !== "")
             ? initialData.customerCreditDays.toString()
-            : initialData.creditDays
+            : (initialData.creditDays !== undefined && initialData.creditDays !== null && initialData.creditDays !== "")
               ? initialData.creditDays.toString()
               : "",
-          customerOpBalance: initialData.customerOpeningBalance
+          customerOpBalance: (initialData.customerOpeningBalance !== undefined && initialData.customerOpeningBalance !== null && initialData.customerOpeningBalance !== "")
             ? initialData.customerOpeningBalance.toString()
-            : initialData.openingBalance
+            : (initialData.openingBalance !== undefined && initialData.openingBalance !== null && initialData.openingBalance !== "")
               ? initialData.openingBalance.toString()
               : "",
           customerBalanceType:
@@ -339,14 +379,14 @@ onUpdateAccount,
               ? initialData.customer.balanceType
               : "Dr"),
           customerType: initialData.customerType || "",
-          vendorCreditDays: initialData.supplierCreditDays
+          vendorCreditDays: (initialData.supplierCreditDays !== undefined && initialData.supplierCreditDays !== null && initialData.supplierCreditDays !== "")
             ? initialData.supplierCreditDays.toString()
-            : initialData.creditDays
+            : (initialData.creditDays !== undefined && initialData.creditDays !== null && initialData.creditDays !== "")
               ? initialData.creditDays.toString()
               : "",
-          vendorOpBalance: initialData.supplierOpeningBalance
+          vendorOpBalance: (initialData.supplierOpeningBalance !== undefined && initialData.supplierOpeningBalance !== null && initialData.supplierOpeningBalance !== "")
             ? initialData.supplierOpeningBalance.toString()
-            : initialData.openingBalance
+            : (initialData.openingBalance !== undefined && initialData.openingBalance !== null && initialData.openingBalance !== "")
               ? initialData.openingBalance.toString()
               : "",
           vendorBalanceType:
@@ -616,7 +656,7 @@ onUpdateAccount,
       case "panNo":
         if (
           !value?.trim() ||
-          !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(value.trim().toUpperCase())
+          !/^[A-Z]{3}[PCHFATBLJG][A-Z]{1}[0-9]{4}[A-Z]{1}$/.test(value.trim().toUpperCase())
         ) {
           return t("modules:error_pan_no");
         }
@@ -656,11 +696,32 @@ onUpdateAccount,
       case "regType":
         if (msmeEnabled && !value) return t("modules:error_reg_type");
         break;
+      case "vendorCreditDays":
+        if (currentFormData.isVendor && (value === undefined || value === null || String(value).trim() === "")) {
+          return t("modules:error_credit_days");
+        }
+        break;
+      case "customerCreditDays":
+        if (currentFormData.isCustomer && (value === undefined || value === null || String(value).trim() === "")) {
+          return t("modules:error_credit_days");
+        }
+        break;
       case "vendorOpBalance":
-        if (value && parseFloat(value) < 0) return t("modules:error_amount");
+        if (currentFormData.isVendor && (value === undefined || value === null || String(value).trim() === "")) {
+          return t("modules:error_opening_balance");
+        }
+        if (value !== undefined && value !== null && value !== "" && parseFloat(value) < 0) return t("modules:error_amount");
         break;
       case "customerOpBalance":
-        if (value && parseFloat(value) < 0) return t("modules:error_amount");
+        if (currentFormData.isCustomer && (value === undefined || value === null || String(value).trim() === "")) {
+          return t("modules:error_opening_balance");
+        }
+        if (value !== undefined && value !== null && value !== "" && parseFloat(value) < 0) return t("modules:error_amount");
+        break;
+      case "customerType":
+        if (currentFormData.isCustomer && !value) {
+          return t("modules:error_customer_type");
+        }
         break;
     }
     return "";
@@ -685,8 +746,11 @@ onUpdateAccount,
       "emailId",
       "prefix",
       "contactPersonName",
+      "vendorCreditDays",
+      "customerCreditDays",
       "vendorOpBalance",
       "customerOpBalance",
+      "customerType",
     ];
 
     if (msmeEnabled) {
@@ -893,11 +957,11 @@ onUpdateAccount,
     );
     fData.append(
       "supplierCreditDays",
-      formData.isVendor ? formData.vendorCreditDays || "" : "",
+      formData.isVendor ? ((formData.vendorCreditDays !== undefined && formData.vendorCreditDays !== null && formData.vendorCreditDays !== "") ? formData.vendorCreditDays : "") : "",
     );
     fData.append(
       "supplierOpeningBalance",
-      formData.isVendor ? formData.vendorOpBalance || "" : "",
+      formData.isVendor ? ((formData.vendorOpBalance !== undefined && formData.vendorOpBalance !== null && formData.vendorOpBalance !== "") ? formData.vendorOpBalance : "") : "",
     );
     fData.append(
       "supplierBalanceType",
@@ -911,11 +975,11 @@ onUpdateAccount,
     );
     fData.append(
       "customerCreditDays",
-      formData.isCustomer ? formData.customerCreditDays || "" : "",
+      formData.isCustomer ? ((formData.customerCreditDays !== undefined && formData.customerCreditDays !== null && formData.customerCreditDays !== "") ? formData.customerCreditDays : "") : "",
     );
     fData.append(
       "customerOpeningBalance",
-      formData.isCustomer ? formData.customerOpBalance || "" : "",
+      formData.isCustomer ? ((formData.customerOpBalance !== undefined && formData.customerOpBalance !== null && formData.customerOpBalance !== "") ? formData.customerOpBalance : "") : "",
     );
     fData.append(
       "customerBalanceType",
@@ -985,7 +1049,7 @@ onUpdateAccount,
     if (!formData.isCustomer && !formData.isVendor) return false;
     if (
       !formData.panNo?.trim() ||
-      !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panNo.trim().toUpperCase())
+      !/^[A-Z]{3}[PCHFATBLJG][A-Z]{1}[0-9]{4}[A-Z]{1}$/.test(formData.panNo.trim().toUpperCase())
     )
       return false;
     if (
@@ -1025,6 +1089,19 @@ onUpdateAccount,
         return false;
       if (!formData.regUnder?.trim()) return false;
       if (!formData.regType?.trim()) return false;
+    }
+
+    if (formData.isVendor) {
+      if (formData.vendorCreditDays === undefined || formData.vendorCreditDays === null || String(formData.vendorCreditDays).trim() === "") return false;
+      if (formData.vendorOpBalance === undefined || formData.vendorOpBalance === null || String(formData.vendorOpBalance).trim() === "" || parseFloat(formData.vendorOpBalance) < 0) return false;
+      if (!formData.vendorBalanceType) return false;
+    }
+
+    if (formData.isCustomer) {
+      if (formData.customerCreditDays === undefined || formData.customerCreditDays === null || String(formData.customerCreditDays).trim() === "") return false;
+      if (formData.customerOpBalance === undefined || formData.customerOpBalance === null || String(formData.customerOpBalance).trim() === "" || parseFloat(formData.customerOpBalance) < 0) return false;
+      if (!formData.customerBalanceType) return false;
+      if (!formData.customerType) return false;
     }
 
     return true;
@@ -1547,7 +1624,7 @@ onUpdateAccount,
                   <div className="form-grid">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[13px] font-semibold text-[#4B5563]">
-                        {t("modules:credit_days")}
+                        {t("modules:credit_days")} <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="number"
@@ -1561,12 +1638,18 @@ onUpdateAccount,
                         onChange={(e) =>
                           handleInputChange("vendorCreditDays", e.target.value)
                         }
-                        className="w-full h-[44px] border border-[#E5E7EB] rounded-[8px] px-4 text-[14px] outline-none focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"
+                        onBlur={() => validateField("vendorCreditDays", formData.vendorCreditDays)}
+                        className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.vendorCreditDays ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
                       />
+                      {errors.vendorCreditDays && (
+                        <p className="text-[12px] text-red-500 mt-0.5">
+                          {errors.vendorCreditDays}
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[13px] font-semibold text-[#4B5563]">
-                        {t("modules:openingBalance")}
+                        {t("modules:openingBalance")} <span className="text-red-500">*</span>
                       </label>
                       <div className="flex w-full gap-2">
                         <input
@@ -1632,7 +1715,7 @@ onUpdateAccount,
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[13px] font-semibold text-[#4B5563]">
-                        {t("modules:credit_days")}
+                        {t("modules:credit_days")} <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="number"
@@ -1649,12 +1732,18 @@ onUpdateAccount,
                             e.target.value,
                           )
                         }
-                        className="w-full h-[44px] border border-[#E5E7EB] rounded-[8px] px-4 text-[14px] outline-none focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"
+                        onBlur={() => validateField("customerCreditDays", formData.customerCreditDays)}
+                        className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.customerCreditDays ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
                       />
+                      {errors.customerCreditDays && (
+                        <p className="text-[12px] text-red-500 mt-0.5">
+                          {errors.customerCreditDays}
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[13px] font-semibold text-[#4B5563]">
-                        {t("modules:openingBalance")}
+                        {t("modules:openingBalance")} <span className="text-red-500">*</span>
                       </label>
                       <div className="flex w-full gap-2">
                         <input
@@ -1694,10 +1783,9 @@ onUpdateAccount,
                       )}
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[13px] font-semibold text-[#4B5563]">
-                        {t("modules:customerType")}
-                      </label>
                       <CustomSelect
+                        label={t("modules:customerType")}
+                        required={true}
                         options={[
                           "industrial",
                           "institutional",
@@ -1709,6 +1797,8 @@ onUpdateAccount,
                         onChange={(val) =>
                           handleInputChange("customerType", val)
                         }
+                        onBlur={() => validateField("customerType", formData.customerType)}
+                        error={errors.customerType}
                         placeholder={t("modules:selectCustomerType")}
                       />
                     </div>

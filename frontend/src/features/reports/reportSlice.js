@@ -5,7 +5,6 @@ const initialState = {
     salesData: [],
     salesInvoicesData: [],
     poData: [],
-    productData: [],
     grnData: [],
     challanData: [],
     loading: false,
@@ -26,7 +25,6 @@ const reportSlice = createSlice({
             state.salesData = action.payload.salesOrders || [];
             state.salesInvoicesData = action.payload.salesInvoices || [];
             state.poData = action.payload.purchaseOrders || [];
-            state.productData = action.payload.products || [];
             state.grnData = action.payload.grnData || [];
             state.challanData = action.payload.challanData || [];
         },

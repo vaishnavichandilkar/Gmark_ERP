@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, Request, Res, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, Request, Res, UploadedFile, UseInterceptors, BadRequestException, Delete } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -255,5 +255,12 @@ export class CategoryMasterController {
         });
 
         res.send(file.buffer);
+    }
+
+    @Delete(':id')
+    @ApiOperation({ summary: 'Delete a Category' })
+    @ApiResponse({ status: 200, description: 'Category deleted' })
+    async deleteCategory(@Request() req, @Param('id') id: string) {
+        return this.service.deleteCategory(id, req.user.userId);
     }
 }

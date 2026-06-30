@@ -1,8 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, FileText } from 'lucide-react';
+import { X, Check, FileText, Folder, Package } from 'lucide-react';
 import axiosInstance from '../../services/axiosInstance';
 import toast from 'react-hot-toast';
+const encodeVirtualId = (uid) => {
+    if (!uid) return null;
+    const parts = String(uid).split('_');
+    if (parts.length === 2) {
+        const level = parseInt(parts[0], 10);
+        const id = parseInt(parts[1], 10);
+        if (!isNaN(level) && !isNaN(id)) {
+            return level * 1000000 + id;
+        }
+    }
+    const val = parseInt(uid, 10);
+    return isNaN(val) ? null : val;
+};
+
+const decodeVirtualId = (val) => {
+    if (!val) return '';
+    const num = parseInt(val, 10);
+    if (isNaN(num)) return '';
+    if (num >= 1000000) {
+        const level = Math.floor(num / 1000000);
+        const id = num % 1000000;
+        return `${level}_${id}`;
+    }
+    return String(num);
+};
 
 const SettlementModal = ({ 
     isOpen, 
@@ -15,21 +40,35 @@ const SettlementModal = ({
     voucherId = null,
     onSave 
 }) => {
-    const [selectedTypes, setSelectedTypes] = useState(['ON_ACCOUNT']); // array of 'ADVANCE', 'AGAINST_REFERENCE', 'ON_ACCOUNT'
+    const [selectedTypes, setSelectedTypes] = useState([]); // array of 'ADVANCE', 'AGAINST_REFERENCE', 'ON_ACCOUNT'
     const [advanceAmount, setAdvanceAmount] = useState('');
     const [onAccountAmount, setOnAccountAmount] = useState('');
     const [invoices, setInvoices] = useState([]);
     const [selectedInvoices, setSelectedInvoices] = useState({}); // { invoiceId: { checked: boolean, amount: number } }
     const [isLoading, setIsLoading] = useState(false);
 
+    // New states for Leaf Groups and pending Orders (POs/SOs)
+    const [leafGroups, setLeafGroups] = useState([]);
+    const [selectedGroupId, setSelectedGroupId] = useState('');
+    const [groupExpenses, setGroupExpenses] = useState([{ groupId: '', amount: '' }]);
+    const [orders, setOrders] = useState([]);
+    const [selectedOrders, setSelectedOrders] = useState({}); // { orderId: { checked: boolean, amount: number } }
+    const [onAccountSubMode, setOnAccountSubMode] = useState('ADVANCE'); // 'GROUP' or 'ADVANCE'
+
     useEffect(() => {
         if (isOpen) {
             // Reset state
+            setSelectedGroupId('');
+            setSelectedOrders({});
+            setOrders([]);
+            setLeafGroups([]);
             setAdvanceAmount('');
             setOnAccountAmount('');
+            setGroupExpenses([{ groupId: '', amount: '' }]);
             setInvoices([]);
             setSelectedInvoices({});
             setIsLoading(false);
+            setOnAccountSubMode('ADVANCE');
 
             if (initialData) {
                 const types = [];
@@ -37,38 +76,114 @@ const SettlementModal = ({
                 
                 if (settlements.length > 0) {
                     const againstRefMapped = {};
+                    const advanceMapped = {};
+                    const parsedGroupExpenses = [];
                     settlements.forEach(s => {
                         if (s.settlementType === 'ADVANCE') {
-                            if (!types.includes('ADVANCE')) types.push('ADVANCE');
-                            setAdvanceAmount(s.settledAmount || '');
+                            if (!types.includes('ON_ACCOUNT')) types.push('ON_ACCOUNT');
+                            setOnAccountSubMode('ADVANCE');
+                            if (s.invoiceId) {
+                                advanceMapped[s.invoiceId] = { checked: true, amount: s.settledAmount };
+                            } else {
+                                setAdvanceAmount(s.settledAmount || '');
+                            }
                         } else if (s.settlementType === 'ON_ACCOUNT') {
                             if (!types.includes('ON_ACCOUNT')) types.push('ON_ACCOUNT');
-                            setOnAccountAmount(s.settledAmount || '');
+                            setOnAccountSubMode('GROUP');
+                            if (s.invoiceId) {
+                                parsedGroupExpenses.push({
+                                    groupId: decodeVirtualId(s.invoiceId) || '',
+                                    amount: s.settledAmount || ''
+                                });
+                            }
                         } else if (s.settlementType === 'AGAINST_REFERENCE') {
                             if (!types.includes('AGAINST_REFERENCE')) types.push('AGAINST_REFERENCE');
                             againstRefMapped[s.invoiceId] = { checked: true, amount: s.settledAmount };
                         }
                     });
-                    setSelectedTypes(types.length > 0 ? types : ['ON_ACCOUNT']);
+                    setSelectedTypes(types);
                     setSelectedInvoices(againstRefMapped);
+                    setSelectedOrders(advanceMapped);
+                    if (parsedGroupExpenses.length > 0) {
+                        setGroupExpenses(parsedGroupExpenses);
+                    }
                 } else {
-                    const singleType = initialData.settlementType || 'ON_ACCOUNT';
-                    setSelectedTypes([singleType]);
-                    if (singleType === 'ADVANCE') {
-                        setAdvanceAmount(initialData.amount || '');
-                    } else if (singleType === 'ON_ACCOUNT') {
-                        setOnAccountAmount(initialData.amount || '');
+                    const singleType = initialData.settlementType;
+                    if (singleType) {
+                        if (singleType === 'ADVANCE') {
+                            setSelectedTypes(['ON_ACCOUNT']);
+                            setOnAccountSubMode('ADVANCE');
+                            if (initialData.invoiceId) {
+                                setSelectedOrders({ [initialData.invoiceId]: { checked: true, amount: initialData.amount || '' } });
+                            } else {
+                                setAdvanceAmount(initialData.amount || '');
+                            }
+                        } else if (singleType === 'ON_ACCOUNT') {
+                            setSelectedTypes(['ON_ACCOUNT']);
+                            setOnAccountSubMode('GROUP');
+                            if (initialData.invoiceId) {
+                                setGroupExpenses([{
+                                    groupId: decodeVirtualId(initialData.invoiceId) || '',
+                                    amount: initialData.amount || ''
+                                }]);
+                            }
+                        } else {
+                            setSelectedTypes([singleType]);
+                        }
+                    } else {
+                        setSelectedTypes([]);
                     }
                 }
             } else {
-                setSelectedTypes(['ON_ACCOUNT']);
+                setSelectedTypes([]);
             }
 
             if (ledgerId) {
                 fetchPendingInvoices();
+                fetchGroupsAndOrders();
             }
         }
     }, [isOpen, ledgerId, initialData]);
+
+    const fetchGroupsAndOrders = async () => {
+        try {
+            // Fetch Groups
+            const groupRes = await axiosInstance.get('/group-master');
+            const tree = groupRes.data?.data || groupRes.data || [];
+            const leafGroupsList = [];
+            const traverse = (node) => {
+                if (node.isAccount) return;
+                const hasChildSubgroups = node.children && node.children.some(child => !child.isAccount);
+                if (!hasChildSubgroups) {
+                    if (!node.is_predefined) {
+                        leafGroupsList.push({
+                            id: node.id,
+                            name: node.group_name || node.name
+                        });
+                    }
+                } else {
+                    node.children.forEach(traverse);
+                }
+            };
+            tree.forEach(traverse);
+            setLeafGroups(leafGroupsList);
+
+            // Fetch POs/SOs for Advance
+            const normalizedRole = String(accountType || '').toUpperCase() || (type === 'Receipt' ? 'CUSTOMER' : 'SUPPLIER');
+            const isCustomer = ['CUSTOMER', 'DEBTOR'].includes(normalizedRole);
+            if (isCustomer) {
+                // Fetch SOs for Receipt
+                const soRes = await axiosInstance.get(`/sales-invoices/customer-sos?customerId=${ledgerId}`);
+                setOrders(soRes.data || []);
+            } else {
+                // Fetch POs for Payment
+                const poRes = await axiosInstance.get(`/purchase-invoices/supplier-pos?supplierId=${ledgerId}`);
+                setOrders(poRes.data || []);
+            }
+        } catch (error) {
+            console.error('Error fetching groups/orders:', error);
+        }
+    };
 
     const fetchPendingInvoices = async () => {
         setIsLoading(true);
@@ -110,31 +225,100 @@ const SettlementModal = ({
         });
     };
 
+    const handleOrderAmountChange = (orderId, value) => {
+        setSelectedOrders(prev => {
+            const copy = { ...prev };
+            copy[orderId] = { 
+                checked: value !== '' && parseFloat(value) > 0, 
+                amount: value 
+            };
+            return copy;
+        });
+    };
+
+    const getAdvanceTotal = () => {
+        if (orders.length === 0) {
+            return parseFloat(advanceAmount) || 0;
+        }
+        return Object.entries(selectedOrders)
+            .filter(([_, item]) => item.checked)
+            .reduce((sum, [_, item]) => sum + (parseFloat(item.amount) || 0), 0);
+    };
+
     const handleSave = () => {
+        if (selectedTypes.length === 0) {
+            toast.error('Please select at least one settlement type');
+            return;
+        }
         let finalAmount = 0;
         let settlements = [];
         let narrationParts = [];
 
-        if (selectedTypes.includes('ADVANCE')) {
-            const amt = parseFloat(advanceAmount);
-            if (!amt || amt <= 0) {
-                toast.error('Please enter a valid Advance amount');
-                return;
-            }
-            finalAmount += amt;
-            settlements.push({ settlementType: 'ADVANCE', settledAmount: amt });
-            narrationParts.push(`Advance - ₹${amt}`);
-        }
-
         if (selectedTypes.includes('ON_ACCOUNT')) {
-            const amt = parseFloat(onAccountAmount);
-            if (!amt || amt <= 0) {
-                toast.error('Please enter a valid On Account amount');
-                return;
+            if (onAccountSubMode === 'GROUP') {
+                if (groupExpenses.length === 0) {
+                    toast.error('Please add at least one expense entry');
+                    return;
+                }
+                for (let i = 0; i < groupExpenses.length; i++) {
+                    const exp = groupExpenses[i];
+                    const amt = parseFloat(exp.amount);
+                    if (!amt || amt <= 0) {
+                        toast.error(`Please enter a valid amount for expense row ${i + 1}`);
+                        return;
+                    }
+                    if (!exp.groupId) {
+                        toast.error(`Please select a group for expense row ${i + 1}`);
+                        return;
+                    }
+                }
+                
+                groupExpenses.forEach(exp => {
+                    const amt = parseFloat(exp.amount);
+                    finalAmount += amt;
+                    settlements.push({
+                        invoiceId: encodeVirtualId(exp.groupId),
+                        settlementType: 'ON_ACCOUNT',
+                        settledAmount: amt
+                    });
+                    const grpName = leafGroups.find(g => String(g.id) === String(exp.groupId))?.name || 'On Account';
+                    narrationParts.push(`On Account (${grpName}) - ₹${amt}`);
+                });
+            } else if (onAccountSubMode === 'ADVANCE') {
+                if (orders.length === 0) {
+                    const amt = parseFloat(advanceAmount);
+                    if (!amt || amt <= 0) {
+                        toast.error('Please enter a valid Advance amount');
+                        return;
+                    }
+                    finalAmount += amt;
+                    settlements.push({ settlementType: 'ADVANCE', settledAmount: amt });
+                    narrationParts.push(`Advance - ₹${amt}`);
+                } else {
+                    const activeEntries = Object.entries(selectedOrders).filter(([_, item]) => item.checked);
+                    if (activeEntries.length === 0) {
+                        toast.error(`Please select at least one ${type === 'Receipt' ? 'Sales Order' : 'Purchase Order'} for Advance`);
+                        return;
+                    }
+                    for (const [orderIdStr, item] of activeEntries) {
+                        const orderId = parseInt(orderIdStr);
+                        const amt = parseFloat(item.amount);
+                        if (!amt || amt <= 0) {
+                            toast.error('Settle amount must be greater than 0');
+                            return;
+                        }
+                        const originalOrder = orders.find(o => o.id === orderId);
+                        const orderNo = originalOrder ? (originalOrder.poNumber || originalOrder.soNumber) : `ORD-${orderId}`;
+                        finalAmount += amt;
+                        settlements.push({
+                            invoiceId: orderId,
+                            settlementType: 'ADVANCE',
+                            settledAmount: amt
+                        });
+                        narrationParts.push(`Advance against ${orderNo} - ₹${amt}`);
+                    }
+                }
             }
-            finalAmount += amt;
-            settlements.push({ settlementType: 'ON_ACCOUNT', settledAmount: amt });
-            narrationParts.push(`On Account - ₹${amt}`);
         }
 
         if (selectedTypes.includes('AGAINST_REFERENCE')) {
@@ -186,7 +370,7 @@ const SettlementModal = ({
             });
         }
 
-        const primaryType = selectedTypes.length === 1 ? selectedTypes[0] : 'MIXED';
+        const primaryType = selectedTypes.length === 1 ? (selectedTypes[0] === 'ON_ACCOUNT' ? onAccountSubMode : selectedTypes[0]) : 'MIXED';
 
         onSave({
             settlementType: primaryType,
@@ -203,9 +387,14 @@ const SettlementModal = ({
             .reduce((sum, [_, item]) => sum + (parseFloat(item.amount) || 0), 0);
     };
 
+    const getExpensesTotal = () => {
+        return groupExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+    };
+
     const grandTotal = (
-        (selectedTypes.includes('ADVANCE') ? (parseFloat(advanceAmount) || 0) : 0) + 
-        (selectedTypes.includes('ON_ACCOUNT') ? (parseFloat(onAccountAmount) || 0) : 0) + 
+        (selectedTypes.includes('ON_ACCOUNT') 
+            ? (onAccountSubMode === 'ADVANCE' ? getAdvanceTotal() : getExpensesTotal()) 
+            : 0) + 
         (selectedTypes.includes('AGAINST_REFERENCE') ? getAgainstRefTotal() : 0)
     );
 
@@ -246,9 +435,8 @@ const SettlementModal = ({
                 {/* Body */}
                 <div className="p-6 overflow-y-auto space-y-6 flex-1">
                     {/* Selectable Settlement Type Cards */}
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
                         {[
-                            { id: 'ADVANCE', label: 'Advance' },
                             { id: 'AGAINST_REFERENCE', label: 'Against Reference' },
                             { id: 'ON_ACCOUNT', label: 'On Account' }
                         ].map((card) => {
@@ -260,10 +448,6 @@ const SettlementModal = ({
                                     onClick={() => {
                                         setSelectedTypes(prev => {
                                             if (prev.includes(card.id)) {
-                                                if (prev.length === 1) {
-                                                    toast.error("At least one settlement type must be selected");
-                                                    return prev;
-                                                }
                                                 return prev.filter(t => t !== card.id);
                                             } else {
                                                 return [...prev, card.id];
@@ -289,45 +473,191 @@ const SettlementModal = ({
 
                     {/* Stacked Input Sections */}
                     <div className="space-y-6">
-                        {/* Advance Amount Card */}
-                        {selectedTypes.includes('ADVANCE') && (
-                            <motion.div 
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="bg-[#F9FAFB] p-5 rounded-xl border border-[#E5E7EB] space-y-2 shadow-sm"
-                            >
-                                <label className="text-[13px] font-bold text-[#6B7280] tracking-wider block">
-                                    Enter Advance Amount (₹)
-                                </label>
-                                <input
-                                    type="number"
-                                    placeholder="0.00"
-                                    value={advanceAmount}
-                                    onChange={(e) => setAdvanceAmount(e.target.value)}
-                                    className="w-full h-11 px-4 bg-white border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[15px] font-bold text-[#073318] transition-all"
-                                    required
-                                />
-                            </motion.div>
-                        )}
-
-                        {/* On Account Amount Card */}
+                        {/* On Account Section */}
                         {selectedTypes.includes('ON_ACCOUNT') && (
                             <motion.div 
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="bg-[#F9FAFB] p-5 rounded-xl border border-[#E5E7EB] space-y-2 shadow-sm"
+                                className="bg-[#F9FAFB] p-5 rounded-xl border border-[#E5E7EB] space-y-4 shadow-sm"
                             >
-                                <label className="text-[13px] font-bold text-[#6B7280] tracking-wider block">
-                                    Enter On Account Amount (₹)
-                                </label>
-                                <input
-                                    type="number"
-                                    placeholder="0.00"
-                                    value={onAccountAmount}
-                                    onChange={(e) => setOnAccountAmount(e.target.value)}
-                                    className="w-full h-11 px-4 bg-white border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[15px] font-bold text-[#073318] transition-all"
-                                    required
-                                />
+                                <div className="flex items-center justify-between border-b border-gray-200 pb-3 mb-2">
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setOnAccountSubMode('ADVANCE')}
+                                            className={`px-4 py-2 text-[13px] font-bold rounded-lg border transition-all flex items-center gap-1.5 ${
+                                                onAccountSubMode === 'ADVANCE'
+                                                ? 'border-[#073318] bg-[#073318]/5 text-[#073318] font-bold'
+                                                : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 font-medium'
+                                            }`}
+                                        >
+                                            <Package size={14} /> Advance
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setOnAccountSubMode('GROUP')}
+                                            className={`px-4 py-2 text-[13px] font-bold rounded-lg border transition-all flex items-center gap-1.5 ${
+                                                onAccountSubMode === 'GROUP'
+                                                ? 'border-[#073318] bg-[#073318]/5 text-[#073318] font-bold'
+                                                : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 font-medium'
+                                            }`}
+                                        >
+                                            <Folder size={14} /> Expenses
+                                        </button>
+                                    </div>
+                                    {onAccountSubMode === 'GROUP' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setGroupExpenses(prev => [...prev, { groupId: '', amount: '' }])}
+                                            className="text-[12px] font-bold text-[#073318] hover:text-[#0a4422] flex items-center gap-1 bg-[#073318]/5 px-3 py-1.5 rounded-lg border border-[#073318]/10 hover:bg-[#073318]/10 transition-all cursor-pointer shadow-sm"
+                                        >
+                                            + Add
+                                        </button>
+                                    )}
+                                </div>
+
+                                {onAccountSubMode === 'GROUP' ? (
+                                    <div className="space-y-4">
+                                        {groupExpenses.map((expense, index) => (
+                                            <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-[#F9FAFB]/50 p-4 rounded-xl border border-[#E5E7EB] shadow-sm relative group">
+                                                <div className="md:col-span-6 space-y-2">
+                                                    <label className="text-[13px] font-bold text-[#6B7280] tracking-wider block flex items-center gap-1.5">
+                                                        <Folder size={14} className="text-gray-500" /> Select Group
+                                                    </label>
+                                                    <select
+                                                        value={expense.groupId}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setGroupExpenses(prev => {
+                                                                const copy = [...prev];
+                                                                copy[index] = { ...copy[index], groupId: val };
+                                                                return copy;
+                                                            });
+                                                        }}
+                                                        className="w-full h-11 px-3 bg-white border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[14px] font-semibold text-gray-700 transition-all"
+                                                        required
+                                                    >
+                                                        <option value="">Choose a Group...</option>
+                                                        {leafGroups.map(grp => (
+                                                            <option key={grp.id} value={grp.id}>
+                                                                {grp.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="md:col-span-5 space-y-2">
+                                                    <label className="text-[13px] font-bold text-[#6B7280] tracking-wider block">
+                                                        Enter On Account Amount (₹)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        placeholder="0.00"
+                                                        value={expense.amount}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setGroupExpenses(prev => {
+                                                                const copy = [...prev];
+                                                                copy[index] = { ...copy[index], amount: val };
+                                                                return copy;
+                                                            });
+                                                        }}
+                                                        className="w-full h-11 px-4 bg-white border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[15px] font-bold text-[#073318] transition-all"
+                                                        required
+                                                    />
+                                                </div>
+                                                <div className="md:col-span-1 flex justify-center pb-1">
+                                                    {groupExpenses.length > 1 ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setGroupExpenses(prev => prev.filter((_, i) => i !== index));
+                                                            }}
+                                                            className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                                                            title="Remove Row"
+                                                        >
+                                                            <X size={16} />
+                                                        </button>
+                                                    ) : (
+                                                        <div className="w-8 h-8"></div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <h3 className="text-[13px] font-bold text-[#6B7280] tracking-wider flex items-center gap-2">
+                                            <Package size={15} className="text-gray-500" /> 
+                                            {type === 'Receipt' ? 'Pending Sales Orders (Advance)' : 'Pending Purchase Orders (Advance)'}
+                                        </h3>
+
+                                        {isLoading ? (
+                                            <div className="py-8 flex justify-center items-center">
+                                                <div className="w-6 h-6 border-2 border-[#073318] border-t-transparent rounded-full animate-spin" />
+                                            </div>
+                                        ) : orders.length === 0 ? (
+                                            <div className="bg-[#F9FAFB] p-5 rounded-xl border border-[#E5E7EB] space-y-2 shadow-sm">
+                                                <label className="text-[13px] font-bold text-[#6B7280] tracking-wider block font-bold text-[#073318]">
+                                                    No pending orders found. Enter General Advance Amount (₹)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    placeholder="0.00"
+                                                    value={advanceAmount}
+                                                    onChange={(e) => setAdvanceAmount(e.target.value)}
+                                                    className="w-full h-11 px-4 bg-white border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[15px] font-bold text-[#073318] transition-all"
+                                                    required
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm bg-white">
+                                                <div className="overflow-x-auto max-h-[250px]">
+                                                    <table className="w-full border-collapse">
+                                                        <thead>
+                                                            <tr className="bg-[#F3F4F6] border-b border-[#E5E7EB] sticky top-0 z-10">
+                                                                <th className="px-4 py-2.5 text-left text-[12px] font-bold text-[#6B7280] tracking-wider">Order No</th>
+                                                                <th className="px-4 py-2.5 text-right text-[12px] font-bold text-[#6B7280] tracking-wider">Total Amount</th>
+                                                                <th className="px-4 py-2.5 text-right text-[12px] font-bold text-[#6B7280] tracking-wider w-[150px]">Settle (₹)</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white divide-y divide-[#F3F4F6]">
+                                                            {orders.map((ord) => {
+                                                                const isChecked = selectedOrders[ord.id]?.checked || false;
+                                                                const settleVal = selectedOrders[ord.id]?.amount !== undefined 
+                                                                    ? selectedOrders[ord.id].amount 
+                                                                    : '';
+                                                                const orderNo = ord.poNumber || ord.soNumber;
+                                                                return (
+                                                                    <tr key={ord.id} className={`hover:bg-gray-50 text-[13px] ${isChecked ? 'bg-[#073318]/5' : ''}`}>
+                                                                        <td className="px-4 py-3 font-medium text-gray-900">{orderNo}</td>
+                                                                        <td className="px-4 py-3 text-right text-gray-600">₹{ord.totalAmount || 0}</td>
+                                                                        <td className="px-4 py-3">
+                                                                            <input
+                                                                                type="number"
+                                                                                placeholder="0.00"
+                                                                                value={settleVal}
+                                                                                onChange={(e) => handleOrderAmountChange(ord.id, e.target.value)}
+                                                                                className={`w-full h-8 px-2 border rounded text-right font-bold text-[12px] outline-none transition-all ${
+                                                                                    isChecked 
+                                                                                    ? 'border-[#073318] bg-white text-[#073318] focus:ring-1 focus:ring-[#073318]' 
+                                                                                    : 'border-gray-200 bg-white text-gray-700 focus:border-[#073318] focus:ring-1 focus:ring-[#073318]'
+                                                                                }`}
+                                                                            />
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <div className="bg-[#F9FAFB] px-6 py-3 border-t border-[#E5E7EB] flex items-center justify-between font-bold text-[14px]">
+                                                    <span className="text-gray-600">Advance Total</span>
+                                                    <span className="text-[#073318] text-[16px]">₹{getAdvanceTotal()}</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </motion.div>
                         )}
 

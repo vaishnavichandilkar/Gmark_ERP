@@ -28,6 +28,7 @@ import { ROUTES } from "@/constants/routes";
 import ScrollableTable from "@/components/common/ScrollableTable";
 import ImportModal from "./components/ImportModal";
 import CustomSelect from "@/components/common/CustomSelect";
+import { formatDate } from "@/utils/dateUtils";
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting, t }) => {
   if (!isOpen) return null;
@@ -264,7 +265,8 @@ const SalesInvoice = () => {
                 customerName: item.customerName || "-",
                 invoiceNo: item.invoiceNumber || "-",
                 customerInvNo: item.customerInvoiceNumber || "-",
-                invoiceDate: item.invoiceDate ? item.invoiceDate.split('T')[0] : "-",
+                customerInvoiceDate: formatDate(item.customerInvoiceDate || item.invoiceDate),
+                invoiceDate: formatDate(item.invoiceDate),
                 grandTotal: item.grandTotal?.toFixed(2) || "0.00",
                 status: statusLabel,
                 bgClass: statusLabel === 'Generated' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
@@ -362,8 +364,8 @@ const SalesInvoice = () => {
                         <thead>
                             <tr className="bg-emerald-900 text-white font-bold text-[15px]">
                                 {[
-                                t('modules:customerName'), t('modules:invoice_number_col'), t('modules:date_col'),
-                                t('modules:cust_inv_no'), t('modules:grand_total_col'), t('common:status'), t('common:action')
+                                t('modules:customerName'), t('modules:cust_inv_no'), t('modules:customer_invoice_date'),
+                                t('modules:grand_total_col'), t('common:status'), t('common:action')
                             ].map(h => (
                                 <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
                             ))}
@@ -374,9 +376,8 @@ const SalesInvoice = () => {
                                 mappedInvoices.map((row, idx) => (
                                     <tr key={row.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
                                         <td className="px-6 py-5 font-bold">{row.customerName}</td>
-                                        <td className="px-6 py-4">{row.invoiceNo}</td>
-                                        <td className="px-6 py-4">{row.invoiceDate}</td>
                                         <td className="px-6 py-4 font-bold text-gray-500">{row.customerInvNo}</td>
+                                        <td className="px-6 py-4">{row.customerInvoiceDate}</td>
                                         <td className="px-6 py-4 font-bold text-[#073318]">₹{row.grandTotal}</td>
                                         <td className="px-6 py-5">
                                             <span className={`px-4 py-1.5 ${row.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{t(`common:status_${row.status.toLowerCase()}`, row.status)}</span>

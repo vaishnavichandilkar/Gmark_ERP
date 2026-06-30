@@ -30,6 +30,7 @@ const CustomSelect = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef(null);
+  const triggerRef = useRef(null);
 
   const filteredOptions =
     isSearchable && searchTerm
@@ -62,8 +63,24 @@ const CustomSelect = ({
         {label} {showAsterisk && <span className="text-red-500">*</span>}
       </label>
       <div
-        className={`w-full h-[44px] flex items-center justify-between px-4 border rounded-[8px] bg-white transition-colors ${disabled ? "cursor-not-allowed border-[#E5E7EB] bg-gray-50" : error ? "border-red-500 ring-1 ring-red-500/10 cursor-pointer" : isOpen ? "border-[#014A36] ring-1 ring-[#014A36]/10 cursor-pointer" : "border-[#E5E7EB] hover:border-gray-300 cursor-pointer"}`}
+        ref={triggerRef}
+        tabIndex={disabled ? -1 : 0}
+        className={`w-full h-[44px] flex items-center justify-between px-4 border rounded-[8px] bg-white transition-colors outline-none focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10 ${disabled ? "cursor-not-allowed border-[#E5E7EB] bg-gray-50" : error ? "border-red-500 ring-1 ring-red-500/10 cursor-pointer" : isOpen ? "border-[#014A36] ring-1 ring-[#014A36]/10 cursor-pointer" : "border-[#E5E7EB] hover:border-gray-300 cursor-pointer"}`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsOpen(!isOpen);
+          } else if (e.key === "ArrowDown" && !isOpen) {
+            e.preventDefault();
+            setIsOpen(true);
+          } else if (e.key === "Escape" && isOpen) {
+            e.preventDefault();
+            setIsOpen(false);
+            setSearchTerm("");
+          }
+        }}
       >
         {isSearchable && isOpen ? (
           <input
@@ -74,6 +91,14 @@ const CustomSelect = ({
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full h-full bg-transparent outline-none text-[14px] text-[#111827] placeholder:text-gray-400"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setIsOpen(false);
+                setSearchTerm("");
+                triggerRef.current?.focus();
+              }
+            }}
           />
         ) : (
           <span
@@ -101,11 +126,27 @@ const CustomSelect = ({
                 return (
                   <div
                     key={idx}
-                    className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors ${isSelected ? "bg-[#F9FAFB] text-[#014A36] font-medium" : "text-[#4B5563] hover:bg-gray-50"}`}
+                    tabIndex={0}
+                    className={`px-4 py-2.5 text-[14px] cursor-pointer transition-colors outline-none focus:bg-[#F9FAFB] focus:text-[#014A36] ${isSelected ? "bg-[#F9FAFB] text-[#014A36] font-medium" : "text-[#4B5563] hover:bg-gray-50"}`}
                     onClick={() => {
                       onChange(opt);
                       setIsOpen(false);
                       setSearchTerm("");
+                      triggerRef.current?.focus();
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onChange(opt);
+                        setIsOpen(false);
+                        setSearchTerm("");
+                        triggerRef.current?.focus();
+                      } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        setIsOpen(false);
+                        setSearchTerm("");
+                        triggerRef.current?.focus();
+                      }
                     }}
                   >
                     {translateDynamic(label, t)}

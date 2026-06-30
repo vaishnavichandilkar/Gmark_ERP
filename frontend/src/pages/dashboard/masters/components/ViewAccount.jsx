@@ -8,13 +8,13 @@ const InfoTableRow = ({ label1, value1, label2, value2, noBorder }) => (
             {label1}
         </div>
         <div className="sm:w-1/4 py-3.5 px-4 md:px-6 text-[13px] text-[#111827] border-r border-b sm:border-b-0 border-[#E5E7EB] bg-white">
-            {value1 || '-'}
+            {(value1 !== undefined && value1 !== null && value1 !== '') ? value1 : '-'}
         </div>
         <div className="sm:w-1/4 py-3.5 px-4 md:px-6 text-[13px] text-[#6B7280] border-r border-b sm:border-b-0 border-[#E5E7EB] bg-white">
             {label2}
         </div>
         <div className="sm:w-1/4 py-3.5 px-4 md:px-6 text-[13px] text-[#111827] bg-white">
-            {value2 || '-'}
+            {(value2 !== undefined && value2 !== null && value2 !== '') ? value2 : '-'}
         </div>
     </div>
 );
@@ -30,14 +30,14 @@ const ViewAccount = ({ initialData, onBack, onEdit }) => {
     const data = initialData || {};
 
     const renderSupplierBalance = () => {
-        if (data.supplierOpeningBalance) {
+        if (data.supplierOpeningBalance !== undefined && data.supplierOpeningBalance !== null && data.supplierOpeningBalance !== '') {
             return `${data.supplierOpeningBalance} ${data.supplierBalanceType || ''}`;
         }
         return '-';
     };
 
     const renderCustomerBalance = () => {
-        if (data.customerOpeningBalance) {
+        if (data.customerOpeningBalance !== undefined && data.customerOpeningBalance !== null && data.customerOpeningBalance !== '') {
             return `${data.customerOpeningBalance} ${data.customerBalanceType || ''}`;
         }
         return '-';

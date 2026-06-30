@@ -115,6 +115,10 @@ const masterService = {
         link.click();
         link.remove();
     },
+    deleteGroup: async (id) => {
+        const response = await axiosInstance.delete(`/group-master/${id}`);
+        return response.data;
+    },
     exportGroups: async (params) => {
         const response = await axiosInstance.get('/group-master/export', {
             params,

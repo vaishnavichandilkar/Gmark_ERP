@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Search, Download, Filter, Plus, Minus, FileText, FileSpreadsheet, Maximize2, Minimize2, MoreVertical, CheckCircle2, XCircle, RefreshCw, ChevronDown, X, Eye, ChevronsUpDown, Upload, User as UserIcon } from 'lucide-react';
+import { Search, Download, Filter, Plus, Minus, FileText, FileSpreadsheet, Maximize2, Minimize2, MoreVertical, CheckCircle2, XCircle, RefreshCw, ChevronDown, X, Eye, ChevronsUpDown, Upload, User as UserIcon, Pencil, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import GroupForm from './components/GroupForm';
+import ViewGroup from './components/ViewGroup';
 import ImportModal from './components/ImportModal';
 import { exportToPDF, exportToExcel } from '../../../utils/exportUtils';
 import masterService from '../../../services/masterService';
@@ -62,23 +63,29 @@ const GroupMaster = () => {
 
     // Sync currentView with URL
     useEffect(() => {
+        const findGroup = (groupList, targetId) => {
+            for (const g of groupList) {
+                if (String(g.id) === String(targetId)) return g;
+                if (g.children) {
+                    const found = findGroup(g.children, targetId);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+
         if (location.pathname.endsWith('/add')) {
             setCurrentView({ type: 'add', data: null });
-        } else if (location.pathname.includes('/edit/')) {
-            // Find the group in the loaded groups array if possible
-            const findGroup = (groupList, targetId) => {
-                for (const g of groupList) {
-                    if (String(g.id) === String(targetId)) return g;
-                    if (g.children) {
-                        const found = findGroup(g.children, targetId);
-                        if (found) return found;
-                    }
-                }
-                return null;
-            };
+        } else if (location.pathname.includes('/edit/') || location.pathname.includes('/view/')) {
             const group = findGroup(groups, id);
             if (group) {
-                setCurrentView({ type: 'edit', data: group });
+                if (group.is_predefined) {
+                    navigate('/seller/masters/group-master', { replace: true });
+                    showToast('Predefined groups cannot be edited or viewed', 'error');
+                } else {
+                    const isView = location.pathname.includes('/view/');
+                    setCurrentView({ type: isView ? 'view' : 'edit', data: group });
+                }
             }
         } else {
             setCurrentView({ type: 'list', data: null });
@@ -171,6 +178,24 @@ const GroupMaster = () => {
             }
         } catch (err) {
             console.error('Error:', err);
+            showToast(err.response?.data?.message || err.message || 'Server error', 'error');
+        }
+    };
+
+    const handleDeleteGroup = async (groupId, groupName) => {
+        const confirmDelete = window.confirm(`Are you sure you want to delete the group "${groupName}"?`);
+        if (!confirmDelete) return;
+
+        try {
+            const response = await masterService.deleteGroup(groupId);
+            if (response.success) {
+                showToast("Group deleted successfully");
+                fetchGroups();
+            } else {
+                showToast(response.message || "Failed to delete group", "error");
+            }
+        } catch (err) {
+            console.error('Error deleting group:', err);
             showToast(err.response?.data?.message || err.message || 'Server error', 'error');
         }
     };
@@ -372,6 +397,32 @@ const GroupMaster = () => {
                                             className={`absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in zoom-in-95 duration-200 dropdown-menu text-left
                                                 ${index >= siblingsLength - 2 && siblingsLength > 2 ? 'bottom-0 mb-2' : 'top-0 mt-2'}`}
                                         >
+                                            {!group.is_predefined && (
+                                                <>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setActiveRowDropdown(null);
+                                                            navigate(`view/${group.id}`);
+                                                        }}
+                                                        className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
+                                                    >
+                                                        <Eye size={18} className="text-gray-400" />
+                                                        {t('modules:view_and_edit_group', 'View & Edit Group')}
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setActiveRowDropdown(null);
+                                                            handleDeleteGroup(group.id, group.group_name);
+                                                        }}
+                                                        className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+                                                    >
+                                                        <Trash2 size={18} className="text-red-500" />
+                                                        {t('common:delete', 'Delete')}
+                                                    </button>
+                                                </>
+                                            )}
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -398,6 +449,17 @@ const GroupMaster = () => {
             </React.Fragment>
         );
     };
+
+    if (currentView.type === 'view') {
+        return (
+            <ViewGroup
+                initialData={currentView.data}
+                groups={groups}
+                onBack={() => navigate('/seller/masters/group-master')}
+                onEdit={() => navigate(`/seller/masters/group-master/edit/${currentView.data.id}`)}
+            />
+        );
+    }
 
     if (currentView.type === 'add' || currentView.type === 'edit') {
         return (

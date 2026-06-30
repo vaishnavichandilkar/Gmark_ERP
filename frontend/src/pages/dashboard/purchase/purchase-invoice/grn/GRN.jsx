@@ -25,6 +25,7 @@ import grnService from "@/services/grnService";
 import ScrollableTable from "@/components/common/ScrollableTable";
 import FilterDropdown from "@/pages/dashboard/masters/components/FilterDropdown";
 import CustomSelect from "@/components/common/CustomSelect";
+import { formatDate } from "@/utils/dateUtils";
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting, t }) => {
   if (!isOpen) return null;
@@ -191,8 +192,8 @@ const GRN = () => {
                 ...item,
                 supplierName: item.supplierName || "-",
                 challanNo: item.challanNumber || "-",
-                challanDate: item.challanDate ? item.challanDate.split('T')[0] : "-",
-                bookingDate: item.bookingDate ? item.bookingDate.split('T')[0] : "-",
+                challanDate: formatDate(item.challanDate),
+                bookingDate: formatDate(item.bookingDate),
                 poNo: item.poNumber || "-",
                 gstNo: item.gstNumber || "-",
                 creditDays: item.creditDays || 0,

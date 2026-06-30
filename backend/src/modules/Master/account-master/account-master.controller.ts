@@ -7,6 +7,7 @@ import {
   Param, 
   Query, 
   Put, 
+  Delete,
   Res, 
   DefaultValuePipe, 
   ParseIntPipe,
@@ -394,6 +395,12 @@ export class AccountMasterController {
     return { code };
   }
 
+  @Get('active-accounts')
+  @ApiOperation({ summary: 'Get all active accounts' })
+  async getActiveAccounts(@Req() req: any) {
+    return this.accountMasterService.findActiveAccounts(req.user.id);
+  }
+
   @Get('pincode/:pincode')
   @ApiOperation({ summary: 'Lookup city, state, and country from a pincode' })
   @ApiParam({ name: 'pincode', required: true, description: '6-digit Indian Pincode' })
@@ -541,5 +548,15 @@ export class AccountMasterController {
     @Req() req: any
   ) {
     return this.accountMasterService.updateStatus(id, updateStatusDto, req.user.id);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a customer or supplier account' })
+  @ApiParam({ name: 'id', required: true, description: 'ID of the account' })
+  delete(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any
+  ) {
+    return this.accountMasterService.delete(id, req.user.id);
   }
 }

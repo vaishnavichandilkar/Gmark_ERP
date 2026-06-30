@@ -18,6 +18,7 @@ import {
 import salesOrderService from '../../../../services/salesOrderService';
 import { getStandardGstUom } from '@/utils/uomUtils';
 import { getImageUrl } from '@/utils/url';
+import { formatDate } from '@/utils/dateUtils';
 
 const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1, renderEdit2 }) => (
     <div className={`flex flex-col sm:flex-row border-[#E5E7EB] border-b last:border-0 font-outfit`}>
@@ -99,14 +100,7 @@ const ViewSO = () => {
         if (id) fetchSO();
     }, [id]);
 
-    const formatDate = (dateStr) => {
-        if (!dateStr) return "-";
-        const date = new Date(dateStr);
-        const d = String(date.getDate()).padStart(2, '0');
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const y = String(date.getFullYear()).slice(-2);
-        return `${d}/${m}/${y}`;
-    };
+
 
     return (
         <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-500 pb-20 font-outfit">

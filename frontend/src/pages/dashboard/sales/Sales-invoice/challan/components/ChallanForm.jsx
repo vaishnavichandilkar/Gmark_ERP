@@ -3,6 +3,8 @@ import { ChevronDown, Calendar, Plus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from "@/constants/routes";
 import { useTranslation } from 'react-i18next';
+import { toDisplayDate } from '@/utils/dateUtils';
+import DateInput from '@/components/common/DateInput';
 
 const ChallanForm = ({
     formData,
@@ -35,38 +37,7 @@ const ChallanForm = ({
         );
     }, [customerSearch, customers]);
 
-    const toDisplayDate = (dateStr) => {
-        if (!dateStr) return "";
-        const parts = dateStr.includes("-") ? dateStr.split("-") : dateStr.split("/");
-        if (parts.length === 3) {
-            // If ISO (YYYY-MM-DD), convert to DD/MM/YY
-            if (parts[0].length === 4) {
-                const yearShort = parts[0].slice(-2);
-                return `${parts[2]}/${parts[1]}/${yearShort}`;
-            }
-            // If already DD-MM-YYYY or DD/MM/YYYY, convert to DD/MM/YY
-            const yearShort = parts[2].slice(-2);
-            return `${parts[0]}/${parts[1]}/${yearShort}`;
-        }
-        return dateStr;
-    };
-
-    const handleDateTextChange = (e, field) => {
-        let val = e.target.value.replace(/\D/g, '');
-        if (val.length > 8) val = val.slice(0, 8);
-
-        let formatted = val;
-        if (val.length > 2) formatted = val.slice(0, 2) + '-' + val.slice(2);
-        if (val.length > 4) formatted = formatted.slice(0, 5) + '-' + val.slice(4);
-
-        if (val.length === 8) {
-            const day = val.slice(0, 2);
-            const month = val.slice(2, 4);
-            const year = val.slice(4, 8);
-            const iso = `${year}-${month}-${day}`;
-            setFormData(prev => ({ ...prev, [field]: iso }));
-        }
-    };
+    // Local duplicate date helpers removed in favor of central import
 
     return (
         <div className="space-y-8 font-outfit">
@@ -201,21 +172,13 @@ const ChallanForm = ({
                 </div>
 
                 {/* 5. Booking Date — Default today, non-editable */}
-                <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">{t('modules:booking_date', 'Booking Date')} (Current Date) <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            value={toDisplayDate(new Date().toISOString().split('T')[0])}
-                            readOnly
-                            className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-[#111827] cursor-not-allowed"
-                        />
-                        <Calendar
-                            size={18}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                        />
-                    </div>
-                </div>
+                <DateInput
+                    label={t('modules:booking_date', 'Booking Date') + ' (Current Date)'}
+                    required
+                    value={toDisplayDate(new Date())}
+                    isLocked={true}
+                    onChange={() => {}}
+                />
 
                 {/* 6. GST Number — Auto-fetched from Account Master */}
                 <div className="space-y-2">
@@ -270,40 +233,20 @@ const ChallanForm = ({
                 </div>
 
                 {/* 9. Challan Date */}
-                <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-[#374151]">{dateLabel} {t('modules:date', 'Date')} <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                        <input
-                            type="date"
-                            ref={challanDateRef}
-                            className="absolute opacity-0 pointer-events-none w-0 h-0"
-                            value={formData.customerChallanDate || ''}
-                            min={formData.soId && formData.soCreationDate ? formData.soCreationDate.split('T')[0] : (() => {
-                                const today = new Date();
-                                const currentMonth = today.getMonth();
-                                const startYear = currentMonth < 3 ? today.getFullYear() - 1 : today.getFullYear();
-                                return `${startYear}-04-01`;
-                            })()}
-                            max={new Date().toISOString().split('T')[0]}
-                            onKeyDown={(e) => e.preventDefault()}
-                            onChange={(e) => setFormData({ ...formData, customerChallanDate: e.target.value })}
-                        />
-                        <input
-                            type="text"
-                            placeholder="DD-MM-YYYY"
-                            value={toDisplayDate(formData.customerChallanDate)}
-                            readOnly
-                            onClick={() => challanDateRef.current?.showPicker?.()}
-                            className={`w-full h-[48px] bg-white border rounded-[10px] px-4 text-[14px] font-bold outline-none transition-all cursor-pointer shadow-sm ${errors.customerChallanDate ? 'border-red-500' : 'border-[#E5E7EB] focus:border-[#073318]'}`}
-                        />
-                        <Calendar
-                            size={18}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer pointer-events-auto hover:text-[#073318]"
-                            onClick={() => challanDateRef.current?.showPicker?.()}
-                        />
-                    </div>
-                    {errors.customerChallanDate && <p className="text-red-500 text-[12px] mt-1 font-medium italic">*{errors.customerChallanDate}</p>}
-                </div>
+                <DateInput
+                    label={dateLabel + ' ' + t('modules:date', 'Date')}
+                    required
+                    value={toDisplayDate(formData.customerChallanDate)}
+                    minDate={formData.soId && formData.soCreationDate ? toDisplayDate(formData.soCreationDate) : (() => {
+                        const today = new Date();
+                        const currentMonth = today.getMonth();
+                        const startYear = currentMonth < 3 ? today.getFullYear() - 1 : today.getFullYear();
+                        return `${startYear}-04-01`;
+                    })()}
+                    maxDate={toDisplayDate(new Date())}
+                    onChange={(val) => setFormData({ ...formData, customerChallanDate: val })}
+                    error={errors.customerChallanDate}
+                />
             </div>
         </div>
     );

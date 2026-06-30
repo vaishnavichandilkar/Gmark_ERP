@@ -3,6 +3,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from './dto/purchase-order.dto';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
+import { formatDate, parseDDMMYYYY } from '../../../utils/dateFormatter';
 
 const isValidGst = (gst?: string | null): boolean => {
   return Boolean(
@@ -88,6 +89,9 @@ export class PurchaseOrderService {
       };
     });
 
+    const totalTax = items.reduce((sum, item) => sum + item.taxAmount, 0);
+    const totalAmt = items.reduce((sum, item) => sum + item.totalAmount, 0);
+
     const po = await this.prisma.purchaseOrder.create({
       data: {
         poNumber: createDto.poNumber || poNumber,
@@ -97,6 +101,8 @@ export class PurchaseOrderService {
         creditDays: createDto.creditDays,
         poCreationDate: createDto.poCreationDate ? new Date(createDto.poCreationDate) : new Date(),
         expiryDate: new Date(createDto.expiryDate),
+        taxAmount: totalTax,
+        totalAmount: totalAmt,
         userId,
         items: { create: items },
       },
@@ -208,6 +214,9 @@ export class PurchaseOrderService {
         })
       : undefined;
 
+    const totalTax = items ? items.reduce((sum, item) => sum + item.taxAmount, 0) : undefined;
+    const totalAmt = items ? items.reduce((sum, item) => sum + item.totalAmount, 0) : undefined;
+
     return this.prisma.$transaction(async (tx) => {
       if (items) {
         await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } });
@@ -228,6 +237,8 @@ export class PurchaseOrderService {
             ? new Date(updateDto.expiryDate)
             : existing.expiryDate,
           status: updateDto.status ?? existing.status,
+          ...(totalTax !== undefined ? { taxAmount: totalTax } : {}),
+          ...(totalAmt !== undefined ? { totalAmount: totalAmt } : {}),
           ...(items ? { items: { create: items } } : {}),
         },
         include: { items: true },
@@ -301,8 +312,8 @@ export class PurchaseOrderService {
         creditDays: values[2],
         address: values[3],
         gstNo: values[4],
-        poCreationDate: values[5],
-        expiryDate: values[6],
+        poCreationDate: parseDDMMYYYY(values[5]),
+        expiryDate: parseDDMMYYYY(values[6]),
         productCode: values[7],
         productName: values[8],
         hsnCode: values[9],
@@ -377,8 +388,8 @@ export class PurchaseOrderService {
         ws.addRow({
           poNumber: po.poNumber,
           supplierName: po.supplierName,
-          poCreationDate: po.poCreationDate ? new Date(po.poCreationDate).toLocaleDateString() : '-',
-          expiryDate: po.expiryDate ? new Date(po.expiryDate).toLocaleDateString() : '-',
+          poCreationDate: formatDate(po.poCreationDate),
+          expiryDate: formatDate(po.expiryDate),
           creditDays: po.creditDays,
           status: po.status,
         });
@@ -445,8 +456,8 @@ export class PurchaseOrderService {
           doc.fontSize(7);
           doc.text(po.poNumber, colX[0], y);
           doc.text(po.supplierName.substring(0, 30), colX[1], y, { width: 150 });
-          doc.text(po.poCreationDate ? new Date(po.poCreationDate).toLocaleDateString() : '-', colX[2], y);
-          doc.text(po.expiryDate ? new Date(po.expiryDate).toLocaleDateString() : '-', colX[3], y);
+          doc.text(formatDate(po.poCreationDate), colX[2], y);
+          doc.text(formatDate(po.expiryDate), colX[3], y);
           doc.text(String(po.creditDays), colX[4], y);
           doc.text(po.status, colX[5], y);
           y += 20;
@@ -486,12 +497,12 @@ export class PurchaseOrderService {
       // PO Details
       doc.fontSize(10);
       doc.text(`PO Number: ${po.poNumber}`, { continued: true });
-      doc.text(`   PO Date: ${po.poCreationDate ? new Date(po.poCreationDate).toLocaleDateString() : '-'}`, { align: 'right' });
+      doc.text(`   PO Date: ${formatDate(po.poCreationDate)}`, { align: 'right' });
       doc.text(`Supplier: ${po.supplierName}`);
       if (po.address) doc.text(`Address: ${po.address}`);
       if ((po as any).gstNo) doc.text(`GST No: ${(po as any).gstNo}`);
       doc.text(`Credit Days: ${po.creditDays}`);
-      doc.text(`Expiry Date: ${po.expiryDate ? new Date(po.expiryDate).toLocaleDateString() : '-'}`);
+      doc.text(`Expiry Date: ${formatDate(po.expiryDate)}`);
       doc.moveDown();
 
       // Table header

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { MoreVertical, X, Eye, Users, BookOpen, Download, Search, FileText, FileSpreadsheet, RotateCcw, ChevronLeft, ChevronRight, Plus, Landmark, Trash2, ChevronDown, XSquare, Upload, UploadCloud } from 'lucide-react';
+import { MoreVertical, X, Eye, Users, BookOpen, Download, Search, FileText, FileSpreadsheet, RotateCcw, ChevronLeft, ChevronRight, Plus, Minus, Landmark, Trash2, ChevronDown, XSquare, Upload, UploadCloud, Check, Maximize2, Minimize2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import CustomSelect from '../../../components/common/CustomSelect';
 import jsPDF from 'jspdf';
@@ -13,8 +13,141 @@ import toast from 'react-hot-toast';
 
 import ledgerService from '../../../services/ledgerService';
 import voucherService from '../../../services/voucherService';
+import masterService from '../../../services/masterService';
 import PaymentModal from '../../../components/common/PaymentModal';
 import OneTabSettlement from './OneTabSettlement';
+import DateInput from '@/components/common/DateInput';
+import { toDisplayDate, toIsoDate, formatDate } from '@/utils/dateUtils';
+const GroupTreeDropdown = ({ value, onChange, treeData, fallbackList }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [expandedNodes, setExpandedNodes] = useState({});
+    const [filterQuery, setFilterQuery] = useState('');
+    const dropdownRef = React.useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const toggleExpand = (nodeId, e) => {
+        e.stopPropagation();
+        setExpandedNodes(prev => ({ ...prev, [nodeId]: !prev[nodeId] }));
+    };
+
+    const handleSelect = (groupName) => {
+        onChange(groupName);
+        setIsOpen(false);
+    };
+
+    const renderTreeNode = (node, depth = 0) => {
+        const nodeName = node.group_name || node.subgroup_name || node.name || '';
+        if (!nodeName) return null;
+
+        const matchesSearch = !filterQuery || nodeName.toLowerCase().includes(filterQuery.toLowerCase());
+        const hasChildren = node.children && node.children.length > 0;
+        
+        const renderedChildren = hasChildren ? node.children.map(child => renderTreeNode(child, depth + 1)).filter(Boolean) : [];
+        const hasMatchingChildren = renderedChildren.length > 0;
+
+        if (!matchesSearch && !hasMatchingChildren) return null;
+
+        const nodeId = node.id || nodeName;
+        const isExpanded = expandedNodes[nodeId] || Boolean(filterQuery);
+        const isSelected = value === nodeName;
+
+        return (
+            <div key={nodeId} className="flex flex-col">
+                <div 
+                    className={`flex items-center justify-between py-2 px-3 rounded-lg cursor-pointer transition-colors select-none ${isSelected ? 'bg-[#073318]/10 text-[#073318] font-bold' : 'hover:bg-gray-100 text-gray-800'}`}
+                    style={{ paddingLeft: `${8 + depth * 16}px` }}
+                    onClick={() => handleSelect(nodeName)}
+                >
+                    <div className="flex items-center gap-2 overflow-hidden">
+                        {hasChildren ? (
+                            <button 
+                                type="button"
+                                onClick={(e) => toggleExpand(nodeId, e)}
+                                className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors shrink-0"
+                            >
+                                {isExpanded ? <Minus size={12} strokeWidth={3} /> : <Plus size={12} strokeWidth={3} />}
+                            </button>
+                        ) : (
+                            <span className="w-5 h-5 flex items-center justify-center text-gray-400 text-xs shrink-0">•</span>
+                        )}
+                        <span className="text-sm font-medium truncate">{nodeName}</span>
+                    </div>
+                    {isSelected && <Check size={16} className="text-[#073318] shrink-0 ml-2" />}
+                </div>
+                {hasChildren && isExpanded && (
+                    <div className="flex flex-col">
+                        {renderedChildren}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    return (
+        <div className="relative min-w-[220px]" ref={dropdownRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="h-[46px] w-full px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] flex items-center justify-between font-bold text-[#111827] focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all cursor-pointer shadow-sm"
+            >
+                <span className="truncate">{value === 'ALL' ? 'All Groups' : value}</span>
+                <ChevronDown size={18} className={`text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute left-0 top-full mt-2 w-72 max-h-80 bg-white border border-[#E5E7EB] rounded-[16px] shadow-2xl z-[200] flex flex-col p-2 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                    <div className="p-1 mb-1 border-b border-gray-100">
+                        <input 
+                            type="text"
+                            placeholder="Search group..."
+                            value={filterQuery}
+                            onChange={(e) => setFilterQuery(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-[#073318]"
+                            autoFocus
+                        />
+                    </div>
+                    <div className="overflow-y-auto max-h-64 space-y-0.5">
+                        <div 
+                            className={`py-2 px-3 rounded-lg cursor-pointer text-sm font-medium transition-colors ${value === 'ALL' ? 'bg-[#073318]/10 text-[#073318] font-bold' : 'hover:bg-gray-100 text-gray-800'}`}
+                            onClick={() => handleSelect('ALL')}
+                        >
+                            All Groups
+                        </div>
+                        {treeData && treeData.length > 0 ? (
+                            treeData.map(node => renderTreeNode(node, 0))
+                        ) : (
+                            fallbackList && fallbackList.map((grpObj, idx) => {
+                                const name = typeof grpObj === 'string' ? grpObj : grpObj.name;
+                                const level = typeof grpObj === 'string' ? 1 : (grpObj.level || 1);
+                                const isSelected = value === name;
+                                return (
+                                    <div 
+                                        key={idx}
+                                        className={`py-2 px-3 rounded-lg cursor-pointer text-sm font-medium transition-colors flex items-center justify-between ${isSelected ? 'bg-[#073318]/10 text-[#073318] font-bold' : 'hover:bg-gray-100 text-gray-800'}`}
+                                        style={{ paddingLeft: `${12 + (level - 1) * 12}px` }}
+                                        onClick={() => handleSelect(name)}
+                                    >
+                                        <span>{level > 1 ? `↳ ${name}` : name}</span>
+                                        {isSelected && <Check size={16} className="text-[#073318]" />}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 
 const Finance = () => {
@@ -24,13 +157,79 @@ const Finance = () => {
     const [activeMainTab, setActiveMainTab] = useState('Ledger');
     const [activeSubTab, setActiveSubTab] = useState('Sundry Creditors');
     const [selectedAccount, setSelectedAccount] = useState(null);
+    const [modalSearchQuery, setModalSearchQuery] = useState('');
     const [openActionMenuId, setOpenActionMenuId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedGroup, setSelectedGroup] = useState('ALL');
+    const [groupsList, setGroupsList] = useState([]);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+
+    const [expandedGroupNodes, setExpandedGroupNodes] = useState({});
+    const [allGroupNodesExpanded, setAllGroupNodesExpanded] = useState(false);
+
+    const [groupTreeData, setGroupTreeData] = useState([]);
+
+    useEffect(() => {
+        const fetchGroups = async () => {
+            try {
+                const data = await masterService.getAllGroups();
+                const tree = data?.data || (Array.isArray(data) ? data : []);
+                setGroupTreeData(tree);
+                
+                const flattenGroups = (nodes, depth = 0) => {
+                    let items = [];
+                    if (!nodes || !Array.isArray(nodes)) return items;
+                    nodes.forEach(node => {
+                        const name = node.group_name || node.subgroup_name || node.name;
+                        if (name) {
+                            items.push({ name, level: node.level || depth + 1 });
+                        }
+                        if (node.children && node.children.length > 0) {
+                            items = items.concat(flattenGroups(node.children, depth + 1));
+                        }
+                    });
+                    return items;
+                };
+
+                const flat = flattenGroups(tree);
+                const uniqueMap = new Map();
+                flat.forEach(item => {
+                    if (!uniqueMap.has(item.name.toLowerCase())) {
+                        uniqueMap.set(item.name.toLowerCase(), item);
+                    }
+                });
+
+                const defaultGroups = [
+                    'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock', 
+                    'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock', 
+                    'Liabilities', 'Assets', 'Capital Account', 'Current Assets', 
+                    'Current Liabilities', 'Duties & Taxes', 'Loans (Liability)', 'Sundry Creditors', 'Sundry Debtors'
+                ];
+                defaultGroups.forEach(d => {
+                    if (!uniqueMap.has(d.toLowerCase())) {
+                        uniqueMap.set(d.toLowerCase(), { name: d, level: 1 });
+                    }
+                });
+
+                const finalList = Array.from(uniqueMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+                setGroupsList(finalList);
+            } catch (err) {
+                console.error('Error fetching groups:', err);
+                const defaultGroups = [
+                    'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock', 
+                    'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock', 
+                    'Liabilities', 'Assets', 'Capital Account', 'Current Assets', 
+                    'Current Liabilities', 'Duties & Taxes', 'Loans (Liability)', 'Sundry Creditors', 'Sundry Debtors'
+                ].sort().map(name => ({ name, level: 1 }));
+                setGroupsList(defaultGroups);
+            }
+        };
+        fetchGroups();
+    }, []);
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [showMainExportMenu, setShowMainExportMenu] = useState(false);
-    const [rowsPerPage, setRowsPerPage] = useState(5);
+    const [rowsPerPage, setRowsPerPage] = useState(50);
     const [currentPage, setCurrentPage] = useState(1);
     
     // Edit Voucher States
@@ -57,8 +256,8 @@ const Finance = () => {
     useEffect(() => {
         if (activeFiscalYear) {
             const [startYear, endYear] = activeFiscalYear.split('-');
-            setStartDate(`${startYear}-04-01`);
-            setEndDate(`${endYear}-03-31`);
+            setStartDate(toDisplayDate(`${startYear}-04-01`));
+            setEndDate(toDisplayDate(`${endYear}-03-31`));
         }
     }, [activeFiscalYear]);
     const [summaryData, setSummaryData] = useState([]);
@@ -69,8 +268,8 @@ const Finance = () => {
     const handleFiscalYearChange = (year) => {
         setActiveFiscalYear(year);
         const [startYear, endYear] = year.split('-');
-        setStartDate(`${startYear}-04-01`);
-        setEndDate(`${endYear}-03-31`);
+        setStartDate(toDisplayDate(`${startYear}-04-01`));
+        setEndDate(toDisplayDate(`${endYear}-03-31`));
     };
 
     useEffect(() => {
@@ -79,12 +278,14 @@ const Finance = () => {
             setLoading(true);
             try {
                 let response;
-                const params = { search: searchQuery, startDate, endDate };
+                const params = { search: searchQuery, startDate: toIsoDate(startDate), endDate: toIsoDate(endDate) };
                 
                 if (activeSubTab === 'Sundry Creditors') {
                     response = await ledgerService.getCreditors(params);
                 } else if (activeSubTab === 'Sundry Debtors') {
                     response = await ledgerService.getDebtors(params);
+                } else if (activeSubTab === 'Group Ledger') {
+                    response = await ledgerService.getGroupLedgers({ ...params, group: selectedGroup });
                 } else {
                     // Bank or Cash
                     const group = activeSubTab === 'Bank' ? 'BANK' : 'CASH';
@@ -101,7 +302,7 @@ const Finance = () => {
         };
 
         fetchSummary();
-    }, [activeMainTab, activeSubTab, searchQuery, startDate, endDate]);
+    }, [activeMainTab, activeSubTab, searchQuery, selectedGroup, startDate, endDate]);
 
     useEffect(() => {
         const tabParam = searchParams.get('tab');
@@ -147,11 +348,12 @@ const Finance = () => {
     const getSubTabs = (mainTab) => {
         if (mainTab === 'Bank Reconciliation') return ['Receipts', 'Payments', 'JV', 'Contra'];
         if (mainTab === 'Settlement') return ['Sundry Creditors', 'Sundry Debtors'];
-        return ['Sundry Creditors', 'Sundry Debtors', 'Bank', 'Cash'];
+        return ['Sundry Creditors', 'Sundry Debtors', 'Group Ledger', 'Bank', 'Cash'];
     };
     const subTabLabels = {
         'Sundry Creditors': t('modules:sundry_creditors'),
         'Sundry Debtors': t('modules:sundry_debtors'),
+        'Group Ledger': 'Group Ledger',
         'Bank': t('modules:bank'),
         'Cash': t('modules:cash'),
         'Receipts': t('modules:receipts'),
@@ -173,6 +375,10 @@ const Finance = () => {
                 response = await voucherService.getReceiptVouchers();
             } else if (activeSubTab === 'Payments') {
                 response = await voucherService.getPaymentVouchers();
+            } else if (activeSubTab === 'JV') {
+                response = await voucherService.getJournalVouchers();
+            } else if (activeSubTab === 'Contra') {
+                response = await voucherService.getContraVouchers();
             } else {
                 setBankData([]);
                 return;
@@ -184,9 +390,7 @@ const Finance = () => {
                 const rawDateStr = !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : '';
                 return {
                     id: v.id,
-                    date: !isNaN(dateObj.getTime()) 
-                        ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')
-                        : '-',
+                    date: formatDate(v.voucherDate),
                     rawDate: rawDateStr,
                     vchNo: v.voucherNumber,
                     account: v.items?.map(i => i.account?.accountName).join(', ') || 'Unknown',
@@ -217,6 +421,10 @@ const Finance = () => {
                 await voucherService.deleteReceiptVoucher(item.id);
             } else if (activeSubTab === 'Payments') {
                 await voucherService.deletePaymentVoucher(item.id);
+            } else if (activeSubTab === 'JV') {
+                await voucherService.deleteJournalVoucher(item.id);
+            } else if (activeSubTab === 'Contra') {
+                await voucherService.deleteContraVoucher(item.id);
             }
             toast.success(t('modules:voucher_deleted'));
             fetchVouchers();
@@ -247,8 +455,8 @@ const Finance = () => {
             // Refresh detailed data
             setDetailedLoading(true);
             const params = { 
-                startDate, 
-                endDate, 
+                startDate: toIsoDate(startDate), 
+                endDate: toIsoDate(endDate), 
                 type: activeMainTab === 'Ledger' ? activeSubTab : undefined,
                 page: detailedCurrentPage,
                 limit: 14
@@ -271,8 +479,8 @@ const Finance = () => {
             setDetailedLoading(true);
             try {
                 const params = { 
-                    startDate, 
-                    endDate, 
+                    startDate: toIsoDate(startDate), 
+                    endDate: toIsoDate(endDate), 
                     type: activeMainTab === 'Ledger' ? activeSubTab : undefined,
                     page: detailedCurrentPage,
                     limit: 14
@@ -320,11 +528,14 @@ const Finance = () => {
             // Search match
             const searchStr = searchQuery.toLowerCase();
             const matchesSearch = !searchQuery || (
+                (item.accountName && item.accountName.toLowerCase().includes(searchStr)) ||
                 (item.account && item.account.toLowerCase().includes(searchStr)) ||
+                (item.groupName && item.groupName.toLowerCase().includes(searchStr)) ||
                 (item.vchNo && item.vchNo.toLowerCase().includes(searchStr)) ||
                 (item.bank && item.bank.toLowerCase().includes(searchStr)) ||
-                (item.amount && item.amount.toLowerCase().includes(searchStr)) ||
-                (item.status && item.status.toLowerCase().includes(searchStr))
+                (item.amount && String(item.amount).toLowerCase().includes(searchStr)) ||
+                (item.status && item.status.toLowerCase().includes(searchStr)) ||
+                (item.allGroups && item.allGroups.some(g => String(g).toLowerCase().includes(searchStr)))
             );
 
             // Date match
@@ -332,8 +543,10 @@ const Finance = () => {
             if (startDate || endDate) {
                 const itemDateStr = item.rawDate || normalizeDate(item.date);
                 if (itemDateStr) {
-                    if (startDate && itemDateStr < startDate) matchesDate = false;
-                    if (endDate && itemDateStr > endDate) matchesDate = false;
+                    const startIso = toIsoDate(startDate);
+                    const endIso = toIsoDate(endDate);
+                    if (startIso && itemDateStr < startIso) matchesDate = false;
+                    if (endIso && itemDateStr > endIso) matchesDate = false;
                 }
             }
             
@@ -359,12 +572,13 @@ const Finance = () => {
     const currentRows = filteredMainData.slice(indexOfFirstRow, indexOfLastRow);
     const totalPages = Math.ceil(filteredMainData.length / rowsPerPage);
 
+
     const filteredTransactions = useMemo(() => {
         if (!detailedLedger || !detailedLedger.items) return [];
         
         return detailedLedger.items.filter(tx => {
-            if (!searchQuery) return true;
-            const query = searchQuery.toLowerCase();
+            if (!modalSearchQuery) return true;
+            const query = modalSearchQuery.toLowerCase();
             return (
                 new Date(tx.date).toLocaleDateString().toLowerCase().includes(query) ||
                 tx.particulars.toLowerCase().includes(query) ||
@@ -374,7 +588,7 @@ const Finance = () => {
                 tx.balance.toString().includes(query)
             );
         });
-    }, [detailedLedger, searchQuery]);
+    }, [detailedLedger, modalSearchQuery]);
 
     const pageTotalDR = useMemo(() => 
         filteredTransactions
@@ -538,16 +752,20 @@ const Finance = () => {
 
         // Try to find an exact match first
         const exactMatch = filteredMainData.find(item => 
-            item.account.toLowerCase() === searchQuery.toLowerCase()
+            (item.accountName || item.account || '').toLowerCase() === searchQuery.toLowerCase()
         );
 
         // If no exact match, but only one result, use that
         const match = exactMatch || (filteredMainData.length === 1 ? filteredMainData[0] : null);
 
         if (match) {
+            const name = match.accountName || match.account || '';
             if (startDate && endDate) {
-                // Navigate to full ledger view with dates
-                navigate(`/seller/finance/ledger/${match.id}?startDate=${startDate}&endDate=${endDate}&name=${match.account}&type=${encodeURIComponent(activeSubTab)}`);
+                const startIso = toIsoDate(startDate);
+                const endIso = toIsoDate(endDate);
+                if (startIso && endIso) {
+                    navigate(`/seller/finance/ledger/${match.id}?startDate=${startIso}&endDate=${endIso}&name=${encodeURIComponent(name)}&type=${encodeURIComponent(activeSubTab)}`);
+                }
             } else {
                 // Just open the modal if no dates set
                 setSelectedAccount(match);
@@ -561,95 +779,278 @@ const Finance = () => {
         }
     };
 
-    React.useEffect(() => {
-        if (activeMainTab === 'Ledger' && searchQuery && startDate && endDate) {
-            const exactMatch = filteredMainData.find(item => 
-                item.account.toLowerCase() === searchQuery.toLowerCase()
-            );
-            const match = exactMatch || (filteredMainData.length === 1 ? filteredMainData[0] : null);
 
-            if (match) {
-                navigate(`/seller/finance/ledger/${match.id}?startDate=${startDate}&endDate=${endDate}&name=${match.account}&type=${encodeURIComponent(activeSubTab)}`);
-            }
+
+    const getExportRowsForMainLedger = () => {
+        if (activeSubTab !== 'Group Ledger') {
+            return filteredMainData.map((item, index) => ({
+                srNo: index + 1,
+                account: item.accountName || '-',
+                opening: item.openingBalance != null ? `${Math.abs(Number(item.openingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.openingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.openingBalance) >= 0 ? 'Dr' : 'Cr')}` : '0.00',
+                debit: Number(item.debit || 0),
+                credit: Number(item.credit || 0),
+                closing: item.closingBalance != null ? `${Math.abs(Number(item.closingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.closingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.closingBalance) >= 0 ? 'Dr' : 'Cr')}` : '0.00'
+            }));
         }
-    }, [activeMainTab, searchQuery, startDate, endDate, filteredMainData, navigate]);
 
+        const tree = [];
+        const nodeMap = {};
 
+        filteredMainData.forEach(item => {
+            let path = (item.allGroups && item.allGroups.length > 0) ? item.allGroups : [item.primaryGroup || item.groupName || 'General'];
+            if (selectedGroup && selectedGroup !== 'ALL') {
+                const grpIdx = path.findIndex(g => String(g).toLowerCase().trim() === selectedGroup.toLowerCase().trim());
+                if (grpIdx !== -1) {
+                    path = path.slice(grpIdx);
+                }
+            }
+            const isRealAccount = item.accountType !== null || Number(item.openingBalance || 0) !== 0 || Number(item.debit || 0) !== 0 || Number(item.credit || 0) !== 0;
 
-    const handleExportPDF = () => {
-        const doc = new jsPDF();
-        
-        doc.setFontSize(16);
-        doc.text(`Ledger Account: ${selectedAccount?.accountName || 'Account'}`, 14, 20);
-        
-        const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "Unallocated", "DR", "CR", "Cum Balance"];
-        const tableRows = filteredTransactions.map((tx, index) => [
-            index + 1,
-            new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
-            tx.particulars,
-            tx.narration || '-',
-            tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
-            tx.debit > 0 ? tx.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
-            tx.credit > 0 ? tx.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
-            `${Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
-        ]);
+            let currentLevel = tree;
+            let currentPath = '';
 
-        const footerRows = [
-            ['', '', '', 'Page Total', '', pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(currentClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}`],
-            ['', '', '', 'Transactions (Ledger)', '', overallTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), overallTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}`],
-            ['', '', '', 'Closing Balance', '', '--', '--', `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}`]
-        ];
+            path.forEach((gName, idx) => {
+                currentPath = currentPath ? `${currentPath}>${gName}` : gName;
+                if (!nodeMap[currentPath]) {
+                    const newNode = {
+                        id: currentPath,
+                        name: gName,
+                        level: idx + 1,
+                        openingBalance: 0,
+                        debit: 0,
+                        credit: 0,
+                        closingBalance: 0,
+                        children: [],
+                        items: []
+                    };
+                    nodeMap[currentPath] = newNode;
+                    currentLevel.push(newNode);
+                }
+                const node = nodeMap[currentPath];
+                node.openingBalance += Number(item.openingBalance || 0);
+                node.debit += Number(item.debit || 0);
+                node.credit += Number(item.credit || 0);
+                node.closingBalance += Number(item.closingBalance || 0);
 
-        autoTable(doc, {
-            head: [tableColumn],
-            body: tableRows,
-            foot: footerRows,
-            startY: 30,
-            theme: 'grid',
-            showHead: 'everyPage',
-            headStyles: { fillColor: [17, 24, 39], textColor: [255, 255, 255] },
-            footStyles: { fillColor: [249, 250, 251], textColor: [17, 24, 39], fontStyle: 'bold' },
-            styles: { fontSize: 8, font: 'helvetica' }
+                if (idx === path.length - 1 && isRealAccount) {
+                    if (item.accountName.toLowerCase().trim() !== gName.toLowerCase().trim()) {
+                        node.items.push(item);
+                    }
+                }
+                currentLevel = node.children;
+            });
         });
 
-        doc.save(`${selectedAccount?.accountName || 'Account'}_ledger.pdf`);
-        setShowExportMenu(false);
+        const masterSequence = [
+            'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock', 
+            'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock', 
+            'Liabilities', 'Assets',
+            'Non-Current Liabilities', 'Current Liabilities',
+            'Long Term Borrowings', 'Other Long Term Liabilities', 'Long Term Provisions',
+            'Short Term Borrowings', 'Suppliers', 'Other Current Liabilities', 'Short Term Provisions',
+            'Non-Current Assets', 'Current Assets',
+            'Fixed Assets', 'Long Term Loans & Advances',
+            'Current Investment', 'Inventories', 'Customers', 'Bank & Cash', 'Short Term Loans and Advances', 'Other Current Assets'
+        ];
+
+        const sortNodesRecursive = (nodes) => {
+            nodes.sort((a, b) => {
+                const idxA = masterSequence.indexOf(a.name);
+                const idxB = masterSequence.indexOf(b.name);
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                if (idxA !== -1) return -1;
+                if (idxB !== -1) return 1;
+                return a.name.localeCompare(b.name);
+            });
+            nodes.forEach(n => {
+                if (n.children && n.children.length > 0) sortNodesRecursive(n.children);
+            });
+        };
+
+        sortNodesRecursive(tree);
+
+        const rows = [];
+        let srNo = 1;
+
+        const flattenTree = (nodes, depth = 0) => {
+            nodes.forEach(node => {
+                const indent = '  '.repeat(depth);
+                rows.push({
+                    srNo: srNo++,
+                    account: `${indent}${node.name}`,
+                    opening: `${Math.abs(node.openingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${node.openingBalance >= 0 ? 'Dr' : 'Cr'}`,
+                    debit: Number(node.debit || 0),
+                    credit: Number(node.credit || 0),
+                    closing: `${Math.abs(node.closingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${node.closingBalance >= 0 ? 'Dr' : 'Cr'}`
+                });
+
+                const isExpanded = searchQuery ? true : (expandedGroupNodes[node.id] !== undefined ? expandedGroupNodes[node.id] : allGroupNodesExpanded);
+
+                if (isExpanded) {
+                    if (node.children && node.children.length > 0) {
+                        flattenTree(node.children, depth + 1);
+                    }
+                    if (node.items && node.items.length > 0) {
+                        node.items.forEach(item => {
+                            const itemIndent = '  '.repeat(depth + 1);
+                            rows.push({
+                                srNo: srNo++,
+                                account: `${itemIndent}• ${item.accountName}`,
+                                opening: item.openingBalance != null ? `${Math.abs(Number(item.openingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${Number(item.openingBalance) >= 0 ? 'Dr' : 'Cr'}` : '0.00',
+                                debit: Number(item.debit || 0),
+                                credit: Number(item.credit || 0),
+                                closing: item.closingBalance != null ? `${Math.abs(Number(item.closingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${Number(item.closingBalance) >= 0 ? 'Dr' : 'Cr'}` : '0.00'
+                            });
+                        });
+                    }
+                }
+            });
+        };
+
+        flattenTree(tree);
+        return rows;
     };
 
-    const handleExportExcel = () => {
-        const exportData = filteredTransactions.map((tx, index) => ({
-            "Sr.No": index + 1,
-            "Date": new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
-            "Particular": tx.particulars,
-            "Narration": tx.narration || '-',
-            "Unallocated (₹)": tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated) : null,
-            "Debit (₹)": tx.debit > 0 ? tx.debit : null,
-            "Credit (₹)": tx.credit > 0 ? tx.credit : null,
-            "Balance": `${Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
-        }));
+    const handleExportPDF = async () => {
+        if (!selectedAccount) return;
+        try {
+            setLoading(true);
+            const params = { 
+                startDate: toIsoDate(startDate), 
+                endDate: toIsoDate(endDate), 
+                type: activeMainTab === 'Ledger' ? activeSubTab : undefined,
+                page: 1,
+                limit: 100000
+            };
+            const res = await ledgerService.getDetailedLedger(selectedAccount.id, params);
+            const allTxs = res.data?.items || [];
+            const filtered = allTxs.filter(tx => {
+                if (!modalSearchQuery) return true;
+                const query = modalSearchQuery.toLowerCase();
+                return (
+                    new Date(tx.date).toLocaleDateString().toLowerCase().includes(query) ||
+                    tx.particulars.toLowerCase().includes(query) ||
+                    (tx.narration || '').toLowerCase().includes(query) ||
+                    tx.debit.toString().includes(query) ||
+                    tx.credit.toString().includes(query) ||
+                    tx.balance.toString().includes(query)
+                );
+            });
 
-        // Add summary rows to Excel
-        exportData.push({}); 
-        exportData.push({ "Narration": "Page Total", "Unallocated (₹)": "--", "Debit (₹)": pageTotalDR, "Credit (₹)": pageTotalCR, "Balance": `${Math.abs(currentClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (currentClosingBalance >= 0 ? 'Cr' : 'Dr') : (currentClosingBalance >= 0 ? 'Dr' : 'Cr')}` });
-        exportData.push({ "Narration": "Transactions (Ledger)", "Unallocated (₹)": "--", "Debit (₹)": overallTotalDR, "Credit (₹)": overallTotalCR, "Balance": `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}` });
-        exportData.push({ "Narration": "Closing Balance", "Unallocated (₹)": "--", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalLedgerBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalLedgerBalance >= 0 ? 'Cr' : 'Dr') : (finalLedgerBalance >= 0 ? 'Dr' : 'Cr')}` });
+            const doc = new jsPDF();
+            doc.setFontSize(16);
+            doc.text(`Ledger Account: ${selectedAccount?.accountName || 'Account'}`, 14, 20);
+            
+            const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "Unallocated", "DR", "CR", "Cum Balance"];
+            const tableRows = filtered.map((tx, index) => [
+                index + 1,
+                formatDate(tx.date),
+                tx.particulars,
+                tx.narration || '-',
+                tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
+                tx.debit > 0 ? tx.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
+                tx.credit > 0 ? tx.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
+                `${Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
+            ]);
 
-        const ws = XLSX.utils.json_to_sheet(exportData);
-        ws['!views'] = [{ state: 'frozen', ySplit: 1 }];
-        ws['!cols'] = [
-            { wch: 8 },  // Sr.No
-            { wch: 15 }, // Date
-            { wch: 25 }, // Particular
-            { wch: 35 }, // Narration
-            { wch: 18 }, // Unallocated (₹)
-            { wch: 15 }, // Debit (₹)
-            { wch: 15 }, // Credit (₹)
-            { wch: 20 }  // Balance
-        ];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Ledger");
-        XLSX.writeFile(wb, `${selectedAccount?.accountName || 'Account'}_ledger.xlsx`);
-        setShowExportMenu(false);
+            const totalDR = filtered.filter(tx => !tx.particulars.toLowerCase().includes('previous')).reduce((sum, tx) => sum + parseFloat(tx.debit || 0), 0);
+            const totalCR = filtered.filter(tx => !tx.particulars.toLowerCase().includes('previous')).reduce((sum, tx) => sum + parseFloat(tx.credit || 0), 0);
+            const finalBal = filtered.length > 0 ? filtered[filtered.length - 1].balance : 0;
+
+            const footerRows = [
+                ['', '', '', 'Total Transactions', '', totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(finalBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalBal >= 0 ? 'Cr' : 'Dr') : (finalBal >= 0 ? 'Dr' : 'Cr')}`],
+                ['', '', '', 'Closing Balance', '', '--', '--', `${Math.abs(finalBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalBal >= 0 ? 'Cr' : 'Dr') : (finalBal >= 0 ? 'Dr' : 'Cr')}`]
+            ];
+
+            autoTable(doc, {
+                head: [tableColumn],
+                body: tableRows,
+                foot: footerRows,
+                startY: 30,
+                theme: 'grid',
+                showHead: 'everyPage',
+                headStyles: { fillColor: [17, 24, 39], textColor: [255, 255, 255] },
+                footStyles: { fillColor: [249, 250, 251], textColor: [17, 24, 39], fontStyle: 'bold' },
+                styles: { fontSize: 8, font: 'helvetica' }
+            });
+
+            doc.save(`${selectedAccount?.accountName || 'Account'}_ledger.pdf`);
+            setShowExportMenu(false);
+        } catch (err) {
+            console.error("Export error:", err);
+            toast.error("Failed to export complete ledger");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleExportExcel = async () => {
+        if (!selectedAccount) return;
+        try {
+            setLoading(true);
+            const params = { 
+                startDate: toIsoDate(startDate), 
+                endDate: toIsoDate(endDate), 
+                type: activeMainTab === 'Ledger' ? activeSubTab : undefined,
+                page: 1,
+                limit: 100000
+            };
+            const res = await ledgerService.getDetailedLedger(selectedAccount.id, params);
+            const allTxs = res.data?.items || [];
+            const filtered = allTxs.filter(tx => {
+                if (!modalSearchQuery) return true;
+                const query = modalSearchQuery.toLowerCase();
+                return (
+                    new Date(tx.date).toLocaleDateString().toLowerCase().includes(query) ||
+                    tx.particulars.toLowerCase().includes(query) ||
+                    (tx.narration || '').toLowerCase().includes(query) ||
+                    tx.debit.toString().includes(query) ||
+                    tx.credit.toString().includes(query) ||
+                    tx.balance.toString().includes(query)
+                );
+            });
+
+            const exportData = filtered.map((tx, index) => ({
+                "Sr.No": index + 1,
+                "Date": formatDate(tx.date),
+                "Particular": tx.particulars,
+                "Narration": tx.narration || '-',
+                "Unallocated (₹)": tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated) : null,
+                "Debit (₹)": tx.debit > 0 ? tx.debit : null,
+                "Credit (₹)": tx.credit > 0 ? tx.credit : null,
+                "Balance": `${Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
+            }));
+
+            const totalDR = filtered.filter(tx => !tx.particulars.toLowerCase().includes('previous')).reduce((sum, tx) => sum + parseFloat(tx.debit || 0), 0);
+            const totalCR = filtered.filter(tx => !tx.particulars.toLowerCase().includes('previous')).reduce((sum, tx) => sum + parseFloat(tx.credit || 0), 0);
+            const finalBal = filtered.length > 0 ? filtered[filtered.length - 1].balance : 0;
+
+            exportData.push({}); 
+            exportData.push({ "Narration": "Total Transactions", "Unallocated (₹)": "--", "Debit (₹)": totalDR, "Credit (₹)": totalCR, "Balance": `${Math.abs(finalBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalBal >= 0 ? 'Cr' : 'Dr') : (finalBal >= 0 ? 'Dr' : 'Cr')}` });
+            exportData.push({ "Narration": "Closing Balance", "Unallocated (₹)": "--", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalBal >= 0 ? 'Cr' : 'Dr') : (finalBal >= 0 ? 'Dr' : 'Cr')}` });
+
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            ws['!views'] = [{ state: 'frozen', ySplit: 1 }];
+            ws['!cols'] = [
+                { wch: 8 },  // Sr.No
+                { wch: 15 }, // Date
+                { wch: 25 }, // Particular
+                { wch: 35 }, // Narration
+                { wch: 18 }, // Unallocated (₹)
+                { wch: 15 }, // Debit (₹)
+                { wch: 15 }, // Credit (₹)
+                { wch: 20 }  // Balance
+            ];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Ledger");
+            XLSX.writeFile(wb, `${selectedAccount?.accountName || 'Account'}_ledger.xlsx`);
+            setShowExportMenu(false);
+        } catch (err) {
+            console.error("Export error:", err);
+            toast.error("Failed to export complete ledger");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleExportMainLedgerPDF = () => {
@@ -658,15 +1059,16 @@ const Finance = () => {
         doc.setFontSize(16);
         doc.text(`Ledger Summary - ${activeSubTab}`, 14, 20);
         doc.setFontSize(10);
-        doc.text(`Period: ${startDate || 'All'} to ${endDate || 'All'}`, 14, 26);
+        doc.text(`Period: ${toIsoDate(startDate) || 'All'} to ${toIsoDate(endDate) || 'All'}`, 14, 26);
         
+        const exportRows = getExportRowsForMainLedger();
         const tableColumn = ["Account", "Opening Balance", "Debit", "Credit", "Closing Balance"];
-        const tableRows = filteredMainData.map(item => [
-            item.accountName || '-',
-            item.openingBalance != null ? `${Math.abs(Number(item.openingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.openingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.openingBalance) >= 0 ? 'Dr' : 'Cr')}` : '0.00',
-            Number(item.debit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-            Number(item.credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-            item.closingBalance != null ? `${Math.abs(Number(item.closingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.closingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.closingBalance) >= 0 ? 'Dr' : 'Cr')}` : '0.00'
+        const tableRows = exportRows.map(item => [
+            item.account,
+            item.opening,
+            typeof item.debit === 'number' ? item.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : item.debit,
+            typeof item.credit === 'number' ? item.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : item.credit,
+            item.closing
         ]);
 
         autoTable(doc, {
@@ -684,20 +1086,21 @@ const Finance = () => {
     };
 
     const handleExportMainLedgerExcel = () => {
-        const exportData = filteredMainData.map((item, index) => ({
-            "Sr.No": index + 1,
-            "Account": item.accountName || '-',
-            "Opening Balance": item.openingBalance != null ? `${Math.abs(Number(item.openingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.openingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.openingBalance) >= 0 ? 'Dr' : 'Cr')}` : '0.00',
-            "Debit": Number(item.debit || 0),
-            "Credit": Number(item.credit || 0),
-            "Closing Balance": item.closingBalance != null ? `${Math.abs(Number(item.closingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.closingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.closingBalance) >= 0 ? 'Dr' : 'Cr')}` : '0.00'
+        const exportRows = getExportRowsForMainLedger();
+        const exportData = exportRows.map(item => ({
+            "Sr.No": item.srNo,
+            "Account": item.account,
+            "Opening Balance": item.opening,
+            "Debit": item.debit,
+            "Credit": item.credit,
+            "Closing Balance": item.closing
         }));
 
         const ws = XLSX.utils.json_to_sheet(exportData);
         ws['!views'] = [{ state: 'frozen', ySplit: 1 }];
         ws['!cols'] = [
             { wch: 8 },  // Sr.No
-            { wch: 30 }, // Account
+            { wch: 35 }, // Account
             { wch: 20 }, // Opening Balance
             { wch: 15 }, // Debit
             { wch: 15 }, // Credit
@@ -718,10 +1121,14 @@ const Finance = () => {
             titleSuffix = ' (Sundry Debtors)';
         } else if (activeSubTab === 'Payments') {
             titleSuffix = ' (Sundry Creditors)';
+        } else if (activeSubTab === 'JV') {
+            titleSuffix = ' (Journal Entries)';
+        } else if (activeSubTab === 'Contra') {
+            titleSuffix = ' (Contra Entries)';
         }
         doc.text(`Bank Reconciliation - ${activeSubTab}${titleSuffix}`, 14, 20);
         doc.setFontSize(10);
-        doc.text(`Period: ${startDate || 'All'} to ${endDate || 'All'}`, 14, 26);
+        doc.text(`Period: ${toIsoDate(startDate) || 'All'} to ${toIsoDate(endDate) || 'All'}`, 14, 26);
         
         const tableColumn = ["Date", "Vch No.", "Account", "Bank/Cash", "Narration", "Amount"];
         const tableRows = filteredMainData.map(item => [
@@ -763,12 +1170,16 @@ const Finance = () => {
             titleSuffix = ' (Sundry Debtors)';
         } else if (activeSubTab === 'Payments') {
             titleSuffix = ' (Sundry Creditors)';
+        } else if (activeSubTab === 'JV') {
+            titleSuffix = ' (Journal Entries)';
+        } else if (activeSubTab === 'Contra') {
+            titleSuffix = ' (Contra Entries)';
         }
 
         // Create sheet with Title and Period first
         const ws = XLSX.utils.aoa_to_sheet([
             [`Bank Reconciliation - ${activeSubTab}${titleSuffix}`],
-            [`Period: ${startDate || 'All'} to ${endDate || 'All'}`],
+            [`Period: ${toIsoDate(startDate) || 'All'} to ${toIsoDate(endDate) || 'All'}`],
             [] // Spacing row
         ]);
 
@@ -796,7 +1207,15 @@ const Finance = () => {
 
     const handleDownloadTemplate = () => {
         const isReceipt = activeSubTab === 'Receipts';
-        const fileName = isReceipt ? 'Bank_Reconciliation_Receipt_Template.xlsx' : 'Bank_Reconciliation_Payment_Template.xlsx';
+        const isPayment = activeSubTab === 'Payments';
+        const isContra = activeSubTab === 'Contra';
+        const fileName = isReceipt 
+            ? 'Bank_Reconciliation_Receipt_Template.xlsx' 
+            : isPayment 
+                ? 'Bank_Reconciliation_Payment_Template.xlsx' 
+                : isContra
+                    ? 'Bank_Reconciliation_Contra_Template.xlsx'
+                    : 'Bank_Reconciliation_Journal_Template.xlsx';
         const link = document.createElement('a');
         link.href = `/${fileName}`;
         link.setAttribute('download', fileName);
@@ -873,10 +1292,11 @@ const Finance = () => {
                 }
 
                 // Fetch reference lists for matching names to IDs
-                const [bankCashRes, customersRes, suppliersRes] = await Promise.all([
+                const [bankCashRes, customersRes, suppliersRes, activeAccountsRes] = await Promise.all([
                     voucherService.getBankCashAccounts(),
                     voucherService.getCustomers(),
-                    voucherService.getSuppliers()
+                    voucherService.getSuppliers(),
+                    voucherService.getActiveAccounts()
                 ]);
 
                 const allAccounts = [...customersRes, ...suppliersRes];
@@ -890,7 +1310,7 @@ const Finance = () => {
                     
                     const dateVal = row['Date (DD/MM/YYYY)'] || row['date (dd/mm/yyyy)'] || row['Date'] || row['date'];
                     const accountNameVal = row['Account Name'] || row['account name'] || row['Account'] || row['account'];
-                    const bankCashNameVal = row['Bank/Cash Account'] || row['bank/cash account'] || row['Bank/Cash'] || row['bank/cash'] || row['Bank'] || row['bank'] || row['Cash'] || row['cash'];
+                    const bankCashNameVal = row['Bank/Cash Account'] || row['bank/cash account'] || row['Bank/Cash'] || row['bank/cash'] || row['Bank'] || row['bank'] || row['Cash'] || row['cash'] || row['Account (First Party)'] || row['account (first party)'];
                     const amountVal = row['Amount'] || row['amount'];
                     const paymentModeVal = row['Payment Mode'] || row['payment mode'] || row['Mode'] || row['mode'];
                     const narrationVal = row['Narration'] || row['narration'] || '';
@@ -901,19 +1321,21 @@ const Finance = () => {
                         continue;
                     }
 
-                    // 1. Match Bank/Cash Account
-                    const matchedBank = bankCashRes.find(b => 
-                        (b.ledgerName || b.accountName || '').toLowerCase().trim() === String(bankCashNameVal).toLowerCase().trim()
+                    // 1. Match Bank/Cash Account (First Party)
+                    const bankCashList = activeSubTab === 'JV' ? (activeAccountsRes || []) : bankCashRes;
+                    const matchedBank = bankCashList.find(b => 
+                        (b.ledgerName || b.accountName || b.name || '').toLowerCase().trim() === String(bankCashNameVal).toLowerCase().trim()
                     );
                     if (!matchedBank) {
                         errorCount++;
-                        errors.push(`Row ${i + 2}: Bank/Cash account '${bankCashNameVal}' not found`);
+                        errors.push(`Row ${i + 2}: ${activeSubTab === 'JV' ? 'First party account' : 'Bank/Cash account'} '${bankCashNameVal}' not found`);
                         continue;
                     }
 
-                    // 2. Match Supplier/Customer Account
-                    const matchedAccount = allAccounts.find(a => 
-                        (a.accountName || a.ledgerName || '').toLowerCase().trim() === String(accountNameVal).toLowerCase().trim()
+                    // 2. Match Supplier/Customer Account (Second Party)
+                    const targetAccounts = activeSubTab === 'JV' ? (activeAccountsRes || []) : allAccounts;
+                    const matchedAccount = targetAccounts.find(a => 
+                        (a.accountName || a.ledgerName || a.name || '').toLowerCase().trim() === String(accountNameVal).toLowerCase().trim()
                     );
                     if (!matchedAccount) {
                         errorCount++;
@@ -971,6 +1393,10 @@ const Finance = () => {
                             await voucherService.createReceiptVoucher(payload);
                         } else if (activeSubTab === 'Payments') {
                             await voucherService.createPaymentVoucher(payload);
+                        } else if (activeSubTab === 'JV') {
+                            await voucherService.createJournalVoucher(payload);
+                        } else if (activeSubTab === 'Contra') {
+                            await voucherService.createContraVoucher(payload);
                         } else {
                             throw new Error(`Unsupported tab for import: ${activeSubTab}`);
                         }
@@ -1098,69 +1524,96 @@ const Finance = () => {
                     </div>
                     
                     {/* Filter Bar */}
-                    <div className="bg-white p-6 rounded-[24px] border border-[#E5E7EB] shadow-sm mb-8">
-                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                            {/* Left Side: Search */}
-                            <div className="relative w-full lg:w-auto">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                                <input 
-                                    type="text" 
-                                    placeholder={activeMainTab === 'Ledger' ? t('modules:search_account') : t('common:search_by_anything')}
-                                    className="h-[46px] pl-10 pr-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all w-full sm:w-[320px] font-medium"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                                />
+                    <div className="bg-white p-4 sm:p-5 rounded-[24px] border border-[#E5E7EB] shadow-sm mb-8">
+                        <div className="flex flex-wrap xl:flex-nowrap items-center justify-between gap-3 sm:gap-4">
+                            {/* Left Side: Search & Group Selector & Expand All */}
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                    <input 
+                                        type="text" 
+                                        placeholder={activeMainTab === 'Ledger' ? t('modules:search_account') : t('common:search_by_anything')}
+                                        className="h-[44px] pl-10 pr-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all w-[180px] sm:w-[200px] xl:w-[220px] font-medium text-[14px]"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                    />
+                                </div>
+
+                                {activeSubTab === 'Group Ledger' && (
+                                    <>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">Group:</span>
+                                            <GroupTreeDropdown 
+                                                value={selectedGroup} 
+                                                onChange={setSelectedGroup} 
+                                                treeData={groupTreeData} 
+                                                fallbackList={groupsList} 
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const nextState = !allGroupNodesExpanded;
+                                                setAllGroupNodesExpanded(nextState);
+                                                setExpandedGroupNodes({});
+                                            }}
+                                            className="h-[44px] px-3.5 bg-[#F9FAFB] border border-[#E5E7EB] hover:bg-gray-100 text-[#111827] rounded-[12px] font-bold text-[13px] transition-all flex items-center gap-2 shadow-sm cursor-pointer whitespace-nowrap"
+                                            title={allGroupNodesExpanded ? "Collapse All Groups" : "Expand All Groups"}
+                                        >
+                                            {allGroupNodesExpanded ? <Minimize2 size={15} className="text-gray-600" /> : <Maximize2 size={15} className="text-gray-600" />}
+                                            <span>{allGroupNodesExpanded ? 'Collapse All' : 'Expand All'}</span>
+                                        </button>
+                                    </>
+                                )}
                             </div>
 
-                            {/* Right Side: Custom Date Range */}
-                            <div className="flex flex-wrap items-center gap-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">{t('common:from_date')}</span>
-                                        <input 
-                                            type="date" 
+                            {/* Right Side: Custom Date Range & Actions */}
+                            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">{t('common:from_date')}</span>
+                                        <DateInput 
                                             value={startDate}
-                                            onChange={(e) => setStartDate(e.target.value)}
-                                            className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all cursor-pointer"
+                                            onChange={(val) => setStartDate(val)}
+                                            className="h-[44px] px-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none text-[13px] font-bold text-[#111827] focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all cursor-pointer"
                                         />
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">{t('common:to_date')}</span>
-                                        <input 
-                                            type="date" 
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">{t('common:to_date')}</span>
+                                        <DateInput 
                                             value={endDate}
-                                            onChange={(e) => setEndDate(e.target.value)}
-                                            className="h-[44px] px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[10px] outline-none text-[14px] font-bold text-[#111827] focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all cursor-pointer"
+                                            onChange={(val) => setEndDate(val)}
+                                            className="h-[44px] px-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] outline-none text-[13px] font-bold text-[#111827] focus:border-[#073318] focus:ring-4 focus:ring-[#073318]/5 transition-all cursor-pointer"
                                         />
                                     </div>
                                     {(startDate || endDate) && (
                                         <button 
                                             onClick={() => { setStartDate(''); setEndDate(''); setActiveFiscalYear(null); }}
-                                            className="p-2.5 text-[#9CA3AF] hover:bg-gray-100 rounded-lg transition-all"
+                                            className="p-2 text-[#9CA3AF] hover:bg-gray-100 rounded-lg transition-all"
                                             title="Reset Dates"
                                         >
-                                            <RotateCcw size={18} />
+                                            <RotateCcw size={16} />
                                         </button>
                                     )}
                                 </div>
 
                                 {/* Export & Import Actions */}
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
                                     {activeMainTab === 'Ledger' && (
                                         <div className="relative">
                                             <button 
-                                                className="h-[44px] px-5 bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] rounded-[10px] font-medium text-[15px] transition-colors flex items-center gap-2 shadow-sm animate-fade-in"
+                                                className="h-[44px] px-4 bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] rounded-[12px] font-medium text-[14px] transition-colors flex items-center gap-2 shadow-sm animate-fade-in whitespace-nowrap"
                                                 onClick={(e) => { e.stopPropagation(); setShowMainExportMenu(!showMainExportMenu); }}
                                             >
-                                                <Download size={18} className="text-[#6B7280]" />
+                                                <Upload size={16} className="text-[#6B7280]" />
                                                 {t('common:export')}
                                             </button>
                                             
                                             {showMainExportMenu && (
                                                 <>
                                                     <div className="fixed inset-0 z-40" onClick={() => setShowMainExportMenu(false)} />
-                                                    <div className="absolute right-0 top-12 w-48 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-50 flex flex-col py-2 font-outfit">
+                                                    <div className="absolute right-0 top-14 w-48 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-50 flex flex-col py-2 font-outfit">
                                                         <button 
                                                             className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
                                                             onClick={handleExportMainLedgerPDF}
@@ -1214,14 +1667,14 @@ const Finance = () => {
                                                                 onClick={handleExportBankReconPDF}
                                                             >
                                                                 <FileText size={18} className="text-red-500" />
-                                                                {t('common:pdf')}
+                                                                {t('common:pdf', 'PDF')}
                                                             </button>
                                                             <button 
                                                                 className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
                                                                 onClick={handleExportBankReconExcel}
                                                             >
                                                                 <FileSpreadsheet size={18} className="text-emerald-500" />
-                                                                {t('common:excel')}
+                                                                {t('common:excel', 'Excel')}
                                                             </button>
                                                         </div>
                                                     </>
@@ -1257,8 +1710,12 @@ const Finance = () => {
                                         <>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:date_col')}</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:voucher_no')}</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:account_col')}</th>
-                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:bank_cash')}</th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">
+                                                {activeSubTab === 'Contra' ? 'Bank/Cash (Receiver)' : 'Account (1st Party)'}
+                                            </th>
+                                            <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">
+                                                {activeSubTab === 'Contra' ? 'Bank/Cash (Giver)' : 'Account (2nd Party)'}
+                                            </th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:narration')}</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:amount_col')}</th>
                                             <th className="px-6 py-4 whitespace-nowrap text-center">{t('common:action')}</th>
@@ -1267,88 +1724,249 @@ const Finance = () => {
                                 </tr>
                             </thead>
                             <tbody className="text-[14px] text-[#111827]">
-                                {currentRows.map((item, index) => (
-                                    <tr key={item.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
-                                        {activeMainTab === 'Ledger' ? (
-                                            <>
-                                                <td 
-                                                    className="px-6 py-4 text-center font-bold text-[#111827] hover:underline cursor-pointer"
-                                                    onClick={() => setSelectedAccount(item)}
-                                                >
-                                                    {item.accountName}
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    {item.openingBalance != null ? `${Math.abs(Number(item.openingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.openingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.openingBalance) >= 0 ? 'Dr' : 'Cr')}` : ''}
-                                                </td>
-                                                <td className="px-6 py-4 text-center">{Number(item.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                <td className="px-6 py-4 text-center">{Number(item.credit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                <td className="px-6 py-4 text-center text-[#111827] font-bold">
-                                                    {item.closingBalance != null ? `${Math.abs(Number(item.closingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.closingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.closingBalance) >= 0 ? 'Dr' : 'Cr')}` : ''}
-                                                </td>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <td className="px-6 py-4 text-center">{item.date}</td>
-                                                <td className="px-6 py-4 text-center font-bold">{item.vchNo}</td>
-                                                <td className="px-6 py-4 text-center">{item.account}</td>
-                                                <td className="px-6 py-4 text-center">{item.bank}</td>
-                                                <td className="px-6 py-4 text-center max-w-[150px] truncate" title={item.narration}>{item.narration || '-'}</td>
-                                                <td className="px-6 py-4 text-center font-bold text-[#111827]">₹ {item.amount}</td>
-                                            </>
-                                        )}
-                                        {activeMainTab !== 'Ledger' && (
-                                            <td className="px-6 py-4 text-center relative">
-                                                <button 
-                                                    className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors inline-flex"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setOpenActionMenuId(openActionMenuId === item.id ? null : item.id);
-                                                    }}
-                                                >
-                                                    <MoreVertical size={20} />
-                                                </button>
+                                {activeSubTab === 'Group Ledger' ? (
+                                    (() => {
+                                        const tree = [];
+                                        const nodeMap = {};
 
-                                                {/* Dropdown Menu */}
-                                                {openActionMenuId === item.id && (
-                                                    <>
-                                                        <div className="fixed inset-0 z-[100]" onClick={() => setOpenActionMenuId(null)} />
-                                                        <div className={`absolute right-0 ${index >= currentRows.length - 2 && currentRows.length > 2 ? 'bottom-full mb-2' : 'top-12'} w-48 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.15)] z-[101] flex flex-col py-2 font-outfit animate-in fade-in zoom-in-95 duration-200`}>
-                                                            <button 
-                                                                className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
-                                                                onClick={() => {
-                                                                    if (activeMainTab === 'Ledger') {
-                                                                        const name = item.accountName || item.account || '';
-                                                                        const qs = `?name=${encodeURIComponent(name)}${startDate ? `&startDate=${startDate}` : ''}${endDate ? `&endDate=${endDate}` : ''}&type=${encodeURIComponent(activeSubTab)}`;
-                                                                        navigate(`/seller/finance/ledger/${item.id}${qs}`);
-                                                                    } else {
-                                                                        setSelectedAccount(item);
-                                                                    }
-                                                                    setOpenActionMenuId(null);
+                                        currentRows.forEach(item => {
+                                            let path = (item.allGroups && item.allGroups.length > 0) ? item.allGroups : [item.primaryGroup || item.groupName || 'General'];
+                                            if (selectedGroup && selectedGroup !== 'ALL') {
+                                                const grpIdx = path.findIndex(g => String(g).toLowerCase().trim() === selectedGroup.toLowerCase().trim());
+                                                if (grpIdx !== -1) {
+                                                    path = path.slice(grpIdx);
+                                                }
+                                            }
+                                            const isRealAccount = item.accountType !== null || Number(item.openingBalance || 0) !== 0 || Number(item.debit || 0) !== 0 || Number(item.credit || 0) !== 0;
+
+                                            let currentLevel = tree;
+                                            let currentPath = '';
+
+                                            path.forEach((gName, idx) => {
+                                                currentPath = currentPath ? `${currentPath}>${gName}` : gName;
+                                                if (!nodeMap[currentPath]) {
+                                                    const newNode = {
+                                                        id: currentPath,
+                                                        name: gName,
+                                                        level: idx + 1,
+                                                        openingBalance: 0,
+                                                        debit: 0,
+                                                        credit: 0,
+                                                        closingBalance: 0,
+                                                        children: [],
+                                                        items: [],
+                                                        isHeader: idx === 0
+                                                    };
+                                                    nodeMap[currentPath] = newNode;
+                                                    currentLevel.push(newNode);
+                                                }
+                                                const node = nodeMap[currentPath];
+                                                node.openingBalance += Number(item.openingBalance || 0);
+                                                node.debit += Number(item.debit || 0);
+                                                node.credit += Number(item.credit || 0);
+                                                node.closingBalance += Number(item.closingBalance || 0);
+
+                                                if (idx === path.length - 1 && isRealAccount) {
+                                                    if (item.accountName.toLowerCase().trim() !== gName.toLowerCase().trim()) {
+                                                        node.items.push(item);
+                                                    }
+                                                }
+                                                currentLevel = node.children;
+                                            });
+                                        });
+
+                                        const masterSequence = [
+                                            'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock', 
+                                            'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock', 
+                                            'Liabilities', 'Assets',
+                                            'Non-Current Liabilities', 'Current Liabilities',
+                                            'Long Term Borrowings', 'Other Long Term Liabilities', 'Long Term Provisions',
+                                            'Short Term Borrowings', 'Suppliers', 'Other Current Liabilities', 'Short Term Provisions',
+                                            'Non-Current Assets', 'Current Assets',
+                                            'Fixed Assets', 'Long Term Loans & Advances',
+                                            'Current Investment', 'Inventories', 'Customers', 'Bank & Cash', 'Short Term Loans and Advances', 'Other Current Assets'
+                                        ];
+
+                                        const sortNodesRecursive = (nodes) => {
+                                            nodes.sort((a, b) => {
+                                                const idxA = masterSequence.indexOf(a.name);
+                                                const idxB = masterSequence.indexOf(b.name);
+                                                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                                                if (idxA !== -1) return -1;
+                                                if (idxB !== -1) return 1;
+                                                return a.name.localeCompare(b.name);
+                                            });
+                                            nodes.forEach(n => {
+                                                if (n.children && n.children.length > 0) {
+                                                    sortNodesRecursive(n.children);
+                                                }
+                                            });
+                                        };
+
+                                        sortNodesRecursive(tree);
+
+                                        const renderNode = (node, depth = 0) => {
+                                            const isExpanded = searchQuery ? true : (expandedGroupNodes[node.id] !== undefined ? expandedGroupNodes[node.id] : allGroupNodesExpanded);
+                                            const hasSubNodes = (node.children && node.children.length > 0) || (node.items && node.items.length > 0);
+                                            const paddingLeft = depth === 0 ? 'pl-6' : depth === 1 ? 'pl-10' : depth === 2 ? 'pl-14' : 'pl-18';
+
+                                            const matchedAccount = currentRows.find(r => r.accountName.toLowerCase().trim() === node.name.toLowerCase().trim()) || 
+                                                                  (node.items && node.items.length > 0 ? node.items[0] : null) || 
+                                                                  { id: node.id, accountName: node.name, groupName: node.name, openingBalance: node.openingBalance, debit: node.debit, credit: node.credit, closingBalance: node.closingBalance };
+
+                                            const nodeRow = (
+                                                <tr key={node.id} className={`${depth === 0 ? 'bg-gray-100/90 font-bold' : 'bg-white font-semibold'} border-b border-gray-200 select-none`}>
+                                                    <td className={`px-6 py-3.5 text-left ${paddingLeft}`}>
+                                                        <div className="flex items-center gap-3">
+                                                            {hasSubNodes ? (
+                                                                <button
+                                                                    onClick={() => setExpandedGroupNodes(prev => ({ ...prev, [node.id]: !isExpanded }))}
+                                                                    className={`p-1 rounded transition-colors ${isExpanded ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}
+                                                                    title={isExpanded ? "Collapse Group" : "Expand Group"}
+                                                                >
+                                                                    {isExpanded ? <Minus size={14} strokeWidth={3} /> : <Plus size={14} strokeWidth={3} />}
+                                                                </button>
+                                                            ) : (
+                                                                <div className="w-1.5 h-1.5 bg-[#4B5563] rounded-full ml-2" />
+                                                            )}
+                                                            <span 
+                                                                className={`text-[#111827] ${depth === 0 ? 'font-extrabold text-[15px]' : 'font-bold text-[14px]'} hover:underline cursor-pointer`}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (matchedAccount) setSelectedAccount(matchedAccount);
                                                                 }}
                                                             >
-                                                                <Eye size={18} className="text-[#9CA3AF]" />
-                                                                {t('common:view_and_edit')}
-                                                            </button>
-                                                            {activeSubTab !== 'Sundry Creditors' && activeSubTab !== 'Sundry Debtors' && activeSubTab !== 'Bank' && activeSubTab !== 'Cash' && (
+                                                                {node.name}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-3.5 text-center font-bold">
+                                                        {`${Math.abs(node.openingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${node.openingBalance >= 0 ? 'Dr' : 'Cr'}`}
+                                                    </td>
+                                                    <td className="px-6 py-3.5 text-center font-bold">{node.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-6 py-3.5 text-center font-bold">{node.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-6 py-3.5 text-center font-bold text-[#111827]">
+                                                        {`${Math.abs(node.closingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${node.closingBalance >= 0 ? 'Dr' : 'Cr'}`}
+                                                    </td>
+                                                </tr>
+                                            );
+
+                                            if (!hasSubNodes || !isExpanded) {
+                                                return nodeRow;
+                                            }
+
+                                            return (
+                                                <React.Fragment key={node.id}>
+                                                    {nodeRow}
+                                                    {node.children.map(child => renderNode(child, depth + 1))}
+                                                    {node.items.map(item => (
+                                                        <tr key={item.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all bg-white">
+                                                            <td 
+                                                                className={`px-6 py-3.5 text-left font-semibold text-[#111827] hover:underline cursor-pointer ${depth === 0 ? 'pl-14' : depth === 1 ? 'pl-18' : 'pl-22'}`}
+                                                                onClick={() => setSelectedAccount(item)}
+                                                            >
+                                                                • {item.accountName}
+                                                            </td>
+                                                            <td className="px-6 py-3.5 text-center text-gray-700">
+                                                                {item.openingBalance != null ? `${Math.abs(Number(item.openingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${Number(item.openingBalance) >= 0 ? 'Dr' : 'Cr'}` : ''}
+                                                            </td>
+                                                            <td className="px-6 py-3.5 text-center">{Number(item.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            <td className="px-6 py-3.5 text-center">{Number(item.credit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            <td className="px-6 py-3.5 text-center font-bold text-[#111827]">
+                                                                {item.closingBalance != null ? `${Math.abs(Number(item.closingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${Number(item.closingBalance) >= 0 ? 'Dr' : 'Cr'}` : ''}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </React.Fragment>
+                                            );
+                                        };
+
+                                        return tree.map(node => renderNode(node, 0));
+                                    })()
+                                ) : (
+                                    currentRows.map((item, index) => (
+                                        <tr key={item.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
+                                            {activeMainTab === 'Ledger' ? (
+                                                <>
+                                                    <td 
+                                                        className="px-6 py-4 text-center font-bold text-[#111827] hover:underline cursor-pointer"
+                                                        onClick={() => setSelectedAccount(item)}
+                                                    >
+                                                        {item.accountName}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        {item.openingBalance != null ? `${Math.abs(Number(item.openingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.openingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.openingBalance) >= 0 ? 'Dr' : 'Cr')}` : ''}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">{Number(item.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-6 py-4 text-center">{Number(item.credit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-6 py-4 text-center text-[#111827] font-bold">
+                                                        {item.closingBalance != null ? `${Math.abs(Number(item.closingBalance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (Number(item.openingBalance) >= 0 ? 'Cr' : 'Dr') : (Number(item.openingBalance) >= 0 ? 'Dr' : 'Cr')}` : ''}
+                                                    </td>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <td className="px-6 py-4 text-center">{item.date}</td>
+                                                    <td className="px-6 py-4 text-center font-bold">{item.vchNo}</td>
+                                                    <td className="px-6 py-4 text-center">{item.account}</td>
+                                                    <td className="px-6 py-4 text-center">{item.bank}</td>
+                                                    <td className="px-6 py-4 text-center max-w-[150px] truncate" title={item.narration}>{item.narration || '-'}</td>
+                                                    <td className="px-6 py-4 text-center font-bold text-[#111827]">₹ {item.amount}</td>
+                                                </>
+                                            )}
+                                            {activeMainTab !== 'Ledger' && (
+                                                <td className="px-6 py-4 text-center relative">
+                                                    <button 
+                                                        className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors inline-flex"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setOpenActionMenuId(openActionMenuId === item.id ? null : item.id);
+                                                        }}
+                                                    >
+                                                        <MoreVertical size={20} />
+                                                    </button>
+
+                                                    {/* Dropdown Menu */}
+                                                    {openActionMenuId === item.id && (
+                                                        <>
+                                                            <div className="fixed inset-0 z-[100]" onClick={() => setOpenActionMenuId(null)} />
+                                                            <div className={`absolute right-0 ${index >= currentRows.length - 2 && currentRows.length > 2 ? 'bottom-full mb-2' : 'top-12'} w-48 bg-white border border-[#E5E7EB] rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.15)] z-[101] flex flex-col py-2 font-outfit animate-in fade-in zoom-in-95 duration-200`}>
                                                                 <button 
-                                                                    className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+                                                                    className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
                                                                     onClick={() => {
-                                                                        handleDeleteVoucher(item);
+                                                                        if (activeMainTab === 'Ledger') {
+                                                                            const name = item.accountName || item.account || '';
+                                                                            const qs = `?name=${encodeURIComponent(name)}${startDate ? `&startDate=${toIsoDate(startDate)}` : ''}${endDate ? `&endDate=${toIsoDate(endDate)}` : ''}&type=${encodeURIComponent(activeSubTab)}`;
+                                                                            navigate(`/seller/finance/ledger/${item.id}${qs}`);
+                                                                        } else {
+                                                                            setSelectedAccount(item);
+                                                                        }
                                                                         setOpenActionMenuId(null);
                                                                     }}
                                                                 >
-                                                                    <Trash2 size={18} className="text-red-400" />
-                                                                    {t('common:delete')}
+                                                                    <Eye size={18} className="text-[#9CA3AF]" />
+                                                                    {t('common:view_and_edit')}
                                                                 </button>
-                                                            )}
+                                                                {activeSubTab !== 'Sundry Creditors' && activeSubTab !== 'Sundry Debtors' && activeSubTab !== 'Bank' && activeSubTab !== 'Cash' && (
+                                                                    <button 
+                                                                        className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+                                                                        onClick={() => {
+                                                                            handleDeleteVoucher(item);
+                                                                            setOpenActionMenuId(null);
+                                                                        }}
+                                                                    >
+                                                                        <Trash2 size={18} className="text-red-400" />
+                                                                        {t('common:delete')}
+                                                                    </button>
+                                                                )}
 
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </td>
-                                        )}
-                                    </tr>
-                                ))}
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </ScrollableTable>
@@ -1420,8 +2038,8 @@ const Finance = () => {
                                             {[
                                                 { label: t('common:date'), value: selectedAccount.date },
                                                 { label: t('modules:voucher_no'), value: selectedAccount.vchNo },
-                                                { label: t('common:account_name'), value: selectedAccount.account },
-                                                { label: t('modules:bank_cash'), value: selectedAccount.bank },
+                                                { label: activeSubTab === 'Contra' ? 'Bank/Cash (Receiver)' : 'Account (1st Party)', value: selectedAccount.account },
+                                                { label: activeSubTab === 'Contra' ? 'Bank/Cash (Giver)' : 'Account (2nd Party)', value: selectedAccount.bank },
                                                 { label: t('modules:amount_col'), value: `₹ ${selectedAccount.amount}`, isBold: true, isFullWidth: true },
                                             ].map((detail, idx) => (
                                                 <div key={idx} className={`bg-white p-6 flex flex-col gap-2 ${detail.isFullWidth ? 'md:col-span-2' : ''}`}>
@@ -1441,11 +2059,15 @@ const Finance = () => {
                                                     let fullVoucher;
                                                     if (activeSubTab === 'Receipts') {
                                                         fullVoucher = await voucherService.getReceiptVoucherById(selectedAccount.id);
+                                                    } else if (activeSubTab === 'JV') {
+                                                        fullVoucher = await voucherService.getJournalVoucherById(selectedAccount.id);
+                                                    } else if (activeSubTab === 'Contra') {
+                                                        fullVoucher = await voucherService.getContraVoucherById(selectedAccount.id);
                                                     } else {
                                                         fullVoucher = await voucherService.getPaymentVoucherById(selectedAccount.id);
                                                     }
                                                     setEditVoucherData(fullVoucher);
-                                                    setEditVoucherType(activeSubTab === 'Receipts' ? 'Receipt' : 'Payment');
+                                                    setEditVoucherType(activeSubTab === 'Receipts' ? 'Receipt' : (activeSubTab === 'JV' ? 'Journal' : (activeSubTab === 'Contra' ? 'Contra' : 'Payment')));
                                                     setIsEditModalOpen(true);
                                                     setSelectedAccount(null); // Close the view modal
                                                 } catch (error) {
@@ -1474,19 +2096,17 @@ const Finance = () => {
                                             </div>
                                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
                                                 <span className="text-[14px] font-bold text-[#4B5563]">{t('common:start_date')}:</span>
-                                                <input 
-                                                    type="date" 
+                                                <DateInput 
                                                     value={startDate}
-                                                    onChange={(e) => setStartDate(e.target.value)}
+                                                    onChange={(val) => setStartDate(val)}
                                                     className="h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-[#4B5563] w-full sm:w-[180px] outline-none focus:border-[#9CA3AF] focus:ring-2 focus:ring-[#9CA3AF]/20 transition-all" 
                                                 />
                                             </div>
                                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
                                                 <span className="text-[14px] font-bold text-[#4B5563]">{t('common:end_date')}:</span>
-                                                <input 
-                                                    type="date" 
+                                                <DateInput 
                                                     value={endDate}
-                                                    onChange={(e) => setEndDate(e.target.value)}
+                                                    onChange={(val) => setEndDate(val)}
                                                     className="h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] text-[#4B5563] w-full sm:w-[180px] outline-none focus:border-[#9CA3AF] focus:ring-2 focus:ring-[#9CA3AF]/20 transition-all" 
                                                 />
                                             </div>
@@ -1511,8 +2131,8 @@ const Finance = () => {
                                                 <input 
                                                     type="text" 
                                                     placeholder={t('common:search_by_anything')}
-                                                    value={searchQuery}
-                                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                                    value={modalSearchQuery}
+                                                    onChange={(e) => setModalSearchQuery(e.target.value)}
                                                     className="h-[42px] bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-4 text-[14px] text-[#4B5563] w-full sm:w-[300px] outline-none focus:border-[#9CA3AF] focus:ring-2 focus:ring-[#9CA3AF]/20 transition-all placeholder:text-[#9CA3AF] placeholder:font-normal" 
                                                 />
                                             </div>
@@ -1528,7 +2148,7 @@ const Finance = () => {
                                                     className="h-[42px] px-5 w-full sm:w-auto justify-center bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] rounded-[10px] font-medium text-[15px] transition-colors flex items-center gap-2 shadow-sm"
                                                     onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}
                                                 >
-                                                    <Download size={18} className="text-[#6B7280]" />
+                                                    <Upload size={18} className="text-[#6B7280]" />
                                                     {t('common:export')}
                                                 </button>
                                                 
@@ -1543,14 +2163,14 @@ const Finance = () => {
                                                                 onClick={handleExportPDF}
                                                             >
                                                                 <FileText size={18} className="text-red-500" />
-                                                                {t('common:export_pdf')}
+                                                                {t('common:pdf', 'PDF')}
                                                             </button>
                                                             <button 
                                                                 className="flex items-center gap-3 w-full px-5 py-2.5 text-[15px] font-medium text-[#4B5563] hover:bg-[#F9FAFB] hover:text-[#111827] transition-colors"
                                                                 onClick={handleExportExcel}
                                                             >
                                                                 <FileSpreadsheet size={18} className="text-emerald-500" />
-                                                                {t('common:export_excel')}
+                                                                {t('common:excel', 'Excel')}
                                                             </button>
                                                         </div>
                                                     </>
@@ -1593,7 +2213,7 @@ const Finance = () => {
                                                                         {(tx.isBalanceRow || tx.particulars.toLowerCase().includes('balance')) ? '-' : ((detailedCurrentPage - 1) * 14 + index + 1)}
                                                                     </td>
                                                                     <td className="px-6 py-4 whitespace-nowrap">
-                                                                        {new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}
+                                                                        {formatDate(tx.date)}
                                                                     </td>
                                                                     <td className="px-6 py-4 font-bold">{tx.particulars}</td>
                                                                     <td className="px-6 py-4 whitespace-nowrap text-gray-500">
@@ -1627,7 +2247,7 @@ const Finance = () => {
                                                                             <tr key={`alloc-${alloc.id}`} className="bg-[#FAFAFA] border-b border-[#F3F4F6]">
                                                                                 <td className="px-6 py-2"></td>
                                                                                 <td className="px-6 py-2 text-[13px] text-gray-500 font-medium">
-                                                                                    {new Date(alloc.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}
+                                                                                    {formatDate(alloc.date)}
                                                                                 </td>
                                                                                 <td className="px-6 py-2 text-[13px] font-bold text-gray-700">{alloc.type}</td>
                                                                                 <td className="px-6 py-2">

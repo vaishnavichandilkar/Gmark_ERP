@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../../constants/routes';
 import toast from 'react-hot-toast';
 import ScrollableTable from '../../../components/common/ScrollableTable';
+import { formatDate } from '@/utils/dateUtils';
 
 const ReportTable = ({ data, type, status, onClose }) => {
     const navigate = useNavigate();
@@ -25,25 +26,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
 
-    const formatDate = (dateStr) => {
-        if (!dateStr) return '-';
-        if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? '-' : dateStr.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        
-        let date = new Date(dateStr);
-        if (isNaN(date.getTime()) && typeof dateStr === 'string') {
-            const parts = dateStr.split(/[-/]/);
-            if (parts.length === 3) {
-                const day = parseInt(parts[0], 10);
-                const month = parseInt(parts[1], 10) - 1;
-                let year = parseInt(parts[2], 10);
-                if (year < 100) year += 2000;
-                date = new Date(year, month, day);
-            }
-        }
-        
-        if (isNaN(date.getTime())) return '-';
-        return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    };
+
 
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat('en-IN', {

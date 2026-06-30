@@ -49,6 +49,8 @@ model User {
   transactions         Transaction[]
   receiptVouchers      ReceiptVoucher[]
   paymentVouchers      PaymentVoucher[]
+  journalVouchers      JournalVoucher[]
+  contraVouchers       ContraVoucher[]
 
   @@map("User")
 }
@@ -258,6 +260,10 @@ model AccountMaster {
   accountReceipts        ReceiptVoucherItem[] @relation("AccountReceipt")
   bankCashPayments       PaymentVoucher[]     @relation("BankCashPayment")
   accountPayments        PaymentVoucherItem[] @relation("AccountPayment")
+  bankCashJournals       JournalVoucher[]     @relation("BankCashJournal")
+  accountJournals        JournalVoucherItem[] @relation("AccountJournal")
+  bankCashContraGivers   ContraVoucher[]     @relation("BankCashContraGiver")
+  bankCashContraReceivers ContraVoucherItem[] @relation("BankCashContraReceiver")
 
   @@unique([accountName, userId])
   @@unique([customerCode, userId])
@@ -1082,6 +1088,66 @@ enum TransactionType {
   Sales
   Payment
   Receipt
+  Journal
+  Contra
+}
+
+model JournalVoucher {
+  id               Int                  @id @default(autoincrement())
+  voucherNumber    String               @unique
+  voucherDate      DateTime
+  bankCashLedgerId Int
+  paymentMode      PaymentMode
+  narration        String?
+  totalAmount      Decimal
+  createdBy        Int
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  user             User                 @relation(fields: [createdBy], references: [id])
+  bankCashLedger   AccountMaster        @relation("BankCashJournal", fields: [bankCashLedgerId], references: [id])
+  items            JournalVoucherItem[]
+
+  @@map("journal_vouchers")
+}
+
+model JournalVoucherItem {
+  id             Int            @id @default(autoincrement())
+  voucherId      Int
+  accountId      Int
+  amount         Decimal
+  journalVoucher JournalVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  account        AccountMaster  @relation("AccountJournal", fields: [accountId], references: [id])
+
+  @@map("journal_voucher_items")
+}
+
+model ContraVoucher {
+  id               Int                  @id @default(autoincrement())
+  voucherNumber    String               @unique
+  voucherDate      DateTime
+  bankCashLedgerId Int
+  paymentMode      PaymentMode
+  narration        String?
+  totalAmount      Decimal
+  createdBy        Int
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  user             User                 @relation(fields: [createdBy], references: [id])
+  bankCashLedger   AccountMaster        @relation("BankCashContraGiver", fields: [bankCashLedgerId], references: [id])
+  items            ContraVoucherItem[]
+
+  @@map("contra_vouchers")
+}
+
+model ContraVoucherItem {
+  id             Int            @id @default(autoincrement())
+  voucherId      Int
+  accountId      Int
+  amount         Decimal
+  contraVoucher  ContraVoucher  @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  account        AccountMaster  @relation("BankCashContraReceiver", fields: [accountId], references: [id])
+
+  @@map("contra_voucher_items")
 }
 
 model VoucherSettlement {

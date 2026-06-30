@@ -26,6 +26,7 @@ import challanService from "@/services/challanService";
 import ScrollableTable from "@/components/common/ScrollableTable";
 import ImportModal from "./components/ImportModal";
 import CustomSelect from "@/components/common/CustomSelect";
+import { formatDate } from "@/utils/dateUtils";
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting, t }) => {
   if (!isOpen) return null;
@@ -256,8 +257,8 @@ const Challan = () => {
                 ...item,
                 customerName: item.customerName || "-",
                 challanNo: item.challanNumber || "-",
-                challanDate: item.challanDate ? item.challanDate.split('T')[0] : "-",
-                bookingDate: item.bookingDate ? item.bookingDate.split('T')[0] : "-",
+                challanDate: formatDate(item.challanDate),
+                bookingDate: formatDate(item.bookingDate),
                 soNo: item.soNumber || "-",
                 gstNo: item.gstNumber || "-",
                 grandTotal: item.grandTotal?.toFixed(2) || "0.00",
