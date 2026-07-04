@@ -106,27 +106,39 @@ export class GrnService {
     let taxableAmount = 0;
     let totalTaxAmount = 0;
 
+    const productCodes = Array.from(new Set(
+      dto.items.map(item => item.productCode).filter(Boolean)
+    ));
+
+    const receivedAggr = await this.prisma.grnItem.groupBy({
+      by: ['productCode'],
+      where: {
+        grn: {
+          userId,
+          supplierName: dto.supplierName,
+          poNumber: dto.poNumber || undefined,
+          status: { not: 'DELETED' },
+          id: existingId ? { not: existingId } : undefined
+        },
+        productCode: { in: productCodes }
+      },
+      _sum: { receivedQty: true }
+    });
+
+    const receivedMap = new Map<string, number>();
+    for (const a of receivedAggr) {
+      if (a.productCode) {
+        receivedMap.set(a.productCode, a._sum.receivedQty || 0);
+      }
+    }
+
     const itemsToCreate = [];
     for (const item of dto.items) {
       if (item.quantity <= 0 || item.rate <= 0) {
         throw new BadRequestException(`Quantity and Rate must be positive for product ${item.productName}`);
       }
 
-      const previousTotalReceived = await this.prisma.grnItem.aggregate({
-        where: {
-          grn: {
-            userId,
-            supplierName: dto.supplierName,
-            poNumber: dto.poNumber || undefined,
-            status: { not: 'DELETED' },
-            id: existingId ? { not: existingId } : undefined
-          },
-          productCode: item.productCode
-        },
-        _sum: { receivedQty: true }
-      });
-
-      const receivedPoQty = previousTotalReceived._sum.receivedQty || 0;
+      const receivedPoQty = receivedMap.get(item.productCode) || 0;
       const totalPoQty = Number(item.totalPoQty || 0);
       const currentReceived = Number(item.quantity);
       const remainingQty = totalPoQty > 0 ? totalPoQty - (receivedPoQty + currentReceived) : 0;

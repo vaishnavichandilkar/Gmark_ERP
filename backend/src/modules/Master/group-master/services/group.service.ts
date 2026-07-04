@@ -222,6 +222,70 @@ export class GroupMasterService {
             { header: 'Status', key: 'status', width: 15 },
         ];
 
+        const prisma = (this.groupRepository as any).prisma;
+        let uniquePredefinedNames: string[] = [];
+        try {
+            const [g1, g2, g3, g4] = await Promise.all([
+                prisma.group.findMany({
+                    where: { userId: null },
+                    select: { group_name: true }
+                }),
+                prisma.subGroup.findMany({
+                    where: { userId: null },
+                    select: { subgroup_name: true }
+                }),
+                prisma.subSubGroup.findMany({
+                    where: { userId: null },
+                    select: { name: true }
+                }),
+                prisma.subSubSubGroup.findMany({
+                    where: { userId: null },
+                    select: { name: true }
+                })
+            ]);
+
+            const predefinedNames = [
+                ...g1.map(g => g.group_name),
+                ...g2.map(g => g.subgroup_name),
+                ...g3.map(g => g.name),
+                ...g4.map(g => g.name)
+            ].map(name => name.trim()).filter(Boolean);
+
+            uniquePredefinedNames = Array.from(new Set(predefinedNames)).sort();
+        } catch (err) {
+            console.error('Error fetching predefined groups for sample excel', err);
+        }
+
+        if (uniquePredefinedNames.length === 0) {
+            uniquePredefinedNames = [
+                'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock',
+                'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock',
+                'Liabilities', 'Assets', 'Non-Current Liabilities', 'Current Liabilities',
+                'Non-Current Assets', 'Current Assets', 'Fixed Assets', 'Customers',
+                'Suppliers', 'Bank & Cash'
+            ];
+        }
+
+        const listSheet = workbook.addWorksheet('Lists');
+        listSheet.state = 'hidden';
+
+        uniquePredefinedNames.forEach((name, idx) => {
+            listSheet.getCell(idx + 1, 1).value = name;
+        });
+
+        const rangeStr = `'Lists'!$A$1:$A$${uniquePredefinedNames.length}`;
+        (worksheet as any).dataValidations.add('B2:B100', {
+            type: 'list',
+            allowBlank: true,
+            formulae: [rangeStr],
+            showErrorMessage: false,
+            errorTitle: 'Invalid Parent Group',
+            error: 'Please select a valid parent group from the dropdown list.',
+            showInputMessage: true,
+            promptTitle: 'Select Parent Group',
+            prompt: 'Choose the parent group under which this group falls.'
+        });
+
         // Add validation for balance type (now in column D)
         (worksheet as any).dataValidations.add('D2:D100', {
             type: 'list',
@@ -328,6 +392,9 @@ export class GroupMasterService {
                 }
 
                 const isExpense = (groupName === 'Direct Expense' || groupName === 'Indirect Expense');
+                if (isExpense && (openingBalance !== null || balTypeStr)) {
+                    throw new BadRequestException('Direct and Indirect Expenses cannot have an opening balance or balance type.');
+                }
                 const finalOpeningBalance = isExpense ? null : openingBalance;
                 const finalBalanceType = isExpense ? null : balanceType;
 
@@ -374,6 +441,9 @@ export class GroupMasterService {
 
                     const targetLevel = parentInfo.level + 1;
                     const parentIsExpense = await this.isExpenseAncestor(parentInfo.id, parentInfo.level, userId, prisma);
+                    if (parentIsExpense && (openingBalance !== null || balTypeStr)) {
+                        throw new BadRequestException('Direct and Indirect Expenses cannot have an opening balance or balance type.');
+                    }
                     const finalOpeningBalanceParent = parentIsExpense ? null : openingBalance;
                     const finalBalanceTypeParent = parentIsExpense ? null : balanceType;
 
@@ -404,6 +474,14 @@ export class GroupMasterService {
                 failed++;
                 errors.push(`Row ${i} (${groupName}): ${error.message}`);
             }
+        }
+
+        if (importedRows === 0 && failed > 0) {
+            const hasExpenseError = errors.some(e => e.includes('Expenses cannot have'));
+            if (hasExpenseError) {
+                throw new BadRequestException('Direct and Indirect Expenses cannot have an opening balance or balance type. Please remove both to import.');
+            }
+            throw new BadRequestException(errors[0]);
         }
 
         return {

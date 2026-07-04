@@ -99,7 +99,7 @@ export const importSalesOrders = async (formData) => {
 };
 
 export const downloadSample = async () => {
-    const response = await axiosInstance.get(`${API_PATH}/sample-excel`, {
+    const response = await axiosInstance.get(`${API_PATH}/sample`, {
         responseType: 'blob'
     });
     return response;

@@ -76,7 +76,7 @@ const ProductDropdown = ({
                         </div>
                         <div className="p-4 bg-gray-50 border-t border-gray-100">
                             <button 
-                                onClick={() => navigate(`/seller/masters/product-master/add?redirect=${window.location.pathname}`)}
+                                onClick={() => navigate(`/seller/masters/product-master/add?redirect=${encodeURIComponent(window.location.pathname + '?restore=true')}`)}
                                 className="w-full h-[52px] bg-[#073318] text-white rounded-[14px] text-[15px] font-black flex items-center justify-center gap-3 hover:bg-[#052611] transition-all shadow-lg active:scale-95 group font-outfit"
                             >
                                 <Plus size={20} className="group-hover:rotate-90 transition-all duration-300" />

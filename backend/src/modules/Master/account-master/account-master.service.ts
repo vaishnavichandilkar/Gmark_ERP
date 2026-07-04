@@ -63,6 +63,122 @@ export class AccountMasterService {
     return this.isCustomerMsme(phone, email, gst);
   }
 
+  async batchIsCustomerMsme(accounts: Array<{ mobileNo?: string | null; emailId?: string | null; gstNo?: string | null }>): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+    if (!accounts || accounts.length === 0) return result;
+
+    const gstNos = Array.from(new Set(
+      accounts
+        .map(a => a.gstNo?.trim())
+        .filter((g): g is string => !!g && g !== '')
+    ));
+
+    let gstDocs: Array<{ name: string | null; uploadedByUserId: number | null }> = [];
+    if (gstNos.length > 0) {
+      gstDocs = await this.prisma.sellerDocument.findMany({
+        where: {
+          type: 'GST',
+          name: { in: gstNos }
+        },
+        select: {
+          name: true,
+          uploadedByUserId: true
+        }
+      });
+    }
+
+    const gstToUploaderId = new Map<string, number>();
+    for (const doc of gstDocs) {
+      if (doc.name && doc.uploadedByUserId) {
+        gstToUploaderId.set(doc.name.trim(), doc.uploadedByUserId);
+      }
+    }
+
+    const phones = Array.from(new Set(
+      accounts
+        .map(a => a.mobileNo?.trim())
+        .filter((p): p is string => !!p && p !== '')
+    ));
+
+    const emails = Array.from(new Set(
+      accounts
+        .map(a => a.emailId?.trim())
+        .filter((e): e is string => !!e && e !== '')
+    ));
+
+    const uploaderIds = Array.from(new Set(
+      Array.from(gstToUploaderId.values())
+    ));
+
+    const userConditions: any[] = [];
+    if (phones.length > 0) {
+      userConditions.push({ phone: { in: phones } });
+    }
+    if (emails.length > 0) {
+      userConditions.push({ email: { in: emails } });
+    }
+    if (uploaderIds.length > 0) {
+      userConditions.push({ id: { in: uploaderIds } });
+    }
+
+    let users: any[] = [];
+    if (userConditions.length > 0) {
+      users = await this.prisma.user.findMany({
+        where: {
+          OR: userConditions
+        },
+        include: {
+          sellerDocuments: true
+        }
+      });
+    }
+
+    const checkUserMsme = (user: any): boolean => {
+      if (!user) return false;
+      const isMsmeActive = user.sellerDocuments.some(
+        (d: any) => d.category === 'UDYOG_AADHAR' && d.name && d.name.trim() !== '' && d.name.trim().toUpperCase() !== 'N/A'
+      );
+      const isMsmeType = user.regType === 'Manufacturing' || user.regType === 'Service';
+      return Boolean(isMsmeActive && isMsmeType);
+    };
+
+    const userByPhone = new Map<string, any>();
+    const userByEmail = new Map<string, any>();
+    const userById = new Map<number, any>();
+
+    for (const u of users) {
+      if (u.phone) userByPhone.set(u.phone.trim(), u);
+      if (u.email) userByEmail.set(u.email.trim(), u);
+      userById.set(u.id, u);
+    }
+
+    for (const a of accounts) {
+      const mob = a.mobileNo?.trim() || '';
+      const em = a.emailId?.trim() || '';
+      const gst = a.gstNo?.trim() || '';
+      const key = `${mob}|${em}|${gst}`;
+
+      if (result.has(key)) continue;
+
+      let matchedUser: any = null;
+      if (mob !== '' && userByPhone.has(mob)) {
+        matchedUser = userByPhone.get(mob);
+      } else if (em !== '' && userByEmail.has(em)) {
+        matchedUser = userByEmail.get(em);
+      } else if (gst !== '') {
+        const uploaderId = gstToUploaderId.get(gst);
+        if (uploaderId && userById.has(uploaderId)) {
+          matchedUser = userById.get(uploaderId);
+        }
+      }
+
+      const isMsme = checkUserMsme(matchedUser);
+      result.set(key, isMsme);
+    }
+
+    return result;
+  }
+
   async generateCustomerCode(userId: number): Promise<string> {
     const prefix = 'CT';
     const lastAccount = await this.prisma.accountMaster.findFirst({
@@ -546,10 +662,12 @@ export class AccountMasterService {
          where,
          orderBy: { createdAt: 'desc' },
        });
-       const mappedData = await Promise.all(data.map(async (item) => {
-         const isMsmeUser = await this.isCustomerMsme(item.mobileNo, item.emailId, item.gstNo);
+       const msmeMap = await this.batchIsCustomerMsme(data);
+       const mappedData = data.map((item) => {
+         const key = `${item.mobileNo?.trim() || ''}|${item.emailId?.trim() || ''}|${item.gstNo?.trim() || ''}`;
+         const isMsmeUser = msmeMap.get(key) || false;
          return { ...item, isMsmeUser };
-       }));
+       });
        return {
            data: mappedData,
            total: mappedData.length,
@@ -573,10 +691,12 @@ export class AccountMasterService {
       this.prisma.accountMaster.count({ where })
     ]);
 
-    const mappedData = await Promise.all(data.map(async (item) => {
-      const isMsmeUser = await this.isCustomerMsme(item.mobileNo, item.emailId, item.gstNo);
+    const msmeMap = await this.batchIsCustomerMsme(data);
+    const mappedData = data.map((item) => {
+      const key = `${item.mobileNo?.trim() || ''}|${item.emailId?.trim() || ''}|${item.gstNo?.trim() || ''}`;
+      const isMsmeUser = msmeMap.get(key) || false;
       return { ...item, isMsmeUser };
-    }));
+    });
 
     return {
       data: mappedData,
@@ -597,8 +717,10 @@ export class AccountMasterService {
       },
       orderBy: { accountName: 'asc' },
     });
-    return Promise.all(customers.map(async (acc) => {
-      const isMsmeUser = await this.isCustomerMsme(acc.mobileNo, acc.emailId, acc.gstNo);
+    const msmeMap = await this.batchIsCustomerMsme(customers);
+    return customers.map((acc) => {
+      const key = `${acc.mobileNo?.trim() || ''}|${acc.emailId?.trim() || ''}|${acc.gstNo?.trim() || ''}`;
+      const isMsmeUser = msmeMap.get(key) || false;
       return {
         id: acc.id,
         accountName: acc.accountName,
@@ -610,7 +732,7 @@ export class AccountMasterService {
         customerType: acc.customerType,
         isMsmeUser,
       };
-    }));
+    });
   }
 
   async findActiveSuppliers(userId: number) {
@@ -1618,11 +1740,17 @@ export class AccountMasterService {
     throw new BadRequestException('Format is required. Please use xlsx or pdf.');
   }
 
-  async downloadSample() {
-    if (this.cachedSampleFile) {
-        return this.cachedSampleFile;
+  private excelColLetter(col: number): string {
+    let letter = '';
+    while (col > 0) {
+      let temp = (col - 1) % 26;
+      letter = String.fromCharCode(65 + temp) + letter;
+      col = Math.floor((col - temp) / 26);
     }
+    return letter;
+  }
 
+  async downloadSample() {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Sample Data');
     worksheet.views = [{ state: 'frozen', ySplit: 1 }];
@@ -1644,7 +1772,42 @@ export class AccountMasterService {
       fgColor: { argb: 'FFD3D3D3' }
     };
 
-    // Data validations for dropdowns (limit to 200 rows to ensure blazing fast generation under 200ms)
+    // Load active pincodes from database
+    const pincodes = await this.prisma.pincode.findMany({
+      where: { isActive: true }
+    });
+
+    const pincodeSheet = workbook.addWorksheet('PincodeData');
+    pincodeSheet.state = 'hidden';
+
+    // Format Column A as Text
+    pincodeSheet.getColumn('A').numFmt = '@';
+
+    pincodes.forEach((p, idx) => {
+      const R = idx + 1;
+      pincodeSheet.getCell(`A${R}`).value = String(p.pincode);
+      pincodeSheet.getCell(`B${R}`).value = p.subDistrict || '';
+      pincodeSheet.getCell(`C${R}`).value = p.district || '';
+      pincodeSheet.getCell(`D${R}`).value = p.state || '';
+      pincodeSheet.getCell(`E${R}`).value = p.country || 'India';
+
+      const areas = Array.isArray(p.areas) ? p.areas : [];
+      areas.forEach((area, colIdx) => {
+        pincodeSheet.getCell(R, 6 + colIdx).value = area;
+      });
+
+      if (areas.length > 0) {
+        const lastColLetter = this.excelColLetter(6 + areas.length - 1);
+        const rangeStr = `'PincodeData'!$F$${R}:$${lastColLetter}$${R}`;
+        const name = `pin_${p.pincode}`;
+        workbook.definedNames.add(rangeStr, name);
+      }
+    });
+
+    // Format Column G (Pincode) of main sheet as Text
+    worksheet.getColumn('G').numFmt = '@';
+
+    // Data validations for dropdowns
     for (let i = 2; i <= 200; i++) {
         // Group Name
         worksheet.getCell(`B${i}`).dataValidation = {
@@ -1655,6 +1818,30 @@ export class AccountMasterService {
             promptTitle: 'Select Group Name',
             prompt: 'Choose one of:\nSUNDRY_CREDITORS (Supplier),\nSUNDRY_DEBTORS (Customer),\nSUNDRY_CREDITORS (Supplier) & SUNDRY_DEBTORS (Customer)'
         };
+
+        // Area (Column H) - Dependent Dropdown based on Pincode (Column G)
+        worksheet.getCell(`H${i}`).dataValidation = {
+            type: 'list',
+            allowBlank: true,
+            formulae: [`=INDIRECT("pin_"&TEXT(G${i}, "000000"))`],
+            showErrorMessage: false,
+            showInputMessage: true,
+            promptTitle: 'Select Area',
+            prompt: 'Dropdown will show areas after you enter a valid Pincode in G.'
+        };
+
+        // Autofill Formulas using VLOOKUP
+        if (pincodes.length > 0) {
+            worksheet.getCell(`I${i}`).value = { formula: `IF(ISBLANK(G${i}), "", IFERROR(VLOOKUP(TEXT(G${i}, "000000"), 'PincodeData'!$A$1:$E$${pincodes.length}, 2, FALSE), ""))` };
+            worksheet.getCell(`J${i}`).value = { formula: `IF(ISBLANK(G${i}), "", IFERROR(VLOOKUP(TEXT(G${i}, "000000"), 'PincodeData'!$A$1:$E$${pincodes.length}, 3, FALSE), ""))` };
+            worksheet.getCell(`K${i}`).value = { formula: `IF(ISBLANK(G${i}), "", IFERROR(VLOOKUP(TEXT(G${i}, "000000"), 'PincodeData'!$A$1:$E$${pincodes.length}, 4, FALSE), ""))` };
+            worksheet.getCell(`L${i}`).value = { formula: `IF(ISBLANK(G${i}), "", IFERROR(VLOOKUP(TEXT(G${i}, "000000"), 'PincodeData'!$A$1:$E$${pincodes.length}, 5, FALSE), ""))` };
+        } else {
+            worksheet.getCell(`I${i}`).value = '';
+            worksheet.getCell(`J${i}`).value = '';
+            worksheet.getCell(`K${i}`).value = '';
+            worksheet.getCell(`L${i}`).value = '';
+        }
 
         // Supplier Balance Type (Column O)
         worksheet.getCell(`O${i}`).dataValidation = {
@@ -1719,6 +1906,12 @@ export class AccountMasterService {
     worksheet.columns = headers.map((h, i) => {
         let width = 22;
         if (i === 1) width = 60; // Group Name
+        if (i === 6) width = 15; // Pincode
+        if (i === 7) width = 20; // Area
+        if (i === 8) width = 20; // Sub District
+        if (i === 9) width = 20; // District
+        if (i === 10) width = 20; // State
+        if (i === 11) width = 15; // Country
         if (i === 19) width = 15; // MSME Enabled
         if (i === 21) width = 15; // Reg.Under
         if (i === 22) width = 18; // Reg.Type
@@ -1727,12 +1920,11 @@ export class AccountMasterService {
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
-    this.cachedSampleFile = {
+    return {
         buffer: Buffer.from(buffer),
         filename: 'Account_Master_Sample.xlsx',
         mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     };
-    return this.cachedSampleFile;
   }
 
   async importAccounts(buffer: Buffer, userId: number) {

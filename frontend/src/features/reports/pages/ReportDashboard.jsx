@@ -404,7 +404,10 @@ const ReportDashboard = () => {
         if (activeTab === 'ALL') {
             return (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-100">
+                    <Card
+                        className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleCardClick('PI', 'Total Invoices', purchaseData)}
+                    >
                         <CardContent className="flex items-center p-6">
                             <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mr-4">
                                 <ShoppingCart className="text-emerald-700" size={24} />
@@ -416,7 +419,10 @@ const ReportDashboard = () => {
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100">
+                    <Card
+                        className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleCardClick('SI', 'Total Invoices', salesInvoicesData)}
+                    >
                         <CardContent className="flex items-center p-6">
                             <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mr-4">
                                 <TrendingUp className="text-blue-700" size={24} />
@@ -446,7 +452,10 @@ const ReportDashboard = () => {
         if (activeTab === 'PURCHASE') {
             return (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-100">
+                    <Card
+                        className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleCardClick('PI', 'Total Invoices', purchaseData)}
+                    >
                         <CardContent className="flex items-center p-6">
                             <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mr-4">
                                 <ShoppingCart className="text-emerald-700" size={24} />
@@ -468,7 +477,10 @@ const ReportDashboard = () => {
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-100">
+                    <Card
+                        className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleCardClick('PI', 'Total Invoices', purchaseData)}
+                    >
                         <CardContent className="flex items-center p-6">
                             <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mr-4">
                                 <FileCheck className="text-emerald-700" size={24} />
@@ -485,7 +497,10 @@ const ReportDashboard = () => {
         if (activeTab === 'SALES') {
             return (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100">
+                    <Card
+                        className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleCardClick('SI', 'Total Invoices', salesInvoicesData)}
+                    >
                         <CardContent className="flex items-center p-6">
                             <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mr-4">
                                 <TrendingUp className="text-blue-700" size={24} />
@@ -507,7 +522,10 @@ const ReportDashboard = () => {
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100">
+                    <Card
+                        className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleCardClick('SI', 'Total Invoices', salesInvoicesData)}
+                    >
                         <CardContent className="flex items-center p-6">
                             <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mr-4">
                                 <FileCheck className="text-blue-700" size={24} />
@@ -1086,6 +1104,16 @@ const ReportDashboard = () => {
 
             {renderSummaryCards()}
             {renderSelectedStatusCards()}
+            {detailView && (detailView.type === 'PI' || detailView.type === 'SI') && activeTab === 'ALL' && (
+                <div className="report-table-element w-full animate-in fade-in slide-in-from-top-4 duration-500 mb-8 animate-in" id="report-detail-table-global">
+                    <ReportTable
+                        type={detailView.type}
+                        status={detailView.status}
+                        data={detailView.data}
+                        onClose={() => setDetailView(null)}
+                    />
+                </div>
+            )}
             {renderGraphs()}
         </div>
     );

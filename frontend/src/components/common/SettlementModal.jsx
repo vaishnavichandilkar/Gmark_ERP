@@ -79,7 +79,10 @@ const SettlementModal = ({
                     const advanceMapped = {};
                     const parsedGroupExpenses = [];
                     settlements.forEach(s => {
-                        if (s.settlementType === 'ADVANCE') {
+                        const normType = s.settlementType === 'SETTLED_ADVANCE' ? 'ADVANCE' :
+                                         s.settlementType === 'SETTLED_ON_ACCOUNT' ? 'ON_ACCOUNT' :
+                                         s.settlementType;
+                        if (normType === 'ADVANCE') {
                             if (!types.includes('ON_ACCOUNT')) types.push('ON_ACCOUNT');
                             setOnAccountSubMode('ADVANCE');
                             if (s.invoiceId) {
@@ -87,7 +90,7 @@ const SettlementModal = ({
                             } else {
                                 setAdvanceAmount(s.settledAmount || '');
                             }
-                        } else if (s.settlementType === 'ON_ACCOUNT') {
+                        } else if (normType === 'ON_ACCOUNT') {
                             if (!types.includes('ON_ACCOUNT')) types.push('ON_ACCOUNT');
                             setOnAccountSubMode('GROUP');
                             if (s.invoiceId) {
@@ -96,7 +99,7 @@ const SettlementModal = ({
                                     amount: s.settledAmount || ''
                                 });
                             }
-                        } else if (s.settlementType === 'AGAINST_REFERENCE') {
+                        } else if (normType === 'AGAINST_REFERENCE') {
                             if (!types.includes('AGAINST_REFERENCE')) types.push('AGAINST_REFERENCE');
                             againstRefMapped[s.invoiceId] = { checked: true, amount: s.settledAmount };
                         }
@@ -108,7 +111,10 @@ const SettlementModal = ({
                         setGroupExpenses(parsedGroupExpenses);
                     }
                 } else {
-                    const singleType = initialData.settlementType;
+                    const rawType = initialData.settlementType;
+                    const singleType = rawType === 'SETTLED_ADVANCE' ? 'ADVANCE' :
+                                       rawType === 'SETTLED_ON_ACCOUNT' ? 'ON_ACCOUNT' :
+                                       rawType;
                     if (singleType) {
                         if (singleType === 'ADVANCE') {
                             setSelectedTypes(['ON_ACCOUNT']);

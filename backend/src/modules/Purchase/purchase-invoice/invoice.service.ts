@@ -616,15 +616,7 @@ export class PurchaseInvoiceService {
       });
 
       // INTEGRATION: Record the transaction in the ledger
-      await this.transactionService.recordTransaction({
-        accountId: supplier.id,
-        userId,
-        bookingDate: new Date(inv.bookingDate),
-        invoiceNumber: inv.supplierInvoiceNumber || inv.invoiceNumber,
-        transactionType: TransactionType.Purchase,
-        amount: inv.grandTotal,
-        entryType: BalanceType.Cr, // Purchase increases Creditor balance (Credit)
-      }, tx);
+      await this.syncLedgerTransactions(inv, userId, tx);
 
       await this.updateCompletionStatusesAfterInvoice(inv.id, tx);
       return inv;
@@ -936,16 +928,7 @@ export class PurchaseInvoiceService {
         await this.updateCompletionStatusesAfterInvoice(id, tx);
         
         // Synchronize with Ledger
-        await this.transactionService.updateTransaction({
-            userId: existing.userId,
-            accountId: existing.supplierId,
-            invoiceNumber: existing.supplierInvoiceNumber || existing.invoiceNumber,
-            transactionType: TransactionType.Purchase,
-        }, {
-            amount: updated.grandTotal,
-            bookingDate: updated.bookingDate,
-            invoiceNumber: updated.supplierInvoiceNumber || updated.invoiceNumber,
-        }, tx);
+        await this.syncLedgerTransactions(updated, userId, tx);
         
         // If the poId was changed (though not explicitly handled in updateDto yet), 
         // we might need to update the old PO too. 
@@ -1334,17 +1317,114 @@ export class PurchaseInvoiceService {
       });
 
       // Synchronize with Ledger: Remove transaction on deletion
-      await this.transactionService.deleteTransaction({
+      await tx.transaction.deleteMany({
+        where: {
           userId: updated.userId,
-          accountId: updated.supplierId,
           invoiceNumber: updated.supplierInvoiceNumber || updated.invoiceNumber,
           transactionType: TransactionType.Purchase,
-      }, tx);
+        }
+      });
 
       // Update completion statuses of linked POs and GRNs
       await this.updateCompletionStatusesAfterInvoice(id, tx);
 
       return updated;
     });
+  }
+
+  private async getOrCreateAccount(accountName: string, groupName: string[], userId: number, tx: any) {
+    let account = await tx.accountMaster.findFirst({
+      where: {
+        accountName,
+        userId,
+      },
+    });
+
+    if (!account) {
+      account = await tx.accountMaster.create({
+        data: {
+          accountName,
+          groupName,
+          userId,
+          status: 'ACTIVE',
+          panNo: 'N/A',
+          addressLine1: 'Default Address',
+          pincode: '000000',
+          state: 'Unknown',
+          prefix: 'Mr',
+          contactPersonName: 'Admin',
+          mobileNo: '0000000000',
+        },
+      });
+    }
+    return account;
+  }
+
+  private async syncLedgerTransactions(invoice: any, userId: number, tx: any) {
+    // 1. Delete all existing transactions for this purchase invoice
+    await tx.transaction.deleteMany({
+      where: {
+        userId,
+        invoiceNumber: invoice.supplierInvoiceNumber || invoice.invoiceNumber,
+        transactionType: TransactionType.Purchase,
+      }
+    });
+
+    // 2. Credit Supplier
+    await tx.transaction.create({
+      data: {
+        accountId: invoice.supplierId,
+        userId,
+        bookingDate: new Date(invoice.bookingDate),
+        invoiceNumber: invoice.supplierInvoiceNumber || invoice.invoiceNumber,
+        transactionType: TransactionType.Purchase,
+        amount: invoice.grandTotal,
+        entryType: BalanceType.Cr,
+      }
+    });
+
+    // 3. Debit Purchase (Material Purchase excl GST)
+    const purchaseAccount = await this.getOrCreateAccount(
+      'MATERIAL PURCHASE (EXCL. GST)',
+      ['Purchase Accounts'],
+      userId,
+      tx
+    );
+    await tx.transaction.create({
+      data: {
+        accountId: purchaseAccount.id,
+        userId,
+        bookingDate: new Date(invoice.bookingDate),
+        invoiceNumber: invoice.supplierInvoiceNumber || invoice.invoiceNumber,
+        transactionType: TransactionType.Purchase,
+        amount: invoice.taxableAmount,
+        entryType: BalanceType.Dr,
+      }
+    });
+
+    // 4. Debit Expenses
+    if (invoice.expenses) {
+      for (const exp of invoice.expenses) {
+        if (exp.amount > 0) {
+          const expAccount = await this.getOrCreateAccount(
+            exp.groupName,
+            ['Direct Expenses'],
+            userId,
+            tx
+          );
+          await tx.transaction.create({
+            data: {
+              accountId: expAccount.id,
+              userId,
+              bookingDate: new Date(invoice.bookingDate),
+              invoiceNumber: invoice.supplierInvoiceNumber || invoice.invoiceNumber,
+              transactionType: TransactionType.Purchase,
+              amount: exp.amount,
+              entryType: BalanceType.Dr,
+            }
+          });
+        }
+      }
+    }
   }
 }

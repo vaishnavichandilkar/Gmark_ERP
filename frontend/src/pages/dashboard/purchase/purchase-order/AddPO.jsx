@@ -645,7 +645,7 @@ const AddPO = () => {
         } catch (e) {
             sessionStorage.setItem('add_po_product_ids', '[]');
         }
-        navigate(`/seller/masters/product-master/add?redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
+        navigate(`/seller/masters/product-master/add?redirect=${encodeURIComponent(ROUTES.PURCHASE_ORDER_ADD + '?restore=true')}`);
     };
 
     // Validation Function
@@ -932,7 +932,7 @@ const AddPO = () => {
                                                     onClick={() => {
                                                         sessionStorage.setItem('add_po_draft', JSON.stringify({ formData, items }));
                                                         sessionStorage.setItem('add_po_supplier_ids', JSON.stringify(suppliers.map(s => s.id)));
-                                                        navigate(`/seller/masters/account-master/add?redirect=${ROUTES.PURCHASE_ORDER_ADD}`);
+                                                        navigate(`/seller/masters/account-master/add?redirect=${encodeURIComponent(ROUTES.PURCHASE_ORDER_ADD + '?restore=true')}`);
                                                     }}
                                                     className="w-full flex items-center justify-center gap-2 py-3 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-md group font-outfit"
                                                 >

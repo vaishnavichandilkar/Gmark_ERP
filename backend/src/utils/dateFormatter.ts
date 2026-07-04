@@ -29,7 +29,7 @@ export function formatDate(date: Date | string | number | null | undefined): str
 
 export function parseDDMMYYYY(dateStr: any): Date | null {
   if (dateStr === null || dateStr === undefined) return null;
-  if (dateStr instanceof Date) {
+  if (dateStr && (dateStr instanceof Date || Object.prototype.toString.call(dateStr) === '[object Date]' || typeof dateStr.getTime === 'function')) {
     return isNaN(dateStr.getTime()) ? null : dateStr;
   }
   

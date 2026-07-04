@@ -14,6 +14,10 @@ export class OtpService {
         const otp = crypto.randomInt(100000, 999999).toString();
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
+        console.log('====================================');
+        console.log(`[OTP SERVICE GENERATED] Phone: ${phone}, OTP: ${otp}`);
+        console.log('====================================');
+
         await this.prisma.otp.upsert({
             where: { phone },
             update: { otp, expiresAt },

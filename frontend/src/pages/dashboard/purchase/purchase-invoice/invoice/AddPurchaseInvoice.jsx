@@ -1003,13 +1003,13 @@ const AddPurchaseInvoice = () => {
         const redirect = isEditMode ? `${ROUTES.PURCHASE_INVOICE_EDIT.replace(':id', id)}` : ROUTES.PURCHASE_INVOICE_ADD;
         sessionStorage.setItem('add_pi_draft', JSON.stringify({ formData, items, expenses }));
         sessionStorage.setItem('add_pi_product_ids', JSON.stringify(products.map(p => p.id)));
-        navigate(`/seller/masters/product-master/add?redirect=${redirect}`);
+        navigate(`/seller/masters/product-master/add?redirect=${encodeURIComponent(redirect + (redirect.includes('?') ? '&' : '?') + 'restore=true')}`);
     };
 
     const handleAddNewSupplier = () => {
         sessionStorage.setItem('add_pi_draft', JSON.stringify({ formData, items, expenses }));
         sessionStorage.setItem('add_pi_supplier_ids', JSON.stringify(suppliers.map(s => s.id)));
-        navigate(`/seller/masters/account-master/add?redirect=${ROUTES.PURCHASE_INVOICE_ADD}`);
+        navigate(`/seller/masters/account-master/add?redirect=${encodeURIComponent(ROUTES.PURCHASE_INVOICE_ADD + '?restore=true')}`);
     };
 
     // Auto save draft on change

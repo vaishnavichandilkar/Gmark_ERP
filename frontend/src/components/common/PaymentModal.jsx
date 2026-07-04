@@ -28,6 +28,26 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
     const [isSettlementOpen, setIsSettlementOpen] = useState(false);
     const [activeEntryId, setActiveEntryId] = useState(null);
     const [searchFilter, setSearchFilter] = useState('');
+    const getAccountTypeLabel = (opt) => {
+        if (!opt) return '';
+        const typeUpper = String(opt.accountType || '').toUpperCase();
+        if (typeUpper === 'CUSTOMER' || typeUpper === 'DEBTOR') return 'Customer';
+        if (typeUpper === 'SUPPLIER' || typeUpper === 'CREDITOR') return 'Supplier';
+        if (typeUpper === 'BANK' || typeUpper === 'CASH') return 'Bank/Cash';
+        
+        if (opt.groupName) {
+            const grpList = Array.isArray(opt.groupName) ? opt.groupName : [opt.groupName];
+            const grp = grpList[grpList.length - 1];
+            if (grp) {
+                if (grp === 'SUNDRY_DEBTORS') return 'Customer';
+                if (grp === 'SUNDRY_CREDITORS') return 'Supplier';
+                if (['BANK', 'CASH', 'Bank & Cash'].includes(grp)) return 'Bank/Cash';
+                return grp.replace(/_/g, ' ');
+            }
+        }
+        return '';
+    };
+
     const getRowOptions = (filterMode) => {
         if (filterMode === 'Customer' || filterMode === 'Supplier') {
             return [...customers, ...suppliers];
@@ -97,11 +117,14 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                         const settlements = item.settlements || [];
                         const summaryParts = [];
                         settlements.forEach(s => {
-                            if (s.settlementType === 'ADVANCE') {
+                            const normType = s.settlementType === 'SETTLED_ADVANCE' ? 'ADVANCE' :
+                                             s.settlementType === 'SETTLED_ON_ACCOUNT' ? 'ON_ACCOUNT' :
+                                             s.settlementType;
+                            if (normType === 'ADVANCE') {
                                 summaryParts.push(`Advance - ₹${s.settledAmount}`);
-                            } else if (s.settlementType === 'ON_ACCOUNT') {
+                            } else if (normType === 'ON_ACCOUNT') {
                                 summaryParts.push(`On Account - ₹${s.settledAmount}`);
-                            } else if (s.settlementType === 'AGAINST_REFERENCE') {
+                            } else if (normType === 'AGAINST_REFERENCE') {
                                 summaryParts.push(`Against Ref: [₹${s.settledAmount}]`);
                             }
                         });
@@ -114,10 +137,10 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                             accountName: item.account?.accountName || '',
                             amount: item.amount || '',
                             filterMode: fMode,
-                            settlementType: settlements.length > 0 ? (settlements.length === 1 ? settlements[0].settlementType : 'MIXED') : null,
+                            settlementType: settlements.length > 0 ? (settlements.length === 1 ? (settlements[0].settlementType === 'SETTLED_ADVANCE' ? 'ADVANCE' : settlements[0].settlementType === 'SETTLED_ON_ACCOUNT' ? 'ON_ACCOUNT' : settlements[0].settlementType) : 'MIXED') : null,
                             settlements: settlements.map(s => ({
                                 invoiceId: s.invoiceId,
-                                settlementType: s.settlementType,
+                                settlementType: s.settlementType === 'SETTLED_ADVANCE' ? 'ADVANCE' : s.settlementType === 'SETTLED_ON_ACCOUNT' ? 'ON_ACCOUNT' : s.settlementType,
                                 settledAmount: s.settledAmount
                             })),
                             settlementSummary: summaryParts.join('; ')
@@ -430,7 +453,20 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                         className="w-full h-11 px-4 bg-white border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[15px] flex items-center justify-between transition-all"
                                     >
                                         <span className={formData.bankCashLedgerId ? 'text-gray-800 font-medium' : 'text-gray-400'}>
-                                            {((type === 'Journal' ? allActiveAccounts : bankCashOptions).find(o => Number(o.id) === Number(formData.bankCashLedgerId))?.ledgerName || 'Select Account')}
+                                            {(() => {
+                                                const matched = (type === 'Journal' ? allActiveAccounts : bankCashOptions).find(o => Number(o.id) === Number(formData.bankCashLedgerId));
+                                                if (!matched) return 'Select Account';
+                                                return (
+                                                    <span>
+                                                        {matched.accountName || matched.ledgerName}
+                                                        {getAccountTypeLabel(matched) && (
+                                                            <span className="text-gray-400 ml-1.5 font-normal text-[11px]">
+                                                                ({getAccountTypeLabel(matched)})
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                );
+                                            })()}
                                         </span>
                                         <ChevronDown size={18} className={`text-[#6B7280] transition-transform duration-200 ${activeDropdown === 'bankCash' ? 'rotate-180' : ''}`} />
                                     </button>
@@ -461,7 +497,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                                         {(() => {
                                                             const optionsToRender = type === 'Journal' ? allActiveAccounts : bankCashOptions;
                                                             const filteredOptions = optionsToRender.filter(o => 
-                                                                String(o.ledgerName).toLowerCase().includes(searchFilter.toLowerCase())
+                                                                String(o.accountName || o.ledgerName || '').toLowerCase().includes(searchFilter.toLowerCase())
                                                             );
                                                             if (filteredOptions.length === 0) {
                                                                 return <div className="px-4 py-3 text-center text-gray-400 text-sm">No accounts found</div>;
@@ -473,7 +509,14 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                                                     onClick={() => handleSelectChange('bankCashLedgerId', opt.id)}
                                                                     className={`w-full px-4 py-2.5 text-left text-[14px] font-medium transition-colors hover:bg-gray-50 ${Number(formData.bankCashLedgerId) === Number(opt.id) ? 'text-[#073318] bg-[#073318]/5' : 'text-gray-700'}`}
                                                                 >
-                                                                    {opt.ledgerName}
+                                                                    <span>
+                                                                        {opt.accountName || opt.ledgerName}
+                                                                        {getAccountTypeLabel(opt) && (
+                                                                            <span className="text-gray-400 ml-1.5 font-normal text-[11px]">
+                                                                                ({getAccountTypeLabel(opt)})
+                                                                            </span>
+                                                                        )}
+                                                                    </span>
                                                                 </button>
                                                             ));
                                                         })()}

@@ -283,11 +283,10 @@ const GroupMaster = () => {
             const response = await masterService.importGroups(formData);
             toast.dismiss('import-toast');
             
-            // Show static success message as requested by user
-            showToast(t('common:import_success', 'Data imported successfully'), 'success');
-            
             if (response.errors && response.errors.length > 0) {
-                console.warn('Import had some errors:', response.errors);
+                showToast(response.message || 'Import completed with some errors', 'error');
+            } else {
+                showToast(t('common:import_success', 'Data imported successfully'), 'success');
             }
             
             fetchGroups();

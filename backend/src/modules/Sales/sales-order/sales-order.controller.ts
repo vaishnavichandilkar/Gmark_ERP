@@ -63,6 +63,18 @@ export class SalesOrderController {
         res.send(buffer);
     }
 
+    @Get('sample')
+    @ApiOperation({ summary: 'Download Sales Order Sample Excel Template' })
+    async downloadSample(@Res() res: Response) {
+        const { buffer, filename, mimetype } = await this.service.downloadSample();
+        res.set({
+            'Content-Type': mimetype,
+            'Content-Disposition': `attachment; filename="${filename}"`,
+            'Content-Length': buffer.length,
+        });
+        res.send(buffer);
+    }
+
     @Post('import')
     @ApiOperation({ summary: 'Import Sales Orders from XLSX' })
     @ApiConsumes('multipart/form-data')

@@ -614,13 +614,13 @@ const AddGRN = () => {
         const redirect = isEditMode ? `${ROUTES.GRN_EDIT.replace(':id', id)}` : ROUTES.GRN_ADD;
         sessionStorage.setItem('add_grn_draft', JSON.stringify({ formData, items, expenses }));
         sessionStorage.setItem('add_grn_product_ids', JSON.stringify(products.map(p => p.id)));
-        navigate(`/seller/masters/product-master/add?redirect=${redirect}`);
+        navigate(`/seller/masters/product-master/add?redirect=${encodeURIComponent(redirect + (redirect.includes('?') ? '&' : '?') + 'restore=true')}`);
     };
 
     const handleAddNewSupplier = () => {
         sessionStorage.setItem('add_grn_draft', JSON.stringify({ formData, items, expenses }));
         sessionStorage.setItem('add_grn_supplier_ids', JSON.stringify(suppliers.map(s => s.id)));
-        navigate(`/seller/masters/account-master/add?redirect=${ROUTES.GRN_ADD}`);
+        navigate(`/seller/masters/account-master/add?redirect=${encodeURIComponent(ROUTES.GRN_ADD + '?restore=true')}`);
     };
 
     // Auto save draft on change

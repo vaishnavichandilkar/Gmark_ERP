@@ -476,7 +476,9 @@ export class PaymentVoucherService {
         .filter(s => s.ledger_id === item.accountId)
         .map(s => ({
           invoiceId: s.invoice_id,
-          settlementType: s.settlement_type,
+          settlementType: s.settlement_type === 'SETTLED_ADVANCE' ? 'ADVANCE' : 
+                          s.settlement_type === 'SETTLED_ON_ACCOUNT' ? 'ON_ACCOUNT' : 
+                          s.settlement_type,
           settledAmount: Number(s.settled_amount),
         }));
 

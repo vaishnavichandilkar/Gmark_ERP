@@ -24,7 +24,7 @@ import { motion } from 'framer-motion';
 
 import challanService from "@/services/challanService";
 import ScrollableTable from "@/components/common/ScrollableTable";
-import ImportModal from "./components/ImportModal";
+import ImportModal from "@/pages/dashboard/masters/components/ImportModal";
 import CustomSelect from "@/components/common/CustomSelect";
 import { formatDate } from "@/utils/dateUtils";
 
@@ -80,8 +80,25 @@ const Challan = () => {
     const [challanToDelete, setChallanToDelete] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [importSummary, setImportSummary] = useState(null);
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const exportRef = useRef(null);
+
+    const downloadBase64File = (base64Data, filename) => {
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const link = document.createElement('a');
+        link.href = window.URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const defaultFilters = { status: "All" };
     const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -200,18 +217,28 @@ const Challan = () => {
         }
     };
 
-    const handleImportExcel = async (file) => {
+    const handleImportExcel = async (formData) => {
         const loadingToast = toast.loading(t('common:processing'));
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            await challanService.importChallans(formData);
+            const res = await challanService.importChallans(formData);
             toast.dismiss(loadingToast);
-            toast.success(t('common:import_success'));
-            fetchData();
+            if (res.success) {
+                toast.success(t('common:import_success'));
+                setImportSummary(res.summary ? {
+                    totalRows: res.summary.totalRows,
+                    successful: res.summary.successful,
+                    failed: res.summary.failed,
+                    successFile: res.successFile,
+                    errorFile: res.errorFile
+                } : null);
+                fetchData();
+            } else {
+                toast.error(res.message || t('common:import_failed'));
+            }
         } catch (error) {
             toast.dismiss(loadingToast);
             toast.error(error?.response?.data?.message || t('common:import_failed'));
+            throw error;
         }
     };
 
@@ -447,13 +474,65 @@ const Challan = () => {
 
             {createPortal(
                 <>
+                    {importSummary && (
+                        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" onClick={() => setImportSummary(null)} />
+                            <div className="relative bg-white w-full max-w-[550px] rounded-[24px] shadow-2xl p-10 space-y-8 animate-in zoom-in-95 duration-300 border border-gray-100 font-outfit text-left">
+                                <div className="text-center space-y-2">
+                                    <h3 className="text-[24px] font-bold text-[#111827] uppercase tracking-tight">Import Summary</h3>
+                                    <p className="text-gray-500 text-[14px] font-medium">Here are the results of the import process</p>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-4 text-center">
+                                    <div className="bg-gray-50 p-5 rounded-[16px]">
+                                        <span className="text-[28px] font-bold text-[#111827]">{importSummary.totalRows}</span>
+                                        <p className="text-[12px] font-bold text-gray-400 uppercase tracking-wider mt-1">Total Rows</p>
+                                    </div>
+                                    <div className="bg-emerald-50 p-5 rounded-[16px]">
+                                        <span className="text-[28px] font-bold text-emerald-700">{importSummary.successful}</span>
+                                        <p className="text-[12px] font-bold text-emerald-600 uppercase tracking-wider mt-1">Successful</p>
+                                    </div>
+                                    <div className="bg-red-50 p-5 rounded-[16px]">
+                                        <span className="text-[28px] font-bold text-red-600">{importSummary.failed}</span>
+                                        <p className="text-[12px] font-bold text-red-500 uppercase tracking-wider mt-1">Failed</p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {importSummary.successful > 0 && (
+                                        <button
+                                            onClick={() => downloadBase64File(importSummary.successFile, 'Sales_Challan_Import_Success_Report.xlsx')}
+                                            className="w-full py-4 border-2 border-emerald-100 bg-emerald-50/50 text-emerald-800 rounded-[14px] font-bold uppercase transition-all hover:bg-emerald-100/50 flex items-center justify-center gap-3 active:scale-95 duration-200"
+                                        >
+                                            <Download size={18} /> Download Success Report
+                                        </button>
+                                    )}
+                                    {importSummary.failed > 0 && (
+                                        <button
+                                            onClick={() => downloadBase64File(importSummary.errorFile, 'Sales_Challan_Import_Error_Report.xlsx')}
+                                            className="w-full py-4 border-2 border-red-100 bg-red-50 text-red-700 rounded-[14px] font-bold uppercase transition-all hover:bg-red-100 flex items-center justify-center gap-3 active:scale-95 duration-200"
+                                        >
+                                            <X size={18} className="text-red-600" /> Download Error Report
+                                        </button>
+                                    )}
+                                </div>
+
+                                <button
+                                    onClick={() => setImportSummary(null)}
+                                    className="w-full py-4 bg-[#073318] text-white hover:bg-[#04200f] rounded-[14px] font-bold uppercase shadow-lg transition-all active:scale-95 duration-200"
+                                >
+                                    Close Summary
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} t={t} />
                     <ImportModal
                         isOpen={isImportModalOpen}
                         onClose={() => setIsImportModalOpen(false)}
                         onImport={handleImportExcel}
                         onDownloadSample={handleDownloadSample}
-                        title={t('modules:import_sales_challans')}
+                        sampleFileName="Sales_Challan_Import_Sample.xlsx"
                     />
 
                     {/* Filter Sidebar */}

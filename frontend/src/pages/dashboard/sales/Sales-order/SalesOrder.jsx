@@ -31,6 +31,7 @@ import { ROUTES } from "../../../../constants/routes";
 import { useTranslation } from 'react-i18next';
 
 import salesOrderService from "../../../../services/salesOrderService";
+import ImportModal from "@/pages/dashboard/masters/components/ImportModal";
 import ScrollableTable from "../../../../components/common/ScrollableTable";
 import CustomSelect from "../../../../components/common/CustomSelect";
 import { formatDate } from '@/utils/dateUtils';
@@ -91,7 +92,24 @@ const SalesOrder = () => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [importSummary, setImportSummary] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const downloadBase64File = (base64Data, filename) => {
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [soToDelete, setSoToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -537,141 +555,48 @@ const SalesOrder = () => {
     }
   };
 
-  const handleDownloadSample = () => {
+  const handleDownloadSample = async () => {
     try {
-      const headers = [
-        "Customer Name*",
-        "Credit Days",
-        "Expiry Date (YYYY-MM-DD)*",
-        "Customer PO Number",
-        "Customer PO Date (YYYY-MM-DD)",
-        "Customer PO Expiry Date (YYYY-MM-DD)",
-        "Product Code*",
-        "Quantity*",
-        "Rate*",
-        "Discount %",
-        "Discount Amount",
-        "Tax %"
-      ];
-
-      // Create worksheet
-      const worksheet = XLSX.utils.aoa_to_sheet([headers]);
-
-      // Define Professional Styling
-      const headerStyle = {
-        font: { bold: true, color: { rgb: "000000" }, name: "Arial", sz: 11 },
-        fill: { fgColor: { rgb: "F2F2F2" } },
-        alignment: { horizontal: "left", vertical: "center" }, // Changed header to left for consistency
-        border: {
-          top: { style: "thin", color: { rgb: "000000" } },
-          bottom: { style: "thin", color: { rgb: "000000" } },
-          left: { style: "thin", color: { rgb: "000000" } },
-          right: { style: "thin", color: { rgb: "000000" } }
-        }
-      };
-
-      const dataStyle = {
-        font: { name: "Arial", sz: 10 },
-        alignment: { horizontal: "left", vertical: "center" } // Force left alignment for numbers
-      };
-
-      // Apply styles to all cells
-      const range = XLSX.utils.decode_range(worksheet['!ref']);
-      for (let R = range.s.r; R <= range.e.r; ++R) {
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-          const address = XLSX.utils.encode_cell({ r: R, c: C });
-          if (!worksheet[address]) continue;
-
-          if (R === 0) {
-            worksheet[address].s = headerStyle; // First row is header
-          } else {
-            worksheet[address].s = dataStyle; // Other rows are data
-          }
-        }
-      }
-
-      // Freeze first row (header row)
-      worksheet['!views'] = [
-        { state: 'frozen', ySplit: 1 }
-      ];
-
-      // Setting column widths for better readability
-      worksheet['!cols'] = [
-        { wch: 30 }, // Customer Name
-        { wch: 15 }, // Credit Days
-        { wch: 25 }, // Expiry Date
-        { wch: 15 }, // Product Code
-        { wch: 12 }, // Quantity
-        { wch: 12 }, // Rate
-        { wch: 12 }, // Discount %
-        { wch: 15 }, // Discount Amount
-        { wch: 10 }  // Tax %
-      ];
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Order Sample");
-      XLSX.writeFile(workbook, "Sales_Order_Import_Template.xlsx");
+      setIsRefreshing(true);
+      const response = await salesOrderService.downloadSample();
+      const blob = new Blob([response.data || response], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const link = document.createElement('a');
+      link.href = window.URL.createObjectURL(blob);
+      link.download = 'Sales_Order_Import_Sample.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       toast.success(t('modules:sample_downloaded_success', 'Sample template downloaded successfully!'));
     } catch (error) {
       console.error("Sample download error:", error);
       toast.error(t('modules:sample_download_failed', 'Failed to download sample file.'));
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
-  const handleSubmitImport = () => {
-    if (!selectedFile) return;
+  const handleSubmitImport = async (formData) => {
     setIsRefreshing(true);
     try {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = e.target.result;
-          const workbook = XLSX.read(data, { type: 'binary' });
-          const sheetName = workbook.SheetNames[0];
-          const sheet = workbook.Sheets[sheetName];
-          const json = XLSX.utils.sheet_to_json(sheet);
-
-          if (json.length === 0) {
-            toast.error(t('modules:uploaded_file_empty', 'The uploaded file is empty.'));
-            setIsRefreshing(false);
-            return;
-          }
-
-          // Map JSON to internal format
-          const importedData = json.map((row, index) => ({
-            id: `imported-${Date.now()}-${index}`,
-            soNumber: row["SO NO"] || row["SO Number"] || `SO-IMP-${index}`,
-            customerName: row["CUSTOMER NAME"] || row["Customer Name"] || "Unknown Customer",
-            customerType: row["CUSTOMER TYPE"] || row["Customer Type"] || "Retail",
-            customerPoNumber: row["CUSTOMER PO NUMBER"] || row["Customer PO Number"] || row["CUSTOMER PO NO"] || row["Customer PO No"] || row["PO Number"] || row["PO NUMBER"] || null,
-            poDate: row["PO DATE"] || row["PO Date"] || row["PO DATE (YYYY-MM-DD)"] || row["PO Date (YYYY-MM-DD)"] || null,
-            poExpiryDate: row["PO EXPIRY DATE"] || row["PO Expiry Date"] || row["PO EXPIRY DATE (YYYY-MM-DD)"] || row["PO Expiry Date (YYYY-MM-DD)"] || null,
-            soCreationDate: row["CREATION DATE"] || row["Creation Date"] || new Date().toISOString(),
-            expiryDate: row["EXPIRY DATE"] || row["Expiry Date"] || new Date().toISOString(),
-            totalAmount: parseFloat(row["AMOUNT"] || row["Amount"]) || 0,
-            gstNumber: row["GST NUMBER"] || row["GST Number"] || "-",
-            creditDays: parseInt(row["CREDIT DAYS"] || row["Credit Days"]) || 0,
-            taxAmount: parseFloat(row["TAX AMOUNT"] || row["Tax Amount"]) || 0,
-            grandTotal: parseFloat(row["TOTAL AMOUNT"] || row["Total Amount"]) || 0,
-            status: (row["STATUS"] || row["Status"] || "pending").toLowerCase()
-          }));
-
-          setSalesOrders(prev => [...importedData, ...prev]);
-          setTotalItemsCount(prev => prev + importedData.length);
-          setIsImportModalOpen(false);
-          setSelectedFile(null);
-          toast.success(t('modules:records_imported_success', { count: importedData.length, defaultValue: `${importedData.length} records imported successfully!` }));
-        } catch (err) {
-          console.error("Parsing error:", err);
-          toast.error(t('modules:invalid_file_format', 'Invalid file format. Please use the provided sample template.'));
-        } finally {
-          setIsRefreshing(false);
-        }
-      };
-      reader.readAsBinaryString(selectedFile);
+      const res = await salesOrderService.importSalesOrders(formData);
+      if (res.success) {
+        toast.success(t('modules:import_completed', 'Import completed successfully!'));
+        setImportSummary(res.summary ? {
+          totalRows: res.summary.totalRows,
+          successful: res.summary.successful,
+          failed: res.summary.failed,
+          successFile: res.successFile,
+          errorFile: res.errorFile
+        } : null);
+        handleRefresh();
+      } else {
+        toast.error(res.message || t('common:import_failed'));
+      }
     } catch (error) {
       console.error("Import error:", error);
-      toast.error(t('modules:failed_to_read_file', 'Failed to read file.'));
+      toast.error(error.response?.data?.message || t('common:import_failed'));
+      throw error;
+    } finally {
       setIsRefreshing(false);
     }
   };
@@ -777,15 +702,15 @@ const SalesOrder = () => {
                       {activeDropdown === so.id && (
                         <div className={`absolute right-full mr-2 w-max min-w-[220px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= currentItems.length - 3 ? 'bottom-0' : 'top-0'}`}>
                           {/* View Option (Always) */}
-                          <button onClick={() => navigate(ROUTES.SALES_ORDER_VIEW.replace(':id', so.id))} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50">
-                            <Eye size={18} />
-                            {((so.computedStatusLabel === 'Pending' || so.computedStatusLabel === 'Expiring Soon') && !(so.salesChallans?.length > 0 || so.salesInvoices?.length > 0)) ? t('modules:view_edit_so') : t('modules:view_so_action')}
+                          {console.log("Dropdown active for SO:", so.soNumber, "Status:", so.computedStatusLabel, "ID:", so.id)}
+                          <button onClick={() => navigate(`/seller/sales/order/view/${so.id}`)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50">
+                            VIEW SO
                           </button>
 
                           {/* Print Option (Not for Deleted) */}
                           {so.computedStatusLabel !== 'Deleted' && (
                             <button onClick={() => handlePrint(so)} className="w-full px-5 py-3.5 flex items-center gap-3 text-gray-700 hover:bg-[#F9FAFB] uppercase border-b border-gray-50">
-                              <Printer size={18} /> {t('common:print')}
+                              <Printer size={18} /> Print
                             </button>
                           )}
 
@@ -835,80 +760,65 @@ const SalesOrder = () => {
       <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} t={t} />
       {createPortal(
         <>
-          {isImportModalOpen && (
+          {importSummary && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] transition-all duration-300" onClick={() => { setIsImportModalOpen(false); setSelectedFile(null); }} />
-              <div className="relative bg-white w-full max-w-[500px] rounded-[24px] shadow-2xl p-10 space-y-8 animate-in zoom-in-95 duration-300 border border-gray-100">
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" onClick={() => setImportSummary(null)} />
+              <div className="relative bg-white w-full max-w-[550px] rounded-[24px] shadow-2xl p-10 space-y-8 animate-in zoom-in-95 duration-300 border border-gray-100 font-outfit">
                 <div className="text-center space-y-2">
-                  <h3 className="text-[24px] font-bold text-[#111827] uppercase tracking-tight font-outfit">{t('modules:import_so')}</h3>
-                  <p className="text-gray-500 text-[14px] font-medium font-outfit">{t('modules:import_so_desc')}</p>
+                  <h3 className="text-[24px] font-bold text-[#111827] uppercase tracking-tight">Import Summary</h3>
+                  <p className="text-gray-500 text-[14px] font-medium font-outfit">Here are the results of the import process</p>
                 </div>
 
-                <button
-                  onClick={handleDownloadSample}
-                  className="w-full py-4 border-2 border-emerald-100 bg-emerald-50 text-emerald-700 rounded-[14px] font-bold uppercase transition-all hover:bg-emerald-100 flex items-center justify-center gap-3 active:scale-95 duration-200 shadow-sm"
-                >
-                  <Download size={20} /> {t('modules:download_sample_xlsx')}
-                </button>
-
-                <div className="space-y-4 font-outfit">
-                  <label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest block text-center">{t('modules:upload_template')}</label>
-                  <div className={`border-2 border-dashed rounded-[18px] h-[72px] flex items-center overflow-hidden transition-all duration-300 ${selectedFile ? 'border-[#073318] bg-emerald-50/50' : 'border-gray-200 bg-gray-50 hover:border-gray-300'}`}>
-                    <label className="h-full px-8 flex items-center justify-center bg-white border-r border-dashed border-gray-200 font-bold uppercase text-[14px] cursor-pointer hover:bg-gray-50 transition-all text-[#073318]">
-                      {t('modules:browse')}
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept=".xlsx,.xls,.csv"
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (!file) return;
-
-                          const allowedExtensions = ['xlsx', 'xls', 'csv'];
-                          const fileExtension = file.name.split('.').pop().toLowerCase();
-
-                          if (!allowedExtensions.includes(fileExtension)) {
-                            toast.error("Invalid file type. Only Excel and CSV files are allowed.");
-                            e.target.value = '';
-                            setSelectedFile(null);
-                            return;
-                          }
-                          setSelectedFile(file);
-                        }}
-                      />
-                    </label>
-                    <div className="px-6 flex items-center gap-2 truncate flex-1 min-w-0">
-                      {selectedFile ? (
-                        <>
-                          <FileSpreadsheet size={18} className="text-[#073318] shrink-0" />
-                          <span className="text-[14px] font-bold text-[#073318] truncate uppercase tracking-tight">{selectedFile.name}</span>
-                          <button onClick={() => setSelectedFile(null)} className="ml-auto p-1.5 hover:bg-emerald-100 rounded-full text-emerald-700 transition-colors"><X size={14} /></button>
-                        </>
-                      ) : (
-                        <span className="text-[14px] font-bold text-gray-400 uppercase tracking-tight">{t('modules:no_file_chosen')}</span>
-                      )}
-                    </div>
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="bg-gray-50 p-5 rounded-[16px]">
+                    <span className="text-[28px] font-bold text-[#111827]">{importSummary.totalRows}</span>
+                    <p className="text-[12px] font-bold text-gray-400 uppercase tracking-wider mt-1">Total Rows</p>
+                  </div>
+                  <div className="bg-emerald-50 p-5 rounded-[16px]">
+                    <span className="text-[28px] font-bold text-emerald-700">{importSummary.successful}</span>
+                    <p className="text-[12px] font-bold text-emerald-600 uppercase tracking-wider mt-1">Successful</p>
+                  </div>
+                  <div className="bg-red-50 p-5 rounded-[16px]">
+                    <span className="text-[28px] font-bold text-red-600">{importSummary.failed}</span>
+                    <p className="text-[12px] font-bold text-red-500 uppercase tracking-wider mt-1">Failed</p>
                   </div>
                 </div>
 
-                <div className="flex gap-4 pt-2">
-                  <button
-                    onClick={() => { setIsImportModalOpen(false); setSelectedFile(null); }}
-                    className="flex-1 py-4 border border-[#E5E7EB] text-[#4B5563] rounded-[14px] font-bold uppercase transition-all hover:bg-gray-50 active:scale-95 duration-200"
-                  >
-                    {t('common:cancel')}
-                  </button>
-                  <button
-                    onClick={handleSubmitImport}
-                    disabled={!selectedFile || isRefreshing}
-                    className={`flex-[2] py-4 rounded-[14px] font-bold uppercase shadow-lg transition-all active:scale-95 duration-200 ${selectedFile ? 'bg-[#073318] text-white hover:bg-[#04200f]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
-                  >
-                    {isRefreshing ? t('modules:importing') : t('modules:submit_data')}
-                  </button>
+                <div className="space-y-3">
+                  {importSummary.successful > 0 && (
+                    <button
+                      onClick={() => downloadBase64File(importSummary.successFile, 'Sales_Order_Import_Success_Report.xlsx')}
+                      className="w-full py-4 border-2 border-emerald-100 bg-emerald-50/50 text-emerald-800 rounded-[14px] font-bold uppercase transition-all hover:bg-emerald-100/50 flex items-center justify-center gap-3 active:scale-95 duration-200"
+                    >
+                      <Download size={18} /> Download Success Report
+                    </button>
+                  )}
+                  {importSummary.failed > 0 && (
+                    <button
+                      onClick={() => downloadBase64File(importSummary.errorFile, 'Sales_Order_Import_Error_Report.xlsx')}
+                      className="w-full py-4 border-2 border-red-100 bg-red-50 text-red-700 rounded-[14px] font-bold uppercase transition-all hover:bg-red-100 flex items-center justify-center gap-3 active:scale-95 duration-200"
+                    >
+                      <XCircle size={18} /> Download Error Report
+                    </button>
+                  )}
                 </div>
+
+                <button
+                  onClick={() => setImportSummary(null)}
+                  className="w-full py-4 bg-[#073318] text-white hover:bg-[#04200f] rounded-[14px] font-bold uppercase shadow-lg transition-all active:scale-95 duration-200"
+                >
+                  Close Summary
+                </button>
               </div>
             </div>
           )}
+          <ImportModal
+            isOpen={isImportModalOpen}
+            onClose={() => setIsImportModalOpen(false)}
+            onImport={handleSubmitImport}
+            onDownloadSample={handleDownloadSample}
+            sampleFileName="Sales_Order_Import_Sample.xlsx"
+          />
 
           {isRefreshing && (
             <div className="fixed inset-0 z-[1000] flex items-center justify-center">

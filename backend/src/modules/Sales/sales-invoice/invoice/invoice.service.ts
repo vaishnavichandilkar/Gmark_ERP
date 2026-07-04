@@ -6,7 +6,7 @@ import { SalesOrderService } from '../../sales-order/sales-order.service';
 import { TransactionService } from '../../../Finance/transaction.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
-import { formatDate } from '../../../../utils/dateFormatter';
+import { formatDate, parseDDMMYYYY } from '../../../../utils/dateFormatter';
 import { isValidGst, determineSalesGst } from '../../../../common/utils/gst.helper';
 
 @Injectable()
@@ -59,6 +59,122 @@ export class SalesInvoiceService {
     return Boolean(isMsmeActive && isMsmeType);
   }
 
+  private async batchIsCustomerMsme(accounts: Array<{ mobileNo?: string | null; emailId?: string | null; gstNo?: string | null }>): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+    if (!accounts || accounts.length === 0) return result;
+
+    const gstNos = Array.from(new Set(
+      accounts
+        .map(a => a.gstNo?.trim())
+        .filter((g): g is string => !!g && g !== '')
+    ));
+
+    let gstDocs: Array<{ name: string | null; uploadedByUserId: number | null }> = [];
+    if (gstNos.length > 0) {
+      gstDocs = await this.prisma.sellerDocument.findMany({
+        where: {
+          type: 'GST',
+          name: { in: gstNos }
+        },
+        select: {
+          name: true,
+          uploadedByUserId: true
+        }
+      });
+    }
+
+    const gstToUploaderId = new Map<string, number>();
+    for (const doc of gstDocs) {
+      if (doc.name && doc.uploadedByUserId) {
+        gstToUploaderId.set(doc.name.trim(), doc.uploadedByUserId);
+      }
+    }
+
+    const phones = Array.from(new Set(
+      accounts
+        .map(a => a.mobileNo?.trim())
+        .filter((p): p is string => !!p && p !== '')
+    ));
+
+    const emails = Array.from(new Set(
+      accounts
+        .map(a => a.emailId?.trim())
+        .filter((e): e is string => !!e && e !== '')
+    ));
+
+    const uploaderIds = Array.from(new Set(
+      Array.from(gstToUploaderId.values())
+    ));
+
+    const userConditions: any[] = [];
+    if (phones.length > 0) {
+      userConditions.push({ phone: { in: phones } });
+    }
+    if (emails.length > 0) {
+      userConditions.push({ email: { in: emails } });
+    }
+    if (uploaderIds.length > 0) {
+      userConditions.push({ id: { in: uploaderIds } });
+    }
+
+    let users: any[] = [];
+    if (userConditions.length > 0) {
+      users = await this.prisma.user.findMany({
+        where: {
+          OR: userConditions
+        },
+        include: {
+          sellerDocuments: true
+        }
+      });
+    }
+
+    const checkUserMsme = (user: any): boolean => {
+      if (!user) return false;
+      const isMsmeActive = user.sellerDocuments.some(
+        (d: any) => d.category === 'UDYOG_AADHAR' && d.name && d.name.trim() !== '' && d.name.trim().toUpperCase() !== 'N/A'
+      );
+      const isMsmeType = user.regType === 'Manufacturing' || user.regType === 'Service';
+      return Boolean(isMsmeActive && isMsmeType);
+    };
+
+    const userByPhone = new Map<string, any>();
+    const userByEmail = new Map<string, any>();
+    const userById = new Map<number, any>();
+
+    for (const u of users) {
+      if (u.phone) userByPhone.set(u.phone.trim(), u);
+      if (u.email) userByEmail.set(u.email.trim(), u);
+      userById.set(u.id, u);
+    }
+
+    for (const a of accounts) {
+      const mob = a.mobileNo?.trim() || '';
+      const em = a.emailId?.trim() || '';
+      const gst = a.gstNo?.trim() || '';
+      const key = `${mob}|${em}|${gst}`;
+
+      if (result.has(key)) continue;
+
+      let matchedUser: any = null;
+      if (mob !== '' && userByPhone.has(mob)) {
+        matchedUser = userByPhone.get(mob);
+      } else if (em !== '' && userByEmail.has(em)) {
+        matchedUser = userByEmail.get(em);
+      } else if (gst !== '') {
+        const uploaderId = gstToUploaderId.get(gst);
+        if (uploaderId && userById.has(uploaderId)) {
+          matchedUser = userById.get(uploaderId);
+        }
+      }
+
+      const isMsme = checkUserMsme(matchedUser);
+      result.set(key, isMsme);
+    }
+
+    return result;
+  }
+
   async getCustomers(userId: number) {
     const customers = await this.prisma.accountMaster.findMany({
       where: {
@@ -91,36 +207,32 @@ export class SalesInvoiceService {
       orderBy: { accountName: 'asc' },
     });
 
-    return Promise.all(
-      customers.map(async (customer) => {
-        const isMsmeUser = await this.isCustomerMsme(
-          customer.mobileNo,
-          customer.emailId,
-          customer.gstNo
-        );
-        return {
-          id: customer.id,
-          customerCode: customer.customerCode,
-          customerName: customer.accountName,
-          customerCreditDays: customer.customerCreditDays,
-          addressLine1: customer.addressLine1,
-          addressLine2: customer.addressLine2,
-          pincode: customer.pincode,
-          area: customer.area,
-          subDistrict: customer.subDistrict,
-          district: customer.district,
-          state: customer.state,
-          country: customer.country,
-          gstNo: customer.gstNo,
-          panNo: customer.panNo,
-          customerType: customer.customerType,
-          msmeEnabled: customer.msmeEnabled,
-          regType: customer.regType,
-          msmeId: customer.msmeId,
-          isMsmeUser,
-        };
-      })
-    );
+    const msmeMap = await this.batchIsCustomerMsme(customers);
+    return customers.map((customer) => {
+      const key = `${customer.mobileNo?.trim() || ''}|${customer.emailId?.trim() || ''}|${customer.gstNo?.trim() || ''}`;
+      const isMsmeUser = msmeMap.get(key) || false;
+      return {
+        id: customer.id,
+        customerCode: customer.customerCode,
+        customerName: customer.accountName,
+        customerCreditDays: customer.customerCreditDays,
+        addressLine1: customer.addressLine1,
+        addressLine2: customer.addressLine2,
+        pincode: customer.pincode,
+        area: customer.area,
+        subDistrict: customer.subDistrict,
+        district: customer.district,
+        state: customer.state,
+        country: customer.country,
+        gstNo: customer.gstNo,
+        panNo: customer.panNo,
+        customerType: customer.customerType,
+        msmeEnabled: customer.msmeEnabled,
+        regType: customer.regType,
+        msmeId: customer.msmeId,
+        isMsmeUser,
+      };
+    });
   }
 
   async getCustomerSOs(customerIdOrName: string, userId: number, excludeInvoiceId?: number) {
@@ -134,10 +246,26 @@ export class SalesInvoiceService {
       if (account) accountName = account.accountName;
     }
 
+    const trimmedAccountName = accountName.trim();
+    const accounts = await this.prisma.accountMaster.findMany({
+      where: {
+        userId,
+        accountName: { startsWith: trimmedAccountName, mode: 'insensitive' }
+      },
+      select: { accountName: true }
+    });
+    const matchedNames = Array.from(new Set([
+      trimmedAccountName,
+      accountName,
+      ...accounts
+        .map(a => a.accountName)
+        .filter(name => name.trim().toLowerCase() === trimmedAccountName.toLowerCase())
+    ]));
+
     const sos = await this.prisma.salesOrder.findMany({
       where: {
         userId,
-        customerName: { equals: accountName, mode: 'insensitive' },
+        customerName: { in: matchedNames },
         status: { not: 'DELETED' },
       },
       include: {
@@ -560,15 +688,7 @@ export class SalesInvoiceService {
         });
 
         // INTEGRATION: Record the transaction in the ledger
-        await this.transactionService.recordTransaction({
-          accountId: customer.id,
-          userId,
-          bookingDate: inv.bookingDate,
-          invoiceNumber: inv.customerInvoiceNumber || inv.invoiceNumber,
-          transactionType: TransactionType.Sales,
-          amount: inv.grandTotal,
-          entryType: BalanceType.Dr, // Sales increases Debtor balance (Debit)
-        }, tx);
+        await this.syncLedgerTransactions(inv, userId, tx);
 
         await this.updateCompletionStatusesAfterInvoice(inv.id, tx);
         return inv;
@@ -609,35 +729,47 @@ export class SalesInvoiceService {
       this.prisma.salesInvoice.count({ where })
     ]);
 
-    const mappedData = await Promise.all(
-      data.map(async (invoice) => {
-        let updatedAddress = invoice.address;
-        if (invoice.customerId) {
-          const customer = await this.prisma.accountMaster.findUnique({
-            where: { id: invoice.customerId }
-          });
-          if (customer) {
-            const parts = [
-              customer.addressLine1,
-              customer.addressLine2,
-              customer.area,
-              customer.subDistrict,
-              customer.district,
-              customer.state
-            ].filter(p => p && String(p).trim() !== '');
-            let formatted = parts.join(', ');
-            if (customer.pincode && String(customer.pincode).trim() !== '') {
-              formatted += ` - ${customer.pincode}`;
-            }
-            updatedAddress = formatted || invoice.address;
+    const customerIds = Array.from(new Set(
+      data
+        .map(inv => inv.customerId)
+        .filter((id): id is number => id !== null && id !== undefined)
+    ));
+
+    let customerMap = new Map<number, any>();
+    if (customerIds.length > 0) {
+      const customers = await this.prisma.accountMaster.findMany({
+        where: { id: { in: customerIds } }
+      });
+      for (const c of customers) {
+        customerMap.set(c.id, c);
+      }
+    }
+
+    const mappedData = data.map((invoice) => {
+      let updatedAddress = invoice.address;
+      if (invoice.customerId) {
+        const customer = customerMap.get(invoice.customerId);
+        if (customer) {
+          const parts = [
+            customer.addressLine1,
+            customer.addressLine2,
+            customer.area,
+            customer.subDistrict,
+            customer.district,
+            customer.state
+          ].filter(p => p && String(p).trim() !== '');
+          let formatted = parts.join(', ');
+          if (customer.pincode && String(customer.pincode).trim() !== '') {
+            formatted += ` - ${customer.pincode}`;
           }
+          updatedAddress = formatted || invoice.address;
         }
-        return {
-          ...invoice,
-          address: updatedAddress
-        };
-      })
-    );
+      }
+      return {
+        ...invoice,
+        address: updatedAddress
+      };
+    });
 
     return { data: mappedData, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
@@ -895,16 +1027,7 @@ export class SalesInvoiceService {
       });
 
       // Synchronize with Ledger
-      await this.transactionService.updateTransaction({
-        userId,
-        accountId: inv.customerId,
-        invoiceNumber: existing.customerInvoiceNumber || existing.invoiceNumber,
-        transactionType: TransactionType.Sales,
-      }, {
-        amount: inv.grandTotal,
-        bookingDate: inv.bookingDate,
-        invoiceNumber: inv.customerInvoiceNumber || inv.invoiceNumber,
-      }, tx);
+      await this.syncLedgerTransactions(inv, userId, tx);
 
       await this.updateCompletionStatusesAfterInvoice(inv.id, tx);
       return inv;
@@ -919,18 +1042,30 @@ export class SalesInvoiceService {
 
   async remove(id: number, userId: number) {
     return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.salesInvoice.findUnique({
+        where: { id, userId },
+        select: { invoiceNumber: true }
+      });
+      if (!existing) {
+        throw new BadRequestException("Sales Invoice not found");
+      }
+
       const invoice = await tx.salesInvoice.update({
         where: { id, userId },
-        data: { status: 'DELETED' }
+        data: { 
+          status: 'DELETED',
+          invoiceNumber: `${existing.invoiceNumber}_DELETED_${Date.now()}`
+        }
       });
 
       // Synchronize with Ledger: Remove transaction on deletion
-      await this.transactionService.deleteTransaction({
-        userId,
-        accountId: invoice.customerId,
-        invoiceNumber: invoice.customerInvoiceNumber || invoice.invoiceNumber,
-        transactionType: TransactionType.Sales,
-      }, tx);
+      await tx.transaction.deleteMany({
+        where: {
+          userId,
+          invoiceNumber: invoice.customerInvoiceNumber || invoice.invoiceNumber,
+          transactionType: TransactionType.Sales,
+        }
+      });
 
       await this.updateCompletionStatusesAfterInvoice(id, tx);
       return invoice;
@@ -1039,28 +1174,7 @@ export class SalesInvoiceService {
     };
   }
 
-  async downloadSample() {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Sales Invoice Sample');
-    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
-    const headers = [
-      'Customer Name*', 'Customer Invoice No*', 'Customer Invoice Date (YYYY-MM-DD)*', 'Booking Date (YYYY-MM-DD)',
-      'Address*', 'Credit Days*', 'Challan Nos', 'SO Nos', 'Product Code*', 'Quantity*', 'Rate*', 'UOM*'
-    ];
-    worksheet.addRow(headers);
 
-    const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true };
-    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
-    worksheet.columns = headers.map(() => ({ width: 22 }));
-
-    const buffer = await workbook.xlsx.writeBuffer();
-    return {
-      buffer: Buffer.from(buffer),
-      filename: 'sales_invoice_sample.xlsx',
-      mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    };
-  }
 
   async exportSalesInvoices(format: string, query: { search?: string, userId: number }) {
     const invoicesData = await this.findAll(query);
@@ -1184,83 +1298,676 @@ export class SalesInvoiceService {
     }
   }
 
-  async importSalesInvoices(buffer: Buffer, userId: number) {
+  async downloadSample() {
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as any);
-    const worksheet = workbook.getWorksheet(1);
-    const rowCount = worksheet.rowCount;
-    if (rowCount < 2) throw new BadRequestException('No data to import');
+    const worksheet = workbook.addWorksheet('Invoice Template');
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-    let imported = 0;
-    const errors: string[] = [];
+    const headers = [
+      'Invoice Number*', 'Invoice Date*', 'Customer Name*',
+      'Product Name*', 'Quantity*', 'Rate*', 'Discount (₹)', 'Discount (%)',
+      'SO Number', 'Challan Number'
+    ];
+    worksheet.addRow(headers);
 
-    const parseDate = (val: any): Date | undefined => {
-      if (!val) return undefined;
-      const date = new Date(val);
-      return isNaN(date.getTime()) ? undefined : date;
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFD3D3D3' }
     };
 
-    // Group items by invoice number to handle multiple products per invoice
-    const invoicesMap = new Map<string, any>();
 
-    for (let i = 2; i <= rowCount; i++) {
-      const row = worksheet.getRow(i);
-      try {
-        const customerName = String(row.getCell(1).value || '').trim();
-        const customerInvoiceNumber = String(row.getCell(2).value || '').trim();
-        if (!customerInvoiceNumber || !customerName) continue;
 
-        if (!invoicesMap.has(customerInvoiceNumber)) {
-          const customer = await this.prisma.accountMaster.findFirst({
-            where: { accountName: customerName, userId }
-          });
-          if (!customer) throw new Error(`Customer '${customerName}' not found`);
+    worksheet.columns = headers.map((h, i) => {
+      let width = Math.max(20, h.length + 5);
+      if (i === 2) width = 30; // Customer Name
+      if (i === 3) width = 30; // Product Name
+      return { width };
+    });
 
-          invoicesMap.set(customerInvoiceNumber, {
-            customerId: customer.id,
-            customerName: customer.accountName,
-            customerInvoiceNumber,
-            invoiceDate: parseDate(row.getCell(3).value) || new Date(),
-            bookingDate: parseDate(row.getCell(4).value) || new Date(),
-            address: String(row.getCell(5).value || '').trim() || customer.addressLine1,
-            creditDays: parseInt(String(row.getCell(6).value), 10) || 0,
-            challanNumbers: String(row.getCell(7).value || '').split(',').filter(Boolean),
-            soNumbers: String(row.getCell(8).value || '').split(',').filter(Boolean),
-            items: []
-          });
+    const buffer = await workbook.xlsx.writeBuffer();
+    return {
+      buffer: Buffer.from(buffer),
+      filename: 'Invoice_Import_Sample.xlsx',
+      mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    };
+  }
+
+  async importSalesInvoices(buffer: Buffer, userId: number) {
+    if (!buffer || buffer.length === 0) {
+      throw new BadRequestException('Empty or invalid file uploaded');
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    try {
+      await workbook.xlsx.load(buffer as any);
+    } catch (error) {
+      throw new BadRequestException('Invalid Excel file format. Please upload a valid .xlsx file.');
+    }
+    const worksheet = workbook.getWorksheet(1);
+    if (!worksheet) {
+      throw new BadRequestException('Invalid Excel file format');
+    }
+
+    const rowCount = worksheet.rowCount;
+    if (rowCount < 2) {
+      throw new BadRequestException('No data found to import');
+    }
+
+    let headerRowIndex = -1;
+    const colMap: Record<string, number> = {};
+
+    for (let r = 1; r <= Math.min(rowCount, 10); r++) {
+      const row = worksheet.getRow(r);
+      let found = false;
+      row.eachCell((cell, colNumber) => {
+        const val = String(cell.value || '').trim().toLowerCase();
+        if (val.includes('invoice number')) { colMap['invoiceNumber'] = colNumber; found = true; }
+        if (val.includes('invoice date')) colMap['invoiceDate'] = colNumber;
+        if (val.includes('customer name')) colMap['customerName'] = colNumber;
+        if (val.includes('product name')) colMap['productName'] = colNumber;
+        if (val.includes('quantity')) colMap['quantity'] = colNumber;
+        if (val.includes('rate')) colMap['rate'] = colNumber;
+        if (val.includes('discount (₹)') || val.includes('discount amount') || val.includes('discount rs')) colMap['discountAmount'] = colNumber;
+        if (val.includes('discount (%)') || val.includes('discount percent')) colMap['discountPercent'] = colNumber;
+        if (val.includes('so number')) colMap['soNumber'] = colNumber;
+        if (val.includes('challan number')) colMap['challanNumber'] = colNumber;
+      });
+      if (found) {
+        headerRowIndex = r;
+        break;
+      }
+    }
+
+    const mandatoryCols = ['invoiceNumber', 'invoiceDate', 'customerName', 'productName', 'quantity', 'rate'];
+    const missing = mandatoryCols.filter(col => !colMap[col]);
+    if (headerRowIndex === -1 || missing.length > 0) {
+      throw new BadRequestException(`Invalid template. Missing mandatory columns: ${missing.join(', ')}`);
+    }
+
+    const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
+      const colIdx = colMap[key];
+      if (!colIdx) return defaultVal;
+      const cell = row.getCell(colIdx);
+      let val = cell.value;
+      if (val && typeof val === 'object' && 'result' in val) {
+        val = val.result;
+      }
+      if (val && (val instanceof Date || Object.prototype.toString.call(val) === '[object Date]' || typeof (val as any).getTime === 'function')) {
+        return val;
+      }
+      return String(val !== undefined && val !== null ? val : '').trim();
+    };
+
+    // Preload Lookups
+    const parsedRows: any[] = [];
+    const groupMap = new Map<string, any[]>();
+
+    for (let r = headerRowIndex + 1; r <= rowCount; r++) {
+      const row = worksheet.getRow(r);
+      const invoiceNumber = getVal(row, 'invoiceNumber');
+      if (!invoiceNumber || invoiceNumber === '-') continue;
+
+      const item = {
+        rowNum: r,
+        originalRowValues: row.values,
+        invoiceNumber,
+        invoiceDateStr: getVal(row, 'invoiceDate'),
+        customerName: getVal(row, 'customerName'),
+        productName: getVal(row, 'productName'),
+        quantityStr: getVal(row, 'quantity'),
+        rateStr: getVal(row, 'rate'),
+        discountAmountStr: getVal(row, 'discountAmount'),
+        discountPercentStr: getVal(row, 'discountPercent'),
+        soNumber: getVal(row, 'soNumber'),
+        challanNumber: getVal(row, 'challanNumber'),
+      };
+
+      parsedRows.push(item);
+      if (!groupMap.has(invoiceNumber)) {
+        groupMap.set(invoiceNumber, []);
+      }
+      groupMap.get(invoiceNumber).push(item);
+    }
+
+    const distinctSoNumbers = Array.from(new Set(parsedRows.map(r => r.soNumber).filter(Boolean)));
+    const distinctChallanNumbers = Array.from(new Set(parsedRows.map(r => r.challanNumber).filter(Boolean)));
+
+    const [dbCustomers, dbProducts, userShop, userGstDoc, dbSalesOrders, dbChallans, dbInvoices, soInvoiceItems, challanInvoiceItems] = await Promise.all([
+      this.prisma.accountMaster.findMany({
+        where: { userId, customerStatus: 'ACTIVE' }
+      }),
+      this.prisma.product.findMany({
+        where: { created_by: userId, status: 'ACTIVE' },
+        include: { uom: true }
+      }),
+      this.prisma.shopDetail.findUnique({
+        where: { userId }
+      }),
+      this.prisma.sellerDocument.findFirst({
+        where: { uploadedByUserId: userId, type: 'GST', url: 'N/A' },
+        select: { name: true }
+      }),
+      this.prisma.salesOrder.findMany({
+        where: { userId, soNumber: { in: distinctSoNumbers }, status: { not: 'DELETED' } },
+        include: { items: true }
+      }),
+      this.prisma.salesChallan.findMany({
+        where: { userId, challanNumber: { in: distinctChallanNumbers }, status: { not: 'DELETED' } },
+        include: { items: true }
+      }),
+      this.prisma.salesInvoice.findMany({
+        where: { userId, status: { not: 'DELETED' } },
+        select: { invoiceNumber: true }
+      }),
+      this.prisma.salesInvoiceItem.findMany({
+        where: {
+          salesInvoice: {
+            userId,
+            status: { not: 'DELETED' },
+            soNumber: { in: distinctSoNumbers }
+          }
+        },
+        select: {
+          productCode: true,
+          quantity: true,
+          salesInvoice: { select: { soNumber: true } }
+        }
+      }),
+      this.prisma.salesInvoiceItem.findMany({
+        where: {
+          salesInvoice: {
+            userId,
+            status: { not: 'DELETED' },
+            challanNumber: { in: distinctChallanNumbers }
+          }
+        },
+        select: {
+          productCode: true,
+          quantity: true,
+          salesInvoice: { select: { challanNumber: true } }
+        }
+      })
+    ]);
+
+    const customerMap = new Map<string, any>();
+    for (const cust of dbCustomers) {
+      customerMap.set(cust.accountName.toLowerCase().trim(), cust);
+    }
+
+    const productMap = new Map<string, any>();
+    for (const prod of dbProducts) {
+      productMap.set(prod.product_name.toLowerCase().trim(), prod);
+    }
+
+    const soMap = new Map<string, any>();
+    for (const so of dbSalesOrders) {
+      soMap.set(so.soNumber.toLowerCase().trim(), so);
+    }
+
+    const challanMap = new Map<string, any>();
+    for (const ch of dbChallans) {
+      challanMap.set(ch.challanNumber.toLowerCase().trim(), ch);
+    }
+
+    const dbInvoiceNumbers = new Set(dbInvoices.map(inv => inv.invoiceNumber.toLowerCase().trim()));
+    const importedInvoiceNumbersInFile = new Set<string>();
+
+    // Maps to track remaining invoiced quantities
+    const soInvoicedQtyMap = new Map<string, number>();
+    for (const item of soInvoiceItems) {
+      const soNo = item.salesInvoice.soNumber?.toLowerCase().trim() || '';
+      const pCode = item.productCode.toLowerCase().trim();
+      const key = `${soNo}_${pCode}`;
+      soInvoicedQtyMap.set(key, (soInvoicedQtyMap.get(key) || 0) + item.quantity);
+    }
+
+    const challanInvoicedQtyMap = new Map<string, number>();
+    for (const item of challanInvoiceItems) {
+      const chNo = item.salesInvoice.challanNumber?.toLowerCase().trim() || '';
+      const pCode = item.productCode.toLowerCase().trim();
+      const key = `${chNo}_${pCode}`;
+      challanInvoicedQtyMap.set(key, (challanInvoicedQtyMap.get(key) || 0) + item.quantity);
+    }
+
+    const successRows: any[] = [];
+    const failedRows: { rowNum: number; values: any[]; error: string }[] = [];
+    const rowErrors: { row: number; error: string }[] = [];
+
+    const userGst = userGstDoc?.name;
+    const companyState = (userShop?.state || "").trim().toLowerCase();
+    const isGstApplicable = isValidGst(userGst);
+
+    for (const [invoiceNumber, rows] of groupMap.entries()) {
+      const groupErrors: string[] = [];
+      const firstRow = rows[0];
+
+      // Check duplicates
+      if (dbInvoiceNumbers.has(invoiceNumber.toLowerCase())) {
+        groupErrors.push(`Record already exists.`);
+      }
+      if (importedInvoiceNumbersInFile.has(invoiceNumber.toLowerCase())) {
+        groupErrors.push(`Duplicate Invoice Number in file.`);
+      }
+
+      // Customer check
+      const custName = firstRow.customerName;
+      const customer = customerMap.get(custName.toLowerCase());
+      if (!customer) {
+        groupErrors.push(`Customer "${custName}" not found. Please create the customer first.`);
+      }
+
+      const parsedInvoiceDate = parseDDMMYYYY(firstRow.invoiceDateStr);
+      if (!parsedInvoiceDate) {
+        groupErrors.push(`Invalid Invoice Date format. Please use DD/MM/YYYY.`);
+      }
+
+      const soNoInput = firstRow.soNumber;
+      const chNoInput = firstRow.challanNumber;
+
+      const salesOrder = soNoInput ? soMap.get(soNoInput.toLowerCase().trim()) : null;
+      const challan = chNoInput ? challanMap.get(chNoInput.toLowerCase().trim()) : null;
+
+      if (soNoInput && !salesOrder) {
+        groupErrors.push(`Sales Order not found.`);
+      }
+      if (chNoInput && !challan) {
+        groupErrors.push(`Challan not found.`);
+      }
+
+      // Cross-document relation validations
+      if (salesOrder && parsedInvoiceDate && salesOrder.soCreationDate) {
+        const soDate = new Date(salesOrder.soCreationDate);
+        if (parsedInvoiceDate < soDate) {
+          groupErrors.push(`Invoice Date must be greater than or equal to SO Date.`);
+        }
+      }
+
+      if (challan && parsedInvoiceDate && challan.challanDate) {
+        const chDate = new Date(challan.challanDate);
+        if (parsedInvoiceDate < chDate) {
+          groupErrors.push(`Invoice Date must be greater than or equal to Challan Date.`);
+        }
+      }
+
+      if (salesOrder && challan) {
+        // Scenario 2: Validate that Challan belongs to SO
+        if (challan.soNumber?.toLowerCase().trim() !== soNoInput.toLowerCase().trim()) {
+          groupErrors.push(`Challan ${chNoInput} does not belong to Sales Order ${soNoInput}.`);
+        }
+      }
+
+      const processedItems: any[] = [];
+      let totalQuantity = 0;
+      let totalTaxable = 0;
+      let totalTaxAmount = 0;
+
+      for (const row of rows) {
+        const prod = productMap.get(row.productName.toLowerCase());
+        if (!prod) {
+          groupErrors.push(`Product "${row.productName}" not found. Please create the product first.`);
+          continue;
         }
 
-        const inv = invoicesMap.get(customerInvoiceNumber);
-        const productCode = String(row.getCell(9).value || '').trim();
-        const product = await this.prisma.product.findFirst({ 
-          where: { product_code: productCode, created_by: userId },
-          include: { uom: true }
-        });
-        if (!product) throw new Error(`Product '${productCode}' not found`);
+        const qty = parseFloat(row.quantityStr);
+        const rate = parseFloat(row.rateStr);
+        if (isNaN(qty) || qty <= 0) groupErrors.push(`Row ${row.rowNum}: Quantity must be greater than 0.`);
+        if (isNaN(rate) || rate < 0) groupErrors.push(`Row ${row.rowNum}: Rate must be 0 or positive.`);
 
-        inv.items.push({
-          productId: product.id,
-          productCode: product.product_code,
-          productName: product.product_name,
-          quantity: parseFloat(String(row.getCell(10).value)) || 0,
-          rate: parseFloat(String(row.getCell(11).value)) || 0,
-          uom: String(row.getCell(12).value || '').trim() || product.uom?.gst_uom || 'Nos',
-          taxPercent: Number(product.tax_rate) || 0,
+        const discountAmt = parseFloat(row.discountAmountStr || '0');
+        const discountPct = parseFloat(row.discountPercentStr || '0');
+        if (isNaN(discountAmt) || discountAmt < 0) groupErrors.push(`Row ${row.rowNum}: Discount amount must be positive.`);
+        if (isNaN(discountPct) || discountPct < 0 || discountPct > 100) groupErrors.push(`Row ${row.rowNum}: Discount percent must be between 0 and 100.`);
+
+        if (groupErrors.length > 0) continue;
+
+        // Scenarios validations
+        if (soNoInput && salesOrder && !chNoInput) {
+          // Scenario 1: Only SO
+          const soItem = salesOrder.items.find(
+            (it: any) => it.productCode.toLowerCase().trim() === prod.product_code.toLowerCase().trim()
+          );
+          if (!soItem) {
+            groupErrors.push(`Row ${row.rowNum}: Product "${row.productName}" does not belong to Sales Order ${soNoInput}.`);
+            continue;
+          }
+          if (Math.abs(rate - soItem.rate) >= 0.01) {
+            groupErrors.push(`Row ${row.rowNum}: Rate mismatch with Sales Order.`);
+          }
+          if (Math.abs(discountAmt - soItem.discountAmount) >= 0.01) {
+            groupErrors.push(`Row ${row.rowNum}: Discount mismatch with Sales Order.`);
+          }
+          if (Math.abs(discountPct - soItem.discountPercent) >= 0.01) {
+            groupErrors.push(`Row ${row.rowNum}: Discount mismatch with Sales Order.`);
+          }
+
+          const key = `${soNoInput.toLowerCase().trim()}_${prod.product_code.toLowerCase().trim()}`;
+          const alreadyInvoiced = soInvoicedQtyMap.get(key) || 0;
+          const remaining = soItem.quantity - alreadyInvoiced;
+
+          if (qty > remaining) {
+            groupErrors.push(`Row ${row.rowNum}: Quantity exceeds Sales Order quantity.`);
+          } else {
+            soInvoicedQtyMap.set(key, alreadyInvoiced + qty);
+          }
+
+        } else if (challan) {
+          // Scenario 2 (SO + Challan) or Scenario 3 (Only Challan)
+          const chItem = challan.items.find(
+            (it: any) => it.productCode.toLowerCase().trim() === prod.product_code.toLowerCase().trim()
+          );
+          if (!chItem) {
+            groupErrors.push(`Row ${row.rowNum}: Product "${row.productName}" does not belong to Challan ${chNoInput}.`);
+            continue;
+          }
+          if (Math.abs(rate - chItem.rate) >= 0.01) {
+            groupErrors.push(`Row ${row.rowNum}: Rate mismatch with Challan.`);
+          }
+          if (Math.abs(discountAmt - chItem.discountAmount) >= 0.01) {
+            groupErrors.push(`Row ${row.rowNum}: Discount mismatch with Challan.`);
+          }
+          if (Math.abs(discountPct - chItem.discountPercent) >= 0.01) {
+            groupErrors.push(`Row ${row.rowNum}: Discount mismatch with Challan.`);
+          }
+
+          const key = `${chNoInput.toLowerCase().trim()}_${prod.product_code.toLowerCase().trim()}`;
+          const alreadyInvoiced = challanInvoicedQtyMap.get(key) || 0;
+          const remaining = chItem.challanQty - alreadyInvoiced;
+
+          if (qty > remaining) {
+            groupErrors.push(`Row ${row.rowNum}: Quantity exceeds Challan quantity.`);
+          } else {
+            challanInvoicedQtyMap.set(key, alreadyInvoiced + qty);
+          }
+        }
+
+        if (groupErrors.length > 0) continue;
+
+        const beforeTaxAmount = (qty * rate) - discountAmt;
+        const taxRate = Number(prod.tax_rate || 0);
+        const taxAmount = isGstApplicable ? ((beforeTaxAmount * taxRate) / 100) : 0;
+        const totalItemAmount = beforeTaxAmount + taxAmount;
+
+        totalQuantity += qty;
+        totalTaxable += beforeTaxAmount;
+        totalTaxAmount += taxAmount;
+
+        processedItems.push({
+          productId: prod.id,
+          productCode: prod.product_code,
+          productName: prod.product_name,
+          hsnCode: prod.hsn_code || null,
+          quantity: qty,
+          rate,
+          uom: prod.uom?.unit_name || 'Nos',
+          discountPercent: discountPct,
+          discountAmount: discountAmt,
+          taxPercent: taxRate,
+          taxAmount,
+          beforeTaxAmount,
+          totalAmount: totalItemAmount,
+          totalSoQty: salesOrder ? salesOrder.items.find((it: any) => it.productCode === prod.product_code)?.quantity || 0 : 0,
+          printDescription: prod.product_name
         });
-      } catch (err) {
-        errors.push(`Row ${i}: ${err.message}`);
+      }
+
+      if (groupErrors.length > 0) {
+        const combinedErrorMsg = groupErrors.join(' | ');
+        for (const row of rows) {
+          rowErrors.push({ row: row.rowNum, error: combinedErrorMsg });
+          failedRows.push({
+            rowNum: row.rowNum,
+            values: row.originalRowValues,
+            error: combinedErrorMsg
+          });
+        }
+      } else {
+        try {
+          const customerGst = customer?.gstNo;
+          const customerState = (customer?.state || "").trim().toLowerCase();
+
+          let isInterState = false;
+          if (isGstApplicable) {
+            const userCode = userGst?.substring(0, 2);
+            const customerCode = customerGst ? customerGst.substring(0, 2) : null;
+            if (customerGst && /^\d{2}$/.test(userCode) && /^\d{2}$/.test(customerCode)) {
+              isInterState = userCode !== customerCode;
+            } else {
+              isInterState = companyState !== customerState;
+            }
+          }
+
+          let cgstAmount = 0;
+          let sgstAmount = 0;
+          let igstAmount = 0;
+          if (isInterState) {
+            igstAmount = totalTaxAmount;
+          } else {
+            cgstAmount = totalTaxAmount / 2;
+            sgstAmount = totalTaxAmount / 2;
+          }
+
+          const grandTotal = totalTaxable + totalTaxAmount;
+
+          const lastInvoice = await this.prisma.salesInvoice.findFirst({
+            where: { userId, customerName: customer.accountName, status: { not: 'DELETED' } },
+            orderBy: { createdAt: 'desc' },
+            select: { cumulativeBalance: true }
+          });
+          const cumulativeBalance = (lastInvoice?.cumulativeBalance || 0) + grandTotal;
+
+          await this.prisma.$transaction(async (tx) => {
+            const inv = await tx.salesInvoice.create({
+              data: {
+                invoiceNumber,
+                customerInvoiceNumber: invoiceNumber,
+                customerInvoiceDate: parsedInvoiceDate,
+                invoiceDate: parsedInvoiceDate,
+                bookingDate: new Date(),
+                customerId: customer.id,
+                soId: salesOrder ? salesOrder.id : null,
+                customerName: customer.accountName,
+                address: customer.addressLine1 + (customer.addressLine2 ? ', ' + customer.addressLine2 : ''),
+                creditDays: customer.customerCreditDays || 0,
+                gstNumber: customer.gstNo || '',
+                soNumber: soNoInput || null,
+                challanNumber: chNoInput || null,
+                cgstAmount,
+                sgstAmount,
+                igstAmount,
+                isRcm: false,
+                isInterState,
+                gstType: isInterState ? 'IGST' : 'CGST_SGST',
+                taxableAmount: totalTaxable,
+                grandTotal,
+                cumulativeBalance,
+                userId,
+                items: {
+                  create: processedItems.map(item => ({
+                    productId: item.productId,
+                    productCode: item.productCode,
+                    productName: item.productName,
+                    hsnCode: item.hsnCode,
+                    quantity: item.quantity,
+                    rate: item.rate,
+                    uom: item.uom,
+                    discountPercent: item.discountPercent,
+                    discountAmount: item.discountAmount,
+                    taxPercent: item.taxPercent,
+                    taxAmount: item.taxAmount,
+                    beforeTaxAmount: item.beforeTaxAmount,
+                    totalAmount: item.totalAmount,
+                    totalSoQty: item.totalSoQty,
+                    printDescription: item.printDescription
+                  }))
+                }
+              }
+            });
+
+            // Post Ledger Transaction
+            await this.syncLedgerTransactions(inv, userId, tx);
+
+            await this.updateCompletionStatusesAfterInvoice(inv.id, tx);
+          });
+
+          importedInvoiceNumbersInFile.add(invoiceNumber.toLowerCase());
+          for (const row of rows) {
+            successRows.push(row);
+          }
+        } catch (dbError: any) {
+          const dbErrMsg = `Database Save Failed: ${dbError.message || dbError}`;
+          for (const row of rows) {
+            rowErrors.push({ row: row.rowNum, error: dbErrMsg });
+            failedRows.push({
+              rowNum: row.rowNum,
+              values: row.originalRowValues,
+              error: dbErrMsg
+            });
+          }
+        }
       }
     }
 
-    for (const inv of invoicesMap.values()) {
-      try {
-        await this.create(inv, userId);
-        imported++;
-      } catch (err) {
-        errors.push(`Invoice ${inv.customerInvoiceNumber}: ${err.message}`);
+    // Build Excel response files
+    const headers = [
+      'Invoice Number*', 'Invoice Date*', 'Customer Name*',
+      'Product Name*', 'Quantity*', 'Rate*', 'Discount (₹)', 'Discount (%)',
+      'SO Number', 'Challan Number'
+    ];
+
+    const successWb = new ExcelJS.Workbook();
+    const successWs = successWb.addWorksheet('Success Reports');
+    successWs.addRow(headers);
+    successWs.getRow(1).font = { bold: true };
+    successWs.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+    successRows.forEach(r => {
+      const rowVals = r.originalRowValues.slice(1);
+      successWs.addRow(rowVals);
+    });
+    const successBuffer = await successWb.xlsx.writeBuffer();
+
+    const failedWb = new ExcelJS.Workbook();
+    const failedWs = failedWb.addWorksheet('Error Reports');
+    failedWs.addRow([...headers, 'Error Description']);
+    failedWs.getRow(1).font = { bold: true };
+    failedWs.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+    failedRows.forEach(r => {
+      const rowVals = r.values.slice(1);
+      while (rowVals.length < headers.length) rowVals.push('');
+      rowVals[headers.length] = r.error;
+      failedWs.addRow(rowVals);
+    });
+    const failedBuffer = await failedWb.xlsx.writeBuffer();
+
+    return {
+      success: true,
+      summary: {
+        totalRows: parsedRows.length,
+        successful: successRows.length,
+        failed: failedRows.length
+      },
+      errors: rowErrors,
+      successFile: Buffer.from(successBuffer).toString('base64'),
+      errorFile: Buffer.from(failedBuffer).toString('base64')
+    };
+  }
+
+  private async getOrCreateAccount(accountName: string, groupName: string[], userId: number, tx: any) {
+    let account = await tx.accountMaster.findFirst({
+      where: {
+        accountName,
+        userId,
+      },
+    });
+
+    if (!account) {
+      account = await tx.accountMaster.create({
+        data: {
+          accountName,
+          groupName,
+          userId,
+          status: 'ACTIVE',
+          panNo: 'N/A',
+          addressLine1: 'Default Address',
+          pincode: '000000',
+          state: 'Unknown',
+          prefix: 'Mr',
+          contactPersonName: 'Admin',
+          mobileNo: '0000000000',
+        },
+      });
+    }
+    return account;
+  }
+
+  private async syncLedgerTransactions(invoice: any, userId: number, tx: any) {
+    // 1. Delete all existing transactions for this sales invoice
+    await tx.transaction.deleteMany({
+      where: {
+        userId,
+        invoiceNumber: invoice.customerInvoiceNumber || invoice.invoiceNumber,
+        transactionType: TransactionType.Sales,
+      }
+    });
+
+    // 2. Debit Customer
+    await tx.transaction.create({
+      data: {
+        accountId: invoice.customerId,
+        userId,
+        bookingDate: new Date(invoice.bookingDate),
+        invoiceNumber: invoice.customerInvoiceNumber || invoice.invoiceNumber,
+        transactionType: TransactionType.Sales,
+        amount: invoice.grandTotal,
+        entryType: BalanceType.Dr,
+      }
+    });
+
+    // 3. Credit Sales Income (Sales excl GST)
+    const salesAccount = await this.getOrCreateAccount(
+      'SALES INCOME (EXCL. GST)',
+      ['Sales Accounts'],
+      userId,
+      tx
+    );
+    await tx.transaction.create({
+      data: {
+        accountId: salesAccount.id,
+        userId,
+        bookingDate: new Date(invoice.bookingDate),
+        invoiceNumber: invoice.customerInvoiceNumber || invoice.invoiceNumber,
+        transactionType: TransactionType.Sales,
+        amount: invoice.taxableAmount,
+        entryType: BalanceType.Cr,
+      }
+    });
+
+    // 4. Credit Expenses/Charges
+    if (invoice.expenses) {
+      for (const exp of invoice.expenses) {
+        if (exp.amount > 0) {
+          const expAccount = await this.getOrCreateAccount(
+            exp.groupName,
+            ['Direct Income'],
+            userId,
+            tx
+          );
+          await tx.transaction.create({
+            data: {
+              accountId: expAccount.id,
+              userId,
+              bookingDate: new Date(invoice.bookingDate),
+              invoiceNumber: invoice.customerInvoiceNumber || invoice.invoiceNumber,
+              transactionType: TransactionType.Sales,
+              amount: exp.amount,
+              entryType: BalanceType.Cr,
+            }
+          });
+        }
       }
     }
-
-    return { imported, total: invoicesMap.size, errors };
   }
 }
+

@@ -1729,6 +1729,31 @@ const Finance = () => {
                                         const tree = [];
                                         const nodeMap = {};
 
+                                        if (!searchQuery && (!selectedGroup || selectedGroup === 'ALL')) {
+                                            const rootGroups = [
+                                                'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock', 
+                                                'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock', 
+                                                'Liabilities', 'Assets'
+                                            ];
+
+                                            rootGroups.forEach(gName => {
+                                                const newNode = {
+                                                    id: gName,
+                                                    name: gName,
+                                                    level: 1,
+                                                    openingBalance: 0,
+                                                    debit: 0,
+                                                    credit: 0,
+                                                    closingBalance: 0,
+                                                    children: [],
+                                                    items: [],
+                                                    isHeader: true
+                                                };
+                                                nodeMap[gName] = newNode;
+                                                tree.push(newNode);
+                                            });
+                                        }
+
                                         currentRows.forEach(item => {
                                             let path = (item.allGroups && item.allGroups.length > 0) ? item.allGroups : [item.primaryGroup || item.groupName || 'General'];
                                             if (selectedGroup && selectedGroup !== 'ALL') {

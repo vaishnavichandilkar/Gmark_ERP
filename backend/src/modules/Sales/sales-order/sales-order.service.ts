@@ -5,7 +5,7 @@ import { CreateSalesOrderDto, UpdateSalesOrderDto } from './dto/sales-order.dto'
 import { Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
-import { formatDate } from '../../../utils/dateFormatter';
+import { formatDate, parseDDMMYYYY } from '../../../utils/dateFormatter';
 
 @Injectable()
 export class SalesOrderService {
@@ -53,6 +53,122 @@ export class SalesOrderService {
         return Boolean(isMsmeActive && isMsmeType);
     }
 
+    private async batchIsCustomerMsme(accounts: Array<{ mobileNo?: string | null; emailId?: string | null; gstNo?: string | null }>): Promise<Map<string, boolean>> {
+        const result = new Map<string, boolean>();
+        if (!accounts || accounts.length === 0) return result;
+
+        const gstNos = Array.from(new Set(
+            accounts
+                .map(a => a.gstNo?.trim())
+                .filter((g): g is string => !!g && g !== '')
+        ));
+
+        let gstDocs: Array<{ name: string | null; uploadedByUserId: number | null }> = [];
+        if (gstNos.length > 0) {
+            gstDocs = await this.prisma.sellerDocument.findMany({
+                where: {
+                    type: 'GST',
+                    name: { in: gstNos }
+                },
+                select: {
+                    name: true,
+                    uploadedByUserId: true
+                }
+            });
+        }
+
+        const gstToUploaderId = new Map<string, number>();
+        for (const doc of gstDocs) {
+            if (doc.name && doc.uploadedByUserId) {
+                gstToUploaderId.set(doc.name.trim(), doc.uploadedByUserId);
+            }
+        }
+
+        const phones = Array.from(new Set(
+            accounts
+                .map(a => a.mobileNo?.trim())
+                .filter((p): p is string => !!p && p !== '')
+        ));
+
+        const emails = Array.from(new Set(
+            accounts
+                .map(a => a.emailId?.trim())
+                .filter((e): e is string => !!e && e !== '')
+        ));
+
+        const uploaderIds = Array.from(new Set(
+            Array.from(gstToUploaderId.values())
+        ));
+
+        const userConditions: any[] = [];
+        if (phones.length > 0) {
+            userConditions.push({ phone: { in: phones } });
+        }
+        if (emails.length > 0) {
+            userConditions.push({ email: { in: emails } });
+        }
+        if (uploaderIds.length > 0) {
+            userConditions.push({ id: { in: uploaderIds } });
+        }
+
+        let users: any[] = [];
+        if (userConditions.length > 0) {
+            users = await this.prisma.user.findMany({
+                where: {
+                    OR: userConditions
+                },
+                include: {
+                    sellerDocuments: true
+                }
+            });
+        }
+
+        const checkUserMsme = (user: any): boolean => {
+            if (!user) return false;
+            const isMsmeActive = user.sellerDocuments.some(
+                (d: any) => d.category === 'UDYOG_AADHAR' && d.name && d.name.trim() !== '' && d.name.trim().toUpperCase() !== 'N/A'
+            );
+            const isMsmeType = user.regType === 'Manufacturing' || user.regType === 'Service';
+            return Boolean(isMsmeActive && isMsmeType);
+        };
+
+        const userByPhone = new Map<string, any>();
+        const userByEmail = new Map<string, any>();
+        const userById = new Map<number, any>();
+
+        for (const u of users) {
+            if (u.phone) userByPhone.set(u.phone.trim(), u);
+            if (u.email) userByEmail.set(u.email.trim(), u);
+            userById.set(u.id, u);
+        }
+
+        for (const a of accounts) {
+            const mob = a.mobileNo?.trim() || '';
+            const em = a.emailId?.trim() || '';
+            const gst = a.gstNo?.trim() || '';
+            const key = `${mob}|${em}|${gst}`;
+
+            if (result.has(key)) continue;
+
+            let matchedUser: any = null;
+            if (mob !== '' && userByPhone.has(mob)) {
+                matchedUser = userByPhone.get(mob);
+            } else if (em !== '' && userByEmail.has(em)) {
+                matchedUser = userByEmail.get(em);
+            } else if (gst !== '') {
+                const uploaderId = gstToUploaderId.get(gst);
+                if (uploaderId && userById.has(uploaderId)) {
+                    matchedUser = userById.get(uploaderId);
+                }
+            }
+
+            const isMsme = checkUserMsme(matchedUser);
+            result.set(key, isMsme);
+        }
+
+        return result;
+    }
+
     async generateSONumber(userId: number, tx?: any): Promise<string> {
         const prisma = tx || this.prisma;
         const lastSO = await prisma.salesOrder.findFirst({
@@ -91,8 +207,10 @@ export class SalesOrderService {
             },
         });
 
-        return Promise.all(customers.map(async customer => {
-            const isMsmeUser = await this.isCustomerMsme(customer.mobileNo, customer.emailId, customer.gstNo);
+        const msmeMap = await this.batchIsCustomerMsme(customers);
+        return customers.map(customer => {
+            const key = `${customer.mobileNo?.trim() || ''}|${customer.emailId?.trim() || ''}|${customer.gstNo?.trim() || ''}`;
+            const isMsmeUser = msmeMap.get(key) || false;
             return {
                 id: customer.id,
                 customerCode: customer.customerCode,
@@ -107,7 +225,7 @@ export class SalesOrderService {
                 msmeId: customer.msmeId,
                 isMsmeUser,
             };
-        }));
+        });
     }
 
     private async _getCustomerDetails(customerId: number) {
@@ -535,7 +653,10 @@ export class SalesOrderService {
 
         return this.prisma.salesOrder.update({
             where: { id },
-            data: { status: 'DELETED' },
+            data: { 
+                status: 'DELETED',
+                soNumber: `${so.soNumber}_DELETED_${Date.now()}`
+            },
         });
     }
 
@@ -901,58 +1022,467 @@ export class SalesOrderService {
         throw new BadRequestException('Invalid format. Use xlsx or pdf.');
     }
 
-    async importSalesOrders(buffer: Buffer, userId: number) {
-        if (!buffer || buffer.length === 0) {
-            throw new BadRequestException('Empty or invalid file uploaded');
-        }
+  async downloadSample() {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Sales Order Template');
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-        const workbook = new ExcelJS.Workbook();
-        try {
-            await workbook.xlsx.load(buffer as any);
-        } catch (error) {
-            throw new BadRequestException('Invalid Excel file format. Please upload a valid .xlsx file.');
-        }
-        const worksheet = workbook.getWorksheet(1);
+    const headers = [
+      'SO Number*', 'SO Date*', 'Expiry Date*', 'Customer Name*',
+      'Customer PO Type* (Verbal/Written)', 'PO Date', 'PO Expiry Date',
+      'PO Amount (Excluding Tax)', 'PO Amount (Including Tax)',
+      'Product Name*', 'Quantity*', 'Rate*', 'Discount (₹)', 'Discount (%)'
+    ];
+    worksheet.addRow(headers);
 
-        if (!worksheet) {
-            throw new BadRequestException('Invalid Excel file format');
-        }
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFD3D3D3' }
+    };
 
-        const rowCount = worksheet.rowCount;
-        if (rowCount < 2) {
-            throw new BadRequestException('No data found to import');
-        }
 
-        let headerRowIndex = -1;
-        const colMap: Record<string, number> = {};
 
-        for (let r = 1; r <= Math.min(rowCount, 10); r++) {
-            const row = worksheet.getRow(r);
-            let found = false;
-            row.eachCell((cell, colNumber) => {
-                const val = String(cell.value || '').trim().toLowerCase();
-                if (val.includes('customer name')) { colMap['customerName'] = colNumber; found = true; }
-                if (val.includes('credit days')) colMap['creditDays'] = colNumber;
-                if (val.includes('expiry date')) colMap['expiryDate'] = colNumber;
-                if (val.includes('product code')) colMap['productCode'] = colNumber;
-                if (val.includes('quantity')) colMap['quantity'] = colNumber;
-                if (val.includes('rate')) colMap['rate'] = colNumber;
-                if (val.includes('discount %')) colMap['discountPercent'] = colNumber;
-                if (val.includes('discount amount') || val.includes('dis amt')) colMap['discountAmount'] = colNumber;
-                if (val.includes('tax')) colMap['taxPercent'] = colNumber;
-                if (val.includes('print description') || val.includes('info')) colMap['printDescription'] = colNumber;
-            });
-            if (found) {
-                headerRowIndex = r;
-                break;
-            }
-        }
-
-        if (headerRowIndex === -1) {
-            throw new BadRequestException('Could not find mandatory columns.');
-        }
-
-        // Logic for rows would continue here (similar to purchase-order)
-        return { message: 'Import logic placeholder' };
+    for (let i = 2; i <= 200; i++) {
+      worksheet.getCell(`E${i}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"Verbal,Written"'],
+        showInputMessage: true,
+        promptTitle: 'Customer PO Type',
+        prompt: 'Choose one of: Verbal, Written'
+      };
     }
+
+    worksheet.columns = headers.map((h, i) => {
+      let width = Math.max(20, h.length + 5);
+      if (i === 3) width = 30; // Customer Name
+      if (i === 9) width = 30; // Product Name
+      return { width };
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return {
+      buffer: Buffer.from(buffer),
+      filename: 'Sales_Order_Import_Sample.xlsx',
+      mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    };
+  }
+
+  async importSalesOrders(buffer: Buffer, userId: number) {
+    if (!buffer || buffer.length === 0) {
+      throw new BadRequestException('Empty or invalid file uploaded');
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    try {
+      await workbook.xlsx.load(buffer as any);
+    } catch (error) {
+      throw new BadRequestException('Invalid Excel file format. Please upload a valid .xlsx file.');
+    }
+    const worksheet = workbook.getWorksheet(1);
+    if (!worksheet) {
+      throw new BadRequestException('Invalid Excel file format');
+    }
+
+    const rowCount = worksheet.rowCount;
+    if (rowCount < 2) {
+      throw new BadRequestException('No data found to import');
+    }
+
+    let headerRowIndex = -1;
+    const colMap: Record<string, number> = {};
+
+    for (let r = 1; r <= Math.min(rowCount, 10); r++) {
+      const row = worksheet.getRow(r);
+      let found = false;
+      row.eachCell((cell, colNumber) => {
+        const val = String(cell.value || '').trim().toLowerCase();
+        if (val.includes('so number')) { colMap['soNumber'] = colNumber; found = true; }
+        if (val.includes('so date')) colMap['soDate'] = colNumber;
+        if (val.includes('expiry date') && !val.includes('po expiry')) colMap['expiryDate'] = colNumber;
+        if (val.includes('customer name')) colMap['customerName'] = colNumber;
+        if (val.includes('customer type') || val.includes('customer po type') || val.includes('po type')) colMap['customerType'] = colNumber;
+        if (val.includes('po number')) colMap['poNumber'] = colNumber;
+        if (val.includes('po date')) colMap['poDate'] = colNumber;
+        if (val.includes('po expiry')) colMap['poExpiryDate'] = colNumber;
+        if (val.includes('po amount (excl') || val.includes('po amt (excl') || val.includes('po amount excluding')) colMap['poAmtExclTax'] = colNumber;
+        if (val.includes('po amount (incl') || val.includes('po amt (incl') || val.includes('po amount including')) colMap['poAmtInclTax'] = colNumber;
+        if (val.includes('product name')) colMap['productName'] = colNumber;
+        if (val.includes('quantity')) colMap['quantity'] = colNumber;
+        if (val.includes('rate')) colMap['rate'] = colNumber;
+        if (val.includes('discount (₹)') || val.includes('discount amount') || val.includes('discount rs')) colMap['discountAmount'] = colNumber;
+        if (val.includes('discount (%)') || val.includes('discount percent')) colMap['discountPercent'] = colNumber;
+      });
+      if (found) {
+        headerRowIndex = r;
+        break;
+      }
+    }
+
+    const mandatoryCols = ['soNumber', 'soDate', 'expiryDate', 'customerName', 'customerType', 'productName', 'quantity', 'rate'];
+    const missing = mandatoryCols.filter(col => !colMap[col]);
+    if (headerRowIndex === -1 || missing.length > 0) {
+      throw new BadRequestException(`Invalid template. Missing mandatory columns: ${missing.join(', ')}`);
+    }
+
+    const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
+      const colIdx = colMap[key];
+      if (!colIdx) return defaultVal;
+      const cell = row.getCell(colIdx);
+      let val = cell.value;
+      if (val && typeof val === 'object' && 'result' in val) {
+        val = val.result;
+      }
+      if (val && (val instanceof Date || Object.prototype.toString.call(val) === '[object Date]' || typeof (val as any).getTime === 'function')) {
+        return val;
+      }
+      return String(val !== undefined && val !== null ? val : '').trim();
+    };
+
+    // Preload Lookups
+    const [dbCustomers, dbProducts, userShop, userGstDoc, existingSos] = await Promise.all([
+      this.prisma.accountMaster.findMany({
+        where: { userId, customerStatus: 'ACTIVE' }
+      }),
+      this.prisma.product.findMany({
+        where: { created_by: userId, status: 'ACTIVE' },
+        include: { uom: true }
+      }),
+      this.prisma.shopDetail.findUnique({
+        where: { userId }
+      }),
+      this.prisma.sellerDocument.findFirst({
+        where: { uploadedByUserId: userId, type: 'GST', url: 'N/A' },
+        select: { name: true }
+      }),
+      this.prisma.salesOrder.findMany({
+        where: { userId, status: { not: 'DELETED' } },
+        select: { soNumber: true }
+      })
+    ]);
+
+    const customerMap = new Map<string, any>();
+    for (const cust of dbCustomers) {
+      customerMap.set(cust.accountName.toLowerCase().trim(), cust);
+    }
+
+    const productMap = new Map<string, any>();
+    for (const prod of dbProducts) {
+      productMap.set(prod.product_name.toLowerCase().trim(), prod);
+    }
+
+    const dbSoNumbers = new Set(existingSos.map(so => so.soNumber.toLowerCase().trim()));
+    const importedSoNumbersInFile = new Set<string>();
+
+    const parsedRows: any[] = [];
+    const groupMap = new Map<string, any[]>();
+
+    for (let r = headerRowIndex + 1; r <= rowCount; r++) {
+      const row = worksheet.getRow(r);
+      const soNumber = getVal(row, 'soNumber');
+      if (!soNumber || soNumber === '-') continue;
+
+      const item = {
+        rowNum: r,
+        originalRowValues: row.values,
+        soNumber,
+        soDateStr: getVal(row, 'soDate'),
+        expiryDateStr: getVal(row, 'expiryDate'),
+        customerName: getVal(row, 'customerName'),
+        customerTypeStr: getVal(row, 'customerType'),
+        poNumber: getVal(row, 'poNumber'),
+        poDateStr: getVal(row, 'poDate'),
+        poExpiryDateStr: getVal(row, 'poExpiryDate'),
+        poAmtExclTaxStr: getVal(row, 'poAmtExclTax'),
+        poAmtInclTaxStr: getVal(row, 'poAmtInclTax'),
+        productName: getVal(row, 'productName'),
+        quantityStr: getVal(row, 'quantity'),
+        rateStr: getVal(row, 'rate'),
+        discountAmountStr: getVal(row, 'discountAmount'),
+        discountPercentStr: getVal(row, 'discountPercent'),
+      };
+
+      parsedRows.push(item);
+      if (!groupMap.has(soNumber)) {
+        groupMap.set(soNumber, []);
+      }
+      groupMap.get(soNumber).push(item);
+    }
+
+    const successRows: any[] = [];
+    const failedRows: { rowNum: number; values: any[]; error: string }[] = [];
+    const rowErrors: { row: number; error: string }[] = [];
+
+    const isValidGst = (name?: string | null) => Boolean(
+      name && 
+      name.trim().toUpperCase() !== 'N/A' && 
+      name.trim().toUpperCase() !== 'NOT AVAILABLE' && 
+      name.trim().toUpperCase() !== '-' && 
+      name.trim().length >= 10
+    );
+
+    const userGst = userGstDoc?.name;
+    const companyState = (userShop?.state || "").trim().toLowerCase();
+    const isGstApplicable = isValidGst(userGst);
+
+    for (const [soNumber, rows] of groupMap.entries()) {
+      const groupErrors: string[] = [];
+      const firstRow = rows[0];
+
+      // Check duplicate SO Number
+      if (dbSoNumbers.has(soNumber.toLowerCase())) {
+        groupErrors.push(`Record already exists.`);
+      }
+      if (importedSoNumbersInFile.has(soNumber.toLowerCase())) {
+        groupErrors.push(`Duplicate SO Number in file.`);
+      }
+
+      // Customer check
+      const custName = firstRow.customerName;
+      const customer = customerMap.get(custName.toLowerCase());
+      if (!customer) {
+        groupErrors.push(`Customer "${custName}" not found. Please create the customer first.`);
+      }
+
+      // Customer type logic
+      const custType = firstRow.customerTypeStr.toLowerCase();
+      if (custType !== 'verbal' && custType !== 'written') {
+        groupErrors.push(`Invalid Customer Type. Allowed values are Verbal or Written.`);
+      }
+
+      const parsedSoDate = parseDDMMYYYY(firstRow.soDateStr);
+      const parsedExpiryDate = parseDDMMYYYY(firstRow.expiryDateStr);
+      if (!parsedSoDate) groupErrors.push(`Invalid SO Date format. Please use DD/MM/YYYY.`);
+      if (!parsedExpiryDate) groupErrors.push(`Invalid Expiry Date format. Please use DD/MM/YYYY.`);
+      if (parsedSoDate && parsedExpiryDate && parsedExpiryDate < parsedSoDate) {
+        groupErrors.push(`Expiry Date must be greater than or equal to SO Date.`);
+      }
+
+      let poDate: Date | null = null;
+      let poExpiryDate: Date | null = null;
+      let poAmtExcl = 0;
+      let poAmtIncl = 0;
+
+      const resolvedPoNumber = firstRow.poNumber || firstRow.soNumber;
+
+      if (custType === 'written') {
+        if (!resolvedPoNumber) groupErrors.push(`PO Number is required for Written Customer Type.`);
+        poDate = parseDDMMYYYY(firstRow.poDateStr);
+        poExpiryDate = parseDDMMYYYY(firstRow.poExpiryDateStr);
+        if (!poDate) groupErrors.push(`PO Date is required and must be in DD/MM/YYYY format.`);
+        if (!poExpiryDate) groupErrors.push(`PO Expiry Date is required and must be in DD/MM/YYYY format.`);
+        if (poDate && poExpiryDate && poExpiryDate < poDate) {
+          groupErrors.push(`PO Expiry Date must be greater than or equal to PO Date.`);
+        }
+        poAmtExcl = parseFloat(firstRow.poAmtExclTaxStr || '0');
+        poAmtIncl = parseFloat(firstRow.poAmtInclTaxStr || '0');
+        if (isNaN(poAmtExcl) || poAmtExcl <= 0) groupErrors.push(`PO Amount (Excluding Tax) is required and must be positive.`);
+        if (isNaN(poAmtIncl) || poAmtIncl <= 0) groupErrors.push(`PO Amount (Including Tax) is required and must be positive.`);
+      }
+
+      // Check items
+      const processedItems: any[] = [];
+      let totalAmount = 0;
+      let totalTaxAmount = 0;
+      let grandTotal = 0;
+
+      for (const row of rows) {
+        const prod = productMap.get(row.productName.toLowerCase());
+        if (!prod) {
+          groupErrors.push(`Product "${row.productName}" not found. Please create the product first.`);
+          continue;
+        }
+
+        const qty = parseFloat(row.quantityStr);
+        const rate = parseFloat(row.rateStr);
+        if (isNaN(qty) || qty <= 0) groupErrors.push(`Row ${row.rowNum}: Quantity must be greater than 0.`);
+        if (isNaN(rate) || rate < 0) groupErrors.push(`Row ${row.rowNum}: Rate must be 0 or positive.`);
+
+        const discountAmt = parseFloat(row.discountAmountStr || '0');
+        const discountPct = parseFloat(row.discountPercentStr || '0');
+        if (isNaN(discountAmt) || discountAmt < 0) groupErrors.push(`Row ${row.rowNum}: Discount amount must be positive.`);
+        if (isNaN(discountPct) || discountPct < 0 || discountPct > 100) groupErrors.push(`Row ${row.rowNum}: Discount percent must be between 0 and 100.`);
+
+        if (groupErrors.length > 0) continue;
+
+        const baseTotal = qty * rate;
+        let finalDiscPercent = discountPct;
+        let finalDiscAmount = discountAmt;
+
+        if (finalDiscAmount > 0 && finalDiscPercent === 0) {
+          finalDiscPercent = baseTotal > 0 ? (finalDiscAmount / baseTotal) * 100 : 0;
+        } else {
+          finalDiscAmount = (baseTotal * finalDiscPercent) / 100;
+        }
+
+        const beforeTaxAmount = baseTotal - finalDiscAmount;
+        const taxRate = Number(prod.tax_rate || 0);
+        const customerGst = customer?.gstNo;
+        const customerState = (customer?.state || "").trim().toLowerCase();
+
+        let isInterState = false;
+        if (isGstApplicable) {
+          const userCode = userGst?.substring(0, 2);
+          const customerCode = customerGst ? customerGst.substring(0, 2) : null;
+          if (customerGst && /^\d{2}$/.test(userCode) && /^\d{2}$/.test(customerCode)) {
+            isInterState = userCode !== customerCode;
+          } else {
+            isInterState = companyState !== customerState;
+          }
+        }
+
+        const taxAmount = isGstApplicable ? ((beforeTaxAmount * taxRate) / 100) : 0;
+        const totalItemAmount = beforeTaxAmount + taxAmount;
+
+        totalAmount += beforeTaxAmount;
+        totalTaxAmount += taxAmount;
+        grandTotal += totalItemAmount;
+
+        processedItems.push({
+          productCode: prod.product_code,
+          productName: prod.product_name,
+          hsnCode: prod.hsn_code || '',
+          quantity: qty,
+          rate,
+          uom: prod.uom?.unit_name || 'Nos',
+          discountPercent: finalDiscPercent,
+          discountAmount: finalDiscAmount,
+          taxPercent: taxRate,
+          taxAmount,
+          totalAmount: totalItemAmount
+        });
+      }
+
+      // Check PO Amount match for Written PO
+      if (groupErrors.length === 0 && custType === 'written') {
+        if (Math.abs(poAmtExcl - totalAmount) >= 0.01) {
+          groupErrors.push(`PO Amount (Excluding Tax) does not match calculated Before Tax Amount.`);
+        }
+        if (Math.abs(poAmtIncl - grandTotal) >= 0.01) {
+          groupErrors.push(`PO Amount (Including Tax) does not match calculated Invoice Amount.`);
+        }
+      }
+
+      if (groupErrors.length > 0) {
+        const combinedErrorMsg = groupErrors.join(' | ');
+        for (const row of rows) {
+          rowErrors.push({ row: row.rowNum, error: combinedErrorMsg });
+          failedRows.push({
+            rowNum: row.rowNum,
+            values: row.originalRowValues,
+            error: combinedErrorMsg
+          });
+        }
+      } else {
+        // Validation passed, create in database
+        try {
+          await this.prisma.$transaction(async (tx) => {
+            await tx.salesOrder.create({
+              data: {
+                soNumber,
+                customerName: customer.accountName,
+                customerType: (customer.customerType as any) || 'retailer',
+                address: customer.addressLine1 + (customer.addressLine2 ? ', ' + customer.addressLine2 : ''),
+                creditDays: customer.customerCreditDays || 0,
+                soCreationDate: new Date(),
+                expiryDate: parsedExpiryDate,
+                customerPoNumber: resolvedPoNumber || null,
+                poDate: poDate || null,
+                poExpiryDate: poExpiryDate || null,
+                customerAmt: poAmtIncl || null,
+                customerAmtExclTax: poAmtExcl || null,
+                customerAmtInclTax: poAmtIncl || null,
+                gstNumber: customer.gstNo || '',
+                panNumber: customer.panNo || '',
+                totalAmount,
+                taxAmount: totalTaxAmount,
+                grandTotal,
+                userId,
+                status: 'PENDING',
+                items: {
+                  create: processedItems.map(item => ({
+                    productCode: item.productCode,
+                    productName: item.productName,
+                    hsnCode: item.hsnCode,
+                    quantity: item.quantity,
+                    rate: item.rate,
+                    uom: item.uom,
+                    discountPercent: item.discountPercent,
+                    discountAmount: item.discountAmount,
+                    taxPercent: item.taxPercent,
+                    taxAmount: item.taxAmount,
+                    totalAmount: item.totalAmount,
+                    printDescription: item.productName
+                  }))
+                }
+              }
+            });
+          });
+          importedSoNumbersInFile.add(soNumber.toLowerCase());
+          for (const row of rows) {
+            successRows.push(row);
+          }
+        } catch (dbError: any) {
+          const dbErrMsg = `Database Save Failed: ${dbError.message || dbError}`;
+          for (const row of rows) {
+            rowErrors.push({ row: row.rowNum, error: dbErrMsg });
+            failedRows.push({
+              rowNum: row.rowNum,
+              values: row.originalRowValues,
+              error: dbErrMsg
+            });
+          }
+        }
+      }
+    }
+
+    // Build Response files
+    const headers = [
+      'SO Number*', 'SO Date*', 'Expiry Date*', 'Customer Name*',
+      'Customer PO Type* (Verbal/Written)', 'PO Date', 'PO Expiry Date',
+      'PO Amount (Excluding Tax)', 'PO Amount (Including Tax)',
+      'Product Name*', 'Quantity*', 'Rate*', 'Discount (₹)', 'Discount (%)'
+    ];
+
+    const successWb = new ExcelJS.Workbook();
+    const successWs = successWb.addWorksheet('Success Reports');
+    successWs.addRow(headers);
+    successWs.getRow(1).font = { bold: true };
+    successWs.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+    successRows.forEach(r => {
+      // Reconstruct values ignoring first element (since Row values is 1-indexed array from ExcelJS)
+      const rowVals = r.originalRowValues.slice(1);
+      successWs.addRow(rowVals);
+    });
+    const successBuffer = await successWb.xlsx.writeBuffer();
+
+    const failedWb = new ExcelJS.Workbook();
+    const failedWs = failedWb.addWorksheet('Error Reports');
+    failedWs.addRow([...headers, 'Error Description']);
+    failedWs.getRow(1).font = { bold: true };
+    failedWs.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+    failedRows.forEach(r => {
+      const rowVals = r.values.slice(1);
+      // Pad to headers length
+      while (rowVals.length < headers.length) rowVals.push('');
+      rowVals[headers.length] = r.error;
+      failedWs.addRow(rowVals);
+    });
+    const failedBuffer = await failedWb.xlsx.writeBuffer();
+
+    return {
+      success: true,
+      summary: {
+        totalRows: parsedRows.length,
+        successful: successRows.length,
+        failed: failedRows.length
+      },
+      errors: rowErrors,
+      successFile: Buffer.from(successBuffer).toString('base64'),
+      errorFile: Buffer.from(failedBuffer).toString('base64')
+    };
+  }
 }

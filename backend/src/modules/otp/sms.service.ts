@@ -68,6 +68,10 @@ export class SmsService {
         const now = new Date();
         const expiresAt = new Date(now.getTime() + this.OTP_EXPIRY_MINUTES * 60000);
 
+        console.log('====================================');
+        console.log(`[SMS OTP GENERATED] Phone: ${phone}, OTP: ${otp}`);
+        console.log('====================================');
+
         // 1. Send SMS via AWS SNS
         await this.sendSms(phone, otp);
 
@@ -116,6 +120,10 @@ export class SmsService {
 
         const otp = crypto.randomInt(100000, 999999).toString();
         const expiresAt = new Date(now.getTime() + this.OTP_EXPIRY_MINUTES * 60000);
+
+        console.log('====================================');
+        console.log(`[SMS OTP RESENT] Phone: ${phone}, OTP: ${otp}`);
+        console.log('====================================');
 
         // 1. Send SMS
         await this.sendSms(phone, otp);

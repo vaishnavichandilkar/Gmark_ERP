@@ -532,16 +532,16 @@ export class ReportsService {
     const [piAgg, siAgg] = await Promise.all([
       this.prisma.purchaseInvoice.aggregate({
         where: piWhereInput,
-        _sum: { grandTotal: true },
+        _sum: { taxableAmount: true },
       }),
       this.prisma.salesInvoice.aggregate({
         where: siWhereInput,
-        _sum: { grandTotal: true },
+        _sum: { taxableAmount: true },
       }),
     ]);
 
-    const invoicePurchases = piAgg._sum.grandTotal ? Number(piAgg._sum.grandTotal) : 0;
-    const invoiceSales = siAgg._sum.grandTotal ? Number(siAgg._sum.grandTotal) : 0;
+    const invoicePurchases = piAgg._sum.taxableAmount ? Number(piAgg._sum.taxableAmount) : 0;
+    const invoiceSales = siAgg._sum.taxableAmount ? Number(siAgg._sum.taxableAmount) : 0;
 
     if (invoicePurchases > purchase) purchase = invoicePurchases;
     if (invoiceSales > sales) sales = invoiceSales;

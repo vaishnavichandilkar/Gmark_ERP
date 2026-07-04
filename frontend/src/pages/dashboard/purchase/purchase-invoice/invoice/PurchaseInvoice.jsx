@@ -25,7 +25,7 @@ import { motion } from 'framer-motion';
 import purchaseInvoiceService from "@/services/purchaseInvoiceService";
 import ScrollableTable from "@/components/common/ScrollableTable";
 import FilterDropdown from "@/pages/dashboard/masters/components/FilterDropdown";
-import ImportModal from "./components/ImportModal";
+import ImportModal from "@/pages/dashboard/masters/components/ImportModal";
 import SuccessToast from "@/pages/dashboard/masters/components/SuccessToast";
 import CustomSelect from "@/components/common/CustomSelect";
 import { formatDate } from "@/utils/dateUtils";
@@ -194,11 +194,9 @@ const PurchaseInvoice = ({ defaultTab }) => {
         }
     };
 
-    const handleImportExcel = async (file) => {
+    const handleImportExcel = async (formData) => {
         const loadingToast = toast.loading(t('common:processing'));
         try {
-            const formData = new FormData();
-            formData.append('file', file);
             await purchaseInvoiceService.importInvoices(formData);
             toast.dismiss(loadingToast);
             toast.custom(() => <SuccessToast message="Invoices imported successfully" />, { duration: 2000, position: 'top-right' });
@@ -206,6 +204,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
         } catch (error) {
             toast.dismiss(loadingToast);
             toast.error(error?.response?.data?.message || t('common:import_failed'));
+            throw error;
         }
     };
 
@@ -449,7 +448,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
                         onClose={() => setIsImportModalOpen(false)} 
                         onImport={handleImportExcel}
                         onDownloadSample={handleDownloadSample}
-                        title={t('modules:import_purchase_invoices')}
+                        sampleFileName="Purchase_Invoice_Import_Sample.xlsx"
                     />
                     
                     {/* Filter Sidebar */}

@@ -58,7 +58,7 @@ const SupplierDropdown = ({
                         <div className="p-3 bg-gray-50 border-t border-[#F3F4F6]">
                             <button 
                                 onClick={() => {
-                                    navigate(`/seller/masters/account-master/add?redirect=${window.location.pathname}`);
+                                    navigate(`/seller/masters/account-master/add?redirect=${encodeURIComponent(window.location.pathname + '?restore=true')}`);
                                 }}
                                 className="w-full flex items-center justify-center gap-2 py-3 bg-[#073318] text-white rounded-[10px] text-[14px] font-bold hover:bg-[#052611] transition-all shadow-md group font-outfit"
                             >
