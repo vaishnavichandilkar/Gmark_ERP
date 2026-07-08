@@ -16,7 +16,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
     const filteredProducts = useMemo(() => {
         const query = tableSearch.toLowerCase();
         const addedProductIds = items.map(item => item.productId).filter(id => id);
-        
+
         return (products || []).filter(p => {
             if (addedProductIds.includes(p.id)) return false;
             return (
@@ -53,11 +53,11 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
 
         // Recalculate
         if (['quantity', 'rate', 'taxPercent', 'discountPercent', 'discountAmount', 'totalPoQty'].includes(field)) {
-            let qty        = parseFloat(field === 'quantity'        ? finalValue : item.quantity)        || 0;
-            const rate     = parseFloat(field === 'rate'            ? finalValue : item.rate)            || 0;
-            const taxPct   = parseFloat(field === 'taxPercent'      ? finalValue : item.taxPercent)      || 0;
-            const totalPO  = parseFloat(field === 'totalPoQty'      ? finalValue : item.totalPoQty)      || 0;
-            const receivedPO = parseFloat(item.receivedPoQty)                                          || 0;
+            let qty = parseFloat(field === 'quantity' ? finalValue : item.quantity) || 0;
+            const rate = parseFloat(field === 'rate' ? finalValue : item.rate) || 0;
+            const taxPct = parseFloat(field === 'taxPercent' ? finalValue : item.taxPercent) || 0;
+            const totalPO = parseFloat(field === 'totalPoQty' ? finalValue : item.totalPoQty) || 0;
+            const receivedPO = parseFloat(item.receivedPoQty) || 0;
 
             const maxAllowed = totalPO - receivedPO;
             if (totalPO > 0 && qty > maxAllowed) {
@@ -72,7 +72,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
             const baseAmount = qty * rate;
 
             let discPct = parseFloat(field === 'discountPercent' ? finalValue : item.discountPercent) || 0;
-            let discAmt = parseFloat(field === 'discountAmount'  ? finalValue : item.discountAmount)  || 0;
+            let discAmt = parseFloat(field === 'discountAmount' ? finalValue : item.discountAmount) || 0;
 
             if (field === 'discountPercent') {
                 discAmt = (baseAmount * discPct) / 100;
@@ -86,20 +86,20 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
             const befTax = (baseAmount - discAmt);
             const isApplicable = typeof gstType === 'object' ? gstType?.gstType !== 'NONE' : gstType !== 'NONE';
             const taxAmt = isApplicable ? (befTax * taxPct) / 100 : 0;
-            
+
             // Update item fields - preserve the string finalValue for the field currently being changed to support intermediate typing states (like "10.")
-            if (field !== 'quantity')        item.quantity        = qty;
-            if (field !== 'rate')            item.rate            = rate;
-            if (field !== 'taxPercent')      item.taxPercent      = taxPct;
+            if (field !== 'quantity') item.quantity = qty;
+            if (field !== 'rate') item.rate = rate;
+            if (field !== 'taxPercent') item.taxPercent = taxPct;
             if (field !== 'discountPercent') item.discountPercent = parseFloat(discPct.toFixed(2));
-            if (field !== 'discountAmount')  item.discountAmount  = parseFloat(discAmt.toFixed(2));
+            if (field !== 'discountAmount') item.discountAmount = parseFloat(discAmt.toFixed(2));
 
             item.beforeTaxAmount = parseFloat(befTax.toFixed(2));
             item.taxAmount = parseFloat(taxAmt.toFixed(2));
             item.totalAmount = parseFloat((befTax + taxAmt).toFixed(2));
 
             // Remaining Qty Logic: if total is 0, remaining is always 0
-            item.remainingQty = totalPO > 0 
+            item.remainingQty = totalPO > 0
                 ? parseFloat(Math.max(0, totalPO - receivedPO - qty).toFixed(2))
                 : 0;
         }
@@ -121,7 +121,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
 
                 // Find total qty in linked PO items if available
                 if (Array.isArray(linkedPoItems)) {
-                    const poItem = linkedPoItems.find(i => 
+                    const poItem = linkedPoItems.find(i =>
                         (i.productCode === (product.product_code || product.productCode)) ||
                         (i.productId === product.id)
                     );
@@ -164,7 +164,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
             productName: product.product_name,
             quantity: qty,
             rate: rate,
-            uom: product.uom?.gst_uom || 'Nos', 
+            uom: product.uom?.gst_uom || 'Nos',
             hsnCode: product.hsn_code || '',
             taxPercent: taxPct,
             discountAmount: 0,
@@ -187,10 +187,10 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
 
         // Auto-add an empty row
         if (!updatedItems.some(i => !i.productId)) {
-            updatedItems.push({ 
-                id: Date.now() + 1, productId: null, productCode: '', productName: '', quantity: 0, rate: 0, 
-                uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0, 
-                taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0 
+            updatedItems.push({
+                id: Date.now() + 1, productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
+                uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0,
+                taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0
             });
         }
 
@@ -203,20 +203,20 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
     const removeItem = (index) => {
         const newItems = items.filter((_, i) => i !== index);
         if (newItems.length === 0) {
-            newItems.push({ 
-                id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0, 
-                uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0, 
-                taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0 
+            newItems.push({
+                id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
+                uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0,
+                taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0
             });
         }
         setItems(newItems);
     };
 
     const handleAddManualRow = () => {
-        setItems([...items, { 
-            id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0, 
-            uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0, 
-            taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0 
+        setItems([...items, {
+            id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
+            uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0,
+            taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0
         }]);
     };
 
@@ -267,11 +267,11 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                 </button>
                             ))}
                             <div className="p-3 bg-gray-50 border-t border-[#F3F4F6]">
-                                <button 
+                                <button
                                     onClick={handleAddNewProduct}
                                     className="w-full h-[40px] bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all flex items-center justify-center gap-2 group shadow-md"
                                 >
-                                    <Plus size={14} className="group-hover:scale-110 transition-transform" /> 
+                                    <Plus size={14} className="group-hover:scale-110 transition-transform" />
                                     Add new product
                                 </button>
                             </div>
@@ -318,10 +318,10 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                             <React.Fragment key={item.id}>
                                 <tr className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-colors group h-[52px]">
                                     <td className="px-4 py-2 text-center text-[13px] font-bold text-gray-400">{index + 1}</td>
-                                    
+
                                     {/* Selection Column */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6] text-center">
-                                        <button 
+                                        <button
                                             onClick={() => { setActiveRowIndex(index); setIsProductSearchOpen(true); }}
                                             className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
                                         >
@@ -340,7 +340,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                             type="text"
                                             value={item.productName}
                                             readOnly={!!item.productId}
-                                            onFocus={() => { if(!item.productId) { setActiveRowIndex(index); setIsProductSearchOpen(true); } }}
+                                            onFocus={() => { if (!item.productId) { setActiveRowIndex(index); setIsProductSearchOpen(true); } }}
                                             onChange={(e) => { setTableSearch(e.target.value); setActiveRowIndex(index); setIsProductSearchOpen(true); }}
                                             placeholder={t('modules:select_product', 'Select product...')}
                                             className={`w-full h-[36px] bg-transparent border-none px-2 text-[14px] font-bold outline-none ${!item.productName ? 'italic font-normal text-gray-400' : ''}`}
@@ -524,7 +524,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                         ))}
                                         <tr className="bg-white border-t border-gray-100 text-center">
                                             <td colSpan={18} className="px-4 py-4 bg-emerald-50/10">
-                                                <button 
+                                                <button
                                                     onClick={handleAddNewProduct}
                                                     className="inline-flex h-[40px] px-8 bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all items-center gap-3 shadow-lg"
                                                 >

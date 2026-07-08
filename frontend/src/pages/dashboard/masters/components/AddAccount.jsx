@@ -53,12 +53,12 @@ const CustomSelect = ({
 
   const filteredOptions =
     isSearchable &&
-    searchTerm &&
-    searchTerm.toLowerCase() !== (value || "").toLowerCase()
+      searchTerm &&
+      searchTerm.toLowerCase() !== (value || "").toLowerCase()
       ? options.filter((opt) => {
-          const displayLabel = renderValue ? renderValue(opt) : opt;
-          return displayLabel.toLowerCase().includes(searchTerm.toLowerCase());
-        })
+        const displayLabel = renderValue ? renderValue(opt) : opt;
+        return displayLabel.toLowerCase().includes(searchTerm.toLowerCase());
+      })
       : options;
 
   return (
@@ -334,7 +334,7 @@ const AddAccount = ({
   onBack,
   onAddAccount,
   initialData,
-onUpdateAccount,
+  onUpdateAccount,
   onShowToast,
 }) => {
   const { t } = useTranslation(["modules", "common"]);
@@ -346,103 +346,103 @@ onUpdateAccount,
   const [formData, setFormData] = useState(
     initialData
       ? {
-          ...initialData,
-          isCustomer:
-            initialData.isCustomer ||
-            initialData.groupName?.some((g) =>
-              g.toUpperCase().includes("DEBTOR"),
-            ) ||
-            false,
-          isVendor:
-            initialData.isVendor ||
-            initialData.groupName?.some((g) =>
-              g.toUpperCase().includes("CREDITOR"),
-            ) ||
-            false,
-          customerCode: initialData.customerCode || "",
-          supplierCode: initialData.supplierCode || "",
-          gstNo: initialData.gstNo || "",
-          panNo: initialData.panNo || "",
-          customerCreditDays: (initialData.customerCreditDays !== undefined && initialData.customerCreditDays !== null && initialData.customerCreditDays !== "")
-            ? initialData.customerCreditDays.toString()
-            : (initialData.creditDays !== undefined && initialData.creditDays !== null && initialData.creditDays !== "")
-              ? initialData.creditDays.toString()
-              : "",
-          customerOpBalance: (initialData.customerOpeningBalance !== undefined && initialData.customerOpeningBalance !== null && initialData.customerOpeningBalance !== "")
-            ? initialData.customerOpeningBalance.toString()
-            : (initialData.openingBalance !== undefined && initialData.openingBalance !== null && initialData.openingBalance !== "")
-              ? initialData.openingBalance.toString()
-              : "",
-          customerBalanceType:
-            initialData.customerBalanceType ||
-            (initialData.customer?.balanceType
-              ? initialData.customer.balanceType
-              : "Dr"),
-          customerType: initialData.customerType || "",
-          vendorCreditDays: (initialData.supplierCreditDays !== undefined && initialData.supplierCreditDays !== null && initialData.supplierCreditDays !== "")
-            ? initialData.supplierCreditDays.toString()
-            : (initialData.creditDays !== undefined && initialData.creditDays !== null && initialData.creditDays !== "")
-              ? initialData.creditDays.toString()
-              : "",
-          vendorOpBalance: (initialData.supplierOpeningBalance !== undefined && initialData.supplierOpeningBalance !== null && initialData.supplierOpeningBalance !== "")
-            ? initialData.supplierOpeningBalance.toString()
-            : (initialData.openingBalance !== undefined && initialData.openingBalance !== null && initialData.openingBalance !== "")
-              ? initialData.openingBalance.toString()
-              : "",
-          vendorBalanceType:
-            initialData.supplierBalanceType ||
-            (initialData.supplier?.balanceType
-              ? initialData.supplier.balanceType
-              : "Cr"),
-          address1: initialData.addressLine1 || "",
-          address2: initialData.addressLine2 || "",
-          area: initialData.area || "",
-          pinCode: initialData.pincode || "",
-          city: initialData.city || "",
-          state: initialData.state || "",
-          subDistrict: initialData.subDistrict || "",
-          district: initialData.city || "", // map city to district in UI based on api
-          country: "India",
-          msmeId: initialData.msmeId || initialData.msmeRegNo || "",
-          regUnder: initialData.regUnder || "",
-          regType: initialData.regType || "",
-          prefix: initialData.prefix || "",
-          contactPersonName: initialData.contactPersonName || "",
-          emailId: initialData.emailId || "",
-          mobileNo: initialData.mobileNo || "",
-        }
+        ...initialData,
+        isCustomer:
+          initialData.isCustomer ||
+          initialData.groupName?.some((g) =>
+            g.toUpperCase().includes("DEBTOR"),
+          ) ||
+          false,
+        isVendor:
+          initialData.isVendor ||
+          initialData.groupName?.some((g) =>
+            g.toUpperCase().includes("CREDITOR"),
+          ) ||
+          false,
+        customerCode: initialData.customerCode || "",
+        supplierCode: initialData.supplierCode || "",
+        gstNo: initialData.gstNo || "",
+        panNo: initialData.panNo || "",
+        customerCreditDays: (initialData.customerCreditDays !== undefined && initialData.customerCreditDays !== null && initialData.customerCreditDays !== "")
+          ? initialData.customerCreditDays.toString()
+          : (initialData.creditDays !== undefined && initialData.creditDays !== null && initialData.creditDays !== "")
+            ? initialData.creditDays.toString()
+            : "",
+        customerOpBalance: (initialData.customerOpeningBalance !== undefined && initialData.customerOpeningBalance !== null && initialData.customerOpeningBalance !== "")
+          ? initialData.customerOpeningBalance.toString()
+          : (initialData.openingBalance !== undefined && initialData.openingBalance !== null && initialData.openingBalance !== "")
+            ? initialData.openingBalance.toString()
+            : "",
+        customerBalanceType:
+          initialData.customerBalanceType ||
+          (initialData.customer?.balanceType
+            ? initialData.customer.balanceType
+            : "Dr"),
+        customerType: initialData.customerType || "",
+        vendorCreditDays: (initialData.supplierCreditDays !== undefined && initialData.supplierCreditDays !== null && initialData.supplierCreditDays !== "")
+          ? initialData.supplierCreditDays.toString()
+          : (initialData.creditDays !== undefined && initialData.creditDays !== null && initialData.creditDays !== "")
+            ? initialData.creditDays.toString()
+            : "",
+        vendorOpBalance: (initialData.supplierOpeningBalance !== undefined && initialData.supplierOpeningBalance !== null && initialData.supplierOpeningBalance !== "")
+          ? initialData.supplierOpeningBalance.toString()
+          : (initialData.openingBalance !== undefined && initialData.openingBalance !== null && initialData.openingBalance !== "")
+            ? initialData.openingBalance.toString()
+            : "",
+        vendorBalanceType:
+          initialData.supplierBalanceType ||
+          (initialData.supplier?.balanceType
+            ? initialData.supplier.balanceType
+            : "Cr"),
+        address1: initialData.addressLine1 || "",
+        address2: initialData.addressLine2 || "",
+        area: initialData.area || "",
+        pinCode: initialData.pincode || "",
+        city: initialData.city || "",
+        state: initialData.state || "",
+        subDistrict: initialData.subDistrict || "",
+        district: initialData.city || "", // map city to district in UI based on api
+        country: "India",
+        msmeId: initialData.msmeId || initialData.msmeRegNo || "",
+        regUnder: initialData.regUnder || "",
+        regType: initialData.regType || "",
+        prefix: initialData.prefix || "",
+        contactPersonName: initialData.contactPersonName || "",
+        emailId: initialData.emailId || "",
+        mobileNo: initialData.mobileNo || "",
+      }
       : {
-          accountName: "",
-          isCustomer: false,
-          isVendor: false,
-          customerCode: "",
-          supplierCode: "",
-          gstNo: "",
-          panNo: "",
-          customerCreditDays: "",
-          customerOpBalance: "",
-          customerBalanceType: "Dr",
-          customerType: "",
-          vendorCreditDays: "",
-          vendorOpBalance: "",
-          vendorBalanceType: "Cr",
-          address1: "",
-          address2: "",
-          area: "",
-          pinCode: "",
-          city: "",
-          state: "",
-          subDistrict: "",
-          district: "",
-          country: "India",
-          msmeId: "",
-          regUnder: "",
-          regType: "",
-          prefix: "",
-          contactPersonName: "",
-          emailId: "",
-          mobileNo: "",
-        },
+        accountName: "",
+        isCustomer: false,
+        isVendor: false,
+        customerCode: "",
+        supplierCode: "",
+        gstNo: "",
+        panNo: "",
+        customerCreditDays: "",
+        customerOpBalance: "",
+        customerBalanceType: "Dr",
+        customerType: "",
+        vendorCreditDays: "",
+        vendorOpBalance: "",
+        vendorBalanceType: "Cr",
+        address1: "",
+        address2: "",
+        area: "",
+        pinCode: "",
+        city: "",
+        state: "",
+        subDistrict: "",
+        district: "",
+        country: "India",
+        msmeId: "",
+        regUnder: "",
+        regType: "",
+        prefix: "",
+        contactPersonName: "",
+        emailId: "",
+        mobileNo: "",
+      },
   );
 
   const [searchParams] = useSearchParams();
@@ -452,11 +452,11 @@ onUpdateAccount,
     if (!isEditMode) {
       const type = searchParams.get('type');
       const name = searchParams.get('name');
-      
+
       if (name) {
         setFormData(prev => ({ ...prev, accountName: name }));
       }
-      
+
       if (type === 'debtor') {
         handleInputChange('isCustomer', true);
       } else if (type === 'creditor') {
@@ -465,7 +465,7 @@ onUpdateAccount,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, isEditMode]);
-  
+
   // Fetch Groups for dropdown
   useEffect(() => {
     const fetchGroups = async () => {
@@ -1034,7 +1034,7 @@ onUpdateAccount,
         onShowToast &&
           onShowToast(
             translateBackendError(errorData?.message) ||
-              t("common:error_saving_data"),
+            t("common:error_saving_data"),
             "error",
           );
       }
@@ -1128,10 +1128,10 @@ onUpdateAccount,
           </div>
         </div>
         <div className="p-4 sm:p-6 md:p-8">
-            <div className="flex flex-col gap-8 md:gap-10">
-              {/* 1. Basic Details */}
-              <div className="flex flex-col gap-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+          <div className="flex flex-col gap-8 md:gap-10">
+            {/* 1. Basic Details */}
+            <div className="flex flex-col gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 {/* Account Name */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[13px] font-semibold text-[#4B5563]">
@@ -1275,228 +1275,228 @@ onUpdateAccount,
                     </p>
                   )}
                 </div>
-                </div>
+              </div>
+            </div>
+
+            {/* Address Details Flow */}
+            <div className="form-grid">
+              {/* Address */}
+              <div className="flex flex-col gap-1.5 col-span-full">
+                <label className="text-[13px] font-semibold text-[#4B5563]">
+                  {t("modules:address_1")}{" "}
+                  <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder={t("modules:enter_address_1")}
+                  className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.address1 ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
+                  value={formData.address1}
+                  onChange={(e) =>
+                    handleInputChange("address1", e.target.value)
+                  }
+                  onBlur={() => validateField("address1", formData.address1)}
+                />
+                {errors.address1 && (
+                  <p className="text-[12px] text-red-500 mt-0.5">
+                    {errors.address1}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5 col-span-full">
+                <label className="text-[13px] font-semibold text-[#4B5563]">
+                  {t("modules:address_2")} ({t("common:optional")})
+                </label>
+                <input
+                  type="text"
+                  placeholder={t("modules:enter_address_2")}
+                  className="w-full h-[44px] border border-[#E5E7EB] rounded-[8px] px-4 text-[14px] outline-none focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"
+                  value={formData.address2}
+                  onChange={(e) =>
+                    handleInputChange("address2", e.target.value)
+                  }
+                />
               </div>
 
-              {/* Address Details Flow */}
-              <div className="form-grid">
-                  {/* Address */}
-                  <div className="flex flex-col gap-1.5 col-span-full">
+              {/* Pincode & Area */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[13px] font-semibold text-[#4B5563] flex justify-between">
+                  <span>
+                    {t("modules:pin_code")}{" "}
+                    <span className="text-red-500">*</span>
+                  </span>
+                  {isFetchingPin && (
+                    <Loader2
+                      size={14}
+                      className="animate-spin text-[#014A36]"
+                    />
+                  )}
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  placeholder={t("modules:enter_pin_code")}
+                  className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.pinCode ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
+                  value={formData.pinCode}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "");
+                    if (val.length <= 6) handleInputChange("pinCode", val);
+                  }}
+                  onBlur={() => validateField("pinCode", formData.pinCode)}
+                />
+                {errors.pinCode && (
+                  <p className="text-[12px] text-red-500 mt-0.5">
+                    {errors.pinCode}
+                  </p>
+                )}
+              </div>
+              <CustomSelect
+                label={`${t("modules:area")} (${t("common:optional")})`}
+                placeholder={t("modules:enter_area")}
+                options={areaOptions}
+                value={formData.area}
+                onChange={(val) => handleInputChange("area", val)}
+                isSearchable={true}
+                disabled={areaOptions.length === 0}
+              />
+
+              {/* Auto fetched details */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[13px] font-semibold text-[#4B5563]">
+                  {t("modules:sub_district")}
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  placeholder={`${t("modules:sub_district")} ${t("modules:fetched_automatically")}`}
+                  className="w-full h-[44px] border border-[#E5E7EB] bg-gray-50 text-gray-500 rounded-[8px] px-4 text-[14px] outline-none cursor-not-allowed"
+                  value={formData.subDistrict}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[13px] font-semibold text-[#4B5563]">
+                  {t("modules:district")} ({t("common:optional")})
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  placeholder={`${t("modules:district")} ${t("modules:fetched_automatically")}`}
+                  className="w-full h-[44px] border border-[#E5E7EB] bg-gray-50 text-gray-500 rounded-[8px] px-4 text-[14px] outline-none cursor-not-allowed"
+                  value={formData.district}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[13px] font-semibold text-[#4B5563]">
+                  {t("modules:state")} ({t("common:optional")})
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  placeholder={`${t("modules:state")} ${t("modules:fetched_automatically")}`}
+                  className="w-full h-[44px] border border-[#E5E7EB] bg-gray-50 text-gray-500 rounded-[8px] px-4 text-[14px] outline-none cursor-not-allowed"
+                  value={formData.state}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[13px] font-semibold text-[#4B5563]">
+                  {t("modules:country")} ({t("common:optional")})
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  placeholder={`${t("modules:country")} ${t("modules:fetched_automatically")}`}
+                  className="w-full h-[44px] border border-[#E5E7EB] bg-gray-50 text-gray-500 rounded-[8px] px-4 text-[14px] outline-none cursor-not-allowed"
+                  value={formData.country}
+                />
+              </div>
+            </div>
+            {/* 2. Contact Person Details */}
+            <div className="flex flex-col gap-6 pt-10 border-t border-[#E5E7EB]">
+              <h3 className="text-[16px] font-bold text-[#111827]">
+                {t("modules:contact_person_details")}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                <CustomSelect
+                  label={t("modules:prefix")}
+                  required={true}
+                  placeholder={t("modules:select_prefix")}
+                  options={PREFIX_OPTIONS}
+                  value={formData.prefix}
+                  renderValue={(val) => t(`modules:${val.toLowerCase()}`, val)}
+                  onChange={(val) => handleInputChange("prefix", val)}
+                  onBlur={() => validateField("prefix", formData.prefix)}
+                  error={errors.prefix}
+                />
+                <div className="flex flex-col gap-1.5">
                   <label className="text-[13px] font-semibold text-[#4B5563]">
-                    {t("modules:address_1")}{" "}
+                    {t("modules:contact_person_name")}{" "}
                     <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    placeholder={t("modules:enter_address_1")}
-                    className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.address1 ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
-                    value={formData.address1}
+                    placeholder={t("modules:enter_person_name")}
+                    className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.contactPersonName ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
+                    value={formData.contactPersonName}
                     onChange={(e) =>
-                      handleInputChange("address1", e.target.value)
+                      handleInputChange("contactPersonName", e.target.value)
                     }
-                    onBlur={() => validateField("address1", formData.address1)}
+                    onBlur={() =>
+                      validateField(
+                        "contactPersonName",
+                        formData.contactPersonName,
+                      )
+                    }
                   />
-                  {errors.address1 && (
+                  {errors.contactPersonName && (
                     <p className="text-[12px] text-red-500 mt-0.5">
-                      {errors.address1}
+                      {errors.contactPersonName}
                     </p>
                   )}
-                  </div>
-                  <div className="flex flex-col gap-1.5 col-span-full">
-                  <label className="text-[13px] font-semibold text-[#4B5563]">
-                    {t("modules:address_2")} ({t("common:optional")})
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={t("modules:enter_address_2")}
-                    className="w-full h-[44px] border border-[#E5E7EB] rounded-[8px] px-4 text-[14px] outline-none focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"
-                    value={formData.address2}
-                    onChange={(e) =>
-                      handleInputChange("address2", e.target.value)
-                    }
-                  />
                 </div>
-
-                {/* Pincode & Area */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-semibold text-[#4B5563] flex justify-between">
-                    <span>
-                      {t("modules:pin_code")}{" "}
-                      <span className="text-red-500">*</span>
-                    </span>
-                    {isFetchingPin && (
-                      <Loader2
-                        size={14}
-                        className="animate-spin text-[#014A36]"
-                      />
-                    )}
+                  <label className="text-[13px] font-semibold text-[#4B5563]">
+                    {t("modules:email_id")} ({t("common:optional")})
+                  </label>
+                  <input
+                    type="email"
+                    placeholder={t("modules:enter_email_id")}
+                    className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.emailId ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
+                    value={formData.emailId}
+                    onChange={(e) =>
+                      handleInputChange("emailId", e.target.value)
+                    }
+                    onBlur={() => validateField("emailId", formData.emailId)}
+                  />
+                  {errors.emailId && (
+                    <p className="text-[12px] text-red-500 mt-0.5">
+                      {errors.emailId}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-semibold text-[#4B5563]">
+                    {t("modules:mobile_no")}{" "}
+                    <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    maxLength={6}
-                    placeholder={t("modules:enter_pin_code")}
-                    className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.pinCode ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
-                    value={formData.pinCode}
+                    maxLength={10}
+                    placeholder={t("modules:enter_mobile_number")}
+                    className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.mobileNo ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
+                    value={formData.mobileNo}
                     onChange={(e) => {
                       const val = e.target.value.replace(/\D/g, "");
-                      if (val.length <= 6) handleInputChange("pinCode", val);
+                      if (val.length <= 10) handleInputChange("mobileNo", val);
                     }}
-                    onBlur={() => validateField("pinCode", formData.pinCode)}
+                    onBlur={() => validateField("mobileNo", formData.mobileNo)}
                   />
-                  {errors.pinCode && (
+                  {errors.mobileNo && (
                     <p className="text-[12px] text-red-500 mt-0.5">
-                      {errors.pinCode}
+                      {errors.mobileNo}
                     </p>
                   )}
                 </div>
-                <CustomSelect
-                  label={`${t("modules:area")} (${t("common:optional")})`}
-                  placeholder={t("modules:enter_area")}
-                  options={areaOptions}
-                  value={formData.area}
-                  onChange={(val) => handleInputChange("area", val)}
-                  isSearchable={true}
-                  disabled={areaOptions.length === 0}
-                />
-
-                {/* Auto fetched details */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-semibold text-[#4B5563]">
-                    {t("modules:sub_district")}
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    placeholder={`${t("modules:sub_district")} ${t("modules:fetched_automatically")}`}
-                    className="w-full h-[44px] border border-[#E5E7EB] bg-gray-50 text-gray-500 rounded-[8px] px-4 text-[14px] outline-none cursor-not-allowed"
-                    value={formData.subDistrict}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-semibold text-[#4B5563]">
-                    {t("modules:district")} ({t("common:optional")})
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    placeholder={`${t("modules:district")} ${t("modules:fetched_automatically")}`}
-                    className="w-full h-[44px] border border-[#E5E7EB] bg-gray-50 text-gray-500 rounded-[8px] px-4 text-[14px] outline-none cursor-not-allowed"
-                    value={formData.district}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-semibold text-[#4B5563]">
-                    {t("modules:state")} ({t("common:optional")})
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    placeholder={`${t("modules:state")} ${t("modules:fetched_automatically")}`}
-                    className="w-full h-[44px] border border-[#E5E7EB] bg-gray-50 text-gray-500 rounded-[8px] px-4 text-[14px] outline-none cursor-not-allowed"
-                    value={formData.state}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-semibold text-[#4B5563]">
-                    {t("modules:country")} ({t("common:optional")})
-                  </label>
-                    <input
-                      type="text"
-                      readOnly
-                      placeholder={`${t("modules:country")} ${t("modules:fetched_automatically")}`}
-                      className="w-full h-[44px] border border-[#E5E7EB] bg-gray-50 text-gray-500 rounded-[8px] px-4 text-[14px] outline-none cursor-not-allowed"
-                      value={formData.country}
-                    />
-                  </div>
-                </div>
-              {/* 2. Contact Person Details */}
-              <div className="flex flex-col gap-6 pt-10 border-t border-[#E5E7EB]">
-                <h3 className="text-[16px] font-bold text-[#111827]">
-                  {t("modules:contact_person_details")}
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                  <CustomSelect
-                    label={t("modules:prefix")}
-                    required={true}
-                    placeholder={t("modules:select_prefix")}
-                    options={PREFIX_OPTIONS}
-                    value={formData.prefix}
-                    renderValue={(val) => t(`modules:${val.toLowerCase()}`, val)}
-                    onChange={(val) => handleInputChange("prefix", val)}
-                    onBlur={() => validateField("prefix", formData.prefix)}
-                    error={errors.prefix}
-                  />
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-semibold text-[#4B5563]">
-                      {t("modules:contact_person_name")}{" "}
-                      <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder={t("modules:enter_person_name")}
-                      className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.contactPersonName ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
-                      value={formData.contactPersonName}
-                      onChange={(e) =>
-                        handleInputChange("contactPersonName", e.target.value)
-                      }
-                      onBlur={() =>
-                        validateField(
-                          "contactPersonName",
-                          formData.contactPersonName,
-                        )
-                      }
-                    />
-                    {errors.contactPersonName && (
-                      <p className="text-[12px] text-red-500 mt-0.5">
-                        {errors.contactPersonName}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-semibold text-[#4B5563]">
-                      {t("modules:email_id")} ({t("common:optional")})
-                    </label>
-                    <input
-                      type="email"
-                      placeholder={t("modules:enter_email_id")}
-                      className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.emailId ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
-                      value={formData.emailId}
-                      onChange={(e) =>
-                        handleInputChange("emailId", e.target.value)
-                      }
-                      onBlur={() => validateField("emailId", formData.emailId)}
-                    />
-                    {errors.emailId && (
-                      <p className="text-[12px] text-red-500 mt-0.5">
-                        {errors.emailId}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-semibold text-[#4B5563]">
-                      {t("modules:mobile_no")}{" "}
-                      <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      maxLength={10}
-                      placeholder={t("modules:enter_mobile_number")}
-                      className={`w-full h-[44px] border rounded-[8px] px-4 text-[14px] outline-none transition-colors ${errors.mobileNo ? "border-red-500 focus:ring-1 focus:ring-red-500/10" : "border-[#E5E7EB] focus:border-[#014A36] focus:ring-1 focus:ring-[#014A36]/10"}`}
-                      value={formData.mobileNo}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, "");
-                        if (val.length <= 10) handleInputChange("mobileNo", val);
-                      }}
-                      onBlur={() => validateField("mobileNo", formData.mobileNo)}
-                    />
-                    {errors.mobileNo && (
-                      <p className="text-[12px] text-red-500 mt-0.5">
-                        {errors.mobileNo}
-                      </p>
-                    )}
-                  </div>
-                </div>
               </div>
+            </div>
 
 
             {/* 3. MSME Details */}
@@ -1943,28 +1943,27 @@ onUpdateAccount,
 
           </div>
 
-            <div className="mt-10 flex flex-col sm:flex-row justify-end gap-3 md:gap-4 py-6 border-t border-[#E5E7EB]">
-              <button
-                onClick={handleSave}
-                disabled={isLoading}
-                className={`w-full sm:w-auto px-10 h-[48px] rounded-[10px] text-[15px] font-bold transition-all flex items-center justify-center min-w-[180px] order-1 sm:order-2 ${
-                  !isLoading
-                    ? "bg-[#073318] hover:bg-[#04200f] text-white shadow-md"
-                    : "bg-gray-400 text-white cursor-wait"
+          <div className="mt-10 flex flex-col sm:flex-row justify-end gap-3 md:gap-4 py-6 border-t border-[#E5E7EB]">
+            <button
+              onClick={handleSave}
+              disabled={isLoading}
+              className={`w-full sm:w-auto px-10 h-[48px] rounded-[10px] text-[15px] font-bold transition-all flex items-center justify-center min-w-[180px] order-1 sm:order-2 ${!isLoading
+                  ? "bg-[#073318] hover:bg-[#04200f] text-white shadow-md"
+                  : "bg-gray-400 text-white cursor-wait"
                 }`}
-              >
-                {isLoading ? (
-                  <Loader2 size={16} className="animate-spin mr-2" />
-                ) : null}
-                {t("modules:saveAccount")}
-              </button>
-              <button
-                onClick={onBack}
-                className="w-full sm:w-auto px-10 h-[48px] bg-white border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[15px] font-bold hover:bg-gray-50 hover:text-[#111827] transition-all flex items-center justify-center order-2 sm:order-1 shadow-sm"
-              >
-                {t("common:cancel")}
-              </button>
-            </div>
+            >
+              {isLoading ? (
+                <Loader2 size={16} className="animate-spin mr-2" />
+              ) : null}
+              {t("modules:saveAccount")}
+            </button>
+            <button
+              onClick={onBack}
+              className="w-full sm:w-auto px-10 h-[48px] bg-white border border-[#E5E7EB] text-[#4B5563] rounded-[10px] text-[15px] font-bold hover:bg-gray-50 hover:text-[#111827] transition-all flex items-center justify-center order-2 sm:order-1 shadow-sm"
+            >
+              {t("common:cancel")}
+            </button>
+          </div>
 
           <style jsx global>{`
             .custom-scrollbar::-webkit-scrollbar {

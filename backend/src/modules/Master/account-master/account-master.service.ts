@@ -15,7 +15,7 @@ export class AccountMasterService {
   constructor(
     private prisma: PrismaService,
     private readonly groupMasterService: GroupMasterService
-  ) {}
+  ) { }
 
   private async isSellerMsme(userId: number): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
@@ -223,7 +223,7 @@ export class AccountMasterService {
   }
 
   private async handleFileUploads(
-    account: any, 
+    account: any,
     files?: { msmeCertificate?: Express.Multer.File[], otherDocuments?: Express.Multer.File[] },
     otherDocumentNames?: string[] | string
   ) {
@@ -239,7 +239,7 @@ export class AccountMasterService {
       const safeAccountName = account.accountName.replace(/[^a-zA-Z0-9]/g, '_');
       const folderName = `${account.id}_${safeAccountName}`;
       const uploadPath = path.resolve(process.cwd(), 'uploads', 'account_upload', folderName);
-      
+
       console.log('Target uploadPath (absolute):', uploadPath);
 
       if (!fs.existsSync(uploadPath)) {
@@ -263,7 +263,7 @@ export class AccountMasterService {
         const extension = path.extname(file.originalname);
         const randomName = `${generateRandomNumber()}_MSME${extension}`;
         const newPath = path.join(uploadPath, randomName);
-        
+
         if (fs.existsSync(sourcePath)) {
           console.log('Renaming file to:', randomName);
           fs.renameSync(sourcePath, newPath);
@@ -275,7 +275,7 @@ export class AccountMasterService {
 
       if (files?.otherDocuments && files.otherDocuments.length > 0) {
         console.log('Processing otherDocuments:', files.otherDocuments.length);
-        
+
         let docNamesArray: string[] = [];
         if (Array.isArray(otherDocumentNames)) {
           docNamesArray = otherDocumentNames as string[];
@@ -284,27 +284,27 @@ export class AccountMasterService {
         }
 
         const docUrls = files.otherDocuments.map((file, idx) => {
-           console.log('Processing doc:', file.originalname, 'at', file.path);
-           const sourcePath = path.resolve(process.cwd(), file.path);
-           const extension = path.extname(file.originalname);
-           
-           let baseDocName = `${Math.floor(100000 + Math.random() * 900000)}_DOC`;
-           if (docNamesArray && docNamesArray[idx]) {
-               baseDocName = docNamesArray[idx].replace(/[^a-zA-Z0-9_\-]/g, '_');
-           }
-           
-           const targetName = `${baseDocName}${extension}`;
-           const newPath = path.join(uploadPath, targetName);
-           
-           if (fs.existsSync(sourcePath)) {
-             console.log('Moving doc to:', newPath);
-             fs.renameSync(sourcePath, newPath);
-             return `${baseUrl}/${targetName}`;
-           }
-           console.log('Source doc NOT found at:', sourcePath);
-           return null;
+          console.log('Processing doc:', file.originalname, 'at', file.path);
+          const sourcePath = path.resolve(process.cwd(), file.path);
+          const extension = path.extname(file.originalname);
+
+          let baseDocName = `${Math.floor(100000 + Math.random() * 900000)}_DOC`;
+          if (docNamesArray && docNamesArray[idx]) {
+            baseDocName = docNamesArray[idx].replace(/[^a-zA-Z0-9_\-]/g, '_');
+          }
+
+          const targetName = `${baseDocName}${extension}`;
+          const newPath = path.join(uploadPath, targetName);
+
+          if (fs.existsSync(sourcePath)) {
+            console.log('Moving doc to:', newPath);
+            fs.renameSync(sourcePath, newPath);
+            return `${baseUrl}/${targetName}`;
+          }
+          console.log('Source doc NOT found at:', sourcePath);
+          return null;
         }).filter(url => url !== null);
-        
+
         console.log('Generated docUrls:', docUrls);
         if (docUrls.length > 0) {
           updates.otherDocuments = docUrls;
@@ -357,7 +357,7 @@ export class AccountMasterService {
     if (createDto.groupName.includes(GroupNameEnum.SUNDRY_CREDITORS)) {
       supplierCode = createDto.supplierCode || await this.generateSupplierCode(userId);
     }
-    
+
     if (createDto.groupName.includes(GroupNameEnum.SUNDRY_DEBTORS)) {
       customerCode = createDto.customerCode || await this.generateCustomerCode(userId);
     }
@@ -440,7 +440,7 @@ export class AccountMasterService {
         groupName: createDto.groupName,
         gstNo: createDto.gstNo,
         panNo: createDto.panNo,
-        
+
         addressLine1: createDto.addressLine1,
         addressLine2: createDto.addressLine2,
         pincode: createDto.pincode,
@@ -476,24 +476,24 @@ export class AccountMasterService {
 
         otherDocuments: createDto.otherDocuments ? createDto.otherDocuments : undefined,
         status: createDto.status || MasterStatus.ACTIVE,
-        accountType: createDto.groupName.includes(GroupNameEnum.SUNDRY_CREDITORS) 
-          ? 'Creditor' 
-          : createDto.groupName.includes(GroupNameEnum.SUNDRY_DEBTORS) 
-            ? 'Debtor' 
-            : createDto.groupName.includes(GroupNameEnum.BANK) 
-              ? 'Bank' 
-              : createDto.groupName.includes(GroupNameEnum.CASH) 
-                ? 'Cash' 
+        accountType: createDto.groupName.includes(GroupNameEnum.SUNDRY_CREDITORS)
+          ? 'Creditor'
+          : createDto.groupName.includes(GroupNameEnum.SUNDRY_DEBTORS)
+            ? 'Debtor'
+            : createDto.groupName.includes(GroupNameEnum.BANK)
+              ? 'Bank'
+              : createDto.groupName.includes(GroupNameEnum.CASH)
+                ? 'Cash'
                 : null
       },
     });
 
     await this.handleFileUploads(account, files, createDto.otherDocumentNames as string[]);
-    
+
     if (!skipSync) {
       await this.groupMasterService.syncUserGroupBalances(userId);
     }
-    
+
     return {
       success: true,
       message: "Account created successfully",
@@ -505,21 +505,21 @@ export class AccountMasterService {
     };
   }
 
-  async findAll(filter: { 
-    groupName?: string; 
-    gstNo?: string; 
-    panNo?: string; 
-    customerCreditDays?: number | string; 
-    supplierCreditDays?: number | string; 
-    status?: MasterStatus | string; 
-    search?: string; 
+  async findAll(filter: {
+    groupName?: string;
+    gstNo?: string;
+    panNo?: string;
+    customerCreditDays?: number | string;
+    supplierCreditDays?: number | string;
+    status?: MasterStatus | string;
+    search?: string;
     page?: number;
     limit?: number;
     isExport?: boolean;
     userId: number;
   }) {
     const where: Prisma.AccountMasterWhereInput = { userId: filter.userId };
-    
+
     // Fetch all active group names to exclude shadow accounts representing groups from the Account Master list
     const [groups, subGroups, subSubGroups, subSubSubGroups, subSubSubSubGroups] = await Promise.all([
       this.prisma.group.findMany({ where: { OR: [{ userId: filter.userId }, { userId: null }] }, select: { group_name: true } }),
@@ -540,7 +540,7 @@ export class AccountMasterService {
     where.accountName = {
       notIn: groupNames
     };
-    
+
     if (filter.groupName) {
       const groupNameStr = String(filter.groupName);
       const groups = groupNameStr.split(',').map(g => g.trim().toUpperCase()).filter(g => g !== '');
@@ -548,7 +548,7 @@ export class AccountMasterService {
         where.groupName = { hasSome: groups };
       }
     }
-    
+
     if (filter.gstNo) {
       where.gstNo = { contains: filter.gstNo, mode: 'insensitive' };
     }
@@ -574,26 +574,26 @@ export class AccountMasterService {
     if (filter.status) {
       const statusStr = String(filter.status).toUpperCase();
       if (statusStr === 'ACTIVE' || statusStr === 'INACTIVE') {
-         if (filter.groupName?.includes('SUNDRY_DEBTORS')) {
-           where.customerStatus = statusStr as MasterStatus;
-         } else if (filter.groupName?.includes('SUNDRY_CREDITORS')) {
-           where.supplierStatus = statusStr as MasterStatus;
-         } else {
-           where.status = statusStr as MasterStatus;
-         }
+        if (filter.groupName?.includes('SUNDRY_DEBTORS')) {
+          where.customerStatus = statusStr as MasterStatus;
+        } else if (filter.groupName?.includes('SUNDRY_CREDITORS')) {
+          where.supplierStatus = statusStr as MasterStatus;
+        } else {
+          where.status = statusStr as MasterStatus;
+        }
       }
     }
 
     if (filter.search) {
       const parsedNum = parseInt(filter.search, 10);
       const upperSearch = filter.search.toUpperCase();
-      
+
       const searchConditions: Prisma.AccountMasterWhereInput['OR'] = [
         // Identity
         { accountName: { contains: filter.search, mode: 'insensitive' } },
         { customerCode: { contains: filter.search, mode: 'insensitive' } },
         { supplierCode: { contains: filter.search, mode: 'insensitive' } },
-        
+
         // Group / Array matches (exact uppercase check for Enum matches)
         { groupName: { hasSome: [upperSearch, upperSearch.includes('CRE') ? 'SUNDRY_CREDITORS' : '', upperSearch.includes('DEB') ? 'SUNDRY_DEBTORS' : ''].filter(Boolean) } },
 
@@ -624,13 +624,13 @@ export class AccountMasterService {
       if ('INACTIVE'.startsWith(upperSearch)) searchConditions.push({ status: MasterStatus.INACTIVE });
 
       if (where.OR) {
-         where.AND = [
-           { OR: where.OR },
-           { OR: searchConditions }
-         ];
-         delete where.OR;
+        where.AND = [
+          { OR: where.OR },
+          { OR: searchConditions }
+        ];
+        delete where.OR;
       } else {
-         where.OR = searchConditions;
+        where.OR = searchConditions;
       }
     }
 
@@ -658,23 +658,23 @@ export class AccountMasterService {
     }
 
     if (filter.isExport) {
-       const data = await this.prisma.accountMaster.findMany({
-         where,
-         orderBy: { createdAt: 'desc' },
-       });
-       const msmeMap = await this.batchIsCustomerMsme(data);
-       const mappedData = data.map((item) => {
-         const key = `${item.mobileNo?.trim() || ''}|${item.emailId?.trim() || ''}|${item.gstNo?.trim() || ''}`;
-         const isMsmeUser = msmeMap.get(key) || false;
-         return { ...item, isMsmeUser };
-       });
-       return {
-           data: mappedData,
-           total: mappedData.length,
-           page: 1,
-           limit: mappedData.length,
-           totalPages: 1
-       };
+      const data = await this.prisma.accountMaster.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+      });
+      const msmeMap = await this.batchIsCustomerMsme(data);
+      const mappedData = data.map((item) => {
+        const key = `${item.mobileNo?.trim() || ''}|${item.emailId?.trim() || ''}|${item.gstNo?.trim() || ''}`;
+        const isMsmeUser = msmeMap.get(key) || false;
+        return { ...item, isMsmeUser };
+      });
+      return {
+        data: mappedData,
+        total: mappedData.length,
+        page: 1,
+        limit: mappedData.length,
+        totalPages: 1
+      };
     }
 
     const page = filter.page || 1;
@@ -1231,7 +1231,7 @@ export class AccountMasterService {
 
   async update(id: number, updateDto: UpdateAccountMasterDto, userId: number, files?: any) {
     const existingOriginal = await this.findOne(id, userId);
-    
+
     if (updateDto.accountName) {
       const duplicateAccount = await this.prisma.accountMaster.findFirst({
         where: {
@@ -1313,7 +1313,7 @@ export class AccountMasterService {
         }
       }
     }
-    
+
     // Convert nested properties back for update if needed. We'll simplify Update strategy.
     const data: Prisma.AccountMasterUpdateInput = {
       accountName: updateDto.accountName,
@@ -1343,24 +1343,24 @@ export class AccountMasterService {
       customerType: updateDto.customerType,
       msmeEnabled: updateDto.msmeEnabled,
     };
-    
+
     if (msmeEnabledVal === true) {
-       if (updateDto.msmeId !== undefined) data.msmeId = updateDto.msmeId;
-       if (updateDto.regUnder !== undefined) data.regUnder = updateDto.regUnder;
-       if (updateDto.regType !== undefined) data.regType = updateDto.regType;
-       if (updateDto.msmeCertificateUrl !== undefined) data.msmeCertificateUrl = updateDto.msmeCertificateUrl;
+      if (updateDto.msmeId !== undefined) data.msmeId = updateDto.msmeId;
+      if (updateDto.regUnder !== undefined) data.regUnder = updateDto.regUnder;
+      if (updateDto.regType !== undefined) data.regType = updateDto.regType;
+      if (updateDto.msmeCertificateUrl !== undefined) data.msmeCertificateUrl = updateDto.msmeCertificateUrl;
     } else {
-       data.msmeId = null;
-       data.regUnder = null;
-       data.regType = null;
-       if (Array.isArray(data.groupName) && data.groupName.some(g => ['BANK', 'Bank & Cash'].includes(g))) {
-         data.accountType = AccountType.Bank;
-       }
-       data.msmeCertificateUrl = null;
+      data.msmeId = null;
+      data.regUnder = null;
+      data.regType = null;
+      if (Array.isArray(data.groupName) && data.groupName.some(g => ['BANK', 'Bank & Cash'].includes(g))) {
+        data.accountType = AccountType.Bank;
+      }
+      data.msmeCertificateUrl = null;
     }
 
     if (updateDto.otherDocuments) {
-       data.otherDocuments = updateDto.otherDocuments;
+      data.otherDocuments = updateDto.otherDocuments;
     }
 
     // Clean undefined
@@ -1373,11 +1373,11 @@ export class AccountMasterService {
       where: { id, userId },
       data,
     });
-    
+
     await this.handleFileUploads(updated, files, updateDto.otherDocumentNames as string[]);
-    
+
     await this.groupMasterService.syncUserGroupBalances(userId);
-    
+
     return {
       success: true,
       message: "Account updated successfully",
@@ -1449,7 +1449,7 @@ export class AccountMasterService {
 
       if (localPincode && localPincode.areas && localPincode.areas.length > 0) {
         return {
-          areas: localPincode.areas, 
+          areas: localPincode.areas,
           district: localPincode.district,
           state: localPincode.state,
           subDistrict: localPincode.subDistrict || '',
@@ -1472,11 +1472,11 @@ export class AccountMasterService {
             .map((po: any) => po.Name)
             .filter((name: any) => typeof name === 'string' && name.trim() !== '')
         )).sort() as string[];
-        
+
         const postOffice = postOffices[0];
         const subDistrict = postOffice.Block || postOffice.District || '';
         const country = postOffice.Country || 'India';
-        
+
         await this.prisma.pincode.upsert({
           where: { pincode },
           update: {
@@ -1495,10 +1495,10 @@ export class AccountMasterService {
             areas: areas,
           }
         }).catch(() => { /* Ignore on conflict */ });
-        
+
         return {
           areas: areas,
-          district: postOffice.District || '', 
+          district: postOffice.District || '',
           state: postOffice.State,
           subDistrict: subDistrict,
           country: country,
@@ -1507,8 +1507,8 @@ export class AccountMasterService {
         throw new NotFoundException('Pincode details not found in external API and local DB');
       }
     } catch (error) {
-       if (error instanceof NotFoundException) throw error;
-       throw new BadRequestException('Failed to fetch pincode details automatically. Please enter manually.');
+      if (error instanceof NotFoundException) throw error;
+      throw new BadRequestException('Failed to fetch pincode details automatically. Please enter manually.');
     }
   }
 
@@ -1640,7 +1640,7 @@ export class AccountMasterService {
         fgColor: { argb: 'FF4472C4' } // Professional Blue
       };
       headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
-      
+
       // Auto-height for header row to avoid cut-off
       headerRow.height = 25;
 
@@ -1650,14 +1650,14 @@ export class AccountMasterService {
         filename: `accounts_export_${Date.now()}.xlsx`,
         mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       };
-    } 
-    
+    }
+
     if (format === 'pdf') {
       return new Promise<any>((resolve, reject) => {
         // Landscape A4
         const doc = new PDFDocument({ margin: 20, size: 'A4', layout: 'landscape' });
         const buffers: Buffer[] = [];
-        
+
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', () => {
           const pdfData = Buffer.concat(buffers);
@@ -1686,7 +1686,7 @@ export class AccountMasterService {
         // Draw Header row
         doc.rect(15, tableTop - 5, 805, 20).fill('#4472C4');
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-        
+
         headers.forEach((header, i) => {
           doc.text(header, colX[i], tableTop);
         });
@@ -1729,7 +1729,7 @@ export class AccountMasterService {
           doc.text(acc.supplierOpeningBalance ? `${acc.supplierOpeningBalance} ${acc.supplierBalanceType || 'Dr'}` : '0', colX[10], y, { width: 55, lineBreak: false });
           doc.text(fullAddress.substring(0, 90), colX[11], y, { width: 165, lineBreak: true });
           doc.text(acc.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[12], y, { width: 40, lineBreak: false });
-          
+
           y += 20;
         });
 
@@ -1757,9 +1757,9 @@ export class AccountMasterService {
 
     const headers = [
       'Account Name*', 'Group Name*', 'GST NO', 'PAN NO*', 'Address1*', 'Address2',
-      'Pincode*', 'Area', 'Sub District', 'District', 'State', 'Country', 
+      'Pincode*', 'Area', 'Sub District', 'District', 'State', 'Country',
       'Supplier Credit Days', 'Supplier Opening Balance', 'Supplier Balance Type',
-      'Customer Credit Days', 'Customer Opening Balance', 'Customer Balance Type', 'Customer Type', 
+      'Customer Credit Days', 'Customer Opening Balance', 'Customer Balance Type', 'Customer Type',
       'MSME Enabled', 'MSME ID', 'Reg.Under', 'Reg.Type', 'Status'
     ];
     worksheet.addRow(headers);
@@ -1809,121 +1809,121 @@ export class AccountMasterService {
 
     // Data validations for dropdowns
     for (let i = 2; i <= 200; i++) {
-        // Group Name
-        worksheet.getCell(`B${i}`).dataValidation = {
-            type: 'list', allowBlank: true,
-            formulae: ['"SUNDRY_CREDITORS (Supplier),SUNDRY_DEBTORS (Customer),SUNDRY_CREDITORS (Supplier) & SUNDRY_DEBTORS (Customer)"'],
-            showErrorMessage: true,
-            showInputMessage: true,
-            promptTitle: 'Select Group Name',
-            prompt: 'Choose one of:\nSUNDRY_CREDITORS (Supplier),\nSUNDRY_DEBTORS (Customer),\nSUNDRY_CREDITORS (Supplier) & SUNDRY_DEBTORS (Customer)'
-        };
+      // Group Name
+      worksheet.getCell(`B${i}`).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: ['"SUNDRY_CREDITORS (Supplier),SUNDRY_DEBTORS (Customer),SUNDRY_CREDITORS (Supplier) & SUNDRY_DEBTORS (Customer)"'],
+        showErrorMessage: true,
+        showInputMessage: true,
+        promptTitle: 'Select Group Name',
+        prompt: 'Choose one of:\nSUNDRY_CREDITORS (Supplier),\nSUNDRY_DEBTORS (Customer),\nSUNDRY_CREDITORS (Supplier) & SUNDRY_DEBTORS (Customer)'
+      };
 
-        // Area (Column H) - Dependent Dropdown based on Pincode (Column G)
-        worksheet.getCell(`H${i}`).dataValidation = {
-            type: 'list',
-            allowBlank: true,
-            formulae: [`=INDIRECT("pin_"&TEXT(G${i}, "000000"))`],
-            showErrorMessage: false,
-            showInputMessage: true,
-            promptTitle: 'Select Area',
-            prompt: 'Dropdown will show areas after you enter a valid Pincode in G.'
-        };
+      // Area (Column H) - Dependent Dropdown based on Pincode (Column G)
+      worksheet.getCell(`H${i}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: [`=INDIRECT("pin_"&TEXT(G${i}, "000000"))`],
+        showErrorMessage: false,
+        showInputMessage: true,
+        promptTitle: 'Select Area',
+        prompt: 'Dropdown will show areas after you enter a valid Pincode in G.'
+      };
 
-        // Autofill Formulas using VLOOKUP
-        if (pincodes.length > 0) {
-            worksheet.getCell(`I${i}`).value = { formula: `IF(ISBLANK(G${i}), "", IFERROR(VLOOKUP(TEXT(G${i}, "000000"), 'PincodeData'!$A$1:$E$${pincodes.length}, 2, FALSE), ""))` };
-            worksheet.getCell(`J${i}`).value = { formula: `IF(ISBLANK(G${i}), "", IFERROR(VLOOKUP(TEXT(G${i}, "000000"), 'PincodeData'!$A$1:$E$${pincodes.length}, 3, FALSE), ""))` };
-            worksheet.getCell(`K${i}`).value = { formula: `IF(ISBLANK(G${i}), "", IFERROR(VLOOKUP(TEXT(G${i}, "000000"), 'PincodeData'!$A$1:$E$${pincodes.length}, 4, FALSE), ""))` };
-            worksheet.getCell(`L${i}`).value = { formula: `IF(ISBLANK(G${i}), "", IFERROR(VLOOKUP(TEXT(G${i}, "000000"), 'PincodeData'!$A$1:$E$${pincodes.length}, 5, FALSE), ""))` };
-        } else {
-            worksheet.getCell(`I${i}`).value = '';
-            worksheet.getCell(`J${i}`).value = '';
-            worksheet.getCell(`K${i}`).value = '';
-            worksheet.getCell(`L${i}`).value = '';
-        }
+      // Autofill Formulas using VLOOKUP
+      if (pincodes.length > 0) {
+        worksheet.getCell(`I${i}`).value = { formula: `IF(ISBLANK(G${i}), "", IFERROR(VLOOKUP(TEXT(G${i}, "000000"), 'PincodeData'!$A$1:$E$${pincodes.length}, 2, FALSE), ""))` };
+        worksheet.getCell(`J${i}`).value = { formula: `IF(ISBLANK(G${i}), "", IFERROR(VLOOKUP(TEXT(G${i}, "000000"), 'PincodeData'!$A$1:$E$${pincodes.length}, 3, FALSE), ""))` };
+        worksheet.getCell(`K${i}`).value = { formula: `IF(ISBLANK(G${i}), "", IFERROR(VLOOKUP(TEXT(G${i}, "000000"), 'PincodeData'!$A$1:$E$${pincodes.length}, 4, FALSE), ""))` };
+        worksheet.getCell(`L${i}`).value = { formula: `IF(ISBLANK(G${i}), "", IFERROR(VLOOKUP(TEXT(G${i}, "000000"), 'PincodeData'!$A$1:$E$${pincodes.length}, 5, FALSE), ""))` };
+      } else {
+        worksheet.getCell(`I${i}`).value = '';
+        worksheet.getCell(`J${i}`).value = '';
+        worksheet.getCell(`K${i}`).value = '';
+        worksheet.getCell(`L${i}`).value = '';
+      }
 
-        // Supplier Balance Type (Column O)
-        worksheet.getCell(`O${i}`).dataValidation = {
-            type: 'list', allowBlank: true,
-            formulae: ['"Cr,Dr"'],
-            showInputMessage: true,
-            promptTitle: 'Select Balance Type',
-            prompt: 'Choose one of:\nCr,\nDr'
-        };
+      // Supplier Balance Type (Column O)
+      worksheet.getCell(`O${i}`).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: ['"Cr,Dr"'],
+        showInputMessage: true,
+        promptTitle: 'Select Balance Type',
+        prompt: 'Choose one of:\nCr,\nDr'
+      };
 
-        // Customer Balance Type (Column R)
-        worksheet.getCell(`R${i}`).dataValidation = {
-            type: 'list', allowBlank: true,
-            formulae: ['"Cr,Dr"'],
-            showInputMessage: true,
-            promptTitle: 'Select Balance Type',
-            prompt: 'Choose one of:\nCr,\nDr'
-        };
+      // Customer Balance Type (Column R)
+      worksheet.getCell(`R${i}`).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: ['"Cr,Dr"'],
+        showInputMessage: true,
+        promptTitle: 'Select Balance Type',
+        prompt: 'Choose one of:\nCr,\nDr'
+      };
 
-        // Customer Type (Column S)
-        worksheet.getCell(`S${i}`).dataValidation = {
-            type: 'list', allowBlank: true,
-            formulae: ['"Industrial,Institutional,Retailer,Dealer"'],
-            showInputMessage: true,
-            promptTitle: 'Select Customer Type',
-            prompt: 'Choose one of:\nIndustrial,\nInstitutional,\nRetailer,\nDealer'
-        };
-        // MSME Enabled (Column T)
-        worksheet.getCell(`T${i}`).dataValidation = {
-            type: 'list', allowBlank: true,
-            formulae: ['"Yes,No"'],
-            showInputMessage: true,
-            promptTitle: 'Select MSME Status',
-            prompt: 'Choose one of:\nYes,\nNo'
-        };
-        // Reg Under (Column V)
-        worksheet.getCell(`V${i}`).dataValidation = {
-            type: 'list', allowBlank: true,
-            formulae: ['"Micro,Small,Medium"'],
-            showInputMessage: true,
-            promptTitle: 'Select MSME Category',
-            prompt: 'Choose one of:\nMicro,\nSmall,\nMedium'
-        };
-        // Reg Type (Column W)
-        worksheet.getCell(`W${i}`).dataValidation = {
-            type: 'list', allowBlank: true,
-            formulae: ['"Manufacturing,Service,Trading"'],
-            showInputMessage: true,
-            promptTitle: 'Select Industry Type',
-            prompt: 'Choose one of:\nManufacturing,\nService,\nTrading'
-        };
-        // Status (Column X)
-        worksheet.getCell(`X${i}`).dataValidation = {
-            type: 'list', allowBlank: true,
-            formulae: ['"ACTIVE,INACTIVE"'],
-            showInputMessage: true,
-            promptTitle: 'Select Status',
-            prompt: 'Choose one of:\nACTIVE,\nINACTIVE'
-        };
+      // Customer Type (Column S)
+      worksheet.getCell(`S${i}`).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: ['"Industrial,Institutional,Retailer,Dealer"'],
+        showInputMessage: true,
+        promptTitle: 'Select Customer Type',
+        prompt: 'Choose one of:\nIndustrial,\nInstitutional,\nRetailer,\nDealer'
+      };
+      // MSME Enabled (Column T)
+      worksheet.getCell(`T${i}`).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: ['"Yes,No"'],
+        showInputMessage: true,
+        promptTitle: 'Select MSME Status',
+        prompt: 'Choose one of:\nYes,\nNo'
+      };
+      // Reg Under (Column V)
+      worksheet.getCell(`V${i}`).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: ['"Micro,Small,Medium"'],
+        showInputMessage: true,
+        promptTitle: 'Select MSME Category',
+        prompt: 'Choose one of:\nMicro,\nSmall,\nMedium'
+      };
+      // Reg Type (Column W)
+      worksheet.getCell(`W${i}`).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: ['"Manufacturing,Service,Trading"'],
+        showInputMessage: true,
+        promptTitle: 'Select Industry Type',
+        prompt: 'Choose one of:\nManufacturing,\nService,\nTrading'
+      };
+      // Status (Column X)
+      worksheet.getCell(`X${i}`).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: ['"ACTIVE,INACTIVE"'],
+        showInputMessage: true,
+        promptTitle: 'Select Status',
+        prompt: 'Choose one of:\nACTIVE,\nINACTIVE'
+      };
     }
 
     worksheet.columns = headers.map((h, i) => {
-        let width = 22;
-        if (i === 1) width = 60; // Group Name
-        if (i === 6) width = 15; // Pincode
-        if (i === 7) width = 20; // Area
-        if (i === 8) width = 20; // Sub District
-        if (i === 9) width = 20; // District
-        if (i === 10) width = 20; // State
-        if (i === 11) width = 15; // Country
-        if (i === 19) width = 15; // MSME Enabled
-        if (i === 21) width = 15; // Reg.Under
-        if (i === 22) width = 18; // Reg.Type
-        if (i === 23) width = 12; // Status
-        return { width };
+      let width = 22;
+      if (i === 1) width = 60; // Group Name
+      if (i === 6) width = 15; // Pincode
+      if (i === 7) width = 20; // Area
+      if (i === 8) width = 20; // Sub District
+      if (i === 9) width = 20; // District
+      if (i === 10) width = 20; // State
+      if (i === 11) width = 15; // Country
+      if (i === 19) width = 15; // MSME Enabled
+      if (i === 21) width = 15; // Reg.Under
+      if (i === 22) width = 18; // Reg.Type
+      if (i === 23) width = 12; // Status
+      return { width };
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
     return {
-        buffer: Buffer.from(buffer),
-        filename: 'Account_Master_Sample.xlsx',
-        mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      buffer: Buffer.from(buffer),
+      filename: 'Account_Master_Sample.xlsx',
+      mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     };
   }
 
@@ -1938,7 +1938,7 @@ export class AccountMasterService {
 
     const rowCount = worksheet.rowCount;
     if (rowCount < 2) {
-       throw new BadRequestException('No data found to import');
+      throw new BadRequestException('No data found to import');
     }
 
     let imported = 0;
@@ -1950,63 +1950,63 @@ export class AccountMasterService {
     const colMap: Record<string, number> = {};
 
     for (let r = 1; r <= Math.min(rowCount, 10); r++) {
-        const row = worksheet.getRow(r);
-        let foundHeaders = false;
-        row.eachCell((cell, colNumber) => {
-            const val = String(cell.value || '').trim().toLowerCase();
-            if (val.includes('account name') || val.includes('acc name')) { colMap['accountName'] = colNumber; foundHeaders = true; }
-            if (val.includes('group name') || val.includes('group')) colMap['groupName'] = colNumber;
-            if (val.includes('gst')) colMap['gstNo'] = colNumber;
-            if (val.includes('pan')) colMap['panNo'] = colNumber;
-            if (val.includes('address1')) colMap['addressLine1'] = colNumber;
-            if (val.includes('address2')) colMap['addressLine2'] = colNumber;
-            if (val.includes('pincode') || val.includes('pin code')) colMap['pincode'] = colNumber;
-            if (val === 'area') colMap['area'] = colNumber;
-            if (val === 'sub district') colMap['subDistrict'] = colNumber;
-            if (val === 'district' || val === 'city') colMap['district'] = colNumber;
-            if (val === 'state') colMap['state'] = colNumber;
-            if (val === 'country') colMap['country'] = colNumber;
-            
-            if (val.includes('supplier credit days')) colMap['supplierCreditDays'] = colNumber;
-            if (val.includes('supplier opening balance')) colMap['supplierOpBalance'] = colNumber;
-            if (val.includes('supplier balance type')) colMap['supplierBalanceType'] = colNumber;
-            if (val.includes('customer credit days')) colMap['customerCreditDays'] = colNumber;
-            if (val.includes('customer opening balance')) colMap['customerOpBalance'] = colNumber;
-            if (val.includes('customer balance type')) colMap['customerBalanceType'] = colNumber;
-            if (val === 'customer type' || val === 'c. type') colMap['customerType'] = colNumber;
-            
-            if (val.includes('msme enabled')) colMap['msmeEnabled'] = colNumber;
-            if (val.includes('msme id') || val.includes('udyam')) colMap['msmeId'] = colNumber;
-            if (val.includes('reg.under') || val.includes('reg under')) colMap['regUnder'] = colNumber;
-            if (val.includes('reg.type') || val.includes('reg type')) colMap['regType'] = colNumber;
-            if (val === 'status') colMap['status'] = colNumber;
-        });
+      const row = worksheet.getRow(r);
+      let foundHeaders = false;
+      row.eachCell((cell, colNumber) => {
+        const val = String(cell.value || '').trim().toLowerCase();
+        if (val.includes('account name') || val.includes('acc name')) { colMap['accountName'] = colNumber; foundHeaders = true; }
+        if (val.includes('group name') || val.includes('group')) colMap['groupName'] = colNumber;
+        if (val.includes('gst')) colMap['gstNo'] = colNumber;
+        if (val.includes('pan')) colMap['panNo'] = colNumber;
+        if (val.includes('address1')) colMap['addressLine1'] = colNumber;
+        if (val.includes('address2')) colMap['addressLine2'] = colNumber;
+        if (val.includes('pincode') || val.includes('pin code')) colMap['pincode'] = colNumber;
+        if (val === 'area') colMap['area'] = colNumber;
+        if (val === 'sub district') colMap['subDistrict'] = colNumber;
+        if (val === 'district' || val === 'city') colMap['district'] = colNumber;
+        if (val === 'state') colMap['state'] = colNumber;
+        if (val === 'country') colMap['country'] = colNumber;
 
-        if (foundHeaders) {
-            headerRowIndex = r;
-            break;
-        }
+        if (val.includes('supplier credit days')) colMap['supplierCreditDays'] = colNumber;
+        if (val.includes('supplier opening balance')) colMap['supplierOpBalance'] = colNumber;
+        if (val.includes('supplier balance type')) colMap['supplierBalanceType'] = colNumber;
+        if (val.includes('customer credit days')) colMap['customerCreditDays'] = colNumber;
+        if (val.includes('customer opening balance')) colMap['customerOpBalance'] = colNumber;
+        if (val.includes('customer balance type')) colMap['customerBalanceType'] = colNumber;
+        if (val === 'customer type' || val === 'c. type') colMap['customerType'] = colNumber;
+
+        if (val.includes('msme enabled')) colMap['msmeEnabled'] = colNumber;
+        if (val.includes('msme id') || val.includes('udyam')) colMap['msmeId'] = colNumber;
+        if (val.includes('reg.under') || val.includes('reg under')) colMap['regUnder'] = colNumber;
+        if (val.includes('reg.type') || val.includes('reg type')) colMap['regType'] = colNumber;
+        if (val === 'status') colMap['status'] = colNumber;
+      });
+
+      if (foundHeaders) {
+        headerRowIndex = r;
+        break;
+      }
     }
 
     if (headerRowIndex === -1) {
-        throw new BadRequestException('Could not find Account Name column in the file. Please ensure headers are present.');
+      throw new BadRequestException('Could not find Account Name column in the file. Please ensure headers are present.');
     }
 
     const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
-        const colIdx = colMap[key];
-        if (!colIdx) return defaultVal;
-        const val = row.getCell(colIdx).value;
-        return (val !== undefined && val !== null) ? val : defaultVal;
+      const colIdx = colMap[key];
+      if (!colIdx) return defaultVal;
+      const val = row.getCell(colIdx).value;
+      return (val !== undefined && val !== null) ? val : defaultVal;
     };
 
     const parseOptional = (val: any) => {
-        const s = String(val === undefined || val === null ? '' : val).trim();
-        return s && s !== '-' ? s : undefined;
+      const s = String(val === undefined || val === null ? '' : val).trim();
+      return s && s !== '-' ? s : undefined;
     };
 
     const parseBoolean = (val: any) => {
-        const s = String(val === undefined || val === null ? '' : val).trim().toLowerCase();
-        return s === 'yes' || s === 'true' || s === 'y' || s === '1';
+      const s = String(val === undefined || val === null ? '' : val).trim().toLowerCase();
+      return s === 'yes' || s === 'true' || s === 'y' || s === '1';
     };
 
     // Pass 1: Scan all rows to count occurrences of accountName and panNo within the sheet (internal duplicates)
@@ -2014,195 +2014,195 @@ export class AccountMasterService {
     const panFrequency = new Map<string, number>();
 
     for (let i = headerRowIndex + 1; i <= rowCount; i++) {
-        const row = worksheet.getRow(i);
-        const nameVal = getVal(row, 'accountName');
-        const rawName = (nameVal !== undefined && nameVal !== null ? String(nameVal).trim() : '');
-        if (!rawName || rawName === '-' || rawName === 'null' || rawName === 'undefined') continue;
+      const row = worksheet.getRow(i);
+      const nameVal = getVal(row, 'accountName');
+      const rawName = (nameVal !== undefined && nameVal !== null ? String(nameVal).trim() : '');
+      if (!rawName || rawName === '-' || rawName === 'null' || rawName === 'undefined') continue;
 
-        const keyName = rawName.toUpperCase();
-        nameFrequency.set(keyName, (nameFrequency.get(keyName) || 0) + 1);
+      const keyName = rawName.toUpperCase();
+      nameFrequency.set(keyName, (nameFrequency.get(keyName) || 0) + 1);
 
-        const panVal = getVal(row, 'panNo');
-        const rawPan = (panVal !== undefined && panVal !== null ? String(panVal).trim() : '');
-        if (rawPan && rawPan !== '-' && rawPan !== 'null' && rawPan !== 'undefined') {
-            const keyPan = rawPan.toUpperCase();
-            panFrequency.set(keyPan, (panFrequency.get(keyPan) || 0) + 1);
-        }
+      const panVal = getVal(row, 'panNo');
+      const rawPan = (panVal !== undefined && panVal !== null ? String(panVal).trim() : '');
+      if (rawPan && rawPan !== '-' && rawPan !== 'null' && rawPan !== 'undefined') {
+        const keyPan = rawPan.toUpperCase();
+        panFrequency.set(keyPan, (panFrequency.get(keyPan) || 0) + 1);
+      }
     }
 
     // Pass 2: Process and import rows, skipping internal and external database duplicates
     for (let i = headerRowIndex + 1; i <= rowCount; i++) {
-        const row = worksheet.getRow(i);
-        
-        const val = getVal(row, 'accountName');
-        const rawAccountName = (val !== undefined && val !== null ? String(val).trim() : '');
-        if (!rawAccountName || rawAccountName === '-' || rawAccountName === 'null' || rawAccountName === 'undefined') continue; // Skip empty rows
+      const row = worksheet.getRow(i);
 
-        // Check if this accountName is duplicated within the Excel sheet itself
-        if ((nameFrequency.get(rawAccountName.toUpperCase()) || 0) > 1) {
+      const val = getVal(row, 'accountName');
+      const rawAccountName = (val !== undefined && val !== null ? String(val).trim() : '');
+      if (!rawAccountName || rawAccountName === '-' || rawAccountName === 'null' || rawAccountName === 'undefined') continue; // Skip empty rows
+
+      // Check if this accountName is duplicated within the Excel sheet itself
+      if ((nameFrequency.get(rawAccountName.toUpperCase()) || 0) > 1) {
+        duplicates++;
+        continue;
+      }
+
+      const panValForCheck = getVal(row, 'panNo');
+      const rawPanNoForCheck = (panValForCheck !== undefined && panValForCheck !== null ? String(panValForCheck).trim() : '');
+      if (rawPanNoForCheck && rawPanNoForCheck !== '-' && rawPanNoForCheck !== 'null' && rawPanNoForCheck !== 'undefined') {
+        if ((panFrequency.get(rawPanNoForCheck.toUpperCase()) || 0) > 1) {
+          duplicates++;
+          continue;
+        }
+      }
+
+      try {
+        const accountName = rawAccountName;
+
+        let groupName = [];
+        const rawGroupName = String(getVal(row, 'groupName', '')).toUpperCase();
+        const isBoth = rawGroupName.includes('BOTH');
+        const isCustomer = rawGroupName.includes('DEBTOR') || rawGroupName.includes('CUSTOMER') || isBoth;
+        const isVendor = rawGroupName.includes('CREDITOR') || rawGroupName.includes('SUPPLIER') || rawGroupName.includes('VENDOR') || isBoth;
+
+        if (isCustomer) groupName.push(GroupNameEnum.SUNDRY_DEBTORS);
+        if (isVendor) groupName.push(GroupNameEnum.SUNDRY_CREDITORS);
+        if (groupName.length === 0) groupName.push(GroupNameEnum.SUNDRY_CREDITORS);
+
+        const customerOpeningBalance = parseFloat(String(getVal(row, 'customerOpBalance', '0'))) || 0;
+        const rawCustomerBalanceType = String(getVal(row, 'customerBalanceType', '')).trim().toUpperCase();
+        const customerBalanceType = rawCustomerBalanceType === 'CR' ? 'Cr' : 'Dr';
+
+        const supplierOpeningBalance = parseFloat(String(getVal(row, 'supplierOpBalance', '0'))) || 0;
+        const rawSupplierBalanceType = String(getVal(row, 'supplierBalanceType', '')).trim().toUpperCase();
+        const supplierBalanceType = rawSupplierBalanceType === 'DR' ? 'Dr' : 'Cr';
+
+        const addressLine1Raw = String(getVal(row, 'addressLine1')).trim();
+        const addressLine1 = (addressLine1Raw && addressLine1Raw !== '-') ? addressLine1Raw : 'Unknown';
+
+        let status: MasterStatus = MasterStatus.ACTIVE;
+        if (String(getVal(row, 'status')).trim().toUpperCase() === 'INACTIVE') {
+          status = MasterStatus.INACTIVE;
+        }
+
+        const rawCustType = parseOptional(getVal(row, 'customerType'))?.toLowerCase();
+        const validCustTypes = ['industrial', 'institutional', 'dealer', 'retailer'];
+        const customerType = validCustTypes.includes(rawCustType as string) ? rawCustType : undefined;
+
+        const msmeEnabled = parseBoolean(getVal(row, 'msmeEnabled'));
+
+        let prefixRaw = parseOptional(getVal(row, 'prefix'));
+        let prefixValue: ContactPrefix = ContactPrefix.Mr;
+        if (prefixRaw) {
+          const pLower = prefixRaw.toLowerCase();
+          if (pLower === 'mrs' || pLower === 'mrs.') prefixValue = ContactPrefix.Mrs;
+          else if (pLower === 'miss') prefixValue = ContactPrefix.Miss;
+          else if (pLower === 'ms' || pLower === 'ms.') prefixValue = ContactPrefix.Ms;
+        }
+
+        const dto: any = {
+          accountName,
+          groupName,
+
+          // IDs and Basic Info
+          gstNo: parseOptional(getVal(row, 'gstNo')),
+          panNo: String(getVal(row, 'panNo') || ''),
+
+          // Address Mapping
+          addressLine1,
+          addressLine2: parseOptional(getVal(row, 'addressLine2')),
+          area: parseOptional(getVal(row, 'area')),
+          district: parseOptional(getVal(row, 'city')),
+          state: parseOptional(getVal(row, 'state')),
+          country: parseOptional(getVal(row, 'country')),
+          pincode: parseOptional(getVal(row, 'pincode')) || '000000',
+
+          // Contact Details
+          prefix: prefixValue,
+          contactPersonName: parseOptional(getVal(row, 'contactPersonName')) || accountName,
+          mobileNo: parseOptional(getVal(row, 'mobileNo')) || '0000000000',
+          emailId: parseOptional(getVal(row, 'emailId')),
+
+          // Customer Fields
+          customerCode: isCustomer ? parseOptional(getVal(row, 'customerCode')) : undefined,
+          customerType: isCustomer ? customerType : undefined,
+          customerCreditDays: isCustomer ? (parseInt(String(getVal(row, 'customerCreditDays', '0')), 10) || 0) : undefined,
+          customerOpeningBalance: isCustomer ? customerOpeningBalance : undefined,
+          customerBalanceType: isCustomer ? customerBalanceType : undefined,
+
+          // Supplier Fields
+          supplierCode: isVendor ? parseOptional(getVal(row, 'supplierCode')) : undefined,
+          supplierCreditDays: isVendor ? (parseInt(String(getVal(row, 'supplierCreditDays', '0')), 10) || 0) : undefined,
+          supplierOpeningBalance: isVendor ? supplierOpeningBalance : undefined,
+          supplierBalanceType: isVendor ? supplierBalanceType : undefined,
+
+          // MSME Mapping
+          msmeEnabled,
+          msmeId: msmeEnabled ? parseOptional(getVal(row, 'msmeId')) : undefined,
+          regUnder: msmeEnabled ? parseOptional(getVal(row, 'regUnder')) : undefined,
+          regType: msmeEnabled ? parseOptional(getVal(row, 'regType')) : undefined,
+
+          status,
+          otherDocumentNames: []
+        };
+
+        // Check for duplicate account name for this user
+        const existingName = await this.prisma.accountMaster.findFirst({
+          where: {
+            accountName: { equals: accountName, mode: 'insensitive' },
+            userId: userId
+          }
+        });
+
+        if (existingName) {
+          duplicates++;
+          continue;
+        }
+
+        // Check for duplicate PAN card for this user
+        const panNo = dto.panNo ? String(dto.panNo).trim() : '';
+        if (panNo && panNo !== '-' && panNo !== 'null' && panNo !== 'undefined') {
+          const existingPan = await this.prisma.accountMaster.findFirst({
+            where: {
+              panNo: { equals: panNo, mode: 'insensitive' },
+              userId: userId
+            }
+          });
+          if (existingPan) {
             duplicates++;
             continue;
+          }
         }
 
-        const panValForCheck = getVal(row, 'panNo');
-        const rawPanNoForCheck = (panValForCheck !== undefined && panValForCheck !== null ? String(panValForCheck).trim() : '');
-        if (rawPanNoForCheck && rawPanNoForCheck !== '-' && rawPanNoForCheck !== 'null' && rawPanNoForCheck !== 'undefined') {
-            if ((panFrequency.get(rawPanNoForCheck.toUpperCase()) || 0) > 1) {
-                duplicates++;
-                continue;
-            }
-        }
+        await this.create(dto, userId, null, true);
+        imported++;
 
-        try {
-            const accountName = rawAccountName;
-            
-            let groupName = [];
-            const rawGroupName = String(getVal(row, 'groupName', '')).toUpperCase();
-            const isBoth = rawGroupName.includes('BOTH');
-            const isCustomer = rawGroupName.includes('DEBTOR') || rawGroupName.includes('CUSTOMER') || isBoth;
-            const isVendor = rawGroupName.includes('CREDITOR') || rawGroupName.includes('SUPPLIER') || rawGroupName.includes('VENDOR') || isBoth;
-            
-            if (isCustomer) groupName.push(GroupNameEnum.SUNDRY_DEBTORS);
-            if (isVendor) groupName.push(GroupNameEnum.SUNDRY_CREDITORS);
-            if (groupName.length === 0) groupName.push(GroupNameEnum.SUNDRY_CREDITORS);
-
-            const customerOpeningBalance = parseFloat(String(getVal(row, 'customerOpBalance', '0'))) || 0;
-            const rawCustomerBalanceType = String(getVal(row, 'customerBalanceType', '')).trim().toUpperCase();
-            const customerBalanceType = rawCustomerBalanceType === 'CR' ? 'Cr' : 'Dr';
-
-            const supplierOpeningBalance = parseFloat(String(getVal(row, 'supplierOpBalance', '0'))) || 0;
-            const rawSupplierBalanceType = String(getVal(row, 'supplierBalanceType', '')).trim().toUpperCase();
-            const supplierBalanceType = rawSupplierBalanceType === 'DR' ? 'Dr' : 'Cr';
-
-            const addressLine1Raw = String(getVal(row, 'addressLine1')).trim();
-            const addressLine1 = (addressLine1Raw && addressLine1Raw !== '-') ? addressLine1Raw : 'Unknown';
-
-            let status: MasterStatus = MasterStatus.ACTIVE;
-            if (String(getVal(row, 'status')).trim().toUpperCase() === 'INACTIVE') {
-                 status = MasterStatus.INACTIVE;
-            }
-
-            const rawCustType = parseOptional(getVal(row, 'customerType'))?.toLowerCase();
-            const validCustTypes = ['industrial', 'institutional', 'dealer', 'retailer'];
-            const customerType = validCustTypes.includes(rawCustType as string) ? rawCustType : undefined;
-
-            const msmeEnabled = parseBoolean(getVal(row, 'msmeEnabled'));
-            
-            let prefixRaw = parseOptional(getVal(row, 'prefix'));
-            let prefixValue: ContactPrefix = ContactPrefix.Mr;
-            if (prefixRaw) {
-                const pLower = prefixRaw.toLowerCase();
-                if (pLower === 'mrs' || pLower === 'mrs.') prefixValue = ContactPrefix.Mrs;
-                else if (pLower === 'miss') prefixValue = ContactPrefix.Miss;
-                else if (pLower === 'ms' || pLower === 'ms.') prefixValue = ContactPrefix.Ms;
-            }
-
-            const dto: any = {
-                accountName,
-                groupName,
-                
-                // IDs and Basic Info
-                gstNo: parseOptional(getVal(row, 'gstNo')),
-                panNo: String(getVal(row, 'panNo') || ''),
-                
-                // Address Mapping
-                addressLine1,
-                addressLine2: parseOptional(getVal(row, 'addressLine2')),
-                area: parseOptional(getVal(row, 'area')),
-                district: parseOptional(getVal(row, 'city')),
-                state: parseOptional(getVal(row, 'state')),
-                country: parseOptional(getVal(row, 'country')),
-                pincode: parseOptional(getVal(row, 'pincode')) || '000000',
-                
-                // Contact Details
-                prefix: prefixValue,
-                contactPersonName: parseOptional(getVal(row, 'contactPersonName')) || accountName,
-                mobileNo: parseOptional(getVal(row, 'mobileNo')) || '0000000000',
-                emailId: parseOptional(getVal(row, 'emailId')),
-
-                // Customer Fields
-                customerCode: isCustomer ? parseOptional(getVal(row, 'customerCode')) : undefined,
-                customerType: isCustomer ? customerType : undefined,
-                customerCreditDays: isCustomer ? (parseInt(String(getVal(row, 'customerCreditDays', '0')), 10) || 0) : undefined,
-                customerOpeningBalance: isCustomer ? customerOpeningBalance : undefined,
-                customerBalanceType: isCustomer ? customerBalanceType : undefined,
-                
-                // Supplier Fields
-                supplierCode: isVendor ? parseOptional(getVal(row, 'supplierCode')) : undefined,
-                supplierCreditDays: isVendor ? (parseInt(String(getVal(row, 'supplierCreditDays', '0')), 10) || 0) : undefined,
-                supplierOpeningBalance: isVendor ? supplierOpeningBalance : undefined,
-                supplierBalanceType: isVendor ? supplierBalanceType : undefined,
-                
-                // MSME Mapping
-                msmeEnabled,
-                msmeId: msmeEnabled ? parseOptional(getVal(row, 'msmeId')) : undefined,
-                regUnder: msmeEnabled ? parseOptional(getVal(row, 'regUnder')) : undefined,
-                regType: msmeEnabled ? parseOptional(getVal(row, 'regType')) : undefined,
-
-                status,
-                otherDocumentNames: []
-            };
-
-            // Check for duplicate account name for this user
-            const existingName = await this.prisma.accountMaster.findFirst({
-                where: {
-                    accountName: { equals: accountName, mode: 'insensitive' },
-                    userId: userId
-                }
-            });
-
-            if (existingName) {
-                duplicates++;
-                continue;
-            }
-
-            // Check for duplicate PAN card for this user
-            const panNo = dto.panNo ? String(dto.panNo).trim() : '';
-            if (panNo && panNo !== '-' && panNo !== 'null' && panNo !== 'undefined') {
-                const existingPan = await this.prisma.accountMaster.findFirst({
-                    where: {
-                        panNo: { equals: panNo, mode: 'insensitive' },
-                        userId: userId
-                    }
-                });
-                if (existingPan) {
-                    duplicates++;
-                    continue;
-                }
-            }
-
-            await this.create(dto, userId, null, true);
-            imported++;
-
-        } catch (error) {
-            failed++;
-            errors.push(`Row ${i} (${rawAccountName}): ${error.message}`);
-        }
+      } catch (error) {
+        failed++;
+        errors.push(`Row ${i} (${rawAccountName}): ${error.message}`);
+      }
     }
 
     if (imported === 0 && failed > 0) {
-        throw new BadRequestException(`Import failed: ${errors[0]}`);
+      throw new BadRequestException(`Import failed: ${errors[0]}`);
     }
 
     if (imported === 0 && duplicates > 0 && failed === 0) {
-        return {
-            success: true,
-            message: `No new accounts imported. ${duplicates} duplicate rows were skipped.`,
-        };
+      return {
+        success: true,
+        message: `No new accounts imported. ${duplicates} duplicate rows were skipped.`,
+      };
     }
 
     if (imported === 0 && failed === 0) {
-        throw new BadRequestException('No data found to import');
+      throw new BadRequestException('No data found to import');
     }
 
     if (imported > 0) {
-        await this.groupMasterService.syncUserGroupBalances(userId);
+      await this.groupMasterService.syncUserGroupBalances(userId);
     }
 
     return {
-        success: true,
-        message: `Successfully imported ${imported} accounts. ${duplicates} duplicate rows were skipped.${failed > 0 ? ' ' + failed + ' failed.' : ''}`,
-        errors: failed > 0 ? errors : undefined,
+      success: true,
+      message: `Successfully imported ${imported} accounts. ${duplicates} duplicate rows were skipped.${failed > 0 ? ' ' + failed + ' failed.' : ''}`,
+      errors: failed > 0 ? errors : undefined,
     };
   }
 

@@ -23,7 +23,7 @@ export class ReportsService {
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
-  ) {}
+  ) { }
 
   async getSummary(userId: number): Promise<SummaryResponseDto> {
     const [purchaseSummary, salesSummary, invoiceCount] = await Promise.all([
@@ -74,7 +74,7 @@ export class ReportsService {
           const exp = new Date(o.expiryDate);
           if (exp < now) counts.expired++;
           else if (exp <= expiringSoonDate) counts.expiringSoon++;
-          
+
           if (o.status === 'PENDING') counts.pending++;
           counts.created++;
         }

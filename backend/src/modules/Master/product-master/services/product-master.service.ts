@@ -667,12 +667,12 @@ export class ProductMasterService {
                     uom = await prisma.unitMaster.findFirst({ where: { user_id: userId, gst_uom: gstUom } });
                     if (!uom) {
                         uom = await prisma.unitMaster.create({
-                            data: { 
-                                user_id: userId, 
-                                unit_name: uomName, 
-                                gst_uom: gstUom, 
-                                full_name_of_measurement: uomName, 
-                                source: 'USER' 
+                            data: {
+                                user_id: userId,
+                                unit_name: uomName,
+                                gst_uom: gstUom,
+                                full_name_of_measurement: uomName,
+                                source: 'USER'
                             }
                         });
                     }
@@ -722,7 +722,7 @@ export class ProductMasterService {
                 }
 
                 let hsnCode = String(getVal(row, 'hsn')).trim();
-                
+
                 let hsnMasterId = '';
                 let taxRateValue = 0;
                 let hsnDescValue = '';
@@ -752,7 +752,7 @@ export class ProductMasterService {
                             break;
                         }
                     }
-                    
+
                     if (!hsnMaster) {
                         let excelTaxRate: number | null = null;
                         const taxRateStr = String(getVal(row, 'taxRate')).trim();

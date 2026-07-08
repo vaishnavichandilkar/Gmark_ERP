@@ -25,7 +25,7 @@ const ReportDashboard = () => {
 
     useEffect(() => {
         dispatch(fetchReportsStart());
-        
+
         const fetchPL = async () => {
             setPlLoading(true);
             try {
@@ -57,7 +57,7 @@ const ReportDashboard = () => {
     const metrics = useMemo(() => {
         const completedSales = (salesInvoicesData || []).filter(s => s.status === 'GENERATED' || s.status === 'INVOICE_GENERATED');
         const validPurchases = (purchaseData || []).filter(p => p.status === 'GENERATED');
-        
+
         const totalPurchases = validPurchases.reduce((sum, item) => sum + (item.grandTotal || 0), 0);
         const totalSales = completedSales.reduce((sum, item) => sum + (item.grandTotal || 0), 0);
         const totalPurchaseTax = validPurchases.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
@@ -99,7 +99,7 @@ const ReportDashboard = () => {
                     const expiry = parseSafeDate(item.expiryDate);
                     const isCompleted = item.status === 'INVOICE_GENERATED' || item.status === 'INVOICE_COMPLETED' || item.status === 'COMPLETED' || item.status === 'CHALLAN_COMPLETED' || item.status === 'GRN_COMPLETED';
                     const hasActivity = (item.salesChallans?.length > 0 || item.salesInvoices?.length > 0 || item.grn?.length > 0 || item.purchaseInvoices?.length > 0);
-                    
+
                     if (isCompleted || hasActivity) {
                         completed++;
                         completedAmt += amt;
@@ -812,7 +812,7 @@ const ReportDashboard = () => {
 
                                 {/* Row 2: Purchase & Sale (Interactive) */}
                                 <tr className="hover:bg-emerald-50/30 transition-all duration-200 group">
-                                    <td 
+                                    <td
                                         onClick={() => handleCardClick('PI', 'Total Invoices', purchaseData)}
                                         className="px-8 py-4 font-semibold text-gray-700 hover:text-emerald-700 cursor-pointer"
                                     >
@@ -824,7 +824,7 @@ const ReportDashboard = () => {
                                     <td className="px-8 py-4 text-right text-gray-900 font-bold border-r-2 border-gray-200/80">
                                         {formatCurrency(purchase)}
                                     </td>
-                                    <td 
+                                    <td
                                         onClick={() => handleCardClick('SI', 'Total Invoices', salesInvoicesData)}
                                         className="px-8 py-4 font-semibold text-gray-700 hover:text-blue-700 cursor-pointer"
                                     >

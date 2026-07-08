@@ -222,7 +222,7 @@ export class CreateAccountMasterDto {
   status?: MasterStatus;
 }
 
-export class UpdateAccountMasterDto extends PartialType(CreateAccountMasterDto) {}
+export class UpdateAccountMasterDto extends PartialType(CreateAccountMasterDto) { }
 
 export class UpdateAccountStatusDto {
   @ApiProperty({ enum: MasterStatus })

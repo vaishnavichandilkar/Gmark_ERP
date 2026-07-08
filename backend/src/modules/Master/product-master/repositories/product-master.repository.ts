@@ -12,7 +12,7 @@ export class ProductMasterRepository {
 
     async getLastProductCode(userId: number, prefix: string): Promise<string | null> {
         const product = await this.prisma.product.findFirst({
-            where: { 
+            where: {
                 created_by: userId,
                 product_code: { startsWith: prefix }
             },

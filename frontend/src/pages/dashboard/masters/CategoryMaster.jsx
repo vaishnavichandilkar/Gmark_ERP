@@ -385,7 +385,7 @@ const CategoryMaster = () => {
         try {
           const errorData = JSON.parse(text);
           message = errorData.message || message;
-        } catch (err) {}
+        } catch (err) { }
       } else if (error.response?.data?.message) {
         message = error.response.data.message;
       }
@@ -417,7 +417,7 @@ const CategoryMaster = () => {
         try {
           const errorData = JSON.parse(text);
           message = errorData.message || message;
-        } catch (err) {}
+        } catch (err) { }
       } else if (error.response?.data?.message) {
         message = error.response.data.message;
       }
@@ -440,7 +440,7 @@ const CategoryMaster = () => {
       toast.dismiss(loadingToast);
       toast.error(
         error?.response?.data?.message ||
-          t("common:import_failed", "Failed to import data"),
+        t("common:import_failed", "Failed to import data"),
       );
       return Promise.reject(error);
     }
@@ -1086,63 +1086,63 @@ const CategoryMaster = () => {
                                           </button>
                                           {activeRowDropdown ===
                                             ssDropdownId && (
-                                            <div
-                                              className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in zoom-in-95 duration-200 text-left ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
-                                            >
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setSelectedCategoryData({
-                                                    ...subSub,
-                                                    type: "sub_sub_category",
-                                                  });
-                                                  setIsEditModalOpen(true);
-                                                  setActiveRowDropdown(null);
-                                                }}
-                                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
+                                              <div
+                                                className={`dropdown-menu absolute right-[80%] w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[110] py-2 animate-in zoom-in-95 duration-200 text-left ${paginatedIndex >= paginatedData.length - 1 ? "bottom-0 mb-2" : "top-0 mt-2"}`}
                                               >
-                                                <Eye
-                                                  size={18}
-                                                  className="text-gray-400"
-                                                />{" "}
-                                                {t(
-                                                  "modules:view_and_edit_category",
-                                                )}
-                                              </button>
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleToggleStatus(
-                                                    subSub.id,
-                                                    subSub.status,
-                                                    "sub_sub_category",
-                                                  );
-                                                }}
-                                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
-                                              >
-                                                {subSub.status ===
-                                                "INACTIVE" ? (
-                                                  <CheckCircle2 size={18} className="text-[#073318]" />
-                                                ) : (
-                                                  <XCircle size={18} />
-                                                )}
-                                                {subSub.status === "INACTIVE"
-                                                  ? t("common:active")
-                                                  : t("common:inactive")}
-                                              </button>
-                                              <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleDeleteCategory(subSub.id, subSub.name);
-                                                }}
-                                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
-                                              >
-                                                <Trash2 size={18} className="text-red-500" />
-                                                {t("common:delete", "Delete")}
-                                              </button>
-                                            </div>
-                                          )}
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedCategoryData({
+                                                      ...subSub,
+                                                      type: "sub_sub_category",
+                                                    });
+                                                    setIsEditModalOpen(true);
+                                                    setActiveRowDropdown(null);
+                                                  }}
+                                                  className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
+                                                >
+                                                  <Eye
+                                                    size={18}
+                                                    className="text-gray-400"
+                                                  />{" "}
+                                                  {t(
+                                                    "modules:view_and_edit_category",
+                                                  )}
+                                                </button>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleToggleStatus(
+                                                      subSub.id,
+                                                      subSub.status,
+                                                      "sub_sub_category",
+                                                    );
+                                                  }}
+                                                  className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-gray-700 hover:bg-[#F9FAFB] hover:text-[#073318] transition-colors whitespace-nowrap"
+                                                >
+                                                  {subSub.status ===
+                                                    "INACTIVE" ? (
+                                                    <CheckCircle2 size={18} className="text-[#073318]" />
+                                                  ) : (
+                                                    <XCircle size={18} />
+                                                  )}
+                                                  {subSub.status === "INACTIVE"
+                                                    ? t("common:active")
+                                                    : t("common:inactive")}
+                                                </button>
+                                                <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteCategory(subSub.id, subSub.name);
+                                                  }}
+                                                  className="w-full px-5 py-3 flex items-center gap-3 text-[14px] font-bold text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+                                                >
+                                                  <Trash2 size={18} className="text-red-500" />
+                                                  {t("common:delete", "Delete")}
+                                                </button>
+                                              </div>
+                                            )}
                                         </div>
                                       </div>
                                     </div>
@@ -1169,14 +1169,14 @@ const CategoryMaster = () => {
         <div className="flex flex-row items-center justify-between px-4 sm:px-6 py-4 border-t border-[#F3F4F6] bg-white gap-4 w-full">
           <div className="flex items-center gap-2 text-[13px] text-[#6B7280] font-medium">
             <span className="hidden sm:inline">{t("common:show")}</span>
-            <CustomSelect 
-                value={itemsPerPage}
-                onChange={(val) => {
-                  setItemsPerPage(val);
-                  setCurrentPage(1);
-                }}
-                options={[5, 10, 20, 50]}
-                menuPlacement="top"
+            <CustomSelect
+              value={itemsPerPage}
+              onChange={(val) => {
+                setItemsPerPage(val);
+                setCurrentPage(1);
+              }}
+              options={[5, 10, 20, 50]}
+              menuPlacement="top"
             />
             <span className="hidden sm:inline">{t("common:per_page")}</span>
           </div>
