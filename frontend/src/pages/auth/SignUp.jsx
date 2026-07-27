@@ -271,6 +271,7 @@ const SignUp = () => {
         udyogAadhar: '',
         regType: '',
         gstNumber: '',
+        panNumber: '',
         udyogAadharFile: null,
         gstFile: null,
         otherDocFile: null,
@@ -313,6 +314,7 @@ const SignUp = () => {
                         udyogAadhar: data.udyogAadhar || '',
                         regType: data.regType || '',
                         gstNumber: data.gstNumber || '',
+                        panNumber: data.panNumber || '',
                         udyogAadharFile: data.udyogAadharFile || null,
                         gstFile: data.gstFile || null,
                         otherDocFile: data.businessProof || null,
@@ -363,6 +365,7 @@ const SignUp = () => {
         udyogAadharNumber: 'udyogAadhar',
         regType: 'regType',
         gstNumber: 'gstNumber',
+        panNumber: 'panNumber',
         udyogAadharCert: 'udyogAadharFile',
         gstCert: 'gstFile',
         businessProof: 'otherDocFile',
@@ -396,7 +399,7 @@ const SignUp = () => {
     const getCurrentStepFields = () => {
         if (step === 1) return ['firstName', 'lastName', 'email'];
         if (step === 2) return ['shopName', 'address', 'pinCode', 'village', 'district', 'state'];
-        if (step === 3) return ['udyogAadhar', 'regType', 'gstNumber', 'udyogAadharFile', 'gstFile', 'otherDocFile'];
+        if (step === 3) return ['udyogAadhar', 'regType', 'gstNumber', 'panNumber', 'udyogAadharFile', 'gstFile', 'otherDocFile'];
         return [];
     };
 
@@ -482,6 +485,7 @@ const SignUp = () => {
     }, [formData.pinCode]);
 
     const validateField = (name, value) => {
+        if (name === 'panNumber' && !value) return 'PAN Number is required.';
         if (!value) return '';
         switch (name) {
             case 'firstName':
@@ -500,6 +504,11 @@ const SignUp = () => {
                 break;
             case 'pinCode':
                 if (!/^\d{6}$/.test(value)) return 'Pincode must be exactly 6 digits.';
+                break;
+            case 'panNumber':
+                if (!/^[A-Z]{3}[PCHFATBLJG][A-Z]{1}[0-9]{4}[A-Z]{1}$/.test(value.trim().toUpperCase())) {
+                    return 'Invalid PAN format. Must be a valid 10-character PAN (e.g. ABCPE1234F).';
+                }
                 break;
             default:
                 break;
@@ -526,7 +535,19 @@ const SignUp = () => {
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
         const newValue = type === 'checkbox' ? checked : value;
-        setFormData({ ...formData, [name]: newValue });
+        
+        let newFormData = { ...formData, [name]: newValue };
+
+        // Auto fetch PAN from GST No
+        if (name === 'gstNumber') {
+            const gstPattern = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+            if (newValue && gstPattern.test(newValue.trim().toUpperCase())) {
+                newFormData.panNumber = newValue.trim().substring(2, 12).toUpperCase();
+                setFieldErrors(prev => ({ ...prev, panNumber: '' }));
+            }
+        }
+
+        setFormData(newFormData);
 
         if (fieldErrors[name]) {
             const validationError = validateField(name, newValue);
@@ -597,11 +618,19 @@ const SignUp = () => {
                 });
                 setSearchParams({ step: '3' });
             } else if (step === 3) {
+                // Validate PAN Number since it is a required field
+                const panError = validateField('panNumber', formData.panNumber) || (!formData.panNumber ? 'PAN Number is required.' : '');
+                if (panError) {
+                    setFieldErrors(prev => ({ ...prev, panNumber: panError }));
+                    setIsLoading(false);
+                    return;
+                }
                 const { saveBusinessDetailsApi, completeOnboardingApi } = await import('../../services/onboardingService');
                 await saveBusinessDetailsApi({
                     udyogAadhar: formData.udyogAadhar,
                     gstNumber: formData.gstNumber,
-                    regType: formData.regType
+                    regType: formData.regType,
+                    panNumber: formData.panNumber
                 }, {
                     udyogAadharFile: formData.udyogAadharFile,
                     gstFile: formData.gstFile,
@@ -1018,8 +1047,8 @@ const SignUp = () => {
                                 <form noValidate onSubmit={(e) => e.preventDefault()} className="w-full">
                                     {error && <div className="mb-4 text-red-500 text-[13px] font-medium animate-in fade-in slide-in-from-top-1 duration-300">{error}</div>}
                                     
-                                    {/* Text/Select Inputs - 3 Columns on desktop */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-[24px] w-full mb-[24px]">
+                                    {/* Text/Select Inputs - 2 Columns on desktop */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px] w-full mb-[24px]">
                                         <CustomInput
                                             label={t('auth:udyog_aadhar')}
                                             optional={true}
@@ -1057,6 +1086,17 @@ const SignUp = () => {
                                             onBlur={handleBlur}
                                             error={fieldErrors.gstNumber || getFieldRejectionReason('gstNumber')}
                                             status={getFieldStatus('gstNumber')}
+                                        />
+                                        <CustomInput
+                                            label={t('auth:pan_no')}
+                                            optional={false}
+                                            placeholder={t('auth:placeholder_pan')}
+                                            name="panNumber"
+                                            value={formData.panNumber}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            error={fieldErrors.panNumber || getFieldRejectionReason('panNumber')}
+                                            status={getFieldStatus('panNumber')}
                                         />
                                     </div>
 
@@ -1100,7 +1140,7 @@ const SignUp = () => {
 
                                     <div className="col-span-1 md:col-span-2 w-full flex justify-center mt-[12px]">
                                         <button
-                                            disabled={isLoading || !!fieldErrors.udyogAadhar || !!fieldErrors.regType || !!fieldErrors.gstNumber || isAnyUploading}
+                                            disabled={isLoading || !formData.panNumber || !!fieldErrors.udyogAadhar || !!fieldErrors.regType || !!fieldErrors.gstNumber || !!fieldErrors.panNumber || isAnyUploading}
                                             onClick={handleNext}
                                             className="w-full mt-6 mb-6 md:w-[calc(50%-12px)] h-[56px] bg-[#0F3D2E] text-white text-[16px] font-['Plus_Jakarta_Sans'] font-medium rounded-[8px] hover:bg-[#0a291f] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                                         >

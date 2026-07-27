@@ -134,6 +134,21 @@ export class CategoryMasterRepository {
     }
 
     async getCategoryWithSubCategories(userId: number) {
+        try {
+            await this.prisma.category.deleteMany({
+                where: {
+                    user_id: userId,
+                    OR: [
+                        { name: 'null' },
+                        { name: 'undefined' },
+                        { name: '' }
+                    ]
+                }
+            });
+        } catch (e) {
+            console.error('Error auto-cleaning invalid categories:', e);
+        }
+
         const categories = await this.prisma.category.findMany({
             where: { user_id: userId, parent_id: null },
             include: {
@@ -153,6 +168,31 @@ export class CategoryMasterRepository {
     }
 
     private mapHierarchy(cat: any): any {
+        const isInvalidName = (n: any) => !n || typeof n !== 'string' || !n.trim() || n.trim().toLowerCase() === 'null' || n.trim().toLowerCase() === 'undefined';
+
+        const subCategories = (cat.children || [])
+            .filter((sub: any) => !isInvalidName(sub?.name))
+            .map((sub: any) => ({
+                id: sub.id,
+                name: sub.name,
+                category_id: sub.parent_id,
+                user_id: sub.user_id,
+                status: sub.status,
+                created_at: sub.created_at,
+                updated_at: sub.updated_at,
+                sub_sub_categories: (sub.children || [])
+                    .filter((ss: any) => !isInvalidName(ss?.name))
+                    .map((ss: any) => ({
+                        id: ss.id,
+                        name: ss.name,
+                        sub_category_id: ss.parent_id,
+                        user_id: ss.user_id,
+                        status: ss.status,
+                        created_at: ss.created_at,
+                        updated_at: ss.updated_at
+                    }))
+            }));
+
         return {
             id: cat.id,
             name: cat.name,
@@ -161,24 +201,7 @@ export class CategoryMasterRepository {
             status: cat.status,
             created_at: cat.created_at,
             updated_at: cat.updated_at,
-            sub_categories: (cat.children || []).map((sub: any) => ({
-                id: sub.id,
-                name: sub.name,
-                category_id: sub.parent_id,
-                user_id: sub.user_id,
-                status: sub.status,
-                created_at: sub.created_at,
-                updated_at: sub.updated_at,
-                sub_sub_categories: (sub.children || []).map((ss: any) => ({
-                    id: ss.id,
-                    name: ss.name,
-                    sub_category_id: ss.parent_id,
-                    user_id: ss.user_id,
-                    status: ss.status,
-                    created_at: ss.created_at,
-                    updated_at: ss.updated_at
-                }))
-            }))
+            sub_categories: subCategories
         };
     }
 

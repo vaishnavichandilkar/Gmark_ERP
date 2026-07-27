@@ -71,6 +71,16 @@ const Challan = () => {
     const navigate = useNavigate();
 
     const [searchQuery, setSearchQuery] = useState("");
+    const [columnFilters, setColumnFilters] = useState({
+        customerName: "",
+        challanNo: "",
+        challanDate: "",
+        bookingDate: "",
+        soNo: "",
+        gstNo: "",
+        grandTotal: "",
+        status: ""
+    });
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -277,7 +287,7 @@ const Challan = () => {
     };
 
     const mappedChallans = useMemo(() => {
-        return challans.map(item => {
+        let baseData = challans.map(item => {
             let statusLabel = item.status?.toUpperCase() === 'DELETED' ? 'Deleted' : 'Generated';
             if (item.isInvoiced && statusLabel !== 'Deleted') statusLabel = 'Invoiced';
             return {
@@ -293,7 +303,29 @@ const Challan = () => {
                 bgClass: statusLabel === 'Deleted' ? 'bg-red-50 text-red-600 border border-red-100' : (statusLabel === 'Invoiced' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-blue-50 text-blue-600 border border-blue-100')
             };
         });
-    }, [challans]);
+
+        // Apply column filters
+        Object.keys(columnFilters).forEach(key => {
+            const val = columnFilters[key].toLowerCase().trim();
+            if (val) {
+                baseData = baseData.filter(row => {
+                    let fieldVal = "";
+                    if (key === 'customerName') fieldVal = row.customerName || "";
+                    else if (key === 'challanNo') fieldVal = row.challanNo || "";
+                    else if (key === 'challanDate') fieldVal = row.challanDate || "";
+                    else if (key === 'bookingDate') fieldVal = row.bookingDate || "";
+                    else if (key === 'soNo') fieldVal = row.soNo || "";
+                    else if (key === 'gstNo') fieldVal = row.gstNo || "";
+                    else if (key === 'grandTotal') fieldVal = row.grandTotal || "";
+                    else if (key === 'status') fieldVal = row.status || "";
+
+                    return fieldVal.toLowerCase().includes(val);
+                });
+            }
+        });
+
+        return baseData;
+    }, [challans, columnFilters]);
 
     const totalPages = Math.ceil(totalItemsCount / itemsPerPage);
 
@@ -389,6 +421,31 @@ const Challan = () => {
                                 <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap text-right">{t('modules:grand_total_col')}</th>
                                 <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap text-center">{t('common:status')}</th>
                                 <th className="px-6 py-5 whitespace-nowrap text-center">{t('common:action')}</th>
+                            </tr>
+                            <tr className="bg-[#0b543f]">
+                                {[
+                                    { key: 'customerName', placeholder: 'Name' },
+                                    { key: 'challanNo', placeholder: 'Challan No' },
+                                    { key: 'challanDate', placeholder: 'Challan Date' },
+                                    { key: 'bookingDate', placeholder: 'Booking Date' },
+                                    { key: 'soNo', placeholder: 'SO No' },
+                                    { key: 'gstNo', placeholder: 'GST No' },
+                                    { key: 'grandTotal', placeholder: 'Total' },
+                                    { key: 'status', placeholder: 'Status' },
+                                    { key: 'actions', noSearch: true }
+                                ].map((col, i) => (
+                                    <th key={i} className="px-2 py-2 border-r border-white/10 whitespace-nowrap align-middle">
+                                        {!col.noSearch && (
+                                            <input
+                                                type="text"
+                                                placeholder={`Search ${col.placeholder}...`}
+                                                value={columnFilters[col.key] || ""}
+                                                onChange={(e) => setColumnFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                                                className="w-full min-w-[85px] px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+                                            />
+                                        )}
+                                    </th>
+                                ))}
                             </tr>
                         </thead>
                         <tbody className={`text-[14px] text-[#111827] font-medium ${isLoading ? 'opacity-40' : 'opacity-100'}`}>

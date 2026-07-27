@@ -111,7 +111,13 @@ export const checkMsmeUser = async (phone, email, gst) => {
     return response.data;
 };
 
+export const checkDuplicate = async (name) => {
+    const response = await axiosInstance.get(`${API_PATH}/check-duplicate`, { params: { name } });
+    return response.data;
+};
+
 export default {
+    checkDuplicate,
     getAllAccounts,
     getAccountById,
     createAccount,

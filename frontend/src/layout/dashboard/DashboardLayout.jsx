@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
+import { getSafeUser } from '../../utils/user';
 
 const DashboardLayout = () => {
     const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 1024);
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const user = getSafeUser();
 
     // Security Gate: Ensure Sellers can only access Dashboard if they are APPROVED.
     // Otherwise, they belong on the ApplicationStatus page.

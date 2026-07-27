@@ -1753,7 +1753,7 @@ export class AccountMasterService {
   async downloadSample() {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Sample Data');
-    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+    worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }];
 
     const headers = [
       'Account Name*', 'Group Name*', 'GST NO', 'PAN NO*', 'Address1*', 'Address2',
@@ -1925,6 +1925,17 @@ export class AccountMasterService {
       filename: 'Account_Master_Sample.xlsx',
       mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     };
+  }
+
+  async checkDuplicate(name: string, userId: number): Promise<boolean> {
+    if (!name || name.trim() === '') return false;
+    const account = await this.prisma.accountMaster.findFirst({
+      where: {
+        accountName: { equals: name.trim(), mode: 'insensitive' },
+        userId: userId
+      }
+    });
+    return !!account;
   }
 
   async importAccounts(buffer: Buffer, userId: number) {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { getSafeUser } from '../../utils/user';
 import { Menu, User, Globe, ChevronDown, LayoutDashboard, FileBarChart, Database, ShoppingCart, TrendingUp, Settings as SettingsIcon, IndianRupee, Plus } from 'lucide-react';
 import logo from '../../assets/images/ERP_Logo2.png';
 import ProfilePopup from '../../components/common/ProfilePopup';
@@ -24,7 +25,7 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
     const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [voucherType, setVoucherType] = useState('Payment');
-    const [userData, setUserData] = useState(JSON.parse(localStorage.getItem('user') || 'null'));
+    const [userData, setUserData] = useState(getSafeUser());
 
     React.useEffect(() => {
         const fetchUserProfile = async () => {

@@ -55,13 +55,13 @@ body {
     color: white;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    height: 44px; /* Standardize height */
+    height: 38px; /* Standardize height - scaled down from 44px */
 }
 
 .master-table th {
     font-size: 11px !important;
     padding: 0 0.5rem;
-    height: 44px;
+    height: 38px; /* Scaled down from 44px */
     white-space: nowrap;
     border-right: 1px solid rgba(255, 255, 255, 0.1);
     vertical-align: middle;
@@ -177,6 +177,7 @@ div[class*="table-wrapper"] table {
 }
 
 /* Enforce compact table header styling */
+/* Enforce compact table header styling */
 .master-table thead tr,
 .master-table-header,
 .custom-table-scrollbar table thead tr,
@@ -191,7 +192,7 @@ div[class*="table-wrapper"] table thead tr {
     font-size: 11px !important;
     font-weight: 700 !important;
     letter-spacing: 0.05em !important;
-    height: 44px !important;
+    height: 38px !important; /* Scaled down from 44px */
     background-color: #064E3B !important; /* Standardized deep green */
     color: white !important;
     text-transform: uppercase !important;
@@ -210,7 +211,7 @@ div[class*="scrollbar"] table th,
 div[class*="table-wrapper"] table th {
     font-size: 11px !important;
     padding: 0 0.5rem !important;
-    height: 44px !important;
+    height: 38px !important; /* Scaled down from 44px */
     white-space: nowrap !important;
     vertical-align: middle !important;
     text-align: left !important;
@@ -229,6 +230,51 @@ div[class*="table-wrapper"] table th {
 .custom-challan-scrollbar table th:last-child,
 .custom-scrollbar table th:last-child {
     border-right: none !important;
+}
+
+/* Enforce compact height for search/filter header row */
+.master-table thead tr:nth-child(2),
+.custom-table-scrollbar table thead tr:nth-child(2),
+.custom-po-scrollbar table thead tr:nth-child(2),
+.custom-so-scrollbar table thead tr:nth-child(2),
+.custom-invoice-scrollbar table thead tr:nth-child(2),
+.custom-grn-scrollbar table thead tr:nth-child(2),
+.custom-challan-scrollbar table thead tr:nth-child(2),
+.custom-scrollbar table thead tr:nth-child(2),
+div[class*="scrollbar"] table thead tr:nth-child(2),
+div[class*="table-wrapper"] table thead tr:nth-child(2) {
+    height: 34px !important;
+}
+
+/* Enforce compact height for search/filter header row cells */
+.master-table thead tr:nth-child(2) th,
+.custom-table-scrollbar table thead tr:nth-child(2) th,
+.custom-po-scrollbar table thead tr:nth-child(2) th,
+.custom-so-scrollbar table thead tr:nth-child(2) th,
+.custom-invoice-scrollbar table thead tr:nth-child(2) th,
+.custom-grn-scrollbar table thead tr:nth-child(2) th,
+.custom-challan-scrollbar table thead tr:nth-child(2) th,
+.custom-scrollbar table thead tr:nth-child(2) th,
+div[class*="scrollbar"] table thead tr:nth-child(2) th,
+div[class*="table-wrapper"] table thead tr:nth-child(2) th {
+    height: 34px !important;
+    padding: 0 0.5rem !important;
+}
+
+/* Styling for search/filter inputs inside table headers */
+.master-table thead input,
+.custom-table-scrollbar table thead input,
+.custom-po-scrollbar table thead input,
+.custom-so-scrollbar table thead input,
+.custom-invoice-scrollbar table thead input,
+.custom-grn-scrollbar table thead input,
+.custom-challan-scrollbar table thead input,
+.custom-scrollbar table thead input,
+div[class*="scrollbar"] table thead input,
+div[class*="table-wrapper"] table thead input {
+    height: 24px !important;
+    font-size: 10px !important;
+    padding: 2px 6px !important;
 }
 
 /* Enforce compact table body cells */

@@ -42,8 +42,8 @@ export class CategoryMasterService {
 
     async createCategory(dto: CreateCategoryDto, userId: number) {
         const name = dto.name.trim();
-        if (!name) {
-            throw new BadRequestException('Category name cannot be empty');
+        if (!name || name.toLowerCase() === 'null' || name.toLowerCase() === 'undefined') {
+            throw new BadRequestException('Category name cannot be empty or invalid');
         }
 
         const existing = await this.repository.findCategoryByName(name, userId);
@@ -72,8 +72,8 @@ export class CategoryMasterService {
 
     async createSubCategory(dto: CreateSubCategoryDto, userId: number) {
         const name = dto.name.trim();
-        if (!name) {
-            throw new BadRequestException('Sub Category name cannot be empty');
+        if (!name || name.toLowerCase() === 'null' || name.toLowerCase() === 'undefined') {
+            throw new BadRequestException('Sub Category name cannot be empty or invalid');
         }
 
         const category = await this.repository.findCategoryById(dto.category_id);
@@ -105,8 +105,8 @@ export class CategoryMasterService {
 
     async createSubSubCategory(dto: CreateSubSubCategoryDto, userId: number) {
         const name = dto.name.trim();
-        if (!name) {
-            throw new BadRequestException('Sub Sub Category name cannot be empty');
+        if (!name || name.toLowerCase() === 'null' || name.toLowerCase() === 'undefined') {
+            throw new BadRequestException('Sub Sub Category name cannot be empty or invalid');
         }
 
         const subCategory = await this.repository.findSubCategoryById(dto.sub_category_id);
@@ -379,6 +379,7 @@ export class CategoryMasterService {
         let importedCategories = 0;
         let importedSubCategories = 0;
         let importedSubSubCategories = 0;
+        let duplicates = 0;
         let failed = 0;
         const errors: string[] = [];
 
@@ -405,10 +406,13 @@ export class CategoryMasterService {
             throw new BadRequestException('Could not find Category name column in the provided Excel file.');
         }
 
-        const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
+        const getValStr = (row: ExcelJS.Row, key: string): string => {
             const colIdx = colMap[key];
-            if (!colIdx) return defaultVal;
-            return row.getCell(colIdx).value;
+            if (!colIdx) return '';
+            const val = row.getCell(colIdx).value;
+            if (val === null || val === undefined) return '';
+            const strVal = String(val).trim();
+            return strVal === 'null' || strVal === 'undefined' ? '' : strVal;
         };
 
         let currentCategoryId: string | null = null;
@@ -416,9 +420,9 @@ export class CategoryMasterService {
 
         for (let i = headerRowIndex + 1; i <= rowCount; i++) {
             const row = worksheet.getRow(i);
-            const rawCategoryName = String(getVal(row, 'categoryName')).trim();
-            const rawSubCategoryName = String(getVal(row, 'subCategoryName')).trim();
-            const rawSubSubCategoryName = String(getVal(row, 'subSubCategoryName')).trim();
+            const rawCategoryName = getValStr(row, 'categoryName');
+            const rawSubCategoryName = getValStr(row, 'subCategoryName');
+            const rawSubSubCategoryName = getValStr(row, 'subSubCategoryName');
 
             if (!rawCategoryName && !rawSubCategoryName && !rawSubSubCategoryName) continue;
             if (rawCategoryName === '-' && rawSubCategoryName === '-' && rawSubSubCategoryName === '-') continue;
@@ -433,6 +437,8 @@ export class CategoryMasterService {
                             status: MasterStatus.ACTIVE,
                         });
                         importedCategories++;
+                    } else {
+                        duplicates++;
                     }
                     currentCategoryId = category.id;
                     currentSubCategoryId = null; // reset subcategory context
@@ -451,6 +457,8 @@ export class CategoryMasterService {
                             status: MasterStatus.ACTIVE,
                         });
                         importedSubCategories++;
+                    } else {
+                        duplicates++;
                     }
                     currentSubCategoryId = subCategory.id;
                 }
@@ -468,6 +476,8 @@ export class CategoryMasterService {
                             status: MasterStatus.ACTIVE,
                         });
                         importedSubSubCategories++;
+                    } else {
+                        duplicates++;
                     }
                 }
             } catch (error) {
@@ -476,17 +486,26 @@ export class CategoryMasterService {
             }
         }
 
-        if (importedCategories === 0 && importedSubCategories === 0 && importedSubSubCategories === 0 && failed > 0) {
+        const totalImported = importedCategories + importedSubCategories + importedSubSubCategories;
+
+        if (totalImported === 0 && failed > 0) {
             throw new BadRequestException(`Import failed: ${errors[0]}`);
         }
 
-        if (importedCategories === 0 && importedSubCategories === 0 && importedSubSubCategories === 0 && failed === 0) {
+        if (totalImported === 0 && duplicates > 0 && failed === 0) {
+            return {
+                success: true,
+                message: `No new categories imported. ${duplicates} duplicate records found in file were skipped.`,
+            };
+        }
+
+        if (totalImported === 0 && failed === 0) {
             throw new BadRequestException('No data found to import');
         }
 
         return {
             success: true,
-            message: `Imported ${importedCategories} categories, ${importedSubCategories} sub-categories, and ${importedSubSubCategories} sub-sub-categories. ${failed > 0 ? failed + ' rows failed.' : ''}`,
+            message: `Imported ${importedCategories} categories, ${importedSubCategories} sub-categories, and ${importedSubSubCategories} sub-sub-categories.${duplicates > 0 ? ` ${duplicates} duplicate records were skipped.` : ''}${failed > 0 ? ` ${failed} rows failed.` : ''}`,
             errors: failed > 0 ? errors : undefined,
         };
     }

@@ -351,6 +351,12 @@ const ApprovedSellers = () => {
                                                         onPreview={() => setPreviewDoc(docs.gstCert)}
                                                     />
 
+                                                    {/* PAN Number */}
+                                                    <DocumentRow 
+                                                        label="PAN Number" 
+                                                        number={docs.panNumber?.name} 
+                                                    />
+
                                                     {/* Shop Act License */}
                                                     <DocumentRow 
                                                         label="Shop Act License File" 
@@ -487,6 +493,9 @@ const getSellerDocs = (documents) => {
         if (doc.type === 'GST') {
             if (doc.url === 'N/A') docs.gstNumber = doc;
             else docs.gstCert = doc;
+        }
+        if (doc.type === 'PAN') {
+            if (doc.url === 'N/A') docs.panNumber = doc;
         }
         if (doc.category === 'BUSINESS_PROOF') docs.businessProof = doc;
         if (doc.category === 'SHOP_ACT_LICENSE') docs.shopActLicense = doc;

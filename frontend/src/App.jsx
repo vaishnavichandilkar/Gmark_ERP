@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { router } from './common/routes';
 import { Provider } from 'react-redux';
@@ -44,7 +45,13 @@ function App() {
           },
         }}
       />
-      <RouterProvider router={router} />
+      <Suspense fallback={
+        <div className="flex h-screen w-screen items-center justify-center bg-[#F8FAF0]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0B3D2E]"></div>
+        </div>
+      }>
+        <RouterProvider router={router} />
+      </Suspense>
     </Provider>
   );
 }

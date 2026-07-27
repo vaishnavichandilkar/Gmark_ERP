@@ -83,6 +83,12 @@ export class Step5BusinessDto {
     @IsEnum(RegType)
     @IsOptional()
     regType?: RegType;
+
+    @ApiProperty({ example: 'ABCDE1234F', required: true })
+    @IsString()
+    @IsNotEmpty({ message: 'PAN Number is required' })
+    @Matches(/^[A-Z]{3}[PCHFATBLJG][A-Z]{1}[0-9]{4}[A-Z]{1}$/, { message: 'Invalid PAN format. Must be a valid 10-character PAN (e.g., ABCPE1234F) where the 4th character is one of: P, C, H, F, A, T, B, L, J, G' })
+    panNumber: string;
 }
 
 export class Step6ShopDto {

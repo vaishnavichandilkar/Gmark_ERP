@@ -49,6 +49,10 @@ const CategoryMaster = () => {
     mode: "add",
   });
   const [searchQuery, setSearchQuery] = useState("");
+  const [columnFilters, setColumnFilters] = useState({
+    category: "",
+    status: ""
+  });
   const [expandedGroups, setExpandedGroups] = useState({});
   const [expandedSubGroups, setExpandedSubGroups] = useState({});
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -347,6 +351,31 @@ const CategoryMaster = () => {
       });
     }
 
+    // Apply column filters
+    if (columnFilters.category) {
+      const q = columnFilters.category.toLowerCase().trim();
+      data = data.filter((section) => {
+        const nameMatch = section.name?.toLowerCase().includes(q);
+        const subMatch = (section.sub_categories || []).some((item) =>
+          (item.name || "").toLowerCase().includes(q),
+        );
+        const subSubMatch = (section.sub_categories || []).some((item) =>
+          (item.sub_sub_categories || []).some((ss) =>
+            (ss.name || "").toLowerCase().includes(q),
+          ),
+        );
+        return nameMatch || subMatch || subSubMatch;
+      });
+    }
+
+    if (columnFilters.status) {
+      const q = columnFilters.status.toLowerCase().trim();
+      data = data.filter((section) => {
+        const status = section.status || "ACTIVE";
+        return status.toLowerCase().includes(q);
+      });
+    }
+
     return data;
   };
 
@@ -431,9 +460,14 @@ const CategoryMaster = () => {
     );
 
     try {
-      await categoryService.importCategories(formData);
+      const response = await categoryService.importCategories(formData);
       toast.dismiss(loadingToast);
-      toast.success(t("common:import_success", "Data imported successfully"));
+      toast.custom((tToast) => (
+        <SuccessToast 
+          message={response?.message || t('common:import_success', 'Data imported successfully')} 
+          onClose={() => toast.dismiss(tToast.id)} 
+        />
+      ), { duration: 4000, position: 'top-right' });
       fetchCategories();
       return Promise.resolve();
     } catch (error) {
@@ -766,6 +800,30 @@ const CategoryMaster = () => {
           </div>
         </div>
 
+        <div className="bg-[#0b543f] flex items-center justify-between px-4 py-2 border-t border-white/10">
+          <div className="flex-1 pl-9 pr-4">
+            <input
+              type="text"
+              placeholder="Search Category / Sub-Category..."
+              value={columnFilters.category || ""}
+              onChange={(e) => setColumnFilters(prev => ({ ...prev, category: e.target.value }))}
+              className="w-full max-w-[400px] px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+            />
+          </div>
+          <div className="flex items-stretch shrink-0 !p-0 !border-r-0">
+            <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4 border-l border-white/10">
+              <input
+                type="text"
+                placeholder="Search..."
+                value={columnFilters.status || ""}
+                onChange={(e) => setColumnFilters(prev => ({ ...prev, status: e.target.value }))}
+                className="w-full px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+              />
+            </div>
+            <div className="w-16 md:w-20 border-l border-white/10"></div>
+          </div>
+        </div>
+
         {/* Hierarchical List */}
         <div className="min-h-[300px]">
           {isLoading ? (
@@ -774,21 +832,22 @@ const CategoryMaster = () => {
             </div>
           ) : paginatedData.length > 0 ? (
             paginatedData.map((section, paginatedIndex) => {
+              const activeQuery = (searchQuery || columnFilters.category || "").trim();
               const isSearchExpanding =
-                searchQuery &&
+                activeQuery !== "" &&
                 (section.sub_categories || []).some(
                   (item) =>
                     (item.name || "")
                       .toLowerCase()
-                      .includes(searchQuery.toLowerCase()) ||
+                      .includes(activeQuery.toLowerCase()) ||
                     (item.sub_sub_categories || []).some((ss) =>
                       (ss.name || "")
                         .toLowerCase()
-                        .includes(searchQuery.toLowerCase()),
+                        .includes(activeQuery.toLowerCase()),
                     ),
                 );
               const isExpanded =
-                expandedGroups[section.id] || isSearchExpanding;
+                !!expandedGroups[section.id] || isSearchExpanding;
 
               return (
                 <React.Fragment key={section.id}>
@@ -907,16 +966,16 @@ const CategoryMaster = () => {
                     <div className="animate-in slide-in-from-top-2 duration-300">
                       {(section.sub_categories || []).map((item) => {
                         const subDropdownId = `sub-${item.id}`;
-                        const hasSubSubs =
-                          item.sub_sub_categories &&
-                          item.sub_sub_categories.length > 0;
+                        const validSubSubs = (item.sub_sub_categories || []).filter(ss => ss && ss.name && ss.name.trim() !== '' && ss.name.toLowerCase() !== 'null' && ss.name.toLowerCase() !== 'undefined');
+                        const hasSubSubs = validSubSubs.length > 0;
+                        const activeQuery = (searchQuery || columnFilters.category || "").trim();
                         const isSubExpanded =
-                          expandedSubGroups[item.id] ||
-                          (searchQuery &&
-                            (item.sub_sub_categories || []).some((ss) =>
+                          !!expandedSubGroups[item.id] ||
+                          (activeQuery !== "" &&
+                            validSubSubs.some((ss) =>
                               (ss.name || "")
                                 .toLowerCase()
-                                .includes(searchQuery.toLowerCase()),
+                                .includes(activeQuery.toLowerCase()),
                             ));
 
                         return (
@@ -1038,7 +1097,7 @@ const CategoryMaster = () => {
                             {/* SubSubCategories List */}
                             {hasSubSubs && isSubExpanded && (
                               <div className="animate-in slide-in-from-top-2 duration-300">
-                                {item.sub_sub_categories.map((subSub) => {
+                                {validSubSubs.map((subSub) => {
                                   const ssDropdownId = `ss-${subSub.id}`;
                                   return (
                                     <div

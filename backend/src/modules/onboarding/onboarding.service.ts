@@ -355,6 +355,11 @@ export class OnboardingService {
             await this.saveFile(userId, 'OTHER', files.businessProof[0], 'BUSINESS_PROOF');
         }
 
+        // Save PAN Number (Required)
+        if (dto.panNumber) {
+            await this.saveDocument(userId, 'PAN', `${dto.panNumber}`, 'PAN_NUMBER');
+        }
+
         // Save regType on User model
         if (dto.regType) {
             await this.prisma.user.update({
@@ -451,6 +456,7 @@ export class OnboardingService {
         const gstCert = user.sellerDocuments.find(d => d.type === 'GST' && d.url !== 'N/A');
         const shopActLicense = user.sellerDocuments.find(d => d.category === 'SHOP_ACT_LICENSE');
         const businessProof = user.sellerDocuments.find(d => d.category === 'BUSINESS_PROOF');
+        const panNumberDoc = user.sellerDocuments.find(d => d.type === 'PAN' && d.url === 'N/A');
 
         return {
             firstName: user.first_name || '',
@@ -465,6 +471,7 @@ export class OnboardingService {
             state: user.shopDetail?.state || '',
             udyogAadhar: udyogAadharDoc?.name || '',
             gstNumber: gstNumberDoc?.name || '',
+            panNumber: panNumberDoc?.name || '',
             udyogAadharFile: udyogAadharCert ? { name: udyogAadharCert.name, url: udyogAadharCert.url } : null,
             gstFile: gstCert ? { name: gstCert.name, url: gstCert.url } : null,
             shopActLicense: shopActLicense ? { name: shopActLicense.name, url: shopActLicense.url } : null,

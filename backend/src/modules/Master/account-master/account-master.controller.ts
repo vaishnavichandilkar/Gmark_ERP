@@ -303,6 +303,17 @@ export class AccountMasterController {
     return this.accountMasterService.importAccounts(file.buffer, req.user.id);
   }
 
+  @Get('check-duplicate')
+  @ApiOperation({ summary: 'Check if an account name already exists' })
+  @ApiQuery({ name: 'name', required: true, type: String })
+  async checkDuplicate(
+    @Query('name') name: string,
+    @Req() req: any
+  ) {
+    const exists = await this.accountMasterService.checkDuplicate(name, req.user.id);
+    return { exists };
+  }
+
   @Get('check-msme-user')
   @ApiOperation({ summary: 'Check if a customer user is registered as MSME at signup' })
   @ApiQuery({ name: 'phone', required: false, type: String })

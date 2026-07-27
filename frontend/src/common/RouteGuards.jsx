@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { getSafeUser } from "../utils/user";
 
 // Placeholder for new modules
 export const Placeholder = ({ title, subtitle }) => (
@@ -24,7 +25,7 @@ export const InitialRedirect = () => {
     localStorage.getItem("languageConfirmed") === "true";
   const token = localStorage.getItem("token");
   const refreshToken = localStorage.getItem("refreshToken");
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = getSafeUser();
 
   // If already logged in, go to correct dashboard or status page
   if ((token || refreshToken) && user.role) {
@@ -32,14 +33,12 @@ export const InitialRedirect = () => {
     if (role === "SUPERADMIN")
       return <Navigate to="/superadmin/dashboard" replace />;
 
-    if (
-      role === "SELLER" &&
-      (user.approvalStatus !== "APPROVED" || user.isFirstApprovalLogin)
-    ) {
-      return <Navigate to="/application-status" replace />;
+    if (role === "SELLER") {
+      if (user.approvalStatus !== "APPROVED" || user.isFirstApprovalLogin) {
+        return <Navigate to="/application-status" replace />;
+      }
+      return <Navigate to="/seller/dashboard" replace />;
     }
-
-    return <Navigate to="/seller/dashboard" replace />;
   }
 
   if (isLanguageSelected) {
@@ -52,7 +51,7 @@ export const InitialRedirect = () => {
 export const AuthGuard = () => {
   const token = localStorage.getItem("token");
   const refreshToken = localStorage.getItem("refreshToken");
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = getSafeUser();
   const location = useLocation();
 
   // If already have a session, go to their dashboard or status page
@@ -63,17 +62,15 @@ export const AuthGuard = () => {
 
     // Strictly block sellers from Auth flow if they are in PENDING, REJECTED, or first-time APPROVED
     // EXCEPT when they are on the signup page to correct and resubmit a rejected application.
-    if (
-      role === "SELLER" &&
-      (user.approvalStatus !== "APPROVED" || user.isFirstApprovalLogin)
-    ) {
-      if (location.pathname === "/signup" && user.approvalStatus === "REJECTED") {
-        return <Outlet />;
+    if (role === "SELLER") {
+      if (user.approvalStatus !== "APPROVED" || user.isFirstApprovalLogin) {
+        if (location.pathname === "/signup" && user.approvalStatus === "REJECTED") {
+          return <Outlet />;
+        }
+        return <Navigate to="/application-status" replace />;
       }
-      return <Navigate to="/application-status" replace />;
+      return <Navigate to="/seller/dashboard" replace />;
     }
-
-    return <Navigate to="/seller/dashboard" replace />;
   }
   return <Outlet />;
 };
@@ -82,7 +79,7 @@ export const AuthGuard = () => {
 export const ProtectedRoute = ({ allowedRoles }) => {
   const token = localStorage.getItem("token");
   const refreshToken = localStorage.getItem("refreshToken");
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = getSafeUser();
 
   // Redirect to landing if no session at all
   if (!token && !refreshToken) return <Navigate to="/landing" replace />;

@@ -28,6 +28,12 @@ const GroupMaster = () => {
     const [appliedFilters, setAppliedFilters] = useState({ status: '' });
     const isFilterApplied = appliedFilters.status !== '';
     const [groups, setGroups] = useState([]);
+    const [columnFilters, setColumnFilters] = useState({
+        groupName: "",
+        openingBalance: "",
+        balanceType: "",
+        status: ""
+    });
     const [isLoading, setIsLoading] = useState(true);
     const exportRef = useRef(null);
     const [activeRowDropdown, setActiveRowDropdown] = useState(null);
@@ -119,9 +125,15 @@ const GroupMaster = () => {
         }));
     };
 
+    const getGroupSearchText = (group) => {
+        const raw = group.group_name || "";
+        const translated = translateDynamic(raw, t) || "";
+        return `${raw} ${translated}`.toLowerCase();
+    };
+
     const hasMatchingChild = (group, query) => {
-        const q = query.toLowerCase();
-        if (group.group_name.toLowerCase().includes(q)) return true;
+        const q = query.toLowerCase().trim();
+        if (getGroupSearchText(group).includes(q)) return true;
         if (group.status && group.status.toLowerCase().includes(q)) return true;
         if (group.children && group.children.length > 0) {
             return group.children.some(child => hasMatchingChild(child, query));
@@ -129,16 +141,68 @@ const GroupMaster = () => {
         return false;
     };
 
+    const hasMatchingGroupData = (group, query, colFilters) => {
+        // Global search
+        if (query) {
+            const q = query.toLowerCase().trim();
+            const matches = getGroupSearchText(group).includes(q) || 
+                            (group.status || "").toLowerCase().includes(q);
+            if (!matches) return false;
+        }
+
+        // Column filters
+        if (colFilters.groupName) {
+            const q = colFilters.groupName.toLowerCase().trim();
+            if (!getGroupSearchText(group).includes(q)) return false;
+        }
+        if (colFilters.openingBalance) {
+            const q = colFilters.openingBalance.trim();
+            if (!(group.opening_balance || 0).toString().includes(q)) return false;
+        }
+        if (colFilters.balanceType) {
+            const q = colFilters.balanceType.toLowerCase().trim();
+            if (!group.balance_type?.toLowerCase().includes(q)) return false;
+        }
+        if (colFilters.status) {
+            const q = colFilters.status.toLowerCase().trim();
+            if (!group.status?.toLowerCase().includes(q)) return false;
+        }
+
+        return true;
+    };
+
+    const filterGroupTree = (groupList, query, colFilters) => {
+        return groupList.map(group => {
+            const matchesThis = hasMatchingGroupData(group, query, colFilters);
+
+            // Filter children
+            const filteredChildren = group.children && group.children.length > 0 
+                ? filterGroupTree(group.children, query, colFilters)
+                : [];
+
+            if (matchesThis || filteredChildren.length > 0) {
+                return {
+                    ...group,
+                    children: matchesThis ? group.children : filteredChildren
+                };
+            }
+            return null;
+        }).filter(Boolean);
+    };
+
     const filteredData = useMemo(() => {
         let result = groups;
-        if (searchQuery) {
-            result = result.filter(group => hasMatchingChild(group, searchQuery));
-        }
         if (appliedFilters.status) {
             result = result.filter(group => group.status === appliedFilters.status);
         }
+
+        const anyFilterApplied = searchQuery || Object.values(columnFilters).some(v => v !== "");
+        if (anyFilterApplied) {
+            result = filterGroupTree(result, searchQuery, columnFilters);
+        }
+
         return result;
-    }, [groups, searchQuery, appliedFilters]);
+    }, [groups, searchQuery, appliedFilters, columnFilters]);
 
     const getAllIds = (items) => {
         let ids = [];
@@ -300,9 +364,10 @@ const GroupMaster = () => {
 
     const renderGroupRow = (group, depth = 0, index = 0, siblingsLength = 0, isExpenseAncestor = false) => {
         const hasChildren = group.children && group.children.length > 0;
-        const isExpanded = expandedGroups[group.id] || (searchQuery && hasMatchingChild(group, searchQuery));
+        const activeQuery = searchQuery || columnFilters.groupName;
+        const isExpanded = expandedGroups[group.id] || (activeQuery && hasMatchingChild(group, activeQuery));
         const dropdownId = `dropdown-${group.id}`;
-        const isHighlighted = searchQuery && group.group_name.toLowerCase().includes(searchQuery.toLowerCase());
+        const isHighlighted = activeQuery && group.group_name.toLowerCase().includes(activeQuery.toLowerCase());
         const currentIsExpense = isExpenseAncestor || group.group_name === 'Direct Expense' || group.group_name === 'Indirect Expense';
 
         return (
@@ -680,6 +745,48 @@ const GroupMaster = () => {
                             <div className="w-16 md:w-20 flex items-center justify-center px-4 border-l border-white/10">
                                 {t('common:action')}
                             </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-[#0b543f] flex items-center justify-between px-4 py-2 border-t border-white/10 text-white">
+                        <div className="flex-1 pl-9 pr-4">
+                            <input
+                                type="text"
+                                placeholder="Search Group..."
+                                value={columnFilters.groupName || ""}
+                                onChange={(e) => setColumnFilters(prev => ({ ...prev, groupName: e.target.value }))}
+                                className="w-full max-w-[400px] px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+                            />
+                        </div>
+                        <div className="flex items-stretch shrink-0 !p-0 !border-r-0">
+                            <div className="w-[170px] flex items-center justify-center px-3 border-l border-white/10">
+                                <input
+                                    type="text"
+                                    placeholder="Search..."
+                                    value={columnFilters.openingBalance || ""}
+                                    onChange={(e) => setColumnFilters(prev => ({ ...prev, openingBalance: e.target.value }))}
+                                    className="w-full px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+                                />
+                            </div>
+                            <div className="w-[150px] flex items-center justify-center px-3 border-l border-white/10">
+                                <input
+                                    type="text"
+                                    placeholder="Search..."
+                                    value={columnFilters.balanceType || ""}
+                                    onChange={(e) => setColumnFilters(prev => ({ ...prev, balanceType: e.target.value }))}
+                                    className="w-full px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+                                />
+                            </div>
+                            <div className="w-[110px] md:w-[120px] flex items-center justify-center px-2 md:px-4 border-l border-white/10">
+                                <input
+                                    type="text"
+                                    placeholder="Search..."
+                                    value={columnFilters.status || ""}
+                                    onChange={(e) => setColumnFilters(prev => ({ ...prev, status: e.target.value }))}
+                                    className="w-full px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+                                />
+                            </div>
+                            <div className="w-16 md:w-20 border-l border-white/10"></div>
                         </div>
                     </div>
                     <div className="flex flex-col divide-y divide-[#F3F4F6]">

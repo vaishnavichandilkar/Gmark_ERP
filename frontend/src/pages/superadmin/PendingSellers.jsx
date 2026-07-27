@@ -290,6 +290,9 @@ const PendingSellers = () => {
                 if (doc.url === 'N/A') docs.gstNumber = doc;
                 else docs.gstCert = doc;
             }
+            if (doc.type === 'PAN') {
+                if (doc.url === 'N/A') docs.panNumber = doc;
+            }
             if (doc.category === 'BUSINESS_PROOF') docs.businessProof = doc;
             if (doc.category === 'SHOP_ACT_LICENSE') docs.shopActLicense = doc;
         });
@@ -313,6 +316,7 @@ const PendingSellers = () => {
             udyogAadharCert: 'Udyog Aadhar Certificate File',
             gstNumber: 'GST Number',
             gstCert: 'GST Certificate File',
+            panNumber: 'PAN Number',
             businessProof: 'Business Proof Document',
             shopActLicense: 'Shop Act License File'
         };
@@ -522,7 +526,7 @@ const PendingSellers = () => {
                 const isStepFlagged = (stepNumber) => {
                     if (stepNumber === 1) return flaggedFields.firstName || flaggedFields.lastName || flaggedFields.email || flaggedFields.phone;
                     if (stepNumber === 2) return flaggedFields.shopName || flaggedFields.address || flaggedFields.pinCode || flaggedFields.village || flaggedFields.district || flaggedFields.state;
-                    if (stepNumber === 3) return flaggedFields.udyogAadharNumber || flaggedFields.regType || flaggedFields.udyogAadharCert || flaggedFields.gstNumber || flaggedFields.gstCert || flaggedFields.businessProof || flaggedFields.shopActLicense;
+                    if (stepNumber === 3) return flaggedFields.udyogAadharNumber || flaggedFields.regType || flaggedFields.udyogAadharCert || flaggedFields.gstNumber || flaggedFields.gstCert || flaggedFields.businessProof || flaggedFields.shopActLicense || flaggedFields.panNumber;
                     return false;
                 };
 
@@ -709,6 +713,13 @@ const PendingSellers = () => {
                                                     value={(!docs.gstNumber?.name || docs.gstNumber?.name === 'N/A') ? 'Not Added' : docs.gstNumber.name} 
                                                     isFlagged={flaggedFields.gstNumber}
                                                     onToggle={() => toggleFlagField('gstNumber')}
+                                                />
+                                                {/* PAN Number */}
+                                                <ReviewFieldCard 
+                                                    label="PAN Number" 
+                                                    value={(!docs.panNumber?.name || docs.panNumber?.name === 'N/A') ? 'Not Added' : docs.panNumber.name} 
+                                                    isFlagged={flaggedFields.panNumber}
+                                                    onToggle={() => toggleFlagField('panNumber')}
                                                 />
                                                 
                                                 {/* Udyog Aadhar File */}

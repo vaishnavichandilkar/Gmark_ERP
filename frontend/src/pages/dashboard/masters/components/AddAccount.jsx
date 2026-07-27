@@ -617,6 +617,7 @@ const AddAccount = ({
   const [isGeneratingSupplierCode, setIsGeneratingSupplierCode] =
     useState(false);
   const [isFetchingPin, setIsFetchingPin] = useState(false);
+  const [isDuplicateName, setIsDuplicateName] = useState(false);
 
   const [msmeFile, setMsmeFile] = useState(null);
   const [otherDocs, setOtherDocs] = useState([
@@ -630,6 +631,7 @@ const AddAccount = ({
       case "accountName":
         if (!value?.trim()) return t("modules:error_account_name");
         if (value.trim().length < 3) return t("modules:error_account_name");
+        if (isDuplicateName) return t("modules:error_account_name_exists");
         break;
       case "groupName":
         if (!currentFormData.isCustomer && !currentFormData.isVendor)
@@ -775,6 +777,10 @@ const AddAccount = ({
   const handleInputChange = async (field, value) => {
     const newFormData = { ...formData, [field]: value };
 
+    if (field === "accountName") {
+      setIsDuplicateName(false);
+    }
+
     // Clear credit days when registration type changes
     if (field === "regType") {
       newFormData.vendorCreditDays = "";
@@ -874,8 +880,8 @@ const AddAccount = ({
     if (!err || typeof err !== "string") return err;
     const msg = err.toLowerCase();
 
-    if (msg.includes("unique constraint") || msg.includes("already exists")) {
-      if (msg.includes("accountname"))
+    if (msg.includes("unique constraint") || msg.includes("already exists") || msg.includes("unique")) {
+      if (msg.includes("accountname") || msg.includes("account name"))
         return t("modules:error_account_name_exists");
       if (msg.includes("gstno")) return t("modules:error_gst_no_exists");
       if (msg.includes("panno")) return t("modules:error_pan_no_exists");
@@ -1012,11 +1018,11 @@ const AddAccount = ({
           initialData.id,
           fData,
         );
-        onShowToast && onShowToast(t("modules:success_account_updated"));
+        toast.success(t("modules:success_account_updated"));
         if (onUpdateAccount) onUpdateAccount(response);
       } else {
         const response = await accountService.createAccount(fData);
-        onShowToast && onShowToast(t("modules:success_account_created"));
+        toast.success(t("modules:success_account_created"));
         if (onAddAccount) onAddAccount(response);
       }
     } catch (error) {
@@ -1028,15 +1034,13 @@ const AddAccount = ({
       ) {
         errorData.errors.forEach(
           (err) =>
-            onShowToast && onShowToast(translateBackendError(err), "error"),
+            toast.error(translateBackendError(err)),
         );
       } else {
-        onShowToast &&
-          onShowToast(
-            translateBackendError(errorData?.message) ||
-            t("common:error_saving_data"),
-            "error",
-          );
+        toast.error(
+          translateBackendError(errorData?.message) ||
+          t("common:error_saving_data")
+        );
       }
     } finally {
       setIsLoading(false);
@@ -1146,9 +1150,22 @@ const AddAccount = ({
                     onChange={(e) =>
                       handleInputChange("accountName", e.target.value)
                     }
-                    onBlur={() =>
-                      validateField("accountName", formData.accountName)
-                    }
+                    onBlur={async () => {
+                      const baseError = validateField("accountName", formData.accountName);
+                      if (!baseError && formData.accountName?.trim() && (!isEditMode || formData.accountName.trim() !== initialData?.accountName)) {
+                        try {
+                          const res = await accountService.checkDuplicate(formData.accountName);
+                          if (res?.exists) {
+                            setIsDuplicateName(true);
+                            setErrors((prev) => ({ ...prev, accountName: t("modules:error_account_name_exists") }));
+                          } else {
+                            setIsDuplicateName(false);
+                          }
+                        } catch (e) {
+                          console.error("Duplicate check failed", e);
+                        }
+                      }
+                    }}
                   />
                   {errors.accountName && (
                     <p className="text-[12px] text-red-500 mt-0.5">

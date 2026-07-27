@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchAllAccounts, toggleAccountStatus } from '../../../redux/account/accountSlice';
@@ -64,10 +64,80 @@ const AccountMaster = () => {
 
     const [rowsPerPage, setRowsPerPage] = useState(5);
     const [currentPage, setCurrentPage] = useState(1);
+    const [columnFilters, setColumnFilters] = useState({
+        customerCode: "",
+        supplierCode: "",
+        accountName: "",
+        groupName: "",
+        customerType: "",
+        customerCreditDays: "",
+        supplierCreditDays: "",
+        gstNo: "",
+        panNo: "",
+        customerOpeningBalance: "",
+        supplierOpeningBalance: "",
+        addressLine1: "",
+        status: ""
+    });
 
     const dispatch = useDispatch();
     const { accounts, total: totalItems, totalPages, loading } = useSelector(state => state.account);
-    const paginatedData = accounts || [];
+
+    const filteredAccounts = useMemo(() => {
+        let baseData = accounts || [];
+
+        // Apply column filters
+        Object.keys(columnFilters).forEach(key => {
+            const val = columnFilters[key].toLowerCase().trim();
+            if (val) {
+                baseData = baseData.filter(row => {
+                    let fieldVal = "";
+                    if (key === 'customerCode') fieldVal = row.customerCode || "";
+                    else if (key === 'supplierCode') fieldVal = row.supplierCode || "";
+                    else if (key === 'accountName') fieldVal = row.accountName || "";
+                    else if (key === 'groupName') {
+                        const tags = [];
+                        const group = row.groupName || "";
+                        tags.push(group);
+                        if (group.includes('SUNDRY_DEBTORS')) {
+                            tags.push('sundry debtors');
+                            tags.push('customer');
+                            tags.push('sundry debtors (customer)');
+                        }
+                        if (group.includes('SUNDRY_CREDITORS')) {
+                            tags.push('sundry creditors');
+                            tags.push('supplier');
+                            tags.push('sundry creditors (supplier)');
+                        }
+                        if (group.includes('BANK') || group.includes('Bank & Cash')) {
+                            tags.push('bank');
+                        }
+                        if (group.includes('CASH')) {
+                            tags.push('cash');
+                        }
+                        fieldVal = tags.join(' ');
+                    }
+                    else if (key === 'customerType') fieldVal = row.customerType || "";
+                    else if (key === 'customerCreditDays') fieldVal = (row.customerCreditDays || 0).toString();
+                    else if (key === 'supplierCreditDays') fieldVal = (row.supplierCreditDays || 0).toString();
+                    else if (key === 'gstNo') fieldVal = row.gstNo || "";
+                    else if (key === 'panNo') fieldVal = row.panNo || "";
+                    else if (key === 'customerOpeningBalance') fieldVal = (row.customerOpeningBalance || 0).toString();
+                    else if (key === 'supplierOpeningBalance') fieldVal = (row.supplierOpeningBalance || 0).toString();
+                    else if (key === 'addressLine1') fieldVal = row.addressLine1 || "";
+                    else if (key === 'status') {
+                        fieldVal = `${row.customerStatus || ""} ${row.supplierStatus || ""}`;
+                    }
+
+                    return fieldVal.toLowerCase().includes(val);
+                });
+            }
+        });
+
+        return baseData;
+    }, [accounts, columnFilters]);
+
+    const paginatedData = filteredAccounts;
 
     useEffect(() => {
         if (location.pathname.endsWith('/add')) {
@@ -661,6 +731,36 @@ const AccountMaster = () => {
                                     </div>
                                 </th>
                                 <th className="text-center">{t('common:action')}</th>
+                            </tr>
+                            <tr className="bg-[#0b543f]">
+                                {[
+                                    { key: 'customerCode', placeholder: 'Cust Code' },
+                                    { key: 'supplierCode', placeholder: 'Supp Code' },
+                                    { key: 'accountName', placeholder: 'Account' },
+                                    { key: 'groupName', placeholder: 'Type' },
+                                    { key: 'customerType', placeholder: 'Cust Type' },
+                                    { key: 'customerCreditDays', placeholder: 'Cust Days' },
+                                    { key: 'supplierCreditDays', placeholder: 'Supp Days' },
+                                    { key: 'gstNo', placeholder: 'GST No' },
+                                    { key: 'panNo', placeholder: 'PAN No' },
+                                    { key: 'customerOpeningBalance', placeholder: 'Cust Bal' },
+                                    { key: 'supplierOpeningBalance', placeholder: 'Supp Bal' },
+                                    { key: 'addressLine1', placeholder: 'Address' },
+                                    { key: 'status', placeholder: 'Status' },
+                                    { key: 'actions', noSearch: true }
+                                ].map((col, i) => (
+                                    <th key={i} className="px-2 py-2 border-r border-white/10 whitespace-nowrap align-middle">
+                                        {!col.noSearch && (
+                                            <input
+                                                type="text"
+                                                placeholder={`Search ${col.placeholder}...`}
+                                                value={columnFilters[col.key] || ""}
+                                                onChange={(e) => setColumnFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                                                className="w-full min-w-[85px] px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+                                            />
+                                        )}
+                                    </th>
+                                ))}
                             </tr>
                         </thead>
                         <tbody className="text-[14px] text-[#111827]">

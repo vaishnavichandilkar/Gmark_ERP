@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate, useLocation, useParams } from "react-router-dom";
 import {
   Search,
@@ -39,7 +39,7 @@ const ProductMaster = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
-  const defaultFilters = { uom: "", status: "", productType: "" };
+  const defaultFilters = { uom: "", status: "", productType: "", productName: "" };
   const [searchQuery, setSearchQuery] = useState("");
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -65,9 +65,49 @@ const ProductMaster = () => {
   };
 
   const [tableData, setTableData] = useState([]);
+  const [columnFilters, setColumnFilters] = useState({
+    productType: "",
+    productCode: "",
+    productName: "",
+    gstUom: "",
+    categoryName: "",
+    subCategoryName: "",
+    subSubCategoryName: "",
+    hsnCode: "",
+    taxPercent: "",
+    status: ""
+  });
   const [loading, setLoading] = useState(false);
   const [totalItems, setTotalItems] = useState(0);
   const [uomOptions, setUomOptions] = useState([]);
+
+  const filteredTableData = useMemo(() => {
+    let baseData = tableData || [];
+
+    // Apply column filters
+    Object.keys(columnFilters).forEach(key => {
+      const val = columnFilters[key].toLowerCase().trim();
+      if (val) {
+        baseData = baseData.filter(row => {
+          let fieldVal = "";
+          if (key === 'productType') fieldVal = row.product_type || "";
+          else if (key === 'productCode') fieldVal = row.product_code || "";
+          else if (key === 'productName') fieldVal = row.product_name || "";
+          else if (key === 'gstUom') fieldVal = getStandardGstUom(row.uom) || "";
+          else if (key === 'categoryName') fieldVal = row.category?.name || "";
+          else if (key === 'subCategoryName') fieldVal = row.sub_category?.name || "";
+          else if (key === 'subSubCategoryName') fieldVal = row.sub_sub_category?.name || "";
+          else if (key === 'hsnCode') fieldVal = row.hsn_code || "";
+          else if (key === 'taxPercent') fieldVal = (row.tax_rate !== null && row.tax_rate !== undefined) ? row.tax_rate.toString() : "0";
+          else if (key === 'status') fieldVal = row.status || "";
+
+          return fieldVal.toLowerCase().includes(val);
+        });
+      }
+    });
+
+    return baseData;
+  }, [tableData, columnFilters]);
 
   // Sync currentView with URL
   useEffect(() => {
@@ -119,7 +159,7 @@ const ProductMaster = () => {
       const params = {
         page: currentPage,
         limit: itemsPerPage,
-        search: searchQuery || undefined,
+        search: searchQuery || appliedFilters.productName || undefined,
         uom_id: appliedFilters.uom || undefined,
         product_type: appliedFilters.productType || undefined,
         status: appliedFilters.status || undefined,
@@ -646,6 +686,33 @@ const ProductMaster = () => {
                       {t("common:action")}
                     </th>
                   </tr>
+                  <tr className="bg-[#0b543f]">
+                    {[
+                      { key: 'productType', placeholder: 'Type' },
+                      { key: 'productCode', placeholder: 'Code' },
+                      { key: 'productName', placeholder: 'Name' },
+                      { key: 'gstUom', placeholder: 'UOM' },
+                      { key: 'categoryName', placeholder: 'Category' },
+                      { key: 'subCategoryName', placeholder: 'SubCategory' },
+                      { key: 'subSubCategoryName', placeholder: 'Sub-Sub' },
+                      { key: 'hsnCode', placeholder: 'HSN Code' },
+                      { key: 'taxPercent', placeholder: 'Tax' },
+                      { key: 'status', placeholder: 'Status' },
+                      { key: 'actions', noSearch: true }
+                    ].map((col, i) => (
+                      <th key={i} className="px-2 py-2 border-r border-white/10 whitespace-nowrap align-middle">
+                        {!col.noSearch && (
+                          <input
+                            type="text"
+                            placeholder={`Search ${col.placeholder}...`}
+                            value={columnFilters[col.key] || ""}
+                            onChange={(e) => setColumnFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                            className="w-full min-w-[85px] px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+                          />
+                        )}
+                      </th>
+                    ))}
+                  </tr>
                 </thead>
                 <tbody className="text-[14px] text-[#111827]">
                   {loading ? (
@@ -659,8 +726,8 @@ const ProductMaster = () => {
                         </div>
                       </td>
                     </tr>
-                  ) : currentData.length > 0 ? (
-                    currentData.map((row, index) => (
+                  ) : filteredTableData.length > 0 ? (
+                    filteredTableData.map((row, index) => (
                       <tr
                         key={row.id}
                         className="group"
@@ -870,6 +937,17 @@ const ProductMaster = () => {
 
             {/* Body */}
             <div className="flex-1 px-5 sm:px-8 py-6 sm:py-8 overflow-y-auto space-y-6 sm:space-y-7 pb-32">
+              <div className="space-y-2.5 w-full">
+                <label className="text-[14px] font-medium text-[#4B5563]">Product Name</label>
+                <input
+                  type="text"
+                  placeholder="Enter product name..."
+                  value={filterInputs.productName || ""}
+                  onChange={(e) => setFilterInputs({ ...filterInputs, productName: e.target.value })}
+                  className="w-full h-[46px] border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] focus:ring-1 focus:ring-[#073318]/10 transition-all placeholder:text-gray-400 font-medium"
+                />
+              </div>
+
               <FilterDropdown
                 label={t("uom")}
                 name="uom"

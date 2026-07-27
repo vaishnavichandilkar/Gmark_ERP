@@ -87,6 +87,22 @@ const SalesOrder = () => {
 
   // States
   const [searchQuery, setSearchQuery] = useState("");
+  const [columnFilters, setColumnFilters] = useState({
+    soNo: "",
+    customerName: "",
+    customerType: "",
+    customerPoNumber: "",
+    poDate: "",
+    poExpiryDate: "",
+    soCreationDate: "",
+    expiryDate: "",
+    amount: "",
+    gstNo: "",
+    creditDays: "",
+    taxAmount: "",
+    totalAmount: "",
+    computedStatusLabel: "",
+  });
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -229,22 +245,51 @@ const SalesOrder = () => {
     });
 
     const query = searchQuery.toLowerCase().trim().replace(/,/g, '');
-    if (!query) return baseData;
+    if (query) {
+      baseData = baseData.filter(so =>
+        so.soNumber?.toLowerCase().includes(query) ||
+        so.customerName?.toLowerCase().includes(query) ||
+        so.customerType?.toLowerCase().includes(query) ||
+        so.customerPoNumber?.toLowerCase().includes(query) ||
+        so.gstNumber?.toLowerCase().includes(query) ||
+        so.computedStatusLabel?.toLowerCase().includes(query) ||
+        so.totalAmount?.toString().includes(query) ||
+        so.totalAmount?.toFixed(2).includes(query) ||
+        so.grandTotal?.toString().includes(query) ||
+        so.grandTotal?.toFixed(2).includes(query) ||
+        so.taxAmount?.toString().includes(query) ||
+        so.taxAmount?.toFixed(2).includes(query)
+      );
+    }
 
-    return baseData.filter(so =>
-      so.soNumber?.toLowerCase().includes(query) ||
-      so.customerName?.toLowerCase().includes(query) ||
-      so.customerType?.toLowerCase().includes(query) ||
-      so.gstNumber?.toLowerCase().includes(query) ||
-      so.computedStatusLabel?.toLowerCase().includes(query) ||
-      so.totalAmount?.toString().includes(query) ||
-      so.totalAmount?.toFixed(2).includes(query) ||
-      so.grandTotal?.toString().includes(query) ||
-      so.grandTotal?.toFixed(2).includes(query) ||
-      so.taxAmount?.toString().includes(query) ||
-      so.taxAmount?.toFixed(2).includes(query)
-    );
-  }, [salesOrders, searchQuery]);
+    // Apply column filters
+    Object.keys(columnFilters).forEach(key => {
+      const val = columnFilters[key].toLowerCase().trim();
+      if (val) {
+        baseData = baseData.filter(so => {
+          let fieldVal = "";
+          if (key === 'soNo') fieldVal = so.soNumber || "";
+          else if (key === 'customerName') fieldVal = so.customerName || "";
+          else if (key === 'customerType') fieldVal = so.customerType || "Retail";
+          else if (key === 'customerPoNumber') fieldVal = so.customerPoNumber || "";
+          else if (key === 'poDate') fieldVal = so.poDate ? formatDate(so.poDate) : "";
+          else if (key === 'poExpiryDate') fieldVal = so.poExpiryDate ? formatDate(so.poExpiryDate) : "";
+          else if (key === 'soCreationDate') fieldVal = formatDate(so.soCreationDate) || "";
+          else if (key === 'expiryDate') fieldVal = formatDate(so.expiryDate) || "";
+          else if (key === 'amount') fieldVal = (so.totalAmount || 0).toFixed(2);
+          else if (key === 'gstNo') fieldVal = so.gstNumber || "";
+          else if (key === 'creditDays') fieldVal = (so.creditDays || 0).toString();
+          else if (key === 'taxAmount') fieldVal = (so.taxAmount || 0).toFixed(2);
+          else if (key === 'totalAmount') fieldVal = (so.grandTotal || 0).toFixed(2);
+          else if (key === 'computedStatusLabel') fieldVal = so.computedStatusLabel || "";
+
+          return fieldVal.toLowerCase().includes(val);
+        });
+      }
+    });
+
+    return baseData;
+  }, [salesOrders, searchQuery, columnFilters]);
 
   const totalPages = Math.ceil(totalItemsCount / itemsPerPage);
   const currentItems = filteredData;
@@ -672,6 +717,37 @@ const SalesOrder = () => {
                   t('modules:total_amount_col'), t('common:status'), t('common:action')
                 ].map(h => (
                   <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap" style={{ wordSpacing: '1px' }}>{h}</th>
+                ))}
+              </tr>
+              <tr className="bg-[#0b543f]">
+                {[
+                  { key: 'soNo', placeholder: 'SO No' },
+                  { key: 'customerName', placeholder: 'Name' },
+                  { key: 'customerType', placeholder: 'Type' },
+                  { key: 'customerPoNumber', placeholder: 'PO No' },
+                  { key: 'poDate', placeholder: 'PO Date' },
+                  { key: 'poExpiryDate', placeholder: 'Exp Date' },
+                  { key: 'soCreationDate', placeholder: 'Created' },
+                  { key: 'expiryDate', placeholder: 'Expiry' },
+                  { key: 'amount', placeholder: 'Amount' },
+                  { key: 'gstNo', placeholder: 'GST No' },
+                  { key: 'creditDays', placeholder: 'Credit' },
+                  { key: 'taxAmount', placeholder: 'Tax' },
+                  { key: 'totalAmount', placeholder: 'Total' },
+                  { key: 'computedStatusLabel', placeholder: 'Status' },
+                  { key: 'actions', noSearch: true }
+                ].map((col, i) => (
+                  <th key={i} className="px-2 py-2 border-r border-white/10 whitespace-nowrap align-middle">
+                    {!col.noSearch && (
+                      <input
+                        type="text"
+                        placeholder={`Search ${col.placeholder}...`}
+                        value={columnFilters[col.key] || ""}
+                        onChange={(e) => setColumnFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                        className="w-full min-w-[85px] px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+                      />
+                    )}
+                  </th>
                 ))}
               </tr>
             </thead>

@@ -74,6 +74,19 @@ const PurchaseInvoice = ({ defaultTab }) => {
 
     // States
     const [searchQuery, setSearchQuery] = useState("");
+    const [columnFilters, setColumnFilters] = useState({
+        supplierName: "",
+        invoiceNo: "",
+        invoiceDate: "",
+        bookingDate: "",
+        poNo: "",
+        gstNo: "",
+        creditDays: "",
+        taxableAmount: "",
+        taxAmount: "",
+        grossAmount: "",
+        status: ""
+    });
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -210,7 +223,7 @@ const PurchaseInvoice = ({ defaultTab }) => {
 
     // Derived Data
     const mappedInvoices = useMemo(() => {
-        return invoices.map(item => {
+        let baseData = invoices.map(item => {
             const taxableAmount = parseFloat(item.taxableAmount) || 0;
             const grossAmount = parseFloat(item.grandTotal) || 0;
             const taxAmount = grossAmount - taxableAmount;
@@ -234,7 +247,32 @@ const PurchaseInvoice = ({ defaultTab }) => {
                 bgClass: statusLabel === 'Generated' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
             };
         });
-    }, [invoices]);
+
+        // Apply column filters
+        Object.keys(columnFilters).forEach(key => {
+            const val = columnFilters[key].toLowerCase().trim();
+            if (val) {
+                baseData = baseData.filter(row => {
+                    let fieldVal = "";
+                    if (key === 'supplierName') fieldVal = row.supplierName || "";
+                    else if (key === 'invoiceNo') fieldVal = row.invoiceNo || "";
+                    else if (key === 'invoiceDate') fieldVal = row.invoiceDate || "";
+                    else if (key === 'bookingDate') fieldVal = row.bookingDate || "";
+                    else if (key === 'poNo') fieldVal = row.poNo || "";
+                    else if (key === 'gstNo') fieldVal = row.gstNo || "";
+                    else if (key === 'creditDays') fieldVal = (row.creditDays || 0).toString();
+                    else if (key === 'taxableAmount') fieldVal = row.taxableAmount || "";
+                    else if (key === 'taxAmount') fieldVal = row.taxAmount || "";
+                    else if (key === 'grossAmount') fieldVal = row.grossAmount || "";
+                    else if (key === 'status') fieldVal = row.status || "";
+
+                    return fieldVal.toLowerCase().includes(val);
+                });
+            }
+        });
+
+        return baseData;
+    }, [invoices, columnFilters]);
 
     const totalPages = Math.ceil(totalItemsCount / itemsPerPage);
 
@@ -365,6 +403,34 @@ const PurchaseInvoice = ({ defaultTab }) => {
                                     t('modules:gross_amount_col'), t('common:status'), t('common:action')
                                 ].map(h => (
                                     <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
+                                ))}
+                            </tr>
+                            <tr className="bg-[#0b543f]">
+                                {[
+                                    { key: 'supplierName', placeholder: 'Name' },
+                                    { key: 'invoiceNo', placeholder: 'Inv No' },
+                                    { key: 'invoiceDate', placeholder: 'Inv Date' },
+                                    { key: 'bookingDate', placeholder: 'Booking Date' },
+                                    { key: 'poNo', placeholder: 'PO No' },
+                                    { key: 'gstNo', placeholder: 'GST No' },
+                                    { key: 'creditDays', placeholder: 'Credit' },
+                                    { key: 'taxableAmount', placeholder: 'Taxable' },
+                                    { key: 'taxAmount', placeholder: 'Tax' },
+                                    { key: 'grossAmount', placeholder: 'Gross' },
+                                    { key: 'status', placeholder: 'Status' },
+                                    { key: 'actions', noSearch: true }
+                                ].map((col, i) => (
+                                    <th key={i} className="px-2 py-2 border-r border-white/10 whitespace-nowrap align-middle">
+                                        {!col.noSearch && (
+                                            <input
+                                                type="text"
+                                                placeholder={`Search ${col.placeholder}...`}
+                                                value={columnFilters[col.key] || ""}
+                                                onChange={(e) => setColumnFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                                                className="w-full min-w-[85px] px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+                                            />
+                                        )}
+                                    </th>
                                 ))}
                             </tr>
                         </thead>

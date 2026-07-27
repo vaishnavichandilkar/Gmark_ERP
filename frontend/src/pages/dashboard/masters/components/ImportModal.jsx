@@ -23,8 +23,8 @@ const ImportModal = ({ isOpen, onClose, onImport, sampleFileName, sampleHeaders,
                 const wscols = sampleHeaders.map(() => ({ wch: 20 }));
                 worksheet['!cols'] = wscols;
 
-                // Freeze first row
-                worksheet['!views'] = [{ state: 'frozen', ySplit: 1 }];
+                // Freeze first row and first column (Account Name)
+                worksheet['!views'] = [{ state: 'frozen', xSplit: 1, ySplit: 1 }];
 
                 // Create a workbook and append the worksheet
                 const workbook = XLSX.utils.book_new();

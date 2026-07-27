@@ -118,6 +118,13 @@ const REJECTION_REASONS = {
         "The document is incomplete or missing required information.",
         "The document appears altered or invalid.",
         "Please upload appropriate supporting documents."
+    ],
+    panNumber: [
+        "PAN details do not match the registered business/owner information.",
+        "The PAN number could not be verified from official records.",
+        "PAN registration belongs to a different entity.",
+        "PAN status is invalid.",
+        "Please provide a valid PAN linked to your business."
     ]
 };
 

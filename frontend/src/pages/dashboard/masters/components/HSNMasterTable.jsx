@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { MoreVertical, Eye, FileEdit, Trash2, CheckCircle2, ChevronsUpDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ScrollableTable from "../../../../components/common/ScrollableTable";
@@ -16,6 +16,39 @@ const HSNMasterTable = ({
 }) => {
     const { t } = useTranslation(['common', 'modules']);
     const dropdownRef = useRef(null);
+
+    const [columnFilters, setColumnFilters] = useState({
+        type: "",
+        code: "",
+        taxRate: "",
+        description: "",
+        status: ""
+    });
+
+    const filteredData = useMemo(() => {
+        let baseData = data || [];
+
+        // Apply column filters
+        Object.keys(columnFilters).forEach(key => {
+            const val = columnFilters[key].toLowerCase().trim();
+            if (val) {
+                baseData = baseData.filter(row => {
+                    let fieldVal = "";
+                    if (key === 'type') fieldVal = row.type || "";
+                    else if (key === 'code') fieldVal = row.code || "";
+                    else if (key === 'taxRate') fieldVal = (row.taxRate || 0).toString();
+                    else if (key === 'description') fieldVal = row.description || "";
+                    else if (key === 'status') {
+                        fieldVal = row.isActive ? 'active' : 'inactive';
+                    }
+
+                    return fieldVal.toLowerCase().includes(val);
+                });
+            }
+        });
+
+        return baseData;
+    }, [data, columnFilters]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -71,6 +104,33 @@ const HSNMasterTable = ({
                             <th className="text-center w-[100px]">ACTIONS</th>
                         )}
                     </tr>
+                    <tr className="bg-[#0b543f]">
+                        {[
+                            { key: 'type', placeholder: 'Type' },
+                            { key: 'code', placeholder: 'Code' },
+                            { key: 'taxRate', placeholder: 'Tax Rate' },
+                            { key: 'description', placeholder: 'Description' },
+                            { key: 'status', placeholder: 'Status' },
+                            { key: 'actions', noSearch: true }
+                        ].map((col, i) => {
+                            if (col.key === 'actions' && !(permissions.canView || permissions.canEdit || permissions.canDelete)) {
+                                return null;
+                            }
+                            return (
+                                <th key={i} className="px-2 py-2 border-r border-white/10 whitespace-nowrap align-middle">
+                                    {!col.noSearch && (
+                                        <input
+                                            type="text"
+                                            placeholder={`Search ${col.placeholder}...`}
+                                            value={columnFilters[col.key] || ""}
+                                            onChange={(e) => setColumnFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                                            className="w-full min-w-[85px] px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+                                        />
+                                    )}
+                                </th>
+                            );
+                        })}
+                    </tr>
                 </thead>
                 <tbody className="text-[14px] text-[#111827]">
                     {loading ? (
@@ -82,8 +142,8 @@ const HSNMasterTable = ({
                                 </div>
                             </td>
                         </tr>
-                    ) : data.length > 0 ? (
-                        data.map((row, index) => (
+                    ) : filteredData.length > 0 ? (
+                        filteredData.map((row, index) => (
                             <tr key={row.id} className="group">
                                 <td className="font-bold text-[#073318] border-r border-[#F3F4F6] text-center">
                                     {row.type}

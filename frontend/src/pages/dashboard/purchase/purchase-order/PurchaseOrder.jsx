@@ -84,6 +84,17 @@ const PurchaseOrder = () => {
 
   // States
   const [searchQuery, setSearchQuery] = useState("");
+  const [columnFilters, setColumnFilters] = useState({
+    poNumber: "",
+    supplierName: "",
+    poCreationDate: "",
+    expiryDate: "",
+    gstNumber: "",
+    creditDays: "",
+    taxAmount: "",
+    totalAmount: "",
+    status: ""
+  });
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -190,7 +201,7 @@ const PurchaseOrder = () => {
 
   // Memoized: Computed Data
   const filteredData = useMemo(() => {
-    const rawMapped = purchaseOrders.map(po => {
+    let rawMapped = purchaseOrders.map(po => {
       const status = po.status;
       const expDate = parseDate(po.expiryDate);
       const now = new Date();
@@ -221,9 +232,33 @@ const PurchaseOrder = () => {
     });
 
     // Refine based on applied filter
-    if (!appliedFilters.status || appliedFilters.status === "All") return rawMapped;
-    return rawMapped.filter(item => item.computedStatusLabel === appliedFilters.status);
-  }, [purchaseOrders, appliedFilters.status]);
+    if (appliedFilters.status && appliedFilters.status !== "All") {
+      rawMapped = rawMapped.filter(item => item.computedStatusLabel === appliedFilters.status);
+    }
+
+    // Apply column filters
+    Object.keys(columnFilters).forEach(key => {
+      const val = columnFilters[key].toLowerCase().trim();
+      if (val) {
+        rawMapped = rawMapped.filter(po => {
+          let fieldVal = "";
+          if (key === 'poNumber') fieldVal = po.poNumber || "";
+          else if (key === 'supplierName') fieldVal = po.supplierName || "";
+          else if (key === 'poCreationDate') fieldVal = formatDate(po.poCreationDate) || "";
+          else if (key === 'expiryDate') fieldVal = formatDate(po.expiryDate) || "";
+          else if (key === 'gstNumber') fieldVal = po.gstNumber || "";
+          else if (key === 'creditDays') fieldVal = (po.creditDays || 0).toString();
+          else if (key === 'taxAmount') fieldVal = (po.taxAmount || 0).toFixed(2);
+          else if (key === 'totalAmount') fieldVal = (po.totalAmount || 0).toFixed(2);
+          else if (key === 'status') fieldVal = po.computedStatusLabel || "";
+
+          return fieldVal.toLowerCase().includes(val);
+        });
+      }
+    });
+
+    return rawMapped;
+  }, [purchaseOrders, appliedFilters.status, columnFilters]);
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const currentItems = filteredData.slice(
@@ -473,6 +508,32 @@ const PurchaseOrder = () => {
                   t('modules:tax_amount_col'), t('modules:total_amount_col'), t('common:status'), t('common:action')
                 ].map(h => (
                   <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+              <tr className="bg-[#0b543f]">
+                {[
+                  { key: 'poNumber', placeholder: 'PO No' },
+                  { key: 'supplierName', placeholder: 'Name' },
+                  { key: 'poCreationDate', placeholder: 'Created' },
+                  { key: 'expiryDate', placeholder: 'Expiry' },
+                  { key: 'gstNumber', placeholder: 'GST No' },
+                  { key: 'creditDays', placeholder: 'Credit' },
+                  { key: 'taxAmount', placeholder: 'Tax' },
+                  { key: 'totalAmount', placeholder: 'Total' },
+                  { key: 'status', placeholder: 'Status' },
+                  { key: 'actions', noSearch: true }
+                ].map((col, i) => (
+                  <th key={i} className="px-2 py-2 border-r border-white/10 whitespace-nowrap align-middle">
+                    {!col.noSearch && (
+                      <input
+                        type="text"
+                        placeholder={`Search ${col.placeholder}...`}
+                        value={columnFilters[col.key] || ""}
+                        onChange={(e) => setColumnFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                        className="w-full min-w-[85px] px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium font-outfit"
+                      />
+                    )}
+                  </th>
                 ))}
               </tr>
             </thead>

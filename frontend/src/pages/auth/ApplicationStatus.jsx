@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { getSafeUser } from '../../utils/user';
 import axiosInstance from '../../services/axiosInstance';
 import AuthLayout from '../../layout/auth/AuthLayout';
 import Button from '../../components/common/Button';
@@ -55,7 +56,7 @@ const ApplicationStatus = () => {
                     const { approvalStatus, isFirstApprovalLogin, rejectionReason: dbReason } = response.data;
 
                     // Sync local storage for consistency, but render based on response data
-                    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+                    const currentUser = getSafeUser();
                     localStorage.setItem('user', JSON.stringify({
                         ...currentUser,
                         approvalStatus,

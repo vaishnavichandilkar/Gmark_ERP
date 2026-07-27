@@ -23,6 +23,9 @@ i18n
         interpolation: {
             escapeValue: false,
         },
+        react: {
+            useSuspense: false,
+        },
         detection: {
             order: ['localStorage', 'querystring', 'cookie', 'sessionStorage', 'navigator', 'htmlTag'],
             lookupLocalStorage: 'i18nextLng',
