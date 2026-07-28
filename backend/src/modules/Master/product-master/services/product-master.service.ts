@@ -94,6 +94,7 @@ export class ProductMasterService {
                 { header: 'Sr. No', key: 'srNo', width: 10 },
                 { header: 'Type', key: 'productType', width: 15 },
                 { header: nameHeader, key: 'productName', width: 30 },
+                { header: 'Description', key: 'description', width: 35 },
                 { header: codeHeader, key: 'productCode', width: 15 },
                 { header: 'UOM', key: 'uom', width: 15 },
                 { header: 'Category', key: 'category', width: 20 },
@@ -112,6 +113,7 @@ export class ProductMasterService {
                     srNo: index + 1,
                     productType: prod.product_type,
                     productName: prod.product_name,
+                    description: prod.description || '-',
                     productCode: prod.product_code ? String(prod.product_code) : '',
                     uom: prod.uom?.gst_uom || '-',
                     category: prod.category?.name || '-',
@@ -127,17 +129,17 @@ export class ProductMasterService {
 
             worksheet.spliceRows(1, 0, [], [], [], []);
 
-            worksheet.mergeCells('A1:J1');
+            worksheet.mergeCells('A1:L1');
             worksheet.getCell('A1').value = 'ERP';
             worksheet.getCell('A1').font = { size: 18, bold: true };
             worksheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
 
-            worksheet.mergeCells('A2:J2');
+            worksheet.mergeCells('A2:L2');
             worksheet.getCell('A2').value = 'Product Master Report';
             worksheet.getCell('A2').font = { size: 14 };
             worksheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
 
-            worksheet.mergeCells('A3:J3');
+            worksheet.mergeCells('A3:L3');
             worksheet.getCell('A3').value = `Exported on: ${timestamp}`;
             worksheet.getCell('A3').font = { size: 10 };
             worksheet.getCell('A3').alignment = { horizontal: 'right', vertical: 'middle' };
@@ -186,10 +188,10 @@ export class ProductMasterService {
                 const hsnHeader = isService ? 'SAC' : 'HSN';
 
                 const tableTop = 100;
-                const colX = [20, 50, 95, 215, 275, 325, 425, 525, 605, 665];
+                const colX = [20, 40, 80, 180, 290, 355, 395, 480, 565, 650, 700, 735];
                 const headers = [
-                    'Sr.', 'Type', nameHeader, codeHeader, 'UOM',
-                    'Category', 'Sub Category', hsnHeader, 'Tax%', 'Status'
+                    'Sr.', 'Type', nameHeader, 'Description', codeHeader, 'UOM',
+                    'Category', 'Sub Category', 'Sub-SubCategory', hsnHeader, 'Tax%', 'Status'
                 ];
 
                 doc.rect(15, tableTop - 5, 805, 20).fill('#4472C4');
@@ -219,17 +221,19 @@ export class ProductMasterService {
                         doc.rect(15, y - 3, 805, 15).fill('#F2F2F2').fillColor('#000000');
                     }
 
-                    doc.fontSize(7);
+                    doc.fontSize(6.5);
                     doc.text((index + 1).toString(), colX[0], y);
                     doc.text(prod.product_type, colX[1], y);
-                    doc.text(prod.product_name, colX[2], y, { width: 110 });
-                    doc.text(prod.product_code, colX[3], y);
-                    doc.text(prod.uom?.gst_uom || '-', colX[4], y);
-                    doc.text(prod.category?.name || '-', colX[5], y, { width: 90 });
-                    doc.text(prod.sub_category?.name || '-', colX[6], y, { width: 90 });
-                    doc.text(prod.hsn_code, colX[7], y);
-                    doc.text(`${prod.tax_rate}%`, colX[8], y);
-                    doc.text(prod.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[9], y);
+                    doc.text(prod.product_name, colX[2], y, { width: 95, height: 12, ellipsis: true });
+                    doc.text(prod.description || '-', colX[3], y, { width: 105, height: 12, ellipsis: true });
+                    doc.text(prod.product_code || '-', colX[4], y, { width: 60, height: 12, ellipsis: true });
+                    doc.text(prod.uom?.gst_uom || '-', colX[5], y);
+                    doc.text(prod.category?.name || '-', colX[6], y, { width: 80, height: 12, ellipsis: true });
+                    doc.text(prod.sub_category?.name || '-', colX[7], y, { width: 80, height: 12, ellipsis: true });
+                    doc.text(prod.sub_sub_category?.name || '-', colX[8], y, { width: 80, height: 12, ellipsis: true });
+                    doc.text(prod.hsn_code || '-', colX[9], y);
+                    doc.text(`${prod.tax_rate}%`, colX[10], y);
+                    doc.text(prod.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive', colX[11], y);
 
                     y += 18;
                 });
@@ -688,38 +692,327 @@ export class ProductMasterService {
                 const productTypeRaw = String(getVal(row, 'productType')).trim().toUpperCase();
                 let productType: ProductType = productTypeRaw === 'SERVICES' ? ProductType.SERVICES : ProductType.GOODS;
 
-                let catName = String(getVal(row, 'category')).trim();
-                let cat = catName && catName !== '-' ? await prisma.category.findFirst({ where: { user_id: userId, name: catName, parent_id: null } }) : null;
-                if (!cat && catName && catName !== '-') {
-                    cat = await prisma.category.create({ data: { user_id: userId, name: catName } });
-                }
-                if (!cat) cat = await prisma.category.findFirst({ where: { user_id: userId, parent_id: null } });
-                if (!cat) {
-                    cat = await prisma.category.create({ data: { user_id: userId, name: 'General' } });
-                }
-                let category_id: string = cat.id;
+                // Normalize names: strip whitespaces, convert '-', 'null', 'undefined' to empty string
+                const cleanName = (val: any): string => {
+                    const s = String(val || '').trim();
+                    return (!s || s === '-' || s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined') ? '' : s;
+                };
 
-                let subCatName = String(getVal(row, 'subCategory')).trim();
-                let subCat = subCatName && subCatName !== '-' ? await prisma.category.findFirst({ where: { user_id: userId, parent_id: category_id, name: subCatName } }) : null;
-                if (!subCat && subCatName && subCatName !== '-') {
-                    subCat = await prisma.category.create({ data: { user_id: userId, parent_id: category_id, name: subCatName } });
-                }
-                if (subCat) {
-                    category_id = subCat.id;
-                }
+                const mName = cleanName(getVal(row, 'category'));
+                const sName = cleanName(getVal(row, 'subCategory'));
+                const ssName = cleanName(getVal(row, 'subSubCategory'));
 
-                let subSubCatName = String(getVal(row, 'subSubCategory')).trim();
-                if (subSubCatName && subSubCatName !== '-' && subSubCatName !== '') {
-                    let subSub = await prisma.category.findFirst({
-                        where: { user_id: userId, parent_id: category_id, name: { equals: subSubCatName, mode: 'insensitive' } }
+                let category_id: string;
+
+                if (!mName && !sName && !ssName) {
+                    // Fallback to "General" at Level 1
+                    let generalCat = await prisma.category.findFirst({
+                        where: {
+                            user_id: userId,
+                            name: { equals: 'General', mode: 'insensitive' },
+                            parent_id: null
+                        }
                     });
-                    if (!subSub) {
-                        subSub = await prisma.category.create({
-                            data: { user_id: userId, parent_id: category_id, name: subSubCatName }
+                    if (!generalCat) {
+                        generalCat = await prisma.category.create({
+                            data: { user_id: userId, name: 'General', status: MasterStatus.ACTIVE }
                         });
                     }
-                    category_id = subSub.id;
+                    category_id = generalCat.id;
+                } else if (!mName) {
+                    // Main category name is empty, but Sub or Sub-Sub category name is not.
+                    // We must try to locate their parents from the database.
+                    let resolvedSubSub: any = null;
+                    let resolvedSub: any = null;
+
+                    if (ssName) {
+                        // Search for a Level 3 category in the database
+                        resolvedSubSub = await prisma.category.findFirst({
+                            where: {
+                                name: { equals: ssName, mode: 'insensitive' },
+                                user_id: userId,
+                                parent: {
+                                    parent_id: { not: null },
+                                    parent: {
+                                        parent_id: null
+                                    }
+                                }
+                            },
+                            include: {
+                                parent: {
+                                    include: {
+                                        parent: true
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    if (resolvedSubSub) {
+                        category_id = resolvedSubSub.id;
+                    } else {
+                        // If not resolved by Sub-Sub Category, look for Sub Category at Level 2
+                        if (sName) {
+                            resolvedSub = await prisma.category.findFirst({
+                                where: {
+                                    name: { equals: sName, mode: 'insensitive' },
+                                    user_id: userId,
+                                    parent: {
+                                        parent_id: null
+                                    }
+                                },
+                                include: {
+                                    parent: true
+                                }
+                            });
+                        }
+
+                        if (resolvedSub) {
+                            if (ssName) {
+                                // Create Level 3 under this resolved Sub Category
+                                let newSubSub = await prisma.category.findFirst({
+                                    where: {
+                                        name: { equals: ssName, mode: 'insensitive' },
+                                        parent_id: resolvedSub.id,
+                                        user_id: userId
+                                    }
+                                });
+                                if (!newSubSub) {
+                                    newSubSub = await prisma.category.create({
+                                        data: {
+                                            user_id: userId,
+                                            parent_id: resolvedSub.id,
+                                            name: ssName,
+                                            status: MasterStatus.ACTIVE
+                                        }
+                                    });
+                                }
+                                category_id = newSubSub.id;
+                            } else {
+                                category_id = resolvedSub.id;
+                            }
+                        } else {
+                            // Both lookup attempts failed. Fallback to creating under "General" Main Category.
+                            let generalCat = await prisma.category.findFirst({
+                                where: {
+                                    user_id: userId,
+                                    name: { equals: 'General', mode: 'insensitive' },
+                                    parent_id: null
+                                }
+                            });
+                            if (!generalCat) {
+                                generalCat = await prisma.category.create({
+                                    data: { user_id: userId, name: 'General', status: MasterStatus.ACTIVE }
+                                });
+                            }
+
+                            if (sName) {
+                                // Create Sub Category under "General"
+                                let newSub = await prisma.category.findFirst({
+                                    where: {
+                                        name: { equals: sName, mode: 'insensitive' },
+                                        parent_id: generalCat.id,
+                                        user_id: userId
+                                    }
+                                });
+                                if (!newSub) {
+                                    newSub = await prisma.category.create({
+                                        data: {
+                                            user_id: userId,
+                                            parent_id: generalCat.id,
+                                            name: sName,
+                                            status: MasterStatus.ACTIVE
+                                        }
+                                    });
+                                }
+
+                                if (ssName) {
+                                    // Create Sub-Sub Category under the new Sub Category
+                                    let newSubSub = await prisma.category.findFirst({
+                                        where: {
+                                            name: { equals: ssName, mode: 'insensitive' },
+                                            parent_id: newSub.id,
+                                            user_id: userId
+                                        }
+                                    });
+                                    if (!newSubSub) {
+                                        newSubSub = await prisma.category.create({
+                                            data: {
+                                                user_id: userId,
+                                                parent_id: newSub.id,
+                                                name: ssName,
+                                                status: MasterStatus.ACTIVE
+                                            }
+                                        });
+                                    }
+                                    category_id = newSubSub.id;
+                                } else {
+                                    category_id = newSub.id;
+                                }
+                            } else {
+                                // Only ssName was provided, no sName. Create a "General" subcategory to hold it.
+                                let genSub = await prisma.category.findFirst({
+                                    where: {
+                                        name: { equals: 'General', mode: 'insensitive' },
+                                        parent_id: generalCat.id,
+                                        user_id: userId
+                                    }
+                                });
+                                if (!genSub) {
+                                    genSub = await prisma.category.create({
+                                        data: {
+                                            user_id: userId,
+                                            parent_id: generalCat.id,
+                                            name: 'General',
+                                            status: MasterStatus.ACTIVE
+                                        }
+                                    });
+                                }
+
+                                let newSubSub = await prisma.category.findFirst({
+                                    where: {
+                                        name: { equals: ssName, mode: 'insensitive' },
+                                        parent_id: genSub.id,
+                                        user_id: userId
+                                    }
+                                });
+                                if (!newSubSub) {
+                                    newSubSub = await prisma.category.create({
+                                        data: {
+                                            user_id: userId,
+                                            parent_id: genSub.id,
+                                            name: ssName,
+                                            status: MasterStatus.ACTIVE
+                                        }
+                                    });
+                                }
+                                category_id = newSubSub.id;
+                            }
+                        }
+                    }
+                } else {
+                    // Main category name is present
+                    let mainCat = await prisma.category.findFirst({
+                        where: {
+                            name: { equals: mName, mode: 'insensitive' },
+                            parent_id: null,
+                            user_id: userId
+                        }
+                    });
+                    if (!mainCat) {
+                        mainCat = await prisma.category.create({
+                            data: {
+                                user_id: userId,
+                                name: mName,
+                                status: MasterStatus.ACTIVE
+                            }
+                        });
+                    }
+
+                    if (sName) {
+                        // Sub category name is present
+                        let subCat = await prisma.category.findFirst({
+                            where: {
+                                name: { equals: sName, mode: 'insensitive' },
+                                parent_id: mainCat.id,
+                                user_id: userId
+                            }
+                        });
+                        if (!subCat) {
+                            subCat = await prisma.category.create({
+                                data: {
+                                    user_id: userId,
+                                    parent_id: mainCat.id,
+                                    name: sName,
+                                    status: MasterStatus.ACTIVE
+                                }
+                            });
+                        }
+
+                        if (ssName) {
+                            // Sub-sub category name is present
+                            let subSubCat = await prisma.category.findFirst({
+                                where: {
+                                    name: { equals: ssName, mode: 'insensitive' },
+                                    parent_id: subCat.id,
+                                    user_id: userId
+                                }
+                            });
+                            if (!subSubCat) {
+                                subSubCat = await prisma.category.create({
+                                    data: {
+                                        user_id: userId,
+                                        parent_id: subCat.id,
+                                        name: ssName,
+                                        status: MasterStatus.ACTIVE
+                                    }
+                                });
+                            }
+                            category_id = subSubCat.id;
+                        } else {
+                            category_id = subCat.id;
+                        }
+                    } else {
+                        // Sub category name is empty, but Main Category name is present.
+                        if (ssName) {
+                            // If Sub-sub category is present, try to find it under any subcategory of this Main Category.
+                            const existingSubSub = await prisma.category.findFirst({
+                                where: {
+                                    name: { equals: ssName, mode: 'insensitive' },
+                                    user_id: userId,
+                                    parent: {
+                                        parent_id: mainCat.id
+                                    }
+                                }
+                            });
+                            if (existingSubSub) {
+                                category_id = existingSubSub.id;
+                            } else {
+                                // Create a default Sub Category under this Main Category, and put ssName under it.
+                                let genSub = await prisma.category.findFirst({
+                                    where: {
+                                        name: { equals: 'General', mode: 'insensitive' },
+                                        parent_id: mainCat.id,
+                                        user_id: userId
+                                    }
+                                });
+                                if (!genSub) {
+                                    genSub = await prisma.category.create({
+                                        data: {
+                                            user_id: userId,
+                                            parent_id: mainCat.id,
+                                            name: 'General',
+                                            status: MasterStatus.ACTIVE
+                                        }
+                                    });
+                                }
+
+                                let newSubSub = await prisma.category.findFirst({
+                                    where: {
+                                        name: { equals: ssName, mode: 'insensitive' },
+                                        parent_id: genSub.id,
+                                        user_id: userId
+                                    }
+                                });
+                                if (!newSubSub) {
+                                    newSubSub = await prisma.category.create({
+                                        data: {
+                                            user_id: userId,
+                                            parent_id: genSub.id,
+                                            name: ssName,
+                                            status: MasterStatus.ACTIVE
+                                        }
+                                    });
+                                }
+                                category_id = newSubSub.id;
+                            }
+                        } else {
+                            // Both sub and sub-sub are empty.
+                            category_id = mainCat.id;
+                        }
+                    }
                 }
+
 
                 let hsnCode = String(getVal(row, 'hsn')).trim();
 

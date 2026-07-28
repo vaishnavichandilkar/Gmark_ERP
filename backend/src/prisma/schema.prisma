@@ -136,6 +136,7 @@ model Session {
   isRevoked        Boolean  @default(false)
   createdAt        DateTime @default(now())
 
+  @@index([userId])
   @@map("sessions")
 }
 
@@ -149,6 +150,7 @@ model AuditLog {
   details   Json?
   createdAt DateTime @default(now())
 
+  @@index([userId, createdAt])
   @@map("audit_logs")
 }
 
@@ -314,6 +316,7 @@ model Group {
   user            User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   sub_groups      SubGroup[]
 
+  @@index([userId])
   @@map("groups")
 }
 
@@ -331,6 +334,7 @@ model SubGroup {
   user            User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   sub_sub_groups  SubSubGroup[]
 
+  @@index([userId, group_id])
   @@map("sub_groups")
 }
 
@@ -348,6 +352,7 @@ model SubSubGroup {
   user               User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
   sub_sub_sub_groups SubSubSubGroup[]
 
+  @@index([userId, sub_group_id])
   @@map("sub_sub_groups")
 }
 
@@ -365,6 +370,7 @@ model SubSubSubGroup {
   user                   User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
   sub_sub_sub_sub_groups SubSubSubSubGroup[]
 
+  @@index([userId, sub_sub_group_id])
   @@map("sub_sub_sub_groups")
 }
 
@@ -381,6 +387,7 @@ model SubSubSubSubGroup {
   sub_sub_sub_group    SubSubSubGroup @relation(fields: [sub_sub_sub_group_id], references: [id], onDelete: Cascade)
   user                 User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, sub_sub_sub_group_id])
   @@map("sub_sub_sub_sub_groups")
 }
 
@@ -424,6 +431,7 @@ model Product {
   uom             UnitMaster   @relation(fields: [uom_id], references: [id])
 
   @@unique([product_code, created_by])
+  @@index([created_by, category_id, uom_id])
   @@map("products")
 }
 
@@ -448,6 +456,7 @@ model PurchaseOrder {
   user             User                @relation(fields: [userId], references: [id])
 
   @@unique([poNumber, userId])
+  @@index([userId])
   @@map("purchase_orders")
 }
 
@@ -470,6 +479,7 @@ model PurchaseOrderItem {
   productId        Int?
   purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
 
+  @@index([purchaseOrderId, productId])
   @@map("purchase_order_items")
 }
 
@@ -504,6 +514,7 @@ model SalesOrder {
   user           User             @relation(fields: [userId], references: [id])
 
   @@unique([soNumber, userId])
+  @@index([userId])
   @@map("sales_orders")
 }
 
@@ -525,6 +536,7 @@ model SalesOrderItem {
   printDescription String?
   salesOrder       SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
 
+  @@index([salesOrderId])
   @@map("sales_order_items")
 }
 
@@ -564,6 +576,7 @@ model PurchaseInvoice {
   user                  User                     @relation(fields: [userId], references: [id])
 
   @@unique([invoiceNumber, userId])
+  @@index([userId, supplierId, poId])
   @@map("purchase_invoices")
 }
 
@@ -586,6 +599,7 @@ model PurchaseInvoiceItem {
   hsnCode           String?
   purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
 
+  @@index([purchaseInvoiceId, productId])
   @@map("purchase_invoice_items")
 }
 
@@ -618,6 +632,7 @@ model Grn {
   purchaseOrder     PurchaseOrder? @relation(fields: [poId], references: [id])
   user              User           @relation(fields: [userId], references: [id])
 
+  @@index([userId, poId])
   @@map("grns")
 }
 
@@ -644,6 +659,7 @@ model GrnItem {
   amount           Float   @default(0)
   grn              Grn     @relation(fields: [grnId], references: [id], onDelete: Cascade)
 
+  @@index([grnId, productId])
   @@map("grn_items")
 }
 
@@ -711,6 +727,7 @@ model SalesInvoice {
   user                  User                  @relation(fields: [userId], references: [id])
 
   @@unique([invoiceNumber, userId])
+  @@index([userId, customerId, soId])
   @@map("sales_invoices")
 }
 
@@ -734,6 +751,7 @@ model SalesInvoiceItem {
   totalAmount      Float        @default(0)
   salesInvoice     SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
 
+  @@index([salesInvoiceId, productId])
   @@map("sales_invoice_items")
 }
 
@@ -780,6 +798,7 @@ model SalesChallan {
   salesOrder        SalesOrder?           @relation(fields: [soId], references: [id])
   user              User                  @relation(fields: [userId], references: [id])
 
+  @@index([userId, soId])
   @@map("sales_challans")
 }
 
@@ -806,6 +825,7 @@ model SalesChallanItem {
   amount           Float        @default(0)
   salesChallan     SalesChallan @relation(fields: [salesChallanId], references: [id], onDelete: Cascade)
 
+  @@index([salesChallanId, productId])
   @@map("sales_challan_items")
 }
 
@@ -1002,6 +1022,8 @@ model Transaction {
   account         AccountMaster   @relation(fields: [accountId], references: [id])
   user            User            @relation(fields: [userId], references: [id])
 
+  @@index([accountId])
+  @@index([userId, accountId, bookingDate])
   @@map("transactions")
 }
 
@@ -1040,6 +1062,8 @@ model ReceiptVoucher {
   bankCashLedger   AccountMaster        @relation("BankCashReceipt", fields: [bankCashLedgerId], references: [id])
   items            ReceiptVoucherItem[]
 
+  @@index([createdBy])
+  @@index([bankCashLedgerId])
   @@map("receipt_vouchers")
 }
 
@@ -1051,6 +1075,8 @@ model ReceiptVoucherItem {
   receiptVoucher ReceiptVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
   account        AccountMaster  @relation("AccountReceipt", fields: [accountId], references: [id])
 
+  @@index([voucherId])
+  @@index([accountId])
   @@map("receipt_voucher_items")
 }
 
@@ -1069,6 +1095,8 @@ model PaymentVoucher {
   bankCashLedger   AccountMaster        @relation("BankCashPayment", fields: [bankCashLedgerId], references: [id])
   items            PaymentVoucherItem[]
 
+  @@index([createdBy])
+  @@index([bankCashLedgerId])
   @@map("payment_vouchers")
 }
 
@@ -1080,6 +1108,8 @@ model PaymentVoucherItem {
   paymentVoucher PaymentVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
   account        AccountMaster  @relation("AccountPayment", fields: [accountId], references: [id])
 
+  @@index([voucherId])
+  @@index([accountId])
   @@map("payment_voucher_items")
 }
 
@@ -1107,6 +1137,8 @@ model JournalVoucher {
   bankCashLedger   AccountMaster        @relation("BankCashJournal", fields: [bankCashLedgerId], references: [id])
   items            JournalVoucherItem[]
 
+  @@index([createdBy])
+  @@index([bankCashLedgerId])
   @@map("journal_vouchers")
 }
 
@@ -1118,6 +1150,8 @@ model JournalVoucherItem {
   journalVoucher JournalVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
   account        AccountMaster  @relation("AccountJournal", fields: [accountId], references: [id])
 
+  @@index([voucherId])
+  @@index([accountId])
   @@map("journal_voucher_items")
 }
 
@@ -1136,6 +1170,8 @@ model ContraVoucher {
   bankCashLedger   AccountMaster        @relation("BankCashContraGiver", fields: [bankCashLedgerId], references: [id])
   items            ContraVoucherItem[]
 
+  @@index([createdBy])
+  @@index([bankCashLedgerId])
   @@map("contra_vouchers")
 }
 
@@ -1147,6 +1183,8 @@ model ContraVoucherItem {
   contraVoucher  ContraVoucher  @relation(fields: [voucherId], references: [id], onDelete: Cascade)
   account        AccountMaster  @relation("BankCashContraReceiver", fields: [accountId], references: [id])
 
+  @@index([voucherId])
+  @@index([accountId])
   @@map("contra_voucher_items")
 }
 

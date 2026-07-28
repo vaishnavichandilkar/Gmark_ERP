@@ -1,61 +1,62 @@
+import { lazy } from "react";
 import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
 
 // Auth Pages
-import Landing from "../pages/auth/Landing";
-import LanguageSelection from "../pages/auth/LanguageSelection";
-import LanguageGuard from "../components/auth/LanguageGuard";
-import SignIn from "../pages/auth/SignIn";
-import VerifyOTP from "../pages/auth/VerifyOTP";
-import Success from "../pages/auth/Success";
-import SignUp from "../pages/auth/SignUp";
-import ApplicationStatus from "../pages/auth/ApplicationStatus";
+const Landing = lazy(() => import("../pages/auth/Landing"));
+const LanguageSelection = lazy(() => import("../pages/auth/LanguageSelection"));
+const LanguageGuard = lazy(() => import("../components/auth/LanguageGuard"));
+const SignIn = lazy(() => import("../pages/auth/SignIn"));
+const VerifyOTP = lazy(() => import("../pages/auth/VerifyOTP"));
+const Success = lazy(() => import("../pages/auth/Success"));
+const SignUp = lazy(() => import("../pages/auth/SignUp"));
+const ApplicationStatus = lazy(() => import("../pages/auth/ApplicationStatus"));
 
 // Dashboard Pages
-import DashboardLayout from "../layout/dashboard/DashboardLayout";
-import Home from "../pages/dashboard/home/Home";
+const DashboardLayout = lazy(() => import("../layout/dashboard/DashboardLayout"));
+const Home = lazy(() => import("../pages/dashboard/home/Home"));
 
 // Masters Pages
-import MastersLayout from "../pages/dashboard/masters/MastersLayout";
-import GroupMaster from "../pages/dashboard/masters/GroupMaster";
-import AccountMaster from "../pages/dashboard/masters/AccountMaster";
-import UnitMaster from "../pages/dashboard/masters/UnitMaster";
-import CategoryMaster from "../pages/dashboard/masters/CategoryMaster";
-import ProductMaster from "../pages/dashboard/masters/ProductMaster";
-import HSNMasterPage from "../pages/dashboard/masters/HSNMasterPage";
+const MastersLayout = lazy(() => import("../pages/dashboard/masters/MastersLayout"));
+const GroupMaster = lazy(() => import("../pages/dashboard/masters/GroupMaster"));
+const AccountMaster = lazy(() => import("../pages/dashboard/masters/AccountMaster"));
+const UnitMaster = lazy(() => import("../pages/dashboard/masters/UnitMaster"));
+const CategoryMaster = lazy(() => import("../pages/dashboard/masters/CategoryMaster"));
+const ProductMaster = lazy(() => import("../pages/dashboard/masters/ProductMaster"));
+const HSNMasterPage = lazy(() => import("../pages/dashboard/masters/HSNMasterPage"));
 
 // Purchase Pages
-import PurchaseLayout from "../pages/dashboard/purchase/PurchaseLayout";
-import PurchaseOrder from "../pages/dashboard/purchase/purchase-order/PurchaseOrder";
-import AddPO from "../pages/dashboard/purchase/purchase-order/AddPO";
-import ViewPO from "../pages/dashboard/purchase/purchase-order/ViewPO";
-import POPrintPreview from "../pages/dashboard/purchase/purchase-order/POPrintPreview";
+const PurchaseLayout = lazy(() => import("../pages/dashboard/purchase/PurchaseLayout"));
+const PurchaseOrder = lazy(() => import("../pages/dashboard/purchase/purchase-order/PurchaseOrder"));
+const AddPO = lazy(() => import("../pages/dashboard/purchase/purchase-order/AddPO"));
+const ViewPO = lazy(() => import("../pages/dashboard/purchase/purchase-order/ViewPO"));
+const POPrintPreview = lazy(() => import("../pages/dashboard/purchase/purchase-order/POPrintPreview"));
 
-import PurchaseInvoice from "../pages/dashboard/purchase/purchase-invoice/invoice/PurchaseInvoice";
-import AddPurchaseInvoice from "../pages/dashboard/purchase/purchase-invoice/invoice/AddPurchaseInvoice";
-import ViewPurchaseInvoice from "../pages/dashboard/purchase/purchase-invoice/invoice/ViewPurchaseInvoice";
+const PurchaseInvoice = lazy(() => import("../pages/dashboard/purchase/purchase-invoice/invoice/PurchaseInvoice"));
+const AddPurchaseInvoice = lazy(() => import("../pages/dashboard/purchase/purchase-invoice/invoice/AddPurchaseInvoice"));
+const ViewPurchaseInvoice = lazy(() => import("../pages/dashboard/purchase/purchase-invoice/invoice/ViewPurchaseInvoice"));
 
-import GRN from "../pages/dashboard/purchase/purchase-invoice/grn/GRN";
-import AddGRN from "../pages/dashboard/purchase/purchase-invoice/grn/AddGRN";
-import ViewGRN from "../pages/dashboard/purchase/purchase-invoice/grn/ViewGRN";
+const GRN = lazy(() => import("../pages/dashboard/purchase/purchase-invoice/grn/GRN"));
+const AddGRN = lazy(() => import("../pages/dashboard/purchase/purchase-invoice/grn/AddGRN"));
+const ViewGRN = lazy(() => import("../pages/dashboard/purchase/purchase-invoice/grn/ViewGRN"));
 
 // Sales Pages
-import SalesLayout from "../pages/dashboard/sales/SalesLayout";
-import SalesOrder from "../pages/dashboard/sales/Sales-order/SalesOrder";
-import AddSO from "../pages/dashboard/sales/Sales-order/AddSO";
-import ViewSO from "../pages/dashboard/sales/Sales-order/ViewSO";
-import SOPrintPreview from "../pages/dashboard/sales/Sales-order/SOPrintPreview";
-import SalesInvoice from "../pages/dashboard/sales/Sales-invoice/invoice/SalesInvoice";
-import AddSI from "../pages/dashboard/sales/Sales-invoice/invoice/AddSalesInvoice";
-import ViewSalesInvoice from "../pages/dashboard/sales/Sales-invoice/invoice/ViewSalesInvoice";
-import SIPrintPreview from "../pages/dashboard/sales/Sales-invoice/invoice/SIPrintPreview";
-import AddChallan from "../pages/dashboard/sales/Sales-invoice/challan/AddChallan";
-import ViewChallan from "../pages/dashboard/sales/Sales-invoice/challan/ViewChallan";
-import Challan from "../pages/dashboard/sales/Sales-invoice/challan/Challan";
+const SalesLayout = lazy(() => import("../pages/dashboard/sales/SalesLayout"));
+const SalesOrder = lazy(() => import("../pages/dashboard/sales/Sales-order/SalesOrder"));
+const AddSO = lazy(() => import("../pages/dashboard/sales/Sales-order/AddSO"));
+const ViewSO = lazy(() => import("../pages/dashboard/sales/Sales-order/ViewSO"));
+const SOPrintPreview = lazy(() => import("../pages/dashboard/sales/Sales-order/SOPrintPreview"));
+const SalesInvoice = lazy(() => import("../pages/dashboard/sales/Sales-invoice/invoice/SalesInvoice"));
+const AddSI = lazy(() => import("../pages/dashboard/sales/Sales-invoice/invoice/AddSalesInvoice"));
+const ViewSalesInvoice = lazy(() => import("../pages/dashboard/sales/Sales-invoice/invoice/ViewSalesInvoice"));
+const SIPrintPreview = lazy(() => import("../pages/dashboard/sales/Sales-invoice/invoice/SIPrintPreview"));
+const AddChallan = lazy(() => import("../pages/dashboard/sales/Sales-invoice/challan/AddChallan"));
+const ViewChallan = lazy(() => import("../pages/dashboard/sales/Sales-invoice/challan/ViewChallan"));
+const Challan = lazy(() => import("../pages/dashboard/sales/Sales-invoice/challan/Challan"));
 
-import SystemSettings from "../features/settings/pages/SystemSettings";
-import ReportDashboard from "../features/reports/pages/ReportDashboard";
-import Finance from "../pages/dashboard/finance/Finance";
-import LedgerView from "../pages/dashboard/finance/LedgerView";
+const SystemSettings = lazy(() => import("../features/settings/pages/SystemSettings"));
+const ReportDashboard = lazy(() => import("../features/reports/pages/ReportDashboard"));
+const Finance = lazy(() => import("../pages/dashboard/finance/Finance"));
+const LedgerView = lazy(() => import("../pages/dashboard/finance/LedgerView"));
 
 import { ROUTES } from "../constants/routes";
 import { 
@@ -66,11 +67,11 @@ import {
 } from "./RouteGuards";
 
 // Super Admin Imports
-import SuperAdminLayout from "../layout/superadmin/SuperAdminLayout";
-import SuperAdminDashboard from "../pages/superadmin/SuperAdminDashboard";
-import PendingSellers from "../pages/superadmin/PendingSellers";
-import ApprovedSellers from "../pages/superadmin/ApprovedSellers";
-import RejectedSellers from "../pages/superadmin/RejectedSellers";
+const SuperAdminLayout = lazy(() => import("../layout/superadmin/SuperAdminLayout"));
+const SuperAdminDashboard = lazy(() => import("../pages/superadmin/SuperAdminDashboard"));
+const PendingSellers = lazy(() => import("../pages/superadmin/PendingSellers"));
+const ApprovedSellers = lazy(() => import("../pages/superadmin/ApprovedSellers"));
+const RejectedSellers = lazy(() => import("../pages/superadmin/RejectedSellers"));
 
 export const router = createBrowserRouter([
   {

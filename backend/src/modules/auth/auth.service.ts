@@ -7,6 +7,7 @@ import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 
 import { SmsService } from '../otp/sms.service';
+import { RedisService } from '../../infrastructure/redis/redis.service';
 
 @Injectable()
 export class AuthService {
@@ -15,6 +16,7 @@ export class AuthService {
         private jwtService: JwtService,
         private configService: ConfigService,
         private smsService: SmsService,
+        private redisService: RedisService,
     ) { }
 
     async sendLoginOtp(dto: SendLoginOtpDto) {
@@ -132,7 +134,10 @@ export class AuthService {
         }
     }
 
-    async logout(userId: number) {
+    async logout(userId: number, jti?: string) {
+        if (jti) {
+            await this.redisService.revokeSession(jti);
+        }
         await this.prisma.session.updateMany({
             where: { userId, isRevoked: false },
             data: { isRevoked: true },
@@ -161,7 +166,15 @@ export class AuthService {
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 7);
 
-        // 1. Invalidate old sessions for this user (Rotate)
+        // 1. Invalidate old sessions in Redis and DB (Rotate)
+        const activeSessions = await this.prisma.session.findMany({
+            where: { userId: user.id, isRevoked: false },
+            select: { jti: true }
+        });
+        for (const session of activeSessions) {
+            await this.redisService.revokeSession(session.jti);
+        }
+
         await this.prisma.session.updateMany({
             where: { userId: user.id, isRevoked: false },
             data: { isRevoked: true },

@@ -3,12 +3,14 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { RedisService } from '../../../infrastructure/redis/redis.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
     constructor(
         private configService: ConfigService,
         private prisma: PrismaService,
+        private redisService: RedisService,
     ) {
         super({
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -18,7 +20,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     async validate(payload: any) {
-        // 1. Strict Session Validation (Matching Session ID in DB)
+        // 1. Check Redis Session Cache First
+        const cachedUser = await this.redisService.getSession(payload.jti);
+        if (cachedUser) {
+            return cachedUser;
+        }
+
+        // 2. Cache Miss: Query Database
         const session = await this.prisma.session.findUnique({
             where: { jti: payload.jti }
         });
@@ -49,9 +57,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             select: { name: true }
         });
 
-        return {
+        const userObj = {
             id: user.id,
             userId: user.id,
+            jti: payload.jti,
             firstName: user.first_name,
             lastName: user.last_name,
             phone: user.phone,
@@ -68,5 +77,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             shopDetail,
             gstNumber: gstDoc?.name || null
         };
+
+        // Cache in Redis (TTL is remaining session lifespan, capped at 1 hour)
+        const ttlSeconds = Math.max(0, Math.floor((session.expiresAt.getTime() - Date.now()) / 1000));
+        if (ttlSeconds > 0) {
+            await this.redisService.setSession(payload.jti, userObj, Math.min(ttlSeconds, 3600));
+        }
+
+        return userObj;
     }
 }

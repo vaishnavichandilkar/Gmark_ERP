@@ -6,6 +6,8 @@ import '@fontsource/plus-jakarta-sans';
 import './styles/global.css';
 import './i18n/index';
 
+import ErrorBoundaryFallback from './components/common/ErrorBoundaryFallback';
+
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -23,11 +25,10 @@ class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: '20px', color: 'red', fontFamily: 'sans-serif' }}>
-          <h1>Something went wrong.</h1>
-          <pre>{this.state.error?.message}</pre>
-          <button onClick={() => window.location.reload()}>Reload Page</button>
-        </div>
+        <ErrorBoundaryFallback 
+          error={this.state.error} 
+          resetError={() => this.setState({ hasError: false, error: null })} 
+        />
       );
     }
     return this.props.children;

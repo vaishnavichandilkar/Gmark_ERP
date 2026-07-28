@@ -37,6 +37,7 @@ const UnitMaster = () => {
     const [itemsPerPage, setItemsPerPage] = useState(15);
     const [currentPage, setCurrentPage] = useState(1);
     const [gstUomOptions, setGstUomOptions] = useState([]);
+    const [debugError, setDebugError] = useState(null);
     const [showSuccessToast, setShowSuccessToast] = useState({ show: false, message: '', type: 'success' });
     const [isFilterApplied, setIsFilterApplied] = useState(false);
     const [columnFilters, setColumnFilters] = useState({
@@ -69,7 +70,8 @@ const UnitMaster = () => {
     }, [tableData, columnFilters]);
 
     const showToast = (message, type = 'success') => {
-        setShowSuccessToast({ show: true, message, type });
+        setToastState({ message, type });
+        setTimeout(() => setToastState(null), 3000);
     };
 
     const fetchUnits = async () => {
@@ -88,6 +90,7 @@ const UnitMaster = () => {
             setTotalItems(response.meta?.total || 0);
         } catch (error) {
             console.error('Error fetching units:', error);
+            setDebugError(error.message + '\n' + error.stack + (error.response ? '\nResponse: ' + JSON.stringify(error.response.data) : ''));
             toast.error(t('common:error_fetching_data'));
         } finally {
             setLoading(false);
@@ -305,6 +308,14 @@ const UnitMaster = () => {
 
     return (
         <div className="flex flex-col relative w-full h-full">
+            {debugError && (
+                <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fecaca', color: '#991b1b', padding: '16px', borderRadius: '8px', margin: '16px 0', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap', userSelect: 'all', zIndex: 9999 }}>
+                    <strong>[DEBUG ERROR DETECTED]</strong>
+                    <button onClick={() => setDebugError(null)} style={{ float: 'right', fontWeight: 'bold', color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer' }}>Dismiss</button>
+                    <div style={{ marginTop: '8px' }}>{debugError}</div>
+                </div>
+            )}
+
             {showSuccessToast.show && (
                 <SuccessToast
                     message={showSuccessToast.message}

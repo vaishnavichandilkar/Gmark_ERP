@@ -59,6 +59,12 @@ const ReportDashboard = () => {
         const validPurchases = (purchaseData || []).filter(p => p.status === 'GENERATED');
 
         const totalPurchases = validPurchases.reduce((sum, item) => sum + (item.grandTotal || 0), 0);
+        const purchaseExpenses = validPurchases.reduce((sum, item) => {
+            const expTotal = (item.expenses || []).reduce((eSum, exp) => eSum + (exp.amount || 0) + (exp.taxAmount || 0), 0);
+            return sum + expTotal;
+        }, 0);
+        const materialPurchases = totalPurchases - purchaseExpenses;
+
         const totalSales = completedSales.reduce((sum, item) => sum + (item.grandTotal || 0), 0);
         const totalPurchaseTax = validPurchases.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
         const totalSalesTax = completedSales.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
@@ -219,6 +225,8 @@ const ReportDashboard = () => {
 
         return {
             totalPurchases,
+            materialPurchases,
+            purchaseExpenses,
             totalSales,
             totalPurchaseTax,
             totalSalesTax,
@@ -334,7 +342,7 @@ const ReportDashboard = () => {
 
         const validPurchasesForChart = (purchaseData || []).filter(p => p.status === 'GENERATED');
         validPurchasesForChart.forEach(item => {
-            const rawDate = item.createdAt || item.bookingDate || new Date();
+            const rawDate = item.invoiceDate || item.createdAt || item.bookingDate || new Date();
             const date = new Date(rawDate);
             const key = getGroupKey(rawDate);
             // Rough timestamp for sorting reliably
@@ -353,7 +361,7 @@ const ReportDashboard = () => {
 
         const completedSalesForChart = (salesInvoicesData || []).filter(s => s.status === 'GENERATED' || s.status === 'INVOICE_GENERATED');
         completedSalesForChart.forEach(item => {
-            const rawDate = item.createdAt || item.invoiceDate || item.soCreationDate || new Date();
+            const rawDate = item.invoiceDate || item.createdAt || item.soCreationDate || new Date();
             const date = new Date(rawDate);
             const key = getGroupKey(rawDate);
             // Rough timestamp for sorting reliably
@@ -415,7 +423,19 @@ const ReportDashboard = () => {
                             <div>
                                 <p className="text-sm font-medium text-emerald-800/70 mb-1">Total Purchases</p>
                                 <h4 className="text-2xl font-bold text-emerald-900">{formatCurrency(metrics.totalPurchases)}</h4>
-                                <p className="text-xs text-emerald-600 mt-1">{metrics.purchaseCount} Invoices</p>
+                                <div className="mt-2 flex flex-row flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-emerald-700 font-semibold border-t border-emerald-500/10 pt-1.5">
+                                    <div className="flex items-center gap-1">
+                                        <span>Material:</span>
+                                        <span className="text-emerald-900">{formatCurrency(metrics.materialPurchases)}</span>
+                                    </div>
+                                    <span className="text-emerald-500/30">|</span>
+                                    <div className="flex items-center gap-1">
+                                        <span>Expenses:</span>
+                                        <span className="text-emerald-900">{formatCurrency(metrics.purchaseExpenses)}</span>
+                                    </div>
+                                    <span className="text-emerald-500/30">|</span>
+                                    <span className="text-[10px] text-emerald-600 font-medium">{metrics.purchaseCount} Invoices</span>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -463,6 +483,17 @@ const ReportDashboard = () => {
                             <div>
                                 <p className="text-sm font-medium text-emerald-800/70 mb-1">Gross Purchases</p>
                                 <h4 className="text-2xl font-bold text-emerald-900">{formatCurrency(metrics.totalPurchases)}</h4>
+                                <div className="mt-2 flex flex-row flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-emerald-700 font-semibold border-t border-emerald-500/10 pt-1.5">
+                                    <div className="flex items-center gap-1">
+                                        <span>Material:</span>
+                                        <span className="text-emerald-900">{formatCurrency(metrics.materialPurchases)}</span>
+                                    </div>
+                                    <span className="text-emerald-500/30">|</span>
+                                    <div className="flex items-center gap-1">
+                                        <span>Expenses:</span>
+                                        <span className="text-emerald-900">{formatCurrency(metrics.purchaseExpenses)}</span>
+                                    </div>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>

@@ -39,11 +39,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
             status = HttpStatus.BAD_REQUEST;
         }
 
+        const errorName = exception instanceof Error ? exception.name : 'UnknownError';
+
         response.status(status).json({
+            success: false,
             statusCode: status,
             timestamp: new Date().toISOString(),
             path: request.url,
             message: message,
+            error: errorName,
         });
     }
 }

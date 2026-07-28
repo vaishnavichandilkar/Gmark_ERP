@@ -19,6 +19,8 @@ import { SalesModule } from './modules/Sales/sales.module';
 import { ReportsModule } from './modules/Reports/reports.module';
 import { FinanceModule } from './modules/Finance/finance.module';
 import { LedgerModule } from './modules/Ledger/ledger.module';
+import { RedisModule } from './infrastructure/redis/redis.module';
+import { QueueModule } from './infrastructure/queue/queue.module';
 import { AppController } from './app.controller';
 @Module({
     imports: [
@@ -27,6 +29,8 @@ import { AppController } from './app.controller';
             load: [envConfig],
         }),
         PrismaModule,
+        RedisModule,
+        QueueModule,
         AuthModule,
         UploadModule,
         BusinessModule,
