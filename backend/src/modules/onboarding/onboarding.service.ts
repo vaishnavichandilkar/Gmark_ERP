@@ -21,7 +21,7 @@ export class OnboardingService {
         // Step 1: Check Local DB first
         const localData = await this.prisma.pincode.findUnique({
             where: { pincode },
-            select: { pincode: true, state: true, district: true, areas: true, country: true, isActive: true }
+            select: { pincode: true, state: true, district: true, areas: true, officeVillages: true, country: true, isActive: true }
         });
 
         if (localData) {
@@ -38,6 +38,17 @@ export class OnboardingService {
                 // Extract Name from each object and collect into a unique list
                 const allAreas: string[] = [...new Set(data[0].PostOffice.map((po: any) => String(po.Name)))] as string[];
 
+                const officeVillagesObj: Record<string, string[]> = {};
+                for (const po of data[0].PostOffice) {
+                    const officeName = po.Name;
+                    if (!officeVillagesObj[officeName]) {
+                        officeVillagesObj[officeName] = [];
+                    }
+                    if (!officeVillagesObj[officeName].includes(po.Name)) {
+                        officeVillagesObj[officeName].push(po.Name);
+                    }
+                }
+
                 // Step 3: Save to DB for next time
                 const saved = await this.prisma.pincode.upsert({
                     where: { pincode },
@@ -46,6 +57,7 @@ export class OnboardingService {
                         district: first.District,
                         country: first.Country || 'India',
                         areas: allAreas,
+                        officeVillages: officeVillagesObj,
                         isActive: true
                     },
                     create: {
@@ -54,6 +66,7 @@ export class OnboardingService {
                         district: first.District,
                         country: first.Country || 'India',
                         areas: allAreas,
+                        officeVillages: officeVillagesObj,
                         isActive: true
                     }
                 });
@@ -412,6 +425,7 @@ export class OnboardingService {
                 pinCode: dto.pinCode,
                 state: dto.state || state,
                 district: dto.district || district,
+                country: dto.country || pincodeRecord?.country || 'India',
             },
             create: {
                 userId,
@@ -421,6 +435,7 @@ export class OnboardingService {
                 pinCode: dto.pinCode,
                 state: dto.state || state,
                 district: dto.district || district,
+                country: dto.country || pincodeRecord?.country || 'India',
             }
         });
 
@@ -469,6 +484,7 @@ export class OnboardingService {
             pinCode: user.shopDetail?.pinCode || '',
             district: user.shopDetail?.district || '',
             state: user.shopDetail?.state || '',
+            country: user.shopDetail?.country || '',
             udyogAadhar: udyogAadharDoc?.name || '',
             gstNumber: gstNumberDoc?.name || '',
             panNumber: panNumberDoc?.name || '',
@@ -527,7 +543,7 @@ export class OnboardingService {
                 profileId: sellerProfile?.id || null,
                 uploadedByUserId: userId,
                 type,
-                url: file.path,
+                url: file.path.replace(/\\/g, '/'),
                 name: file.originalname,
                 size: BigInt(file.size),
                 category: category || null,

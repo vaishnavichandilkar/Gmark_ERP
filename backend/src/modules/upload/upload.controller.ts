@@ -32,7 +32,7 @@ export class UploadController {
         return {
             message: 'File uploaded successfully',
             filename: file.filename,
-            path: file.path,
+            path: file.path.replace(/\\/g, '/'),
         };
     }
 }

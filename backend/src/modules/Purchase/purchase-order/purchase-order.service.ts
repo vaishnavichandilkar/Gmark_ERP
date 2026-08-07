@@ -4,6 +4,7 @@ import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from './dto/purchase-o
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { formatDate, parseDDMMYYYY } from '../../../utils/dateFormatter';
+import { generatePOSampleExcel } from '../../../common/utils/procurement-bulk-import.processor';
 
 const isValidGst = (gst?: string | null): boolean => {
   return Boolean(
@@ -255,42 +256,7 @@ export class PurchaseOrderService {
   }
 
   async downloadSample(): Promise<{ buffer: Buffer; filename: string; mimetype: string }> {
-    const workbook = new ExcelJS.Workbook();
-    const ws = workbook.addWorksheet('Purchase Orders');
-
-    ws.columns = [
-      { header: 'Supplier ID', key: 'supplierId', width: 15 },
-      { header: 'Credit Days', key: 'creditDays', width: 15 },
-      { header: 'Address', key: 'address', width: 30 },
-      { header: 'GST No', key: 'gstNo', width: 20 },
-      { header: 'PO Date', key: 'poCreationDate', width: 15 },
-      { header: 'Expiry Date', key: 'expiryDate', width: 15 },
-      { header: 'Product Code', key: 'productCode', width: 15 },
-      { header: 'Product Name', key: 'productName', width: 25 },
-      { header: 'HSN Code', key: 'hsnCode', width: 12 },
-      { header: 'Quantity', key: 'quantity', width: 12 },
-      { header: 'Rate', key: 'rate', width: 12 },
-      { header: 'UOM', key: 'uom', width: 10 },
-      { header: 'Tax %', key: 'taxPercent', width: 10 },
-    ];
-
-    ws.addRow({
-      supplierId: 1,
-      creditDays: 30,
-      address: '123 Supplier St',
-      gstNo: '27AAAAA0000A1Z5',
-      poCreationDate: new Date().toISOString().split('T')[0],
-      expiryDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-      productCode: 'PROD001',
-      productName: 'Sample Product',
-      hsnCode: '8471',
-      quantity: 10,
-      rate: 100,
-      uom: 'PCS',
-      taxPercent: 18,
-    });
-
-    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+    const buffer = await generatePOSampleExcel();
     return {
       buffer,
       filename: 'purchase_order_sample.xlsx',

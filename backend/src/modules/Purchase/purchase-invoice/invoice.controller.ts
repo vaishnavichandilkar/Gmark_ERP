@@ -62,7 +62,7 @@ export class PurchaseInvoiceController {
       creditDays: body.creditDays ? parseInt(body.creditDays as any, 10) : 0,
     };
 
-    return this.service.create(parsedDto, req.user.id, file?.path);
+    return this.service.create(parsedDto, req.user.id, file?.path ? file.path.replace(/\\/g, '/') : undefined);
   }
 
   @Get()
@@ -191,7 +191,7 @@ export class PurchaseInvoiceController {
       poId: body.poId ? parseInt(body.poId, 10) : undefined,
     };
 
-    return this.service.update(id, updateDto, req.user.id, file?.path);
+    return this.service.update(id, updateDto, req.user.id, file?.path ? file.path.replace(/\\/g, '/') : undefined);
   }
 
   @Delete(':id')

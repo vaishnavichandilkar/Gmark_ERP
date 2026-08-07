@@ -33,7 +33,7 @@ export class SalesOrderController {
             customerAmtExclTax: (body.customerAmtExclTax !== undefined && body.customerAmtExclTax !== null && body.customerAmtExclTax !== '') ? parseFloat(body.customerAmtExclTax) : null,
             customerAmtInclTax: (body.customerAmtInclTax !== undefined && body.customerAmtInclTax !== null && body.customerAmtInclTax !== '') ? parseFloat(body.customerAmtInclTax) : null,
         };
-        return this.service.create(parsedDto, req.user.userId, file?.path);
+        return this.service.create(parsedDto, req.user.userId, file?.path ? file.path.replace(/\\/g, '/') : undefined);
     }
 
     @Get('next-number')
@@ -153,7 +153,7 @@ export class SalesOrderController {
             customerAmtExclTax: (body.customerAmtExclTax !== undefined && body.customerAmtExclTax !== null && body.customerAmtExclTax !== '') ? parseFloat(body.customerAmtExclTax) : undefined,
             customerAmtInclTax: (body.customerAmtInclTax !== undefined && body.customerAmtInclTax !== null && body.customerAmtInclTax !== '') ? parseFloat(body.customerAmtInclTax) : undefined,
         };
-        return this.service.update(id, parsedDto, req.user.userId, file?.path, body.removeAttachment === 'true');
+        return this.service.update(id, parsedDto, req.user.userId, file?.path ? file.path.replace(/\\/g, '/') : undefined, body.removeAttachment === 'true');
     }
 
     @Delete(':id')

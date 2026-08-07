@@ -522,16 +522,15 @@ export class AccountMasterController {
     if (files?.msmeCertificate?.[0]) {
        body.msmeCertificateUrl = "temp-" + files.msmeCertificate[0].filename;
     }
-    if (files?.otherDocuments && files.otherDocuments.length > 0) {
-       body.otherDocuments = files.otherDocuments.map(f => "temp-" + f.filename);
-    } else if (typeof body.otherDocuments === 'string') {
-       try { 
-           body.otherDocuments = JSON.parse(body.otherDocuments); 
-       } catch (e) {}
+    let parsedDocs: string[] = [];
+    if (typeof body.otherDocuments === 'string') {
+        try { 
+            parsedDocs = JSON.parse(body.otherDocuments); 
+        } catch (e) {}
+    } else if (Array.isArray(body.otherDocuments)) {
+        parsedDocs = body.otherDocuments;
     }
-    if (!Array.isArray(body.otherDocuments)) {
-       delete body.otherDocuments;
-    }
+    body.otherDocuments = parsedDocs;
 
     if (body.otherDocumentNames && typeof body.otherDocumentNames === 'string') {
        body.otherDocumentNames = [body.otherDocumentNames];

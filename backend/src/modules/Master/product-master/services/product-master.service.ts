@@ -535,15 +535,26 @@ export class ProductMasterService {
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
         const headers = ['Type*', 'Product Name*', 'UOM*', 'Category*', 'Sub Category*', 'Sub Sub Category', 'HSN/SAC Code*', 'Tax Rate (%)*', 'Product Description', 'Status'];
-        worksheet.addRow(headers);
-
         const headerRow = worksheet.getRow(1);
-        headerRow.font = { bold: true };
-        headerRow.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFD3D3D3' }
-        };
+        headerRow.height = 28;
+        headers.forEach((h, idx) => {
+            const cell = headerRow.getCell(idx + 1);
+            const isRequired = h.includes('*');
+            cell.value = h;
+            cell.font = { bold: true, color: { argb: isRequired ? 'FF881337' : 'FF1E293B' }, size: 11 };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: isRequired ? 'FFFECDD3' : 'FFF1F5F9' }
+            };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                bottom: { style: 'medium', color: { argb: isRequired ? 'FFFDA4AF' : 'FFCBD5E1' } },
+                right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            };
+        });
 
         for (let i = 2; i <= 1000; i++) {
             worksheet.getCell(`A${i}`).dataValidation = {

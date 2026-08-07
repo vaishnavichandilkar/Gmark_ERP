@@ -6,6 +6,7 @@ import { PurchaseOrderService } from '../../purchase-order/purchase-order.servic
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { formatDate } from '../../../../utils/dateFormatter';
+import { generateGRNSampleExcel } from '../../../../common/utils/procurement-bulk-import.processor';
 
 @Injectable()
 export class GrnService {
@@ -819,5 +820,14 @@ export class GrnService {
       // ... rest of print logic ...
       doc.end();
     });
+  }
+
+  async downloadSample() {
+    const buffer = await generateGRNSampleExcel();
+    return {
+      buffer,
+      filename: 'grn_sample.xlsx',
+      mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
   }
 }

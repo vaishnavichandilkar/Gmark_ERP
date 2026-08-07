@@ -315,6 +315,28 @@ export class HsnMasterService {
         const worksheet = workbook.addWorksheet('HSN Master Template');
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
+        const headers = ['Type*', 'Code*', 'Tax Rate*', 'Description*'];
+        const headerRow = worksheet.getRow(1);
+        headerRow.height = 28;
+        headers.forEach((h, idx) => {
+            const cell = headerRow.getCell(idx + 1);
+            const isRequired = h.includes('*');
+            cell.value = h;
+            cell.font = { bold: true, color: { argb: isRequired ? 'FF881337' : 'FF1E293B' }, size: 11 };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: isRequired ? 'FFFECDD3' : 'FFF1F5F9' }
+            };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                bottom: { style: 'medium', color: { argb: isRequired ? 'FFFDA4AF' : 'FFCBD5E1' } },
+                right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            };
+        });
+
         worksheet.columns = [
             { header: 'Type*', key: 'type', width: 15 },
             { header: 'Code*', key: 'code', width: 20 },

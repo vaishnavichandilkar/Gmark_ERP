@@ -7,6 +7,7 @@ import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { formatDate } from '../../../utils/dateFormatter';
 import { isValidGst, determinePurchaseGst } from '../../../common/utils/gst.helper';
+import { generatePISampleExcel } from '../../../common/utils/procurement-bulk-import.processor';
 import { TransactionService } from '../../Finance/transaction.service';
 
 @Injectable()
@@ -965,23 +966,9 @@ export class PurchaseInvoiceService {
   }
 
   async downloadSample() {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Purchase Invoice Sample');
-    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
-    const headers = [
-      'Supplier Name*', 'Supplier Invoice No*', 'Supplier Invoice Date (YYYY-MM-DD)*', 'Booking Date (YYYY-MM-DD)',
-      'Address*', 'Credit Days*', 'CH No', 'PO No', 'Product Code*', 'Quantity*', 'Rate*', 'UOM*'
-    ];
-    worksheet.addRow(headers);
-
-    const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true };
-    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
-    worksheet.columns = headers.map(() => ({ width: 22 }));
-
-    const buffer = await workbook.xlsx.writeBuffer();
+    const buffer = await generatePISampleExcel();
     return {
-      buffer: Buffer.from(buffer),
+      buffer,
       filename: 'purchase_invoice_sample.xlsx',
       mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     };

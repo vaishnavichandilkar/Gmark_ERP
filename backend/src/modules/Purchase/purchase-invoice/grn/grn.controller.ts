@@ -154,4 +154,12 @@ export class GrnController {
     res.set({ 'Content-Type': mimetype, 'Content-Disposition': `attachment; filename=${filename}` });
     res.send(buffer);
   }
+
+  @Get('download-sample')
+  @ApiOperation({ summary: 'Download sample Excel file for GRN import' })
+  async downloadSample(@Res() res: Response) {
+    const { buffer, filename, mimetype } = await this.grnService.downloadSample();
+    res.set({ 'Content-Type': mimetype, 'Content-Disposition': `attachment; filename=${filename}` });
+    res.send(buffer);
+  }
 }

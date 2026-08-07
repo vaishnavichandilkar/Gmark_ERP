@@ -1,85 +1,111 @@
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as readline from 'readline';
 
 const prisma = new PrismaClient();
 
-interface RawPincodeRecord {
-  Name: string;
-  Description: string | null;
-  BranchType: string;
-  DeliveryStatus: string;
-  Circle: string;
-  District: string;
-  Division: string;
-  Region: string;
-  Block: string;
-  State: string;
-  Country: string;
-  Pincode: number | string;
-}
-
 async function main() {
-  console.log('Starting Pincode seeding process...');
-  // Located in backend root directory: D:\USERS\vaishnavi\Desktop\weighting_scale\backend\India_pincodes.json
-  const filePath = path.join(__dirname, '../../India_pincodes.json');
-  
+  console.log('Starting Pincode seeding process from CSV...');
+  const filePath = path.join(__dirname, '../common/pincode.csv');
+
   if (!fs.existsSync(filePath)) {
-    console.error(`Error: India_pincodes.json not found at ${filePath}`);
+    console.error(`Error: pincode.csv not found at ${filePath}`);
     process.exit(1);
   }
 
-  console.log('Reading India_pincodes.json file...');
-  const fileContent = fs.readFileSync(filePath, 'utf8');
-  console.log('Parsing JSON...');
-  const rawRecords: RawPincodeRecord[] = JSON.parse(fileContent);
-  console.log(`Total raw records found: ${rawRecords.length}`);
+  console.log('Clearing existing Pincodes from database...');
+  await prisma.pincode.deleteMany();
+  console.log('Database cleared.');
 
-  console.log('Grouping areas by pincode...');
-  // Group by pincode string to maintain uniqueness and aggregate sub-areas
+  console.log('Reading and parsing pincode.csv file...');
+  const fileStream = fs.createReadStream(filePath, 'utf8');
+  const rl = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity,
+  });
+
   const grouped = new Map<string, {
     state: string;
     district: string;
     subDistrict: string | null;
     country: string;
     areas: Set<string>;
+    officeVillages: Map<string, Set<string>>;
   }>();
 
-  for (const record of rawRecords) {
-    if (!record.Pincode) continue;
-    const pincodeStr = String(record.Pincode).trim();
-    if (!pincodeStr) continue;
+  let isHeader = true;
+  let lineCount = 0;
 
-    const areaName = record.Name ? record.Name.trim() : '';
-    if (!areaName) continue;
+  for await (const line of rl) {
+    lineCount++;
+    if (isHeader) {
+      isHeader = false;
+      continue;
+    }
 
-    const existing = grouped.get(pincodeStr);
-    if (existing) {
-      existing.areas.add(areaName);
-    } else {
-      grouped.set(pincodeStr, {
-        state: record.State || 'India',
-        district: record.District || '',
-        subDistrict: record.Block || null,
-        country: record.Country || 'India',
-        areas: new Set([areaName]),
-      });
+    if (!line.trim()) continue;
+
+    // Zero-dependency CSV line parser to handle quotes/commas correctly
+    const record = parseCSVLine(line);
+    if (record.length < 6) continue;
+
+    const village = record[0].trim();
+    const officeName = record[1].trim();
+    const pincode = record[2].trim();
+    const subDistrict = record[3].trim();
+    const district = record[4].trim();
+    const state = record[5].trim();
+
+    if (!pincode || !/^\d{6}$/.test(pincode)) continue;
+
+    let existing = grouped.get(pincode);
+    if (!existing) {
+      existing = {
+        state: state || 'India',
+        district: district || '',
+        subDistrict: subDistrict || null,
+        country: 'India',
+        areas: new Set<string>(),
+        officeVillages: new Map<string, Set<string>>(),
+      };
+      grouped.set(pincode, existing);
+    }
+
+    if (village) {
+      existing.areas.add(village);
+      if (officeName) {
+        let officeSet = existing.officeVillages.get(officeName);
+        if (!officeSet) {
+          officeSet = new Set<string>();
+          existing.officeVillages.set(officeName, officeSet);
+        }
+        officeSet.add(village);
+      }
     }
   }
 
-  const uniquePincodesCount = grouped.size;
-  console.log(`Total unique pincodes to seed: ${uniquePincodesCount}`);
+  console.log(`Finished parsing. Total CSV lines read: ${lineCount}`);
+  console.log(`Total unique pincodes to seed: ${grouped.size}`);
 
   // Convert map to array of database-friendly objects matching Prisma Pincode model
-  const recordsToInsert = Array.from(grouped.entries()).map(([pincode, data]) => ({
-    pincode,
-    state: data.state,
-    district: data.district,
-    subDistrict: data.subDistrict,
-    country: data.country,
-    areas: Array.from(data.areas),
-    isActive: true,
-  }));
+  const recordsToInsert = Array.from(grouped.entries()).map(([pincode, data]) => {
+    const officeVillagesObj: Record<string, string[]> = {};
+    for (const [office, villages] of data.officeVillages.entries()) {
+      officeVillagesObj[office] = Array.from(villages).sort();
+    }
+
+    return {
+      pincode,
+      state: data.state,
+      district: data.district,
+      subDistrict: data.subDistrict,
+      country: data.country,
+      areas: Array.from(data.areas).sort(),
+      officeVillages: officeVillagesObj,
+      isActive: true,
+    };
+  });
 
   console.log('Starting batch database insertion...');
   const BATCH_SIZE = 1000;
@@ -89,7 +115,6 @@ async function main() {
     const batch = recordsToInsert.slice(i, i + BATCH_SIZE);
     
     try {
-      // Postgres createMany supports skipDuplicates perfectly
       const result = await prisma.pincode.createMany({
         data: batch,
         skipDuplicates: true,
@@ -103,7 +128,26 @@ async function main() {
     }
   }
 
-  console.log(`\nSeeding completed successfully! Total pincodes inserted: ${successCount}`);
+  console.log(`\nSeeding completed successfully! Total unique pincodes inserted: ${successCount}`);
+}
+
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim());
+  return result;
 }
 
 main()

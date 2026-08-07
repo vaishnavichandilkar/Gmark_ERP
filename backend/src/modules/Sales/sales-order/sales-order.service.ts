@@ -1033,15 +1033,26 @@ export class SalesOrderService {
       'PO Amount (Excluding Tax)', 'PO Amount (Including Tax)',
       'Product Name*', 'Quantity*', 'Rate*', 'Discount (₹)', 'Discount (%)'
     ];
-    worksheet.addRow(headers);
-
     const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true };
-    headerRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFD3D3D3' }
-    };
+    headerRow.height = 28;
+    headers.forEach((h, idx) => {
+      const cell = headerRow.getCell(idx + 1);
+      const isRequired = h.includes('*');
+      cell.value = h;
+      cell.font = { bold: true, color: { argb: isRequired ? 'FF9F1239' : 'FF334155' }, size: 11 };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: isRequired ? 'FFFEE2E2' : 'FFF8FAFC' }
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'medium', color: { argb: isRequired ? 'FFFECDD3' : 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      };
+    });
 
 
 

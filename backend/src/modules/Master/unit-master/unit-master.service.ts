@@ -370,9 +370,31 @@ export class UnitMasterService {
         const worksheet = workbook.addWorksheet('Sample Data');
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
+        const headers = ['Unit Name*', 'GST UOM*', 'Full Name', 'Status'];
+        const headerRow = worksheet.getRow(1);
+        headerRow.height = 28;
+        headers.forEach((h, idx) => {
+            const cell = headerRow.getCell(idx + 1);
+            const isRequired = h.includes('*');
+            cell.value = h;
+            cell.font = { bold: true, color: { argb: isRequired ? 'FF881337' : 'FF1E293B' }, size: 11 };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: isRequired ? 'FFFECDD3' : 'FFF1F5F9' }
+            };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                bottom: { style: 'medium', color: { argb: isRequired ? 'FFFDA4AF' : 'FFCBD5E1' } },
+                right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            };
+        });
+
         worksheet.columns = [
-            { header: 'Unit Name', key: 'unit_name', width: 20 },
-            { header: 'GST UOM', key: 'gst_uom', width: 20 },
+            { header: 'Unit Name*', key: 'unit_name', width: 20 },
+            { header: 'GST UOM*', key: 'gst_uom', width: 20 },
             { header: 'Full Name', key: 'full_name', width: 40 },
             { header: 'Status', key: 'status', width: 15 },
         ];

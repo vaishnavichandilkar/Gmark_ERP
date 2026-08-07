@@ -26,32 +26,37 @@ export class LedgerService {
               gte: query.startDate ? new Date(query.startDate) : undefined,
               lte: query.endDate ? new Date(query.endDate) : undefined,
             },
-            transactionType: { in: [TransactionType.Purchase, TransactionType.Payment] },
+            transactionType: { in: [TransactionType.Purchase, TransactionType.Payment, TransactionType.Journal] },
           },
         },
       },
     });
 
-    return accounts.map((account) => {
-      const openingBalance = account.supplierBalanceType === BalanceType.Dr ? -Number(account.supplierOpeningBalance || 0) : Number(account.supplierOpeningBalance || 0);
-      const debit = account.transactions
-        .filter((t) => t.entryType === BalanceType.Dr)
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-      const credit = account.transactions
-        .filter((t) => t.entryType === BalanceType.Cr)
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-      const closingBalance = openingBalance + credit - debit;
+    const results = await Promise.all(
+      accounts.map(async (account) => {
+        const validTransactions = await this.filterTransactions(account.transactions, true, false);
+        const openingBalance = account.supplierBalanceType === BalanceType.Dr ? -Number(account.supplierOpeningBalance || 0) : Number(account.supplierOpeningBalance || 0);
+        const debit = validTransactions
+          .filter((t) => t.entryType === BalanceType.Dr)
+          .reduce((sum, t) => sum + Number(t.amount), 0);
+        const credit = validTransactions
+          .filter((t) => t.entryType === BalanceType.Cr)
+          .reduce((sum, t) => sum + Number(t.amount), 0);
+        const closingBalance = openingBalance + credit - debit;
 
-      return {
-        id: account.id,
-        accountName: account.accountName,
-        accountType: account.accountType,
-        openingBalance,
-        debit,
-        credit,
-        closingBalance,
-      };
-    }).filter(acc => acc.debit !== 0 || acc.credit !== 0);
+        return {
+          id: account.id,
+          accountName: account.accountName,
+          accountType: account.accountType,
+          openingBalance,
+          debit,
+          credit,
+          closingBalance,
+        };
+      })
+    );
+
+    return results.filter(acc => acc.debit !== 0 || acc.credit !== 0 || acc.openingBalance !== 0);
   }
 
   async getDebtorsSummary(query: LedgerQueryDto, userId: number) {
@@ -72,32 +77,37 @@ export class LedgerService {
               gte: query.startDate ? new Date(query.startDate) : undefined,
               lte: query.endDate ? new Date(query.endDate) : undefined,
             },
-            transactionType: { in: [TransactionType.Sales, TransactionType.Receipt] },
+            transactionType: { in: [TransactionType.Sales, TransactionType.Receipt, TransactionType.Journal] },
           },
         },
       },
     });
 
-    return accounts.map((account) => {
-      const openingBalance = account.customerBalanceType === BalanceType.Cr ? -Number(account.customerOpeningBalance || 0) : Number(account.customerOpeningBalance || 0);
-      const debit = account.transactions
-        .filter((t) => t.entryType === BalanceType.Dr)
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-      const credit = account.transactions
-        .filter((t) => t.entryType === BalanceType.Cr)
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-      const closingBalance = openingBalance + debit - credit;
+    const results = await Promise.all(
+      accounts.map(async (account) => {
+        const validTransactions = await this.filterTransactions(account.transactions, false, false);
+        const openingBalance = account.customerBalanceType === BalanceType.Cr ? -Number(account.customerOpeningBalance || 0) : Number(account.customerOpeningBalance || 0);
+        const debit = validTransactions
+          .filter((t) => t.entryType === BalanceType.Dr)
+          .reduce((sum, t) => sum + Number(t.amount), 0);
+        const credit = validTransactions
+          .filter((t) => t.entryType === BalanceType.Cr)
+          .reduce((sum, t) => sum + Number(t.amount), 0);
+        const closingBalance = openingBalance + debit - credit;
 
-      return {
-        id: account.id,
-        accountName: account.accountName,
-        accountType: account.accountType,
-        openingBalance,
-        debit,
-        credit,
-        closingBalance,
-      };
-    }).filter(acc => acc.debit !== 0 || acc.credit !== 0);
+        return {
+          id: account.id,
+          accountName: account.accountName,
+          accountType: account.accountType,
+          openingBalance,
+          debit,
+          credit,
+          closingBalance,
+        };
+      })
+    );
+
+    return results.filter(acc => acc.debit !== 0 || acc.credit !== 0 || acc.openingBalance !== 0);
   }
 
   async getGroupLedgersSummary(query: LedgerQueryDto, userId: number) {
@@ -342,9 +352,30 @@ export class LedgerService {
 
       baseOpeningBalance = balType === BalanceType.Cr ? -bal : bal;
     } else {
+      let bal = isCreditorLedger
+        ? Number(account.supplierOpeningBalance ?? account.customerOpeningBalance ?? 0)
+        : Number(account.customerOpeningBalance ?? account.supplierOpeningBalance ?? 0);
+      let balType = isCreditorLedger
+        ? (account.supplierBalanceType || account.customerBalanceType || BalanceType.Cr)
+        : (account.customerBalanceType || account.supplierBalanceType || BalanceType.Dr);
+
+      if (bal === 0) {
+        // Fallback check in SubSubSubGroup / Group Master
+        const groupInfo = await this.prisma.subSubSubGroup.findFirst({
+          where: {
+            userId,
+            name: { equals: account.accountName, mode: 'insensitive' }
+          }
+        });
+        if (groupInfo && groupInfo.opening_balance) {
+          bal = Number(groupInfo.opening_balance || 0);
+          balType = (groupInfo.balance_type as BalanceType) || (isCreditorLedger ? BalanceType.Cr : BalanceType.Dr);
+        }
+      }
+
       baseOpeningBalance = isCreditorLedger
-        ? (account.supplierBalanceType === BalanceType.Dr ? -Number(account.supplierOpeningBalance || 0) : Number(account.supplierOpeningBalance || 0))
-        : (account.customerBalanceType === BalanceType.Cr ? -Number(account.customerOpeningBalance || 0) : Number(account.customerOpeningBalance || 0));
+        ? (balType === BalanceType.Dr ? -bal : bal)
+        : (balType === BalanceType.Cr ? -bal : bal);
     }
 
 
@@ -834,10 +865,10 @@ export class LedgerService {
         // Exclude Payment Vouchers (supplier entries)
         if (isPV) return false;
 
-        // Exclude supplier-side Journal Vouchers (both child JVs with Parent PV and standalone JVs created as Dr)
+        // Exclude supplier-side Journal Vouchers (child JVs with Parent PV)
         if (isJV) {
           const narration = jvNarrationMap.get(t.invoiceNumber) || '';
-          if (narration.includes('[Parent PV ID:') || t.entryType === BalanceType.Dr) {
+          if (narration.includes('[Parent PV ID:')) {
             return false;
           }
         }

@@ -123,5 +123,10 @@ export class Step6ShopDto {
     @IsString()
     @IsOptional()
     district?: string;
+
+    @ApiProperty({ example: 'India', required: false })
+    @IsString()
+    @IsOptional()
+    country?: string;
 }
 

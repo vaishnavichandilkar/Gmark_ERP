@@ -250,7 +250,7 @@ export class AccountMasterService {
       }
 
       const updates: any = {};
-      const baseUrl = `account_upload/${folderName}`;
+      const baseUrl = `uploads/account_upload/${folderName}`;
       const generateRandomNumber = () => Math.floor(100000 + Math.random() * 900000);
 
       if (files?.msmeCertificate?.[0]) {
@@ -306,11 +306,15 @@ export class AccountMasterService {
         }).filter(url => url !== null);
 
         console.log('Generated docUrls:', docUrls);
-        if (docUrls.length > 0) {
-          updates.otherDocuments = docUrls;
+        const existingDocs = Array.isArray(account.otherDocuments) 
+          ? (account.otherDocuments as string[]) 
+          : [];
+        const combinedDocs = [...existingDocs, ...docUrls];
+        if (combinedDocs.length > 0) {
+          updates.otherDocuments = combinedDocs;
           console.log('updates.otherDocuments set to:', updates.otherDocuments);
         } else {
-          console.log('docUrls is empty after processing');
+          console.log('combinedDocs is empty after processing');
         }
       } else {
         console.log('files.otherDocuments is empty or missing');
@@ -1450,6 +1454,7 @@ export class AccountMasterService {
       if (localPincode && localPincode.areas && localPincode.areas.length > 0) {
         return {
           areas: localPincode.areas,
+          officeVillages: localPincode.officeVillages || {},
           district: localPincode.district,
           state: localPincode.state,
           subDistrict: localPincode.subDistrict || '',
@@ -1473,6 +1478,17 @@ export class AccountMasterService {
             .filter((name: any) => typeof name === 'string' && name.trim() !== '')
         )).sort() as string[];
 
+        const officeVillagesObj: Record<string, string[]> = {};
+        for (const po of postOffices) {
+          const officeName = po.Name;
+          if (!officeVillagesObj[officeName]) {
+            officeVillagesObj[officeName] = [];
+          }
+          if (!officeVillagesObj[officeName].includes(po.Name)) {
+            officeVillagesObj[officeName].push(po.Name);
+          }
+        }
+
         const postOffice = postOffices[0];
         const subDistrict = postOffice.Block || postOffice.District || '';
         const country = postOffice.Country || 'India';
@@ -1485,6 +1501,7 @@ export class AccountMasterService {
             subDistrict: subDistrict,
             country: country,
             areas: areas,
+            officeVillages: officeVillagesObj,
           },
           create: {
             pincode: pincode,
@@ -1493,11 +1510,13 @@ export class AccountMasterService {
             subDistrict: subDistrict,
             country: country,
             areas: areas,
+            officeVillages: officeVillagesObj,
           }
         }).catch(() => { /* Ignore on conflict */ });
 
         return {
           areas: areas,
+          officeVillages: officeVillagesObj,
           district: postOffice.District || '',
           state: postOffice.State,
           subDistrict: subDistrict,
@@ -1762,15 +1781,26 @@ export class AccountMasterService {
       'Customer Credit Days', 'Customer Opening Balance', 'Customer Balance Type', 'Customer Type',
       'MSME Enabled', 'MSME ID', 'Reg.Under', 'Reg.Type', 'Status'
     ];
-    worksheet.addRow(headers);
-
     const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true };
-    headerRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFD3D3D3' }
-    };
+    headerRow.height = 28;
+    headers.forEach((h, idx) => {
+      const cell = headerRow.getCell(idx + 1);
+      const isRequired = h.includes('*');
+      cell.value = h;
+      cell.font = { bold: true, color: { argb: isRequired ? 'FF881337' : 'FF1E293B' }, size: 11 };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: isRequired ? 'FFFECDD3' : 'FFF1F5F9' }
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'medium', color: { argb: isRequired ? 'FFFDA4AF' : 'FFCBD5E1' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      };
+    });
 
     // Load active pincodes from database
     const pincodes = await this.prisma.pincode.findMany({
