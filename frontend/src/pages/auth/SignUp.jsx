@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import AuthLayout from '../../layout/auth/AuthLayout';
 import { Upload, FileText, Trash2, ChevronDown, CloudUpload, ArrowLeft, Search } from 'lucide-react';
 import logo from '../../assets/images/ERP_Logo2.png';
 import { useTranslation } from 'react-i18next';
+import { getImageUrl } from '../../utils/url';
 
 import RegistrationSuccessModal from '../../components/common/RegistrationSuccessModal';
 
@@ -12,6 +14,16 @@ const FileUploadBox = ({ title, file, onFileChange, onRemove, onUploadStateChang
     const [progress, setProgress] = React.useState(0);
     const [localError, setLocalError] = React.useState('');
     const onUploadStateChangeRef = React.useRef(onUploadStateChange);
+    const [hoveredDoc, setHoveredDoc] = React.useState(null);
+
+    const handleMouseEnter = (e, url) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setHoveredDoc({ url, rect });
+    };
+
+    const handleMouseLeave = () => {
+        setHoveredDoc(null);
+    };
 
     const handleLocalFileChange = (e) => {
         const selectedFile = e.target.files[0];
@@ -89,7 +101,20 @@ const FileUploadBox = ({ title, file, onFileChange, onRemove, onUploadStateChang
                         <div className="flex-1 min-w-0 flex flex-col justify-center">
                             <div className="flex justify-between items-center w-full mb-1">
                                 <div className="flex-1 min-w-0 mr-3">
-                                    <p className="text-[14px] font-['Plus_Jakarta_Sans'] font-medium text-[#111827] truncate leading-tight">{file.name}</p>
+                                    {file.url ? (
+                                        <a 
+                                            href={getImageUrl(file.url)} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer" 
+                                            className="text-[14px] font-['Plus_Jakarta_Sans'] font-medium text-[#0F3D2E] hover:underline truncate leading-tight block"
+                                            onMouseEnter={(e) => handleMouseEnter(e, file.url)}
+                                            onMouseLeave={handleMouseLeave}
+                                        >
+                                            {file.name}
+                                        </a>
+                                    ) : (
+                                        <p className="text-[14px] font-['Plus_Jakarta_Sans'] font-medium text-[#111827] truncate leading-tight">{file.name}</p>
+                                    )}
                                     <p className="text-[12px] font-['Plus_Jakarta_Sans'] text-[#6B7280] mt-0.5">{file.size ? `${Math.round(file.size / 1024)} KB` : 'Uploaded Document'}</p>
                                 </div>
                                 <div className="flex items-center gap-3 shrink-0">
@@ -138,6 +163,36 @@ const FileUploadBox = ({ title, file, onFileChange, onRemove, onUploadStateChang
                     </svg>
                     <span>Corrected / Replaced Document</span>
                 </div>
+            )}
+            {hoveredDoc && createPortal(
+                <div 
+                    className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.15)] p-2 w-[320px] h-[220px] pointer-events-none flex items-center justify-center overflow-hidden animate-in zoom-in-95 duration-150"
+                    style={{
+                        top: `${hoveredDoc.rect.top - 235 < 10 ? hoveredDoc.rect.bottom + 10 : hoveredDoc.rect.top - 235}px`,
+                        left: `${Math.max(10, Math.min(window.innerWidth - 330, hoveredDoc.rect.left + (hoveredDoc.rect.width / 2) - 160))}px`,
+                    }}
+                >
+                    {/\.(jpg|jpeg|png|gif|webp)$/i.test(hoveredDoc.url) ? (
+                        <img 
+                            src={getImageUrl(hoveredDoc.url)} 
+                            alt="Preview" 
+                            className="w-full h-full object-contain rounded-lg"
+                        />
+                    ) : /\.pdf$/i.test(hoveredDoc.url) ? (
+                        <iframe 
+                            src={`${getImageUrl(hoveredDoc.url)}#toolbar=0&navpanes=0&scrollbar=0`} 
+                            title="PDF Preview" 
+                            className="w-full h-full border-0 rounded-lg pointer-events-none"
+                            scrolling="no"
+                        />
+                    ) : (
+                        <div className="text-[12px] text-gray-500 font-medium flex flex-col items-center gap-2">
+                            <FileText size={32} className="text-gray-400" />
+                            <span>Preview not available</span>
+                        </div>
+                    )}
+                </div>,
+                document.body
             )}
         </div>
     );
@@ -281,12 +336,18 @@ const SignUp = () => {
         pinCode: '',
         district: '',
         state: '',
+        country: 'India',
         areas: [],
+        postalAddress: '',
+        postalAddresses: [],
+        officeVillages: {},
     });
     const [isManualLocation, setIsManualLocation] = useState(false);
     const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
     const [showVillageDropdown, setShowVillageDropdown] = useState(false);
+    const [showPostalDropdown, setShowPostalDropdown] = useState(false);
     const villageRef = useRef(null);
+    const postalAddressRef = useRef(null);
 
     const [rejectionData, setRejectionData] = useState(null);
     const [initialFormData, setInitialFormData] = useState(null);
@@ -311,6 +372,7 @@ const SignUp = () => {
                         pinCode: data.pinCode || '',
                         district: data.district || '',
                         state: data.state || '',
+                        country: data.country || 'India',
                         udyogAadhar: data.udyogAadhar || '',
                         regType: data.regType || '',
                         gstNumber: data.gstNumber || '',
@@ -457,15 +519,20 @@ const SignUp = () => {
                 getPincodeInfoApi(formData.pinCode)
                     .then(data => {
                         if (data && data.state && data.district) {
+                            const officeVillages = data.officeVillages || {};
+                            const postalAddresses = Object.keys(officeVillages).sort();
                             setFormData(prev => ({
                                 ...prev,
                                 district: data.district,
                                 state: data.state,
-                                areas: data.areas || [],
+                                country: data.country || 'India',
+                                officeVillages: officeVillages,
+                                postalAddresses: postalAddresses,
+                                postalAddress: '',
+                                areas: [],
                                 village: ''
                             }));
-                            // Ensure unique names and open dropdown
-                            setShowVillageDropdown(true);
+                            setShowPostalDropdown(true);
                             setIsManualLocation(false);
                             setFieldErrors(prev => {
                                 const { pinCode, ...rest } = prev;
@@ -570,11 +637,14 @@ const SignUp = () => {
     const [error, setError] = useState('');
     const [fieldErrors, setFieldErrors] = useState({});
 
-    // Add outside click listener for village dropdown
+    // Add outside click listener for village and postal address dropdowns
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (villageRef.current && !villageRef.current.contains(event.target)) {
                 setShowVillageDropdown(false);
+            }
+            if (postalAddressRef.current && !postalAddressRef.current.contains(event.target)) {
+                setShowPostalDropdown(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -904,6 +974,58 @@ const SignUp = () => {
                                             info={isManualLocation ? "Location not found. Please enter manually." : null}
                                             status={getFieldStatus('pinCode')}
                                         />
+                                        <div className="flex flex-col w-full relative" ref={postalAddressRef}>
+                                            <label className="text-[14px] text-[#374151] mb-2 font-['Plus_Jakarta_Sans'] font-medium block">
+                                                Postal Address <span className="text-red-500">*</span>
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    name="postalAddress"
+                                                    autoComplete="off"
+                                                    value={formData.postalAddress || ''}
+                                                    onChange={(e) => {
+                                                        handleChange(e);
+                                                        setShowPostalDropdown(true);
+                                                    }}
+                                                    onFocus={() => setShowPostalDropdown(true)}
+                                                    placeholder="Select Postal Address"
+                                                    className="w-full h-[56px] pl-[16px] pr-[40px] text-[15px] border border-[#D1D5DB] rounded-[8px] outline-none bg-[#FFFFFF] transition-all duration-300 focus:ring-1 focus:border-[#0F3D2E] focus:ring-[#0F3D2E] placeholder:text-[#9CA3AF] text-[#111827]"
+                                                />
+                                                <div
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280] cursor-pointer"
+                                                    onClick={() => setShowPostalDropdown(!showPostalDropdown)}
+                                                >
+                                                    <ChevronDown size={20} className={`transition-transform duration-300 ${showPostalDropdown ? 'rotate-180' : ''}`} />
+                                                </div>
+
+                                                {showPostalDropdown && (formData.postalAddresses || []).length > 0 && (
+                                                    <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-[#E5E7EB] rounded-[8px] shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)] z-[100] max-h-[220px] overflow-y-auto">
+                                                        <div className="py-1">
+                                                            {(formData.postalAddresses || []).map((office, idx) => (
+                                                                <div
+                                                                    key={idx}
+                                                                    className="px-4 py-2.5 hover:bg-[#F3F4F6] cursor-pointer text-[14px] font-['Plus_Jakarta_Sans'] text-[#374151] transition-colors flex items-center justify-between group"
+                                                                    onClick={() => {
+                                                                        setFormData(prev => ({
+                                                                            ...prev,
+                                                                            postalAddress: office,
+                                                                            areas: prev.officeVillages[office] || [],
+                                                                            village: ''
+                                                                        }));
+                                                                        setShowPostalDropdown(false);
+                                                                        setShowVillageDropdown(true);
+                                                                    }}
+                                                                >
+                                                                    <span>{office}</span>
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-[#0F3D2E] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                         <div className="flex flex-col w-full relative" ref={villageRef}>
                                             <label className="text-[14px] text-[#374151] mb-2 font-['Plus_Jakarta_Sans'] font-medium block">
                                                 {t('auth:village')} <span className="text-red-500">*</span>
@@ -1010,6 +1132,16 @@ const SignUp = () => {
                                             error={fieldErrors.state || getFieldRejectionReason('state')}
                                             readOnly={!isManualLocation}
                                             status={getFieldStatus('state')}
+                                        />
+                                        <CustomInput
+                                            label="Country"
+                                            placeholder="Country"
+                                            name="country"
+                                            value={formData.country || 'India'}
+                                            onChange={handleChange}
+                                            onBlur={handleBlur}
+                                            readOnly={true}
+                                            status={getFieldStatus('country')}
                                         />
                                     </div>
 

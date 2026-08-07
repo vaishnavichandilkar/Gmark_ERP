@@ -328,15 +328,15 @@ div[class*="table-wrapper"] table td {
     transition: background-color 0.2s !important;
 }
 
-.master-table tbody tr:hover,
-.custom-table-scrollbar table tbody tr:hover,
-.custom-po-scrollbar table tbody tr:hover,
-.custom-so-scrollbar table tbody tr:hover,
-.custom-invoice-scrollbar table tbody tr:hover,
-.custom-grn-scrollbar table tbody tr:hover,
-.custom-challan-scrollbar table tbody tr:hover,
-.custom-scrollbar table tbody tr:hover {
-    background-color: #F9FAFB !important;
+.master-table tbody tr:not(.product-suggestion-row):hover,
+.custom-table-scrollbar table tbody tr:not(.product-suggestion-row):hover,
+.custom-po-scrollbar table tbody tr:not(.product-suggestion-row):hover,
+.custom-so-scrollbar table tbody tr:not(.product-suggestion-row):hover,
+.custom-invoice-scrollbar table tbody tr:not(.product-suggestion-row):hover,
+.custom-grn-scrollbar table tbody tr:not(.product-suggestion-row):hover,
+.custom-challan-scrollbar table tbody tr:not(.product-suggestion-row):hover,
+.custom-scrollbar table tbody tr:not(.product-suggestion-row):hover {
+    background-color: #F9FAFB;
 }
 
 /* Global Typography Scaling Overrides */

@@ -165,7 +165,14 @@ const GroupMaster = () => {
         }
         if (colFilters.status) {
             const q = colFilters.status.toLowerCase().trim();
-            if (!group.status?.toLowerCase().includes(q)) return false;
+            const statusStr = (group.status || "").toLowerCase();
+            if (q === 'active') {
+                if (statusStr !== 'active') return false;
+            } else if (q === 'inactive') {
+                if (statusStr !== 'inactive') return false;
+            } else {
+                if (!statusStr.includes(q)) return false;
+            }
         }
 
         return true;

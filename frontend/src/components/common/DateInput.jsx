@@ -39,6 +39,16 @@ const DateInput = ({
     const minIso = minDate ? (minDate.includes('/') ? toIsoDate(minDate) : minDate) : undefined;
     const maxIso = maxDate ? (maxDate.includes('/') ? toIsoDate(maxDate) : maxDate) : undefined;
 
+    const openCalendar = () => {
+        if (!isLocked) {
+            try {
+                hiddenDateInputRef.current?.showPicker?.();
+            } catch (e) {
+                hiddenDateInputRef.current?.focus();
+            }
+        }
+    };
+
     return (
         <div className="space-y-2 font-outfit relative">
             {label && (
@@ -46,7 +56,7 @@ const DateInput = ({
                     {label} {required && <span className="text-red-500">*</span>}
                 </label>
             )}
-            <div className="relative">
+            <div className={`relative ${!isLocked ? 'cursor-pointer' : ''}`} onClick={openCalendar}>
                 {/* Hidden native date picker */}
                 <input
                     type="date"
@@ -66,10 +76,11 @@ const DateInput = ({
                     placeholder={placeholder}
                     value={value || ''}
                     onChange={handleInputChange}
+                    onClick={openCalendar}
                     disabled={isLocked}
                     className={`w-full h-[48px] bg-white border rounded-[10px] px-4 pr-12 text-[14px] font-bold outline-none transition-all shadow-sm ${
                         isLocked ? 'bg-gray-50 text-gray-500 cursor-not-allowed border-[#E5E7EB]' : 
-                        `focus:border-[#073318] ${error ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB]'}`
+                        `focus:border-[#073318] cursor-pointer ${error ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB]'}`
                     } ${className}`}
                 />
                 
@@ -79,15 +90,7 @@ const DateInput = ({
                     className={`absolute right-4 top-1/2 -translate-y-1/2 transition-colors ${
                         isLocked ? 'text-gray-300 pointer-events-none' : 'text-gray-400 cursor-pointer hover:text-[#073318]'
                     }`}
-                    onClick={() => {
-                        if (!isLocked) {
-                            try {
-                                hiddenDateInputRef.current?.showPicker?.();
-                            } catch (e) {
-                                hiddenDateInputRef.current?.focus();
-                            }
-                        }
-                    }}
+                    onClick={openCalendar}
                 />
             </div>
             {error && (

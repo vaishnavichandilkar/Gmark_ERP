@@ -290,6 +290,13 @@ const Challan = () => {
         let baseData = challans.map(item => {
             let statusLabel = item.status?.toUpperCase() === 'DELETED' ? 'Deleted' : 'Generated';
             if (item.isInvoiced && statusLabel !== 'Deleted') statusLabel = 'Invoiced';
+
+            const grossAmount = parseFloat(item.grandTotal) || 0;
+            const taxableAmount = item.taxableAmount !== undefined && item.taxableAmount !== null && parseFloat(item.taxableAmount) > 0
+                ? parseFloat(item.taxableAmount)
+                : (item.items?.reduce((sum, i) => sum + (parseFloat(i.beforeTaxAmount) || 0), 0) || 0);
+            const taxAmount = ((item.cgstAmount || 0) + (item.sgstAmount || 0) + (item.igstAmount || 0)) || (grossAmount > taxableAmount ? (grossAmount - taxableAmount) : 0);
+
             return {
                 ...item,
                 customerName: item.customerName || "-",
@@ -298,7 +305,9 @@ const Challan = () => {
                 bookingDate: formatDate(item.bookingDate),
                 soNo: item.soNumber || "-",
                 gstNo: item.gstNumber || "-",
-                grandTotal: item.grandTotal?.toFixed(2) || "0.00",
+                taxableAmount: taxableAmount.toFixed(2),
+                taxAmount: taxAmount.toFixed(2),
+                grandTotal: grossAmount.toFixed(2),
                 status: statusLabel,
                 bgClass: statusLabel === 'Deleted' ? 'bg-red-50 text-red-600 border border-red-100' : (statusLabel === 'Invoiced' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-blue-50 text-blue-600 border border-blue-100')
             };
@@ -316,6 +325,8 @@ const Challan = () => {
                     else if (key === 'bookingDate') fieldVal = row.bookingDate || "";
                     else if (key === 'soNo') fieldVal = row.soNo || "";
                     else if (key === 'gstNo') fieldVal = row.gstNo || "";
+                    else if (key === 'taxableAmount') fieldVal = row.taxableAmount || "";
+                    else if (key === 'taxAmount') fieldVal = row.taxAmount || "";
                     else if (key === 'grandTotal') fieldVal = row.grandTotal || "";
                     else if (key === 'status') fieldVal = row.status || "";
 
@@ -418,6 +429,8 @@ const Challan = () => {
                                 <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{t('modules:bookingDate')}</th>
                                 <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{t('modules:soNo')}</th>
                                 <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{t('modules:gst_no')}</th>
+                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap text-right">{t('modules:taxable_amount', 'Taxable Amt')}</th>
+                                <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap text-right">{t('modules:tax_amount', 'Tax Amt')}</th>
                                 <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap text-right">{t('modules:grand_total_col')}</th>
                                 <th className="px-6 py-5 border-r border-white/10 whitespace-nowrap text-center">{t('common:status')}</th>
                                 <th className="px-6 py-5 whitespace-nowrap text-center">{t('common:action')}</th>
@@ -430,6 +443,8 @@ const Challan = () => {
                                     { key: 'bookingDate', placeholder: 'Booking Date' },
                                     { key: 'soNo', placeholder: 'SO No' },
                                     { key: 'gstNo', placeholder: 'GST No' },
+                                    { key: 'taxableAmount', placeholder: 'Taxable' },
+                                    { key: 'taxAmount', placeholder: 'Tax' },
                                     { key: 'grandTotal', placeholder: 'Total' },
                                     { key: 'status', placeholder: 'Status' },
                                     { key: 'actions', noSearch: true }
@@ -458,6 +473,8 @@ const Challan = () => {
                                         <td className="px-6 py-4">{row.bookingDate}</td>
                                         <td className="px-6 py-4 font-bold text-gray-500">{row.soNo}</td>
                                         <td className="px-6 py-4 font-medium uppercase">{row.gstNo}</td>
+                                        <td className="px-6 py-4 text-right font-bold">₹{row.taxableAmount}</td>
+                                        <td className="px-6 py-4 text-right">₹{row.taxAmount}</td>
                                         <td className="px-6 py-4 text-right font-bold text-[#073318]">₹{row.grandTotal}</td>
                                         <td className="px-6 py-5 text-center">
                                             <span className={`px-4 py-1.5 ${row.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>

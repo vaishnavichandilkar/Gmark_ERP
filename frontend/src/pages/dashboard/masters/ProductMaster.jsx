@@ -99,7 +99,12 @@ const ProductMaster = () => {
           else if (key === 'subSubCategoryName') fieldVal = row.sub_sub_category?.name || "";
           else if (key === 'hsnCode') fieldVal = row.hsn_code || "";
           else if (key === 'taxPercent') fieldVal = (row.tax_rate !== null && row.tax_rate !== undefined) ? row.tax_rate.toString() : "0";
-          else if (key === 'status') fieldVal = row.status || "";
+          else if (key === 'status') {
+            const statusStr = (row.status || "").toLowerCase();
+            if (val === 'active') return statusStr === 'active';
+            if (val === 'inactive') return statusStr === 'inactive';
+            return statusStr.includes(val);
+          }
 
           return fieldVal.toLowerCase().includes(val);
         });

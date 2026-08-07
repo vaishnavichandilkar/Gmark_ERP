@@ -1141,7 +1141,7 @@ const AddPurchaseInvoice = () => {
 
                         {formData.attachment && (
                             <div className="flex items-center gap-2">
-                                <div className="relative group/preview">
+                                <div className="relative group">
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -1155,7 +1155,7 @@ const AddPurchaseInvoice = () => {
                                         <Eye size={18} />
                                     </button>
                                     {previewUrl && (
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover/preview:flex flex-col w-[380px] h-[480px] bg-white border border-gray-200 rounded-[16px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] z-[100] p-3 animate-in fade-in slide-in-from-bottom-2 duration-200 pointer-events-none">
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:flex flex-col w-[380px] h-[480px] bg-white border border-gray-200 rounded-[16px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] z-[100] p-3 animate-in fade-in slide-in-from-bottom-2 duration-200 pointer-events-none">
                                             <div className="text-[12px] font-bold text-gray-500 mb-2 border-b pb-1.5 flex items-center justify-between">
                                                 <span>{t('modules:invoice_preview', 'Invoice Preview')}</span>
                                                 <span className="text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-black uppercase">{t('modules:live_view', 'Live View')}</span>

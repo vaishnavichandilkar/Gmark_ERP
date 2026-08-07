@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ROUTES } from '../../../../constants/routes';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +18,7 @@ import {
 
 import salesOrderService from '../../../../services/salesOrderService';
 import { getStandardGstUom } from '@/utils/uomUtils';
-import { getImageUrl } from '@/utils/url';
+import { getImageUrl, getCleanFileName } from '@/utils/url';
 import { formatDate } from '@/utils/dateUtils';
 
 const InfoTableRow = ({ label1, value1, label2, value2, isEditMode, renderEdit1, renderEdit2 }) => (
@@ -45,6 +46,17 @@ const ViewSO = () => {
 
     const [isLoading, setIsLoading] = useState(true);
     const [salesOrder, setSalesOrder] = useState(null);
+
+    const [hoveredDoc, setHoveredDoc] = useState(null);
+
+    const handleMouseEnter = (e, url) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setHoveredDoc({ url, rect });
+    };
+
+    const handleMouseLeave = () => {
+        setHoveredDoc(null);
+    };
     const [formData, setFormData] = useState({
         customer_name: '',
         credit_days: '',
@@ -189,24 +201,25 @@ const ViewSO = () => {
                                         label2="" 
                                         value2="" 
                                     />
-                                    {formData.customer_po_file && (
-                                        <InfoTableRow 
-                                            label1={t('modules:customerPoDocument', 'Customer PO Document') + ":"} 
-                                            value1={
-                                                <button
-                                                    onClick={() => {
-                                                        const normalizedPath = formData.customer_po_file.replace(/\\/g, '/');
-                                                        window.open(getImageUrl(normalizedPath), '_blank');
-                                                    }}
-                                                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 text-emerald-800 rounded-md font-bold text-[12px] hover:bg-emerald-100 transition-colors border border-emerald-200 cursor-pointer shadow-sm active:scale-95 shrink-0"
-                                                >
-                                                    <FileText size={14} /> {t('common:view_document', 'View Document')}
-                                                </button>
-                                            }
-                                            label2="" 
-                                            value2="" 
-                                        />
-                                    )}
+                                    <InfoTableRow 
+                                        label1={t('modules:customerPoDocument', 'Customer PO Document') + ":"} 
+                                        value1={formData.customer_po_file ? (
+                                            <button
+                                                onClick={() => {
+                                                    const normalizedPath = formData.customer_po_file.replace(/\\/g, '/');
+                                                    window.open(getImageUrl(normalizedPath), '_blank');
+                                                }}
+                                                onMouseEnter={(e) => handleMouseEnter(e, formData.customer_po_file)}
+                                                onMouseLeave={handleMouseLeave}
+                                                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 text-emerald-800 rounded-md font-bold text-[12px] hover:bg-emerald-100 transition-colors border border-emerald-200 cursor-pointer shadow-sm active:scale-95 shrink-0 max-w-[250px] truncate"
+                                                title={getCleanFileName(formData.customer_po_file)}
+                                            >
+                                                <FileText size={14} className="shrink-0" /> {getCleanFileName(formData.customer_po_file)}
+                                            </button>
+                                        ) : '-'} 
+                                        label2="" 
+                                        value2="" 
+                                    />
                                 </>
                             )}
                         </div>
@@ -338,6 +351,36 @@ const ViewSO = () => {
                             <Printer size={18} /> {t('modules:preview_print_so', 'Preview & Print SO')}
                         </button>
                     </div>
+                )}
+                {hoveredDoc && createPortal(
+                    <div 
+                        className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.15)] p-2 w-[320px] h-[220px] pointer-events-none flex items-center justify-center overflow-hidden animate-in zoom-in-95 duration-150"
+                        style={{
+                            top: `${hoveredDoc.rect.top - 235 < 10 ? hoveredDoc.rect.bottom + 10 : hoveredDoc.rect.top - 235}px`,
+                            left: `${Math.max(10, Math.min(window.innerWidth - 330, hoveredDoc.rect.left + (hoveredDoc.rect.width / 2) - 160))}px`,
+                        }}
+                    >
+                        {/\.(jpg|jpeg|png|gif|webp)$/i.test(hoveredDoc.url) ? (
+                            <img 
+                                src={getImageUrl(hoveredDoc.url)} 
+                                alt="Preview" 
+                                className="w-full h-full object-contain rounded-lg"
+                            />
+                        ) : /\.pdf$/i.test(hoveredDoc.url) ? (
+                            <iframe 
+                                src={`${getImageUrl(hoveredDoc.url)}#toolbar=0&navpanes=0&scrollbar=0`} 
+                                title="PDF Preview" 
+                                className="w-full h-full border-0 rounded-lg pointer-events-none"
+                                scrolling="no"
+                            />
+                        ) : (
+                            <div className="text-[12px] text-gray-500 font-medium flex flex-col items-center gap-2">
+                                <FileText size={32} className="text-gray-400" />
+                                <span>Preview not available</span>
+                            </div>
+                        )}
+                    </div>,
+                    document.body
                 )}
             </div>
         </div>

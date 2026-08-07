@@ -654,14 +654,13 @@ const AddPO = () => {
 
         if (!formData.supplier_name) newErrors.supplier_name = "Supplier name is required";
         if (!formData.address) newErrors.address = "Address is required";
-        if (!formData.credit_days && formData.credit_days !== 0) {
-            // Optional but recommended, let's keep it non-blocking if user cleared it but maybe set a default or just allow it.
-            // Requirement says fetched and editable. If they clear it, we might want to warn or just allow.
+        if (formData.credit_days === '' || formData.credit_days === null || formData.credit_days === undefined) {
+            newErrors.credit_days = "Credit days is required";
         }
         const isValidIso = (d) => d && d.length === 10 && d.split("-").length === 3 && d.split("-")[0].length === 4;
 
         if (!formData.creation_date) {
-            newErrors.creation_date = "Required";
+            newErrors.creation_date = "Creation date is required";
         } else if (!isValidIso(toIsoDate(formData.creation_date))) {
             newErrors.creation_date = "Enter valid date (DD-MM-YYYY)";
         }
@@ -669,7 +668,7 @@ const AddPO = () => {
         if (!formData.po_number) newErrors.po_number = "PO number is required";
 
         if (!formData.expiry_date) {
-            newErrors.expiry_date = "Required";
+            newErrors.expiry_date = "Expiry date is required";
         } else {
             const isoExpiry = toIsoDate(formData.expiry_date);
             if (!isValidIso(isoExpiry)) {
@@ -690,28 +689,49 @@ const AddPO = () => {
             newErrors.items = true;
         } else {
             const itemErrors = [];
+            let hasItemError = false;
             items.forEach((item, index) => {
                 if (item.product_name) {
-                    if (!item.quantity || item.quantity <= 0) {
+                    if (!item.quantity || parseFloat(item.quantity) <= 0) {
                         if (!itemErrors[index]) itemErrors[index] = {};
                         itemErrors[index].quantity = "Required";
+                        hasItemError = true;
                     }
-                    if (!item.rate || item.rate <= 0) {
+                    if (!item.rate || parseFloat(item.rate) <= 0) {
                         if (!itemErrors[index]) itemErrors[index] = {};
                         itemErrors[index].rate = "Required";
+                        hasItemError = true;
                     }
                 }
             });
-            if (itemErrors.length > 0) newErrors.itemErrors = itemErrors;
+            if (hasItemError) newErrors.itemErrors = itemErrors;
         }
 
         setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+
+        if (Object.keys(newErrors).length > 0) {
+            const missingFields = [];
+            if (newErrors.supplier_name) missingFields.push("Supplier Name");
+            if (newErrors.credit_days) missingFields.push("Credit Days");
+            if (newErrors.expiry_date) missingFields.push("Expiry Date");
+            if (newErrors.items) missingFields.push("At least 1 product");
+            if (newErrors.itemErrors) missingFields.push("Product Quantity & Rate");
+
+            if (missingFields.length > 0) {
+                toast.error(`Please fill in required fields: ${missingFields.join(", ")}`);
+            } else {
+                toast.error("Please fill in all required fields");
+            }
+            return false;
+        }
+
+        return true;
     };
 
     // Save functionality
     const handleSave = async () => {
         if (!validateForm()) {
+            setShowValidationPopup(true);
             return;
         }
 
@@ -1331,7 +1351,7 @@ const AddPO = () => {
                                                         handleQuickAddProduct(p, index);
                                                     }}
                                                     onMouseEnter={() => setSelectedSuggestionIndex(pIndex)}
-                                                    className={`border-b border-emerald-50 cursor-pointer transition-all duration-200 relative z-[100] ${selectedSuggestionIndex === pIndex ? 'bg-emerald-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.1)]' : 'bg-emerald-50/40 hover:bg-emerald-100/60'}`}
+                                                    className={`product-suggestion-row border-b border-white/10 cursor-pointer transition-all duration-200 relative z-[100] ${selectedSuggestionIndex === pIndex ? '!bg-[#044e36] !text-white shadow-inner' : '!bg-[#07835B] hover:!bg-[#056d4b] !text-white'}`}
                                                 >
                                                     <td className="px-4 py-3 text-center">
                                                         {selectedSuggestionIndex === pIndex ? (
@@ -1339,39 +1359,39 @@ const AddPO = () => {
                                                                 <div className="w-2.5 h-2.5 bg-white rounded-full ring-4 ring-white/20"></div>
                                                             </div>
                                                         ) : (
-                                                            <div className="w-1.5 h-1.5 bg-emerald-200 rounded-full mx-auto"></div>
+                                                            <div className="w-2 h-2 bg-white/30 rounded-full mx-auto"></div>
                                                         )}
                                                     </td>
-                                                    <td className={`px-4 py-3 border-l border-emerald-100 ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-800'}`}>
+                                                    <td className="px-4 py-3 border-l border-white/10 text-white">
                                                         <span className="font-mono text-[13px] font-black">{p.product_code}</span>
                                                     </td>
-                                                    <td className={`px-4 py-3 border-l border-emerald-100 ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-900 font-bold'}`}>
+                                                    <td className="px-4 py-3 border-l border-white/10 text-white">
                                                         <div className="flex flex-col">
                                                             <span className="text-[14px] font-black tracking-tight uppercase">{p.product_name}</span>
-                                                            <span className={`text-[10px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-600/70'}`}>{p.category?.name || t('modules:stock_item', 'STOCK ITEM')}</span>
+                                                            <span className="text-[10px] font-bold text-white/70">{p.category?.name || t('modules:stock_item', 'STOCK ITEM')}</span>
                                                         </div>
                                                     </td>
-                                                    <td colSpan={1} className="px-4 py-3 border-l border-emerald-100 text-center">
-                                                        <div className={`text-[11px] font-black italic uppercase tracking-tighter ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-600/50'}`}>
+                                                    <td colSpan={1} className="px-4 py-3 border-l border-white/10 text-center">
+                                                        <div className="text-[11px] font-black italic uppercase tracking-tighter text-white/80">
                                                             {selectedSuggestionIndex === pIndex ? t('modules:hit_enter') : '---'}
                                                         </div>
                                                     </td>
-                                                    <td className={`px-4 py-3 border-l border-emerald-100 text-right ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-900 font-black'}`}>
+                                                    <td className="px-4 py-3 border-l border-white/10 text-right text-white font-black">
                                                         ₹{p.purchaseRate || p.rate || 0}
                                                     </td>
-                                                    <td className={`px-4 py-3 border-l border-emerald-100 text-center whitespace-nowrap ${selectedSuggestionIndex === pIndex ? 'text-white' : 'text-emerald-800 font-bold'}`}>
+                                                    <td className="px-4 py-3 border-l border-white/10 text-center whitespace-nowrap text-white font-bold">
                                                         {getStandardGstUom(p.uom)}
                                                     </td>
-                                                    <td colSpan={2} className={`px-4 py-3 border-l border-emerald-100 text-center italic text-[11px] font-bold ${selectedSuggestionIndex === pIndex ? 'text-emerald-100' : 'text-emerald-400'}`}>
+                                                    <td colSpan={2} className="px-4 py-3 border-l border-white/10 text-center italic text-[11px] font-bold text-white/90">
                                                         {t('modules:select_item_continue')}
                                                     </td>
-                                                    <td className={`px-4 py-3 border-l border-emerald-100 text-center ${selectedSuggestionIndex === pIndex ? 'text-white font-black' : 'text-emerald-900 font-bold'}`}>
+                                                    <td className="px-4 py-3 border-l border-white/10 text-center text-white font-black">
                                                         {p.hsn_code || p.hsn || 'N/A'}
                                                     </td>
-                                                    <td className={`px-4 py-3 border-l border-emerald-100 text-center ${selectedSuggestionIndex === pIndex ? 'text-white font-black' : 'text-emerald-900 font-bold'}`}>
+                                                    <td className="px-4 py-3 border-l border-white/10 text-center text-white font-black">
                                                         {p.tax_rate || p.tax || 0}%
                                                     </td>
-                                                    <td colSpan={5} className="px-4 py-8 border-l border-emerald-100">
+                                                    <td colSpan={5} className="px-4 py-8 border-l border-white/10">
                                                         {/* Action cell empty - selection handled by row click */}
                                                     </td>
                                                 </tr>
@@ -1484,31 +1504,65 @@ const AddPO = () => {
                 </div>
             </div>
 
-            {/* Validation Popup Modal - Error Format */}
+            {/* Validation Popup Modal - Light Soft Error Theme */}
             {showValidationPopup && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-300" onClick={() => setShowValidationPopup(false)} />
-                    <div className="relative bg-white rounded-[24px] shadow-2xl w-full max-w-[400px] overflow-hidden flex flex-col scale-100 animate-in zoom-in-95 duration-200 font-outfit">
-                        <div className="px-8 py-5 flex items-center justify-between bg-red-600 text-white">
+                    <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px] animate-in fade-in duration-300" onClick={() => setShowValidationPopup(false)} />
+                    <div className="relative bg-white rounded-[24px] shadow-2xl w-full max-w-[420px] overflow-hidden flex flex-col scale-100 animate-in zoom-in-95 duration-200 font-outfit border border-red-100">
+                        <div className="px-6 py-4 flex items-center justify-between bg-red-50/80 border-b border-red-100 text-red-900">
                             <div className="flex items-center gap-3">
-                                <AlertCircle size={22} className="text-white" />
-                                <h3 className="text-[18px] font-bold tracking-tight">{t('modules:missing_required_fields')}</h3>
+                                <div className="w-9 h-9 rounded-full bg-red-100/80 flex items-center justify-center text-red-500 shrink-0">
+                                    <AlertCircle size={20} />
+                                </div>
+                                <h3 className="text-[17px] font-bold text-red-900 tracking-tight">{t('modules:missing_required_fields', 'Missing Required Fields')}</h3>
                             </div>
-                            <button onClick={() => setShowValidationPopup(false)} className="p-1 hover:bg-white/10 rounded-full transition-colors">
-                                <X size={20} />
+                            <button onClick={() => setShowValidationPopup(false)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-100/50 rounded-full transition-colors">
+                                <X size={18} />
                             </button>
                         </div>
-                        <div className="p-8">
-                            <p className="text-[15px] text-[#4B5563] font-medium leading-relaxed">
-                                {t('modules:please_ensure_mandatory_fields')}
+                        <div className="p-6 space-y-3">
+                            <p className="text-[14px] text-gray-600 font-medium">
+                                Please fill in the following mandatory fields:
                             </p>
+                            <ul className="space-y-2 pt-1">
+                                {errors.supplier_name && (
+                                    <li className="text-[13.5px] font-bold text-red-700 flex items-center gap-2.5 bg-red-50/60 px-3.5 py-2.5 rounded-xl border border-red-100/80">
+                                        <span className="w-2 h-2 bg-red-500 rounded-full shrink-0"></span>
+                                        Supplier Name is required
+                                    </li>
+                                )}
+                                {errors.credit_days && (
+                                    <li className="text-[13.5px] font-bold text-red-700 flex items-center gap-2.5 bg-red-50/60 px-3.5 py-2.5 rounded-xl border border-red-100/80">
+                                        <span className="w-2 h-2 bg-red-500 rounded-full shrink-0"></span>
+                                        Credit Days is required
+                                    </li>
+                                )}
+                                {errors.expiry_date && (
+                                    <li className="text-[13.5px] font-bold text-red-700 flex items-center gap-2.5 bg-red-50/60 px-3.5 py-2.5 rounded-xl border border-red-100/80">
+                                        <span className="w-2 h-2 bg-red-500 rounded-full shrink-0"></span>
+                                        {errors.expiry_date}
+                                    </li>
+                                )}
+                                {errors.items && (
+                                    <li className="text-[13.5px] font-bold text-red-700 flex items-center gap-2.5 bg-red-50/60 px-3.5 py-2.5 rounded-xl border border-red-100/80">
+                                        <span className="w-2 h-2 bg-red-500 rounded-full shrink-0"></span>
+                                        Please select at least one product
+                                    </li>
+                                )}
+                                {errors.itemErrors && (
+                                    <li className="text-[13.5px] font-bold text-red-700 flex items-center gap-2.5 bg-red-50/60 px-3.5 py-2.5 rounded-xl border border-red-100/80">
+                                        <span className="w-2 h-2 bg-red-500 rounded-full shrink-0"></span>
+                                        Product Quantity & Rate are required
+                                    </li>
+                                )}
+                            </ul>
                         </div>
-                        <div className="px-8 py-5 bg-gray-50 flex justify-end">
+                        <div className="px-6 py-4 bg-gray-50/60 flex justify-end border-t border-gray-100">
                             <button
                                 onClick={() => setShowValidationPopup(false)}
-                                className="px-8 h-[48px] bg-red-600 text-white rounded-[12px] text-[15px] font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200 active:scale-95"
+                                className="px-6 h-[40px] bg-red-500 text-white rounded-[10px] text-[14px] font-bold hover:bg-red-600 transition-all shadow-sm active:scale-95"
                             >
-                                {t('modules:got_it')}
+                                {t('modules:got_it', 'Got it')}
                             </button>
                         </div>
                     </div>

@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Edit3 } from 'lucide-react';
+import { ArrowLeft, Edit3, FileText } from 'lucide-react';
+import { getImageUrl, getCleanFileName } from '../../../../utils/url';
 
 const InfoTableRow = ({ label1, value1, label2, value2, noBorder }) => (
     <div className={`flex flex-col sm:flex-row border-[#E5E7EB] ${noBorder ? '' : 'border-b'}`}>
@@ -28,6 +30,17 @@ const SectionHeading = ({ title }) => (
 const ViewAccount = ({ initialData, onBack, onEdit }) => {
     const { t } = useTranslation(['modules', 'common']);
     const data = initialData || {};
+
+    const [hoveredDoc, setHoveredDoc] = React.useState(null);
+
+    const handleMouseEnter = (e, url) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setHoveredDoc({ url, rect });
+    };
+
+    const handleMouseLeave = () => {
+        setHoveredDoc(null);
+    };
 
     const renderSupplierBalance = () => {
         if (data.supplierOpeningBalance !== undefined && data.supplierOpeningBalance !== null && data.supplierOpeningBalance !== '') {
@@ -109,6 +122,10 @@ const ViewAccount = ({ initialData, onBack, onEdit }) => {
                             label2={`${t('state')}:`} value2={data.state} 
                         />
                         <InfoTableRow 
+                            label1={`${t('modules:sub_district')}:`} value1={data.subDistrict} 
+                            label2={`${t('modules:country')}:`} value2={data.country} 
+                        />
+                        <InfoTableRow 
                             label1={`${t('msme')}:`} value1={data.msmeEnabled ? t('common:yes') : t('common:no')} 
                             label2={`${t('msme_id')}:`} value2={data.msmeId} 
                         />
@@ -116,6 +133,54 @@ const ViewAccount = ({ initialData, onBack, onEdit }) => {
                             label1={`${t('reg_type')}:`} value1={data.regType} 
                             label2={`${t('reg_under')}:`} value2={data.regUnder} 
                         />
+
+                        {/* Documents Section */}
+                        {(data.msmeCertificateUrl || (data.otherDocuments && data.otherDocuments.length > 0)) && (
+                            <>
+                                <SectionHeading title={t('modules:uploaded_documents', 'Uploaded Documents')} />
+                                {data.msmeCertificateUrl && (
+                                     <InfoTableRow 
+                                         label1={`${t('modules:msme_certificate', 'MSME Certificate')}:`} 
+                                         value1={
+                                             <a 
+                                                 href={getImageUrl(data.msmeCertificateUrl)} 
+                                                 target="_blank" 
+                                                 rel="noopener noreferrer" 
+                                                 className="text-[#014A36] hover:underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[300px] truncate"
+                                                 onMouseEnter={(e) => handleMouseEnter(e, data.msmeCertificateUrl)}
+                                                 onMouseLeave={handleMouseLeave}
+                                                 title={getCleanFileName(data.msmeCertificateUrl)}
+                                             >
+                                                 <FileText size={16} className="shrink-0" /> {getCleanFileName(data.msmeCertificateUrl)}
+                                             </a>
+                                         } 
+                                         label2={''} value2={''} 
+                                     />
+                                 )}
+                                 {data.otherDocuments && data.otherDocuments.map((docUrl, index) => {
+                                     return (
+                                         <InfoTableRow 
+                                             key={index}
+                                             label1={`${t('modules:document', 'Document')}:`} 
+                                             value1={
+                                                 <a 
+                                                     href={getImageUrl(docUrl)} 
+                                                     target="_blank" 
+                                                     rel="noopener noreferrer" 
+                                                     className="text-[#014A36] hover:underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[300px] truncate"
+                                                     onMouseEnter={(e) => handleMouseEnter(e, docUrl)}
+                                                     onMouseLeave={handleMouseLeave}
+                                                     title={getCleanFileName(docUrl)}
+                                                 >
+                                                     <FileText size={16} className="shrink-0" /> {getCleanFileName(docUrl)}
+                                                 </a>
+                                             } 
+                                             label2={''} value2={''} 
+                                         />
+                                     );
+                                })}
+                            </>
+                        )}
 
                         {/* Customer Ledger Section */}
                         {(data.groupName?.includes('CUSTOMER') || data.groupName?.includes('SUNDRY_DEBTORS') || data.isCustomer) && (
@@ -163,6 +228,37 @@ const ViewAccount = ({ initialData, onBack, onEdit }) => {
 
                 </div>
             </div>
+
+            {hoveredDoc && createPortal(
+                <div 
+                    className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.15)] p-2 w-[320px] h-[220px] pointer-events-none flex items-center justify-center overflow-hidden animate-in zoom-in-95 duration-150"
+                    style={{
+                        top: `${hoveredDoc.rect.top - 235 < 10 ? hoveredDoc.rect.bottom + 10 : hoveredDoc.rect.top - 235}px`,
+                        left: `${Math.max(10, Math.min(window.innerWidth - 330, hoveredDoc.rect.left + (hoveredDoc.rect.width / 2) - 160))}px`,
+                    }}
+                >
+                    {/\.(jpg|jpeg|png|gif|webp)$/i.test(hoveredDoc.url) ? (
+                        <img 
+                            src={getImageUrl(hoveredDoc.url)} 
+                            alt="Preview" 
+                            className="w-full h-full object-contain rounded-lg"
+                        />
+                    ) : /\.pdf$/i.test(hoveredDoc.url) ? (
+                        <iframe 
+                            src={`${getImageUrl(hoveredDoc.url)}#toolbar=0&navpanes=0&scrollbar=0`} 
+                            title="PDF Preview" 
+                            className="w-full h-full border-0 rounded-lg pointer-events-none"
+                            scrolling="no"
+                        />
+                    ) : (
+                        <div className="text-[12px] text-gray-500 font-medium flex flex-col items-center gap-2">
+                            <FileText size={32} className="text-gray-400" />
+                            <span>Preview not available</span>
+                        </div>
+                    )}
+                </div>,
+                document.body
+            )}
         </div>
     );
 };

@@ -15,16 +15,19 @@ import {
   ArrowRight,
   RefreshCw,
   Trash2,
-  FileEdit
+  FileEdit,
+  Upload
 } from "lucide-react";
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
+import * as XLSX from 'xlsx';
 
 import grnService from "@/services/grnService";
 import ScrollableTable from "@/components/common/ScrollableTable";
 import FilterDropdown from "@/pages/dashboard/masters/components/FilterDropdown";
 import CustomSelect from "@/components/common/CustomSelect";
+import ImportModal from "@/pages/dashboard/masters/components/ImportModal";
 import { formatDate } from "@/utils/dateUtils";
 
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting, t }) => {
@@ -86,6 +89,7 @@ const GRN = () => {
     });
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [isExportOpen, setIsExportOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [grns, setGrns] = useState([]);
     const [totalItemsCount, setTotalItemsCount] = useState(0);
@@ -94,6 +98,99 @@ const GRN = () => {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const exportRef = useRef(null);
+
+    const sampleHeaders = [
+        'Supplier Name', 'Supplier Challan No', 'Supplier Challan Date', 'Booking Date',
+        'PO Number', 'GST Number', 'Credit Days', 'Product Code', 'Product Name',
+        'Quantity', 'Rate', 'UOM', 'Discount Amount', 'Discount Percent', 'Tax Percent', 'Print Description'
+    ];
+
+    const handleImportExcel = async (formData) => {
+        const file = formData.get('file');
+        if (!file) return;
+
+        const loadingToast = toast.loading(t('common:processing', 'Processing GRN import...'));
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+            if (!jsonRows || jsonRows.length === 0) {
+                toast.dismiss(loadingToast);
+                toast.error("The uploaded file is empty.");
+                return;
+            }
+
+            const grnGroups = {};
+            jsonRows.forEach((row) => {
+                const supplierName = row['Supplier Name'] || row['Supplier'] || row['supplierName'] || '';
+                const challanNo = row['Supplier Challan No'] || row['Challan No'] || row['challanNumber'] || '';
+                
+                if (!supplierName || !challanNo) return;
+                const key = `${supplierName}___${challanNo}`;
+
+                if (!grnGroups[key]) {
+                    grnGroups[key] = {
+                        supplierName: String(supplierName).trim(),
+                        challanNumber: String(challanNo).trim(),
+                        grnDate: row['Supplier Challan Date'] || row['Challan Date'] || new Date().toISOString().split('T')[0],
+                        bookingDate: row['Booking Date'] || new Date().toISOString().split('T')[0],
+                        poNumber: String(row['PO Number'] || row['PO No'] || '').trim(),
+                        gstNumber: String(row['GST Number'] || row['GST No'] || '').trim(),
+                        creditDays: parseInt(row['Credit Days'] || 0, 10),
+                        items: []
+                    };
+                }
+
+                grnGroups[key].items.push({
+                    productCode: String(row['Product Code'] || '').trim(),
+                    productName: String(row['Product Name'] || '').trim(),
+                    quantity: parseFloat(row['Quantity'] || row['Qty'] || 0),
+                    rate: parseFloat(row['Rate'] || row['Price'] || 0),
+                    uom: String(row['UOM'] || 'NOS').trim(),
+                    discountAmount: parseFloat(row['Discount Amount'] || 0),
+                    discountPercent: parseFloat(row['Discount Percent'] || 0),
+                    taxPercent: parseFloat(row['Tax Percent'] || row['Tax %'] || 0),
+                    printDescription: String(row['Print Description'] || row['Description'] || '').trim()
+                });
+            });
+
+            const keys = Object.keys(grnGroups);
+            if (keys.length === 0) {
+                toast.dismiss(loadingToast);
+                toast.error("No valid GRN records found in the Excel file.");
+                return;
+            }
+
+            let successCount = 0;
+            let failCount = 0;
+
+            for (const key of keys) {
+                const grnData = grnGroups[key];
+                try {
+                    await grnService.createGRN(grnData);
+                    successCount++;
+                } catch (err) {
+                    console.error("Failed to import GRN record:", grnData, err);
+                    failCount++;
+                }
+            }
+
+            toast.dismiss(loadingToast);
+            if (successCount > 0) {
+                toast.success(`Successfully imported ${successCount} GRN(s)${failCount > 0 ? `, ${failCount} failed` : ''}`);
+                fetchData();
+            } else {
+                toast.error("Failed to import GRN records.");
+            }
+        } catch (err) {
+            console.error("Import error:", err);
+            toast.dismiss(loadingToast);
+            toast.error("Failed to process Excel file.");
+        }
+    };
 
     // Filter State
     const defaultFilters = { status: "All" };
@@ -204,8 +301,8 @@ const GRN = () => {
             return {
                 ...item,
                 supplierName: item.supplierName || "-",
-                challanNo: item.challanNumber || "-",
-                challanDate: formatDate(item.challanDate),
+                challanNo: item.challanNumber || item.challanNo || "-",
+                challanDate: formatDate(item.grnDate || item.supplierChallanDate || item.challanDate || item.documentDate),
                 bookingDate: formatDate(item.bookingDate),
                 poNo: item.poNumber || "-",
                 gstNo: item.gstNumber || "-",
@@ -337,6 +434,12 @@ const GRN = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <button 
+                            onClick={() => setIsImportModalOpen(true)} 
+                            className="flex items-center gap-2 px-6 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] bg-white hover:bg-gray-50 transition-all uppercase"
+                        >
+                            <Upload size={18} /> {t('common:import', 'Import')}
+                        </button>
                         <div className="relative" ref={exportRef}>
                             <button 
                                 onClick={() => setIsExportOpen(!isExportOpen)} 
@@ -478,6 +581,14 @@ const GRN = () => {
             {createPortal(
                 <>
                     <DeleteConfirmModal isOpen={isDeleteModalOpen} isDeleting={isDeleting} onCancel={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} t={t} />
+                    
+                    <ImportModal
+                        isOpen={isImportModalOpen}
+                        onClose={() => setIsImportModalOpen(false)}
+                        onImport={handleImportExcel}
+                        sampleFileName="grn_import_sample.xlsx"
+                        sampleHeaders={sampleHeaders}
+                    />
                     
                     {/* Filter Sidebar */}
                     {isFilterOpen && <div className="fixed inset-0 z-[100] bg-slate-900/20 backdrop-blur-[2px]" onClick={() => setIsFilterOpen(false)} />}

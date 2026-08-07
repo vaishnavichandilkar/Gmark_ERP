@@ -294,14 +294,24 @@ const SalesInvoice = () => {
     const mappedInvoices = useMemo(() => {
         let baseData = invoices.map(item => {
             const statusLabel = item.status?.toUpperCase() === 'DELETED' ? 'Deleted' : 'Generated';
+            const grossAmount = parseFloat(item.grandTotal) || 0;
+            const taxableAmount = item.taxableAmount !== undefined && item.taxableAmount !== null && parseFloat(item.taxableAmount) > 0
+                ? parseFloat(item.taxableAmount)
+                : (item.items?.reduce((sum, i) => sum + (parseFloat(i.beforeTaxAmount) || 0), 0) || 0);
+            const taxAmount = ((item.cgstAmount || 0) + (item.sgstAmount || 0) + (item.igstAmount || 0)) || (grossAmount > taxableAmount ? (grossAmount - taxableAmount) : 0);
+
             return {
                 ...item,
                 customerName: item.customerName || "-",
                 invoiceNo: item.invoiceNumber || "-",
                 customerInvNo: item.customerInvoiceNumber || "-",
                 customerInvoiceDate: formatDate(item.customerInvoiceDate || item.invoiceDate),
-                invoiceDate: formatDate(item.invoiceDate),
-                grandTotal: item.grandTotal?.toFixed(2) || "0.00",
+                bookingDate: formatDate(item.bookingDate || item.createdAt),
+                soNo: item.soNumber || "-",
+                gstNo: item.gstNumber || "-",
+                taxableAmount: taxableAmount.toFixed(2),
+                taxAmount: taxAmount.toFixed(2),
+                grandTotal: grossAmount.toFixed(2),
                 status: statusLabel,
                 bgClass: statusLabel === 'Generated' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
             };
@@ -316,6 +326,11 @@ const SalesInvoice = () => {
                     if (key === 'customerName') fieldVal = row.customerName || "";
                     else if (key === 'invoiceNo') fieldVal = row.customerInvNo || "";
                     else if (key === 'customerInvoiceDate') fieldVal = row.customerInvoiceDate || "";
+                    else if (key === 'bookingDate') fieldVal = row.bookingDate || "";
+                    else if (key === 'soNo') fieldVal = row.soNo || "";
+                    else if (key === 'gstNo') fieldVal = row.gstNo || "";
+                    else if (key === 'taxableAmount') fieldVal = row.taxableAmount || "";
+                    else if (key === 'taxAmount') fieldVal = row.taxAmount || "";
                     else if (key === 'grandTotal') fieldVal = row.grandTotal || "";
                     else if (key === 'status') fieldVal = row.status || "";
 
@@ -417,17 +432,24 @@ const SalesInvoice = () => {
                         <thead>
                             <tr className="bg-emerald-900 text-white font-bold text-[15px]">
                                 {[
-                                t('modules:customerName'), t('modules:cust_inv_no'), t('modules:customer_invoice_date'),
-                                t('modules:grand_total_col'), t('common:status'), t('common:action')
-                            ].map(h => (
-                                <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
-                            ))}
+                                    t('modules:customerName'), t('modules:cust_inv_no'), t('modules:customer_invoice_date'),
+                                    t('modules:bookingDate'), t('modules:soNo'), t('modules:gst_no'),
+                                    t('modules:taxable_amount', 'Taxable Amt'), t('modules:tax_amount', 'Tax Amt'),
+                                    t('modules:grand_total_col'), t('common:status'), t('common:action')
+                                ].map(h => (
+                                    <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
+                                ))}
                             </tr>
                             <tr className="bg-[#0b543f]">
                                 {[
                                     { key: 'customerName', placeholder: 'Name' },
                                     { key: 'invoiceNo', placeholder: 'Inv No' },
-                                    { key: 'customerInvoiceDate', placeholder: 'Date' },
+                                    { key: 'customerInvoiceDate', placeholder: 'Inv Date' },
+                                    { key: 'bookingDate', placeholder: 'Booking Date' },
+                                    { key: 'soNo', placeholder: 'SO No' },
+                                    { key: 'gstNo', placeholder: 'GST No' },
+                                    { key: 'taxableAmount', placeholder: 'Taxable' },
+                                    { key: 'taxAmount', placeholder: 'Tax' },
                                     { key: 'grandTotal', placeholder: 'Total' },
                                     { key: 'status', placeholder: 'Status' },
                                     { key: 'actions', noSearch: true }
@@ -453,7 +475,12 @@ const SalesInvoice = () => {
                                         <td className="px-6 py-5 font-bold">{row.customerName}</td>
                                         <td className="px-6 py-4 font-bold text-gray-500">{row.customerInvNo}</td>
                                         <td className="px-6 py-4">{row.customerInvoiceDate}</td>
-                                        <td className="px-6 py-4 font-bold text-[#073318]">₹{row.grandTotal}</td>
+                                        <td className="px-6 py-4">{row.bookingDate}</td>
+                                        <td className="px-6 py-4 font-bold text-gray-500">{row.soNo}</td>
+                                        <td className="px-6 py-4 font-medium uppercase">{row.gstNo}</td>
+                                        <td className="px-6 py-4 text-right font-bold">₹{row.taxableAmount}</td>
+                                        <td className="px-6 py-4 text-right">₹{row.taxAmount}</td>
+                                        <td className="px-6 py-4 text-right font-bold text-[#073318]">₹{row.grandTotal}</td>
                                         <td className="px-6 py-5">
                                             <span className={`px-4 py-1.5 ${row.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{t(`common:status_${row.status.toLowerCase()}`, row.status)}</span>
                                         </td>

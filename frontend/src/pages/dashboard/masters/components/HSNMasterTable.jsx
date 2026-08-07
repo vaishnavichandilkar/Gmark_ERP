@@ -39,7 +39,10 @@ const HSNMasterTable = ({
                     else if (key === 'taxRate') fieldVal = (row.taxRate || 0).toString();
                     else if (key === 'description') fieldVal = row.description || "";
                     else if (key === 'status') {
-                        fieldVal = row.isActive ? 'active' : 'inactive';
+                        const statusStr = row.isActive ? 'active' : 'inactive';
+                        if (val === 'active') return statusStr === 'active';
+                        if (val === 'inactive') return statusStr === 'inactive';
+                        return statusStr.includes(val);
                     }
 
                     return fieldVal.toLowerCase().includes(val);

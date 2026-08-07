@@ -1141,7 +1141,7 @@ const AddSO = () => {
 
                             {formData.attachment && (
                                 <div className="flex items-center gap-2">
-                                    <div className="relative group/preview">
+                                    <div className="relative group">
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -1155,7 +1155,7 @@ const AddSO = () => {
                                             <Eye size={18} />
                                         </button>
                                         {previewUrl && (
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover/preview:flex flex-col w-[380px] h-[480px] bg-white border border-gray-200 rounded-[16px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] z-[100] p-3 animate-in fade-in slide-in-from-bottom-2 duration-200 pointer-events-none">
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:flex flex-col w-[380px] h-[480px] bg-white border border-gray-200 rounded-[16px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] z-[100] p-3 animate-in fade-in slide-in-from-bottom-2 duration-200 pointer-events-none">
                                                 <div className="text-[12px] font-bold text-gray-500 mb-2 border-b pb-1.5 flex items-center justify-between">
                                                     <span>Customer PO Preview</span>
                                                     <span className="text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-black uppercase">Live View</span>
@@ -1295,22 +1295,25 @@ const AddSO = () => {
                         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
                         transition: all 0.15s ease;
                         cursor: pointer;
-                        min-height: 64px;
+                        min-height: 44px;
                     }
                     .suggestion-row:hover, .suggestion-row.active {
-                        background: #056d4b;
+                        background: #044e36 !important;
+                        color: white !important;
                     }
                     .suggestion-dot {
-                        width: 14px;
-                        height: 14px;
+                        width: 12px;
+                        height: 12px;
                         background: white;
                         border-radius: 50%;
-                        opacity: 0.15;
+                        opacity: 0.25;
                         transition: all 0.2s ease;
                     }
+                    .suggestion-row:hover .suggestion-dot,
                     .suggestion-row.active .suggestion-dot {
-                        opacity: 1;
-                        box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+                        opacity: 1 !important;
+                        background: #ffffff !important;
+                        box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25) !important;
                         transform: scale(1.1);
                     }
                     .suggestion-col-divider {
@@ -1492,12 +1495,12 @@ const AddSO = () => {
 
                                                                     {/* Product Col - Width: 350px */}
                                                                     <div className="w-[350px] px-6 flex flex-col justify-center suggestion-col-divider text-left shrink-0">
-                                                                        <span className="font-bold text-[15px] leading-tight">{p.product_name}</span>
+                                                                        <span className="font-bold text-[13.5px] leading-tight">{p.product_name}</span>
                                                                         <span className="text-[10px] text-white/70 font-bold uppercase tracking-tight">{p.category?.name || p.category || 'Fruit'}</span>
                                                                     </div>
 
                                                                     {/* Description Col - Width: 300px */}
-                                                                    <div className="w-[300px] px-8 flex items-center justify-center suggestion-col-divider italic text-[12px] font-bold text-white/80 shrink-0">
+                                                                    <div className="w-[300px] px-8 flex items-center justify-center suggestion-col-divider italic text-[11px] font-bold text-white/80 shrink-0">
                                                                         {t('modules:select_item_continue')}
                                                                     </div>
 
@@ -1507,22 +1510,22 @@ const AddSO = () => {
                                                                     </div>
 
                                                                     {/* UOM Col - Width: 100px */}
-                                                                    <div className="w-[100px] flex items-center justify-center suggestion-col-divider font-bold text-[14px] shrink-0">
+                                                                    <div className="w-[100px] flex items-center justify-center suggestion-col-divider font-bold text-[13px] shrink-0">
                                                                         {p.uom?.gst_uom || p.uom?.unit_name || 'NOS'}
                                                                     </div>
 
                                                                     {/* Rate Col - Width: 120px */}
-                                                                    <div className="w-[120px] px-4 flex items-center justify-center suggestion-col-divider font-bold text-[16px] shrink-0">
+                                                                    <div className="w-[120px] px-4 flex items-center justify-center suggestion-col-divider font-bold text-[13.5px] shrink-0">
                                                                         ₹{p.sellingRate || p.rate || 0}
                                                                     </div>
 
                                                                     {/* HSN Col - Width: 140px */}
-                                                                    <div className="w-[140px] px-4 flex items-center justify-center suggestion-col-divider font-bold text-[15px] shrink-0">
+                                                                    <div className="w-[140px] px-4 flex items-center justify-center suggestion-col-divider font-bold text-[13.5px] shrink-0">
                                                                         {p.hsn_code || '1001'}
                                                                     </div>
 
                                                                     {/* Tax Col - Width: 120px */}
-                                                                    <div className="w-[120px] px-4 flex items-center justify-center suggestion-col-divider shrink-0 font-black text-[16px]">
+                                                                    <div className="w-[120px] px-4 flex items-center justify-center suggestion-col-divider shrink-0 font-black text-[13.5px]">
                                                                         {p.tax_rate || 0}%
                                                                     </div>
                                                                     <div className="w-[160px] suggestion-col-divider shrink-0"></div>

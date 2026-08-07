@@ -99,6 +99,22 @@ const grnService = {
   deleteGRN: async (id) => {
     const response = await axiosInstance.delete(`/grn/${id}`);
     return response.data;
+  },
+
+  downloadSample: async () => {
+    const response = await axiosInstance.get('/grn/download-sample', {
+      responseType: 'blob',
+    });
+    return response;
+  },
+
+  importGRNs: async (formData) => {
+    const response = await axiosInstance.post('/grn/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
   }
 };
 

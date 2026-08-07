@@ -83,7 +83,8 @@ const InvoiceForm = ({ formData, setFormData, handleSupplierChange, handlePOChan
                         type="date"
                         value={formData.booking_date}
                         onChange={(e) => setFormData({ ...formData, booking_date: e.target.value })}
-                        className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318]"
+                        onClick={(e) => { try { e.target.showPicker?.(); } catch (err) {} }}
+                        className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] cursor-pointer"
                     />
                 </div>
 
@@ -104,7 +105,8 @@ const InvoiceForm = ({ formData, setFormData, handleSupplierChange, handlePOChan
                         type="date"
                         value={formData.supplier_invoice_date || ''}
                         onChange={(e) => setFormData({ ...formData, supplier_invoice_date: e.target.value })}
-                        className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318]"
+                        onClick={(e) => { try { e.target.showPicker?.(); } catch (err) {} }}
+                        className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] outline-none focus:border-[#073318] cursor-pointer"
                     />
                 </div>
             </div>

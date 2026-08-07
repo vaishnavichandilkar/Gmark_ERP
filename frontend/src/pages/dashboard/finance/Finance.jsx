@@ -2260,8 +2260,20 @@ const Finance = () => {
                                                                             return `₹ ${displayAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${suffix}`.trim();
                                                                         })()}
                                                                     </td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-emerald-600">{tx.debit > 0 ? `₹ ${tx.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-rose-600">{tx.credit > 0 ? `₹ ${tx.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-emerald-600">
+                                                                        {tx.debit > 0 
+                                                                            ? `₹ ${tx.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+                                                                            : ((tx.isBalanceRow || tx.particulars?.toLowerCase().includes('balance')) && (!tx.credit || tx.credit === 0) && activeSubTab !== 'Sundry Creditors') 
+                                                                                ? `₹ 0.00` 
+                                                                                : '-'}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-rose-600">
+                                                                        {tx.credit > 0 
+                                                                            ? `₹ ${tx.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+                                                                            : ((tx.isBalanceRow || tx.particulars?.toLowerCase().includes('balance')) && (!tx.debit || tx.debit === 0) && activeSubTab === 'Sundry Creditors') 
+                                                                                ? `₹ 0.00` 
+                                                                                : '-'}
+                                                                    </td>
                                                                     <td className="px-6 py-4 text-right font-bold text-[#111827]">
                                                                         ₹ {Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}
                                                                     </td>

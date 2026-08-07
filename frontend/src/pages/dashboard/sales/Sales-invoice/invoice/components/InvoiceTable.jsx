@@ -461,16 +461,24 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                             <tr
                                                 key={p.id}
                                                 onClick={() => handleSelectProduct(p, index)}
-                                                className={`cursor-pointer transition-all border-b border-emerald-50 ${selectedSuggestionIndex === pIdx ? 'bg-emerald-600 text-white' : 'bg-emerald-50/40 hover:bg-emerald-100'}`}
+                                                className={`product-suggestion-row cursor-pointer transition-all border-b border-white/10 ${selectedSuggestionIndex === pIdx ? '!bg-[#044e36] !text-white shadow-md' : '!bg-[#07835B] hover:!bg-[#056d4b] !text-white'}`}
                                                 onMouseEnter={() => setSelectedSuggestionIndex(pIdx)}
                                             >
-                                                <td className="px-4 py-3 text-center"><div className={`w-2 h-2 rounded-full mx-auto ${selectedSuggestionIndex === pIdx ? 'bg-white font-outfit' : 'bg-emerald-200'}`}></div></td>
-                                                <td colSpan={2} className="px-4 py-3 border-l border-emerald-100 font-mono text-[13px] font-black underline decoration-emerald-300">{p.product_code}</td>
-                                                <td className="px-4 py-3 border-l border-emerald-100 font-bold uppercase text-[15px]">{p.product_name}</td>
-                                                <td className="px-4 py-3 border-l border-emerald-100 text-center font-bold text-emerald-800 uppercase text-[12px]">
+                                                <td className="px-4 py-3 text-center">
+                                                    {selectedSuggestionIndex === pIdx ? (
+                                                        <div className="flex items-center justify-center">
+                                                            <div className="w-2.5 h-2.5 bg-white rounded-full ring-4 ring-white/20"></div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="w-2 h-2 bg-white/30 rounded-full mx-auto"></div>
+                                                    )}
+                                                </td>
+                                                <td colSpan={2} className="px-4 py-3 border-l border-white/10 font-mono text-[13px] font-black text-white">{p.product_code}</td>
+                                                <td className="px-4 py-3 border-l border-white/10 font-bold uppercase text-[15px] text-white">{p.product_name}</td>
+                                                <td className="px-4 py-3 border-l border-white/10 text-center font-bold uppercase text-[12px] text-white/90">
                                                     {getStandardGstUom(p.uom)}
                                                 </td>
-                                                <td colSpan={9} className="px-4 py-3 border-l border-emerald-100 text-right font-black">₹{p.sale_rate || 0}</td>
+                                                <td colSpan={9} className="px-4 py-3 border-l border-white/10 text-right font-black text-white">₹{p.sale_rate || 0}</td>
                                                 <td className="sticky right-0 bg-transparent"></td>
                                             </tr>
                                         ))}

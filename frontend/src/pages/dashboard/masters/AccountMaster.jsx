@@ -126,7 +126,11 @@ const AccountMaster = () => {
                     else if (key === 'supplierOpeningBalance') fieldVal = (row.supplierOpeningBalance || 0).toString();
                     else if (key === 'addressLine1') fieldVal = row.addressLine1 || "";
                     else if (key === 'status') {
-                        fieldVal = `${row.customerStatus || ""} ${row.supplierStatus || ""}`;
+                        const custStat = (row.customerStatus || "").toLowerCase();
+                        const suppStat = (row.supplierStatus || "").toLowerCase();
+                        if (val === 'active') return custStat === 'active' || suppStat === 'active';
+                        if (val === 'inactive') return custStat === 'inactive' || suppStat === 'inactive';
+                        return custStat.includes(val) || suppStat.includes(val);
                     }
 
                     return fieldVal.toLowerCase().includes(val);

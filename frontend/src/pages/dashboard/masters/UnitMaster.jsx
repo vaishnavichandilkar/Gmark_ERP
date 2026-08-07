@@ -59,7 +59,12 @@ const UnitMaster = () => {
                     if (key === 'unitName') fieldVal = row.unit_name || "";
                     else if (key === 'gstUom') fieldVal = row.gst_uom || "";
                     else if (key === 'fullName') fieldVal = row.full_name_of_measurement || "";
-                    else if (key === 'status') fieldVal = row.status || "";
+                    else if (key === 'status') {
+                        const statusStr = (row.status || "").toLowerCase();
+                        if (val === 'active') return statusStr === 'active';
+                        if (val === 'inactive') return statusStr === 'inactive';
+                        return statusStr.includes(val);
+                    }
 
                     return fieldVal.toLowerCase().includes(val);
                 });
@@ -599,14 +604,6 @@ const UnitMaster = () => {
                                                         >
                                                             <Eye size={18} className="text-gray-400" />
                                                             {t('modules:view_and_edit_unit')}
-                                                        </button>
-                                                        <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
-                                                        <button
-                                                            onClick={() => handleToggleStatus(row.id, row.status)}
-                                                            className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-gray-700 hover:bg-[#F9FAFB] hover:text-[#0A3622] transition-colors whitespace-nowrap font-bold"
-                                                        >
-                                                            <CheckCircle2 size={18} className={row.status === 'ACTIVE' ? "text-gray-400" : "text-[#0A3622]"} />
-                                                            {row.status === 'ACTIVE' ? t('common:inactive') : t('common:active')}
                                                         </button>
                                                     </div>
                                                 )}

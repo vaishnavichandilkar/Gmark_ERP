@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import { 
     ArrowLeft, 
-    RefreshCw
+    RefreshCw,
+    FileText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -11,6 +13,7 @@ import purchaseInvoiceService from '@/services/purchaseInvoiceService';
 import { getStandardGstUom } from '@/utils/uomUtils';
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '@/utils/dateUtils';
+import { getImageUrl, getCleanFileName } from '@/utils/url';
 
 const InfoTableRow = ({ label1, value1, label2, value2 }) => (
     <div className="flex flex-col sm:flex-row border-[#E5E7EB] border-b last:border-0 font-outfit">
@@ -38,6 +41,17 @@ const ViewPurchaseInvoice = () => {
     const [invoice, setInvoice] = useState(null);
     const [items, setItems] = useState([]);
     const [expenses, setExpenses] = useState([]);
+
+    const [hoveredDoc, setHoveredDoc] = useState(null);
+
+    const handleMouseEnter = (e, url) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setHoveredDoc({ url, rect });
+    };
+
+    const handleMouseLeave = () => {
+        setHoveredDoc(null);
+    };
 
     useEffect(() => {
         const fetchInvoice = async () => {
@@ -144,6 +158,23 @@ const ViewPurchaseInvoice = () => {
                         <InfoTableRow label1={t('modules:supplier_address', 'Supplier Address') + ":"} value1={invoice.address} label2={t('modules:po_number', 'PO Number') + ":"} value2={invoice.poNumber} />
                         <InfoTableRow label1={t('modules:supplier_invoice_no', 'Supplier Invoice No') + ":"} value1={invoice.supplierInvoiceNumber} label2={t('modules:booking_date', 'Booking Date') + ":"} value2={formatDate(invoice.bookingDate)} />
                         <InfoTableRow label1={t('modules:invoice_date', 'Invoice Date') + ":"} value1={formatDate(invoice.supplierInvoiceDate)} label2={t('modules:gst_number_col') + ":"} value2={invoice.gstNumber} />
+                        <InfoTableRow 
+                            label1={t('modules:uploaded_document', 'Uploaded Document') + ":"} 
+                            value1={invoice.uploadedFilePath ? (
+                                <a 
+                                    href={getImageUrl(invoice.uploadedFilePath)} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="text-[#014A36] hover:underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[300px] truncate"
+                                    onMouseEnter={(e) => handleMouseEnter(e, invoice.uploadedFilePath)}
+                                    onMouseLeave={handleMouseLeave}
+                                    title={getCleanFileName(invoice.uploadedFilePath)}
+                                >
+                                    <FileText size={16} className="shrink-0" /> {getCleanFileName(invoice.uploadedFilePath)}
+                                </a>
+                            ) : '-'} 
+                            label2={''} value2={''} 
+                        />
                     </div>
                 </div>
 
@@ -287,8 +318,38 @@ const ViewPurchaseInvoice = () => {
                     </div>
                 </div>
 
-                {/* Footer Section - Back Button only if needed, currently no footer content */}
             </div>
+
+            {hoveredDoc && createPortal(
+                <div 
+                    className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.15)] p-2 w-[320px] h-[220px] pointer-events-none flex items-center justify-center overflow-hidden animate-in zoom-in-95 duration-150"
+                    style={{
+                        top: `${hoveredDoc.rect.top - 235 < 10 ? hoveredDoc.rect.bottom + 10 : hoveredDoc.rect.top - 235}px`,
+                        left: `${Math.max(10, Math.min(window.innerWidth - 330, hoveredDoc.rect.left + (hoveredDoc.rect.width / 2) - 160))}px`,
+                    }}
+                >
+                    {/\.(jpg|jpeg|png|gif|webp)$/i.test(hoveredDoc.url) ? (
+                        <img 
+                            src={getImageUrl(hoveredDoc.url)} 
+                            alt="Preview" 
+                            className="w-full h-full object-contain rounded-lg"
+                        />
+                    ) : /\.pdf$/i.test(hoveredDoc.url) ? (
+                        <iframe 
+                            src={`${getImageUrl(hoveredDoc.url)}#toolbar=0&navpanes=0&scrollbar=0`} 
+                            title="PDF Preview" 
+                            className="w-full h-full border-0 rounded-lg pointer-events-none"
+                            scrolling="no"
+                        />
+                    ) : (
+                        <div className="text-[12px] text-gray-500 font-medium flex flex-col items-center gap-2">
+                            <FileText size={32} className="text-gray-400" />
+                            <span>Preview not available</span>
+                        </div>
+                    )}
+                </div>,
+                document.body
+            )}
         </div>
     );
 };

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Check,
   ChevronDown,
@@ -11,12 +12,14 @@ import {
   Plus,
   Info,
   X,
+  FileText,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import accountService from "../../../../services/accountService";
 import masterService from "../../../../services/masterService";
 import toast from "react-hot-toast";
+import { getImageUrl, getCleanFileName } from "../../../../utils/url";
 
 const CustomSelect = ({
   label,
@@ -339,6 +342,17 @@ const AddAccount = ({
 }) => {
   const { t } = useTranslation(["modules", "common"]);
   const isEditMode = !!initialData;
+  const [hoveredDoc, setHoveredDoc] = useState(null);
+
+  const handleMouseEnter = (e, url) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setHoveredDoc({ url, rect });
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredDoc(null);
+  };
+
   const [groups, setGroups] = useState([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [selectedParentGroup, setSelectedParentGroup] = useState(null);
@@ -397,6 +411,7 @@ const AddAccount = ({
         address1: initialData.addressLine1 || "",
         address2: initialData.addressLine2 || "",
         area: initialData.area || "",
+        postalAddress: initialData.postalAddress || "",
         pinCode: initialData.pincode || "",
         city: initialData.city || "",
         state: initialData.state || "",
@@ -429,6 +444,7 @@ const AddAccount = ({
         address1: "",
         address2: "",
         area: "",
+        postalAddress: "",
         pinCode: "",
         city: "",
         state: "",
@@ -611,6 +627,37 @@ const AddAccount = ({
     isProfileLoaded,
   ]);
   const [areaOptions, setAreaOptions] = useState([]);
+  const [postalAddressOptions, setPostalAddressOptions] = useState([]);
+  const [officeVillagesMapping, setOfficeVillagesMapping] = useState({});
+
+  useEffect(() => {
+    if (formData.pinCode && formData.pinCode.length === 6 && postalAddressOptions.length === 0) {
+      accountService.lookupPincode(formData.pinCode)
+        .then(res => {
+          if (res) {
+            const officeVillages = res.officeVillages || {};
+            const postalAddresses = Object.keys(officeVillages).sort();
+            setPostalAddressOptions(postalAddresses);
+            setOfficeVillagesMapping(officeVillages);
+            
+            if (formData.postalAddress) {
+              setAreaOptions(officeVillages[formData.postalAddress] || []);
+            } else if (formData.area) {
+              const foundOffice = postalAddresses.find(office => 
+                (officeVillages[office] || []).includes(formData.area)
+              );
+              if (foundOffice) {
+                setFormData(prev => ({ ...prev, postalAddress: foundOffice }));
+                setAreaOptions(officeVillages[foundOffice] || []);
+              } else {
+                setAreaOptions(res.areas || []);
+              }
+            }
+          }
+        })
+        .catch(err => console.error("Failed to load mount-time pincode mapping:", err));
+    }
+  }, [formData.pinCode, postalAddressOptions.length]);
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingCustomerCode, setIsGeneratingCustomerCode] =
     useState(false);
@@ -620,9 +667,24 @@ const AddAccount = ({
   const [isDuplicateName, setIsDuplicateName] = useState(false);
 
   const [msmeFile, setMsmeFile] = useState(null);
-  const [otherDocs, setOtherDocs] = useState([
-    { type: "", name: "", file: null },
-  ]);
+  const [otherDocs, setOtherDocs] = useState(() => {
+    if (initialData?.otherDocuments && Array.isArray(initialData.otherDocuments)) {
+      return initialData.otherDocuments.map((docUrl) => {
+        const filename = docUrl.split('/').pop() || 'Document';
+        // Parse type/name
+        const displayName = filename.replace(/^\d+_/, '').replace(/_DOC\.[^/.]+$/, "").replace(/\.[^/.]+$/, "");
+        const docType = displayName.replace(/DOC$/, '').trim().toLowerCase();
+        const hasOption = OTHER_DOC_OPTIONS.includes(docType);
+        return {
+          type: hasOption ? docType : "other",
+          name: hasOption ? docType : displayName.replace(/_/g, ' '),
+          file: null,
+          url: docUrl
+        };
+      });
+    }
+    return [{ type: "", name: "", file: null }];
+  });
   const [showPanTooltip, setShowPanTooltip] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -854,18 +916,21 @@ const AddAccount = ({
       try {
         const res = await accountService.lookupPincode(value);
         if (res) {
+          const officeVillages = res.officeVillages || {};
+          const postalAddresses = Object.keys(officeVillages).sort();
           setFormData((prev) => ({
             ...prev,
-            city: res.city || res.district || prev.city,
-            district: res.district || res.city || prev.district,
+            city: res.district || prev.city,
+            district: res.district || prev.district,
             subDistrict: res.subDistrict || "",
             state: res.state || prev.state,
             country: res.country || "India",
-            area: res.areas && res.areas.length > 0 ? res.areas[0] : prev.area,
+            postalAddress: "",
+            area: "",
           }));
-          if (res.areas && res.areas.length > 0) {
-            setAreaOptions(res.areas);
-          }
+          setPostalAddressOptions(postalAddresses);
+          setOfficeVillagesMapping(officeVillages);
+          setAreaOptions([]);
           toast.success(t("modules:success_location_fetched"));
         }
       } catch (_err) {
@@ -1002,6 +1067,14 @@ const AddAccount = ({
         fData.append("otherDocuments", d.file);
         fData.append("otherDocumentNames", d.name);
       });
+    }
+
+    if (isEditMode) {
+      const preservedUrls = otherDocs.filter((d) => d.url && !d.file).map((d) => d.url);
+      fData.append("otherDocuments", JSON.stringify(preservedUrls));
+      if (initialData?.msmeCertificateUrl && !msmeFile) {
+        fData.append("msmeCertificateUrl", initialData.msmeCertificateUrl);
+      }
     }
 
     fData.append("msmeEnabled", msmeEnabled ? "true" : "false");
@@ -1367,6 +1440,20 @@ const AddAccount = ({
                 )}
               </div>
               <CustomSelect
+                label="Postal Address *"
+                placeholder="Select Postal Address"
+                options={postalAddressOptions}
+                value={formData.postalAddress}
+                onChange={(val) => {
+                  handleInputChange("postalAddress", val);
+                  const villages = officeVillagesMapping[val] || [];
+                  setAreaOptions(villages);
+                  handleInputChange("area", "");
+                }}
+                isSearchable={true}
+                disabled={postalAddressOptions.length === 0}
+              />
+              <CustomSelect
                 label={`${t("modules:area")} (${t("common:optional")})`}
                 placeholder={t("modules:enter_area")}
                 options={areaOptions}
@@ -1597,7 +1684,7 @@ const AddAccount = ({
               </div>
 
               {msmeEnabled && (
-                <div className="w-full md:w-1/2">
+                <div className="w-full md:w-1/2 flex flex-col gap-2">
                   <FileUploadField
                     label={t("modules:msme_certificate")}
                     accept=".pdf, .jpg, .jpeg, .png"
@@ -1605,6 +1692,22 @@ const AddAccount = ({
                     onFileSelect={setMsmeFile}
                     onShowToast={onShowToast}
                   />
+                  {initialData?.msmeCertificateUrl && !msmeFile && (
+                    <div className="text-[13px] text-gray-500 flex items-center gap-1.5 px-1">
+                      <span>{t("modules:existing_file", "Existing File")}:</span>
+                      <a 
+                        href={getImageUrl(initialData.msmeCertificateUrl)} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-[#014A36] hover:underline font-semibold flex items-center gap-1 cursor-pointer max-w-[250px] truncate"
+                        onMouseEnter={(e) => handleMouseEnter(e, initialData.msmeCertificateUrl)}
+                        onMouseLeave={handleMouseLeave}
+                        title={getCleanFileName(initialData.msmeCertificateUrl)}
+                      >
+                        <FileText size={14} className="shrink-0" /> {getCleanFileName(initialData.msmeCertificateUrl)}
+                      </a>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1913,12 +2016,12 @@ const AddAccount = ({
                           <label className="text-[13px] font-semibold text-[#4B5563]">
                             {t("modules:uploadFile")} <span className="text-red-500">*</span>
                           </label>
-                          <div className="relative flex items-center">
+                          <div className="flex-1 w-full">
                             <input
                               type="file"
                               id={`file-${idx}`}
                               accept=".pdf, .jpg, .jpeg, .png"
-                              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                              className="hidden"
                               onChange={(e) => {
                                 const file = e.target.files[0];
                                 if (file && file.size > 10 * 1024 * 1024)
@@ -1929,11 +2032,30 @@ const AddAccount = ({
                               }}
                             />
                             <div className="flex items-center gap-3 w-full border border-[#E5F0ED] rounded-md bg-[#F9FAFB] overflow-hidden">
-                              <span className="px-4 py-2 bg-[#E5F0ED] text-[#0A3622] text-[13px] font-semibold hover:bg-[#d6e7e2] transition-colors whitespace-nowrap">
+                              <label
+                                htmlFor={`file-${idx}`}
+                                className="px-4 py-2 bg-[#E5F0ED] text-[#0A3622] text-[13px] font-semibold hover:bg-[#d6e7e2] transition-colors whitespace-nowrap cursor-pointer"
+                              >
                                 {t('modules:chooseFile')}
-                              </span>
-                              <span className="px-3 text-[14px] text-gray-500 truncate flex-1">
-                                {doc.file ? doc.file.name : t('modules:noFileChosen')}
+                              </label>
+                              <span className="px-3 text-[14px] text-gray-500 truncate flex-1 flex items-center gap-2">
+                                {doc.file ? (
+                                  <span className="font-medium text-gray-700">{doc.file.name}</span>
+                                ) : doc.url ? (
+                                  <a 
+                                    href={getImageUrl(doc.url)} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="text-[#014A36] hover:underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[250px] truncate"
+                                    onMouseEnter={(e) => handleMouseEnter(e, doc.url)}
+                                    onMouseLeave={handleMouseLeave}
+                                    title={getCleanFileName(doc.url)}
+                                  >
+                                    <FileText size={14} className="shrink-0" /> {getCleanFileName(doc.url)}
+                                  </a>
+                                ) : (
+                                  t('modules:noFileChosen')
+                                )}
                               </span>
                             </div>
                           </div>
@@ -2005,6 +2127,36 @@ const AddAccount = ({
               -moz-appearance: textfield;
             }
           `}</style>
+          {hoveredDoc && createPortal(
+            <div 
+              className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.15)] p-2 w-[320px] h-[220px] pointer-events-none flex items-center justify-center overflow-hidden animate-in zoom-in-95 duration-150"
+              style={{
+                top: `${hoveredDoc.rect.top - 235 < 10 ? hoveredDoc.rect.bottom + 10 : hoveredDoc.rect.top - 235}px`,
+                left: `${Math.max(10, Math.min(window.innerWidth - 330, hoveredDoc.rect.left + (hoveredDoc.rect.width / 2) - 160))}px`,
+              }}
+            >
+              {/\.(jpg|jpeg|png|gif|webp)$/i.test(hoveredDoc.url) ? (
+                <img 
+                  src={getImageUrl(hoveredDoc.url)} 
+                  alt="Preview" 
+                  className="w-full h-full object-contain rounded-lg"
+                />
+              ) : /\.pdf$/i.test(hoveredDoc.url) ? (
+                <iframe 
+                  src={`${getImageUrl(hoveredDoc.url)}#toolbar=0&navpanes=0&scrollbar=0`} 
+                  title="PDF Preview" 
+                  className="w-full h-full border-0 rounded-lg pointer-events-none"
+                  scrolling="no"
+                />
+              ) : (
+                <div className="text-[12px] text-gray-500 font-medium flex flex-col items-center gap-2">
+                  <FileText size={32} className="text-gray-400" />
+                  <span>Preview not available</span>
+                </div>
+              )}
+            </div>,
+            document.body
+          )}
         </div>
       </div>
     </div>

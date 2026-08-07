@@ -345,9 +345,32 @@ const CategoryMaster = () => {
     }
 
     if (appliedFilters.status) {
+      const target = appliedFilters.status.toLowerCase().trim();
       data = data.filter((section) => {
-        const status = section.status || "ACTIVE";
-        return status.toLowerCase() === appliedFilters.status.toLowerCase();
+        const sectionStatus = (section.status || "ACTIVE").toLowerCase();
+        let sectionMatch = false;
+        if (target === 'active') sectionMatch = sectionStatus === 'active';
+        else if (target === 'inactive') sectionMatch = sectionStatus === 'inactive';
+        else sectionMatch = sectionStatus.includes(target);
+
+        const subMatch = (section.sub_categories || []).some((sub) => {
+          const subStatus = (sub.status || "ACTIVE").toLowerCase();
+          let sm = false;
+          if (target === 'active') sm = subStatus === 'active';
+          else if (target === 'inactive') sm = subStatus === 'inactive';
+          else sm = subStatus.includes(target);
+
+          const subSubMatch = (sub.sub_sub_categories || []).some((ss) => {
+            const ssStatus = (ss.status || "ACTIVE").toLowerCase();
+            if (target === 'active') return ssStatus === 'active';
+            if (target === 'inactive') return ssStatus === 'inactive';
+            return ssStatus.includes(target);
+          });
+
+          return sm || subSubMatch;
+        });
+
+        return sectionMatch || subMatch;
       });
     }
 
@@ -371,8 +394,30 @@ const CategoryMaster = () => {
     if (columnFilters.status) {
       const q = columnFilters.status.toLowerCase().trim();
       data = data.filter((section) => {
-        const status = section.status || "ACTIVE";
-        return status.toLowerCase().includes(q);
+        const sectionStatus = (section.status || "ACTIVE").toLowerCase();
+        let sectionMatch = false;
+        if (q === 'active') sectionMatch = sectionStatus === 'active';
+        else if (q === 'inactive') sectionMatch = sectionStatus === 'inactive';
+        else sectionMatch = sectionStatus.includes(q);
+
+        const subMatch = (section.sub_categories || []).some((sub) => {
+          const subStatus = (sub.status || "ACTIVE").toLowerCase();
+          let sm = false;
+          if (q === 'active') sm = subStatus === 'active';
+          else if (q === 'inactive') sm = subStatus === 'inactive';
+          else sm = subStatus.includes(q);
+
+          const subSubMatch = (sub.sub_sub_categories || []).some((ss) => {
+            const ssStatus = (ss.status || "ACTIVE").toLowerCase();
+            if (q === 'active') return ssStatus === 'active';
+            if (q === 'inactive') return ssStatus === 'inactive';
+            return ssStatus.includes(q);
+          });
+
+          return sm || subSubMatch;
+        });
+
+        return sectionMatch || subMatch;
       });
     }
 

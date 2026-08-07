@@ -79,6 +79,7 @@ export const saveShopDetailsApi = async (data) => {
     formData.append('pinCode', data.pinCode);
     formData.append('state', data.state);
     formData.append('district', data.district);
+    formData.append('country', data.country || 'India');
 
     const response = await axiosInstance.post(ONBOARDING_ENDPOINTS.STEP5_SHOP, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
