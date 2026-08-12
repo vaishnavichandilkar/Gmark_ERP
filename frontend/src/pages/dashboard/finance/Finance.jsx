@@ -941,13 +941,12 @@ const Finance = () => {
             doc.setFontSize(16);
             doc.text(`Ledger Account: ${selectedAccount?.accountName || 'Account'}`, 14, 20);
             
-            const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "Unallocated", "DR", "CR", "Cum Balance"];
+            const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "DR", "CR", "Cum Balance"];
             const tableRows = filtered.map((tx, index) => [
                 index + 1,
                 formatDate(tx.date),
                 tx.particulars,
                 tx.narration || '-',
-                tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
                 tx.debit > 0 ? tx.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
                 tx.credit > 0 ? tx.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
                 `${Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
@@ -958,8 +957,8 @@ const Finance = () => {
             const finalBal = filtered.length > 0 ? filtered[filtered.length - 1].balance : 0;
 
             const footerRows = [
-                ['', '', '', 'Total Transactions', '', totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(finalBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalBal >= 0 ? 'Cr' : 'Dr') : (finalBal >= 0 ? 'Dr' : 'Cr')}`],
-                ['', '', '', 'Closing Balance', '', '--', '--', `${Math.abs(finalBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalBal >= 0 ? 'Cr' : 'Dr') : (finalBal >= 0 ? 'Dr' : 'Cr')}`]
+                ['', '', '', 'Total Transactions', totalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), totalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(finalBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalBal >= 0 ? 'Cr' : 'Dr') : (finalBal >= 0 ? 'Dr' : 'Cr')}`],
+                ['', '', '', 'Closing Balance', '--', '--', `${Math.abs(finalBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalBal >= 0 ? 'Cr' : 'Dr') : (finalBal >= 0 ? 'Dr' : 'Cr')}`]
             ];
 
             autoTable(doc, {
@@ -1015,7 +1014,6 @@ const Finance = () => {
                 "Date": formatDate(tx.date),
                 "Particular": tx.particulars,
                 "Narration": tx.narration || '-',
-                "Unallocated (₹)": tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated) : null,
                 "Debit (₹)": tx.debit > 0 ? tx.debit : null,
                 "Credit (₹)": tx.credit > 0 ? tx.credit : null,
                 "Balance": `${Math.abs(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
@@ -1026,8 +1024,8 @@ const Finance = () => {
             const finalBal = filtered.length > 0 ? filtered[filtered.length - 1].balance : 0;
 
             exportData.push({}); 
-            exportData.push({ "Narration": "Total Transactions", "Unallocated (₹)": "--", "Debit (₹)": totalDR, "Credit (₹)": totalCR, "Balance": `${Math.abs(finalBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalBal >= 0 ? 'Cr' : 'Dr') : (finalBal >= 0 ? 'Dr' : 'Cr')}` });
-            exportData.push({ "Narration": "Closing Balance", "Unallocated (₹)": "--", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalBal >= 0 ? 'Cr' : 'Dr') : (finalBal >= 0 ? 'Dr' : 'Cr')}` });
+            exportData.push({ "Narration": "Total Transactions", "Debit (₹)": totalDR, "Credit (₹)": totalCR, "Balance": `${Math.abs(finalBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalBal >= 0 ? 'Cr' : 'Dr') : (finalBal >= 0 ? 'Dr' : 'Cr')}` });
+            exportData.push({ "Narration": "Closing Balance", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (finalBal >= 0 ? 'Cr' : 'Dr') : (finalBal >= 0 ? 'Dr' : 'Cr')}` });
 
             const ws = XLSX.utils.json_to_sheet(exportData);
             ws['!views'] = [{ state: 'frozen', ySplit: 1 }];
@@ -1036,7 +1034,6 @@ const Finance = () => {
                 { wch: 15 }, // Date
                 { wch: 25 }, // Particular
                 { wch: 35 }, // Narration
-                { wch: 18 }, // Unallocated (₹)
                 { wch: 15 }, // Debit (₹)
                 { wch: 15 }, // Credit (₹)
                 { wch: 20 }  // Balance

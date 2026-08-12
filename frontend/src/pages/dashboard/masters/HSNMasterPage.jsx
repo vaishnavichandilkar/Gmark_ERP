@@ -227,22 +227,13 @@ const HSNMasterPage = () => {
 
     const handleImportExcel = async (formData) => {
         try {
-            toast.loading(t('common:importing', 'Importing...'), { id: 'import-toast' });
             const response = await hsnService.importHsn(formData);
-            toast.dismiss('import-toast');
-            if (response.errors && response.errors.length > 0) {
-                toast.error(`Import partially succeeded: ${response.message}`);
-                // Print errors in console or display
-                console.warn('Import errors:', response.errors);
-            } else {
-                toast.success(t('common:import_success', 'Data imported successfully'));
-            }
+            const res = response?.data || response;
             fetchHsnData();
-            return Promise.resolve();
+            return res;
         } catch (error) {
-            toast.dismiss('import-toast');
-            toast.error(error?.response?.data?.message || t('common:import_failed', 'Failed to import data'));
-            return Promise.reject(error);
+            console.error("Import error:", error);
+            throw error;
         }
     };
 

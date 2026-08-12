@@ -177,7 +177,7 @@ const ViewSO = () => {
                         <div className="border border-[#E5E7EB] rounded-[12px] overflow-hidden shadow-sm">
                             <InfoTableRow label1={t('modules:customerName') + ":"} value1={formData.customer_name} label2={t('modules:credit_days') + ":"} value2={formData.credit_days} />
                             <InfoTableRow label1={t('common:address') + ":"} value1={formData.address} label2={t('modules:creation_date') + ":"} value2={formatDate(formData.creation_date)} />
-                            <InfoTableRow label1={t('modules:expiry_date') + ":"} value1={formatDate(formData.expiry_date)} label2={t('modules:gst_no') + ":"} value2={formData.gst_number} />
+                            <InfoTableRow label1={t('modules:so_expiry_date', 'SO Expiry Date') + ":"} value1={formatDate(formData.expiry_date)} label2={t('modules:gst_no') + ":"} value2={formData.gst_number} />
                             <InfoTableRow label1={t('modules:pan_no') + ":"} value1={formData.pan_number} label2={t('modules:customer_type') + ":"} value2={formData.customer_type ? formData.customer_type.toUpperCase() : '-'} />
                             {formData.customer_po_number === 'verbal' ? (
                                 <InfoTableRow label1={t('modules:customerPoNumber') + ":"} value1={t('common:status_verbal', 'Verbal')} label2="" value2="" />

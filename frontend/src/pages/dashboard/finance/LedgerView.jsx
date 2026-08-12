@@ -283,22 +283,21 @@ const LedgerView = () => {
             doc.setFontSize(16);
             doc.text(`Ledger Account: ${accountData.name}`, 14, 20);
             
-            const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "Unallocated", "DR", "CR", "Balance"];
+            const tableColumn = ["Sr.No", "Date", "Particular", "Narration", "DR", "CR", "Balance"];
             const tableRows = filteredTransactions.map((tx, idx) => [
                 idx + 1,
                 formatDate(tx.date),
                 tx.particulars,
                 (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
-                tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
                 tx.debit !== '0' && tx.debit ? Number(tx.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
                 tx.credit !== '0' && tx.credit ? Number(tx.credit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
                 Number(tx.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ` ${type === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
             ]);
 
             const footerRows = [
-                ['', '', '', 'Page Total', '', pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}`],
-                ['', '', '', 'Transactions (Ledger)', '', periodTotals.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), periodTotals.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}`],
-                ['', '', '', 'Closing Balance', '', '--', '--', `${Math.abs(finalBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}`]
+                ['', '', '', 'Page Total', pageTotalDR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), pageTotalCR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}`],
+                ['', '', '', 'Transactions (Ledger)', periodTotals.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), periodTotals.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}`],
+                ['', '', '', 'Closing Balance', '--', '--', `${Math.abs(finalBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}`]
             ];
 
             autoTable(doc, {
@@ -335,7 +334,6 @@ const LedgerView = () => {
                 "Date": formatDate(tx.date),
                 "Particular": tx.particulars,
                 "Narration": (tx.voucherNo && tx.voucherNo !== '-' ? `Inv.No-${tx.voucherNo.split('-')[1] || tx.voucherNo} - ` : '') + (tx.narration || ''),
-                "Unallocated (₹)": tx.unallocated !== undefined && tx.unallocated !== null ? Number(tx.unallocated) : null,
                 "Debit (₹)": tx.debit !== '0' && tx.debit ? Number(tx.debit) : null,
                 "Credit (₹)": tx.credit !== '0' && tx.credit ? Number(tx.credit) : null,
                 "Balance": `${Math.abs(Number(tx.balance)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (tx.balance >= 0 ? 'Cr' : 'Dr') : (tx.balance >= 0 ? 'Dr' : 'Cr')}`
@@ -343,9 +341,9 @@ const LedgerView = () => {
 
             // Add summary rows to Excel
             exportData.push({}); // Empty row for spacing
-            exportData.push({ "Narration": "Page Total", "Unallocated (₹)": "--", "Debit (₹)": pageTotalDR, "Credit (₹)": pageTotalCR, "Balance": `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}` });
-            exportData.push({ "Narration": "Transactions (Ledger)", "Unallocated (₹)": "--", "Debit (₹)": periodTotals.debit, "Credit (₹)": periodTotals.credit, "Balance": `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}` });
-            exportData.push({ "Narration": "Closing Balance", "Unallocated (₹)": "--", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}` });
+            exportData.push({ "Narration": "Page Total", "Debit (₹)": pageTotalDR, "Credit (₹)": pageTotalCR, "Balance": `${Math.abs(pageNetBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${pageTotalCR >= pageTotalDR ? 'Cr' : 'Dr'}` });
+            exportData.push({ "Narration": "Transactions (Ledger)", "Debit (₹)": periodTotals.debit, "Credit (₹)": periodTotals.credit, "Balance": `${Math.abs(periodTotals.credit - periodTotals.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${periodTotals.credit >= periodTotals.debit ? 'Cr' : 'Dr'}` });
+            exportData.push({ "Narration": "Closing Balance", "Debit (₹)": "--", "Credit (₹)": "--", "Balance": `${Math.abs(finalBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${type === 'Sundry Creditors' ? (finalBalance >= 0 ? 'Cr' : 'Dr') : (finalBalance >= 0 ? 'Dr' : 'Cr')}` });
 
             const ws = XLSX.utils.json_to_sheet(exportData);
             ws['!views'] = [{ state: 'frozen', ySplit: 1 }];
@@ -356,7 +354,6 @@ const LedgerView = () => {
                 {wch: 15}, // Date
                 {wch: 30}, // Particular
                 {wch: 40}, // Narration
-                {wch: 15}, // Unallocated
                 {wch: 15}, // Debit
                 {wch: 15}, // Credit
                 {wch: 15}  // Balance

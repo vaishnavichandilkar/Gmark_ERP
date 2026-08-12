@@ -6,6 +6,7 @@ import { Upload, FileText, Trash2, ChevronDown, CloudUpload, ArrowLeft, Search }
 import logo from '../../assets/images/ERP_Logo2.png';
 import { useTranslation } from 'react-i18next';
 import { getImageUrl } from '../../utils/url';
+import { sanitizePanInput, validatePan } from '../../utils/panUtils';
 
 import RegistrationSuccessModal from '../../components/common/RegistrationSuccessModal';
 
@@ -376,7 +377,7 @@ const SignUp = () => {
                         udyogAadhar: data.udyogAadhar || '',
                         regType: data.regType || '',
                         gstNumber: data.gstNumber || '',
-                        panNumber: data.panNumber || '',
+                        panNumber: data.panNumber || (data.gstNumber && data.gstNumber.trim().length >= 12 ? data.gstNumber.trim().substring(2, 12).toUpperCase() : ''),
                         udyogAadharFile: data.udyogAadharFile || null,
                         gstFile: data.gstFile || null,
                         otherDocFile: data.businessProof || null,
@@ -519,8 +520,30 @@ const SignUp = () => {
                 getPincodeInfoApi(formData.pinCode)
                     .then(data => {
                         if (data && data.state && data.district) {
-                            const officeVillages = data.officeVillages || {};
-                            const postalAddresses = Object.keys(officeVillages).sort();
+                            let officeVillages = (data.officeVillages && typeof data.officeVillages === 'object' && !Array.isArray(data.officeVillages)) ? { ...data.officeVillages } : {};
+                            let postalAddresses = Object.keys(officeVillages).sort();
+
+                            if (postalAddresses.length === 0 && data.areas && data.areas.length > 0) {
+                                officeVillages = {};
+                                data.areas.forEach(area => {
+                                    officeVillages[area] = data.areas;
+                                });
+                                postalAddresses = Object.keys(officeVillages).sort();
+                            }
+
+                            if (postalAddresses.length === 0 && data.district) {
+                                officeVillages = { [data.district]: [data.district] };
+                                postalAddresses = [data.district];
+                            }
+
+                            const initialPostal = formData.postalAddress && postalAddresses.includes(formData.postalAddress)
+                                ? formData.postalAddress
+                                : '';
+
+                            const initialAreas = initialPostal && officeVillages[initialPostal]
+                                ? officeVillages[initialPostal]
+                                : (data.areas && data.areas.length > 0 ? data.areas : [data.district]);
+
                             setFormData(prev => ({
                                 ...prev,
                                 district: data.district,
@@ -528,9 +551,9 @@ const SignUp = () => {
                                 country: data.country || 'India',
                                 officeVillages: officeVillages,
                                 postalAddresses: postalAddresses,
-                                postalAddress: '',
-                                areas: [],
-                                village: ''
+                                postalAddress: initialPostal,
+                                areas: initialAreas,
+                                village: prev.village || ''
                             }));
                             setShowPostalDropdown(true);
                             setIsManualLocation(false);
@@ -572,11 +595,11 @@ const SignUp = () => {
             case 'pinCode':
                 if (!/^\d{6}$/.test(value)) return 'Pincode must be exactly 6 digits.';
                 break;
-            case 'panNumber':
-                if (!/^[A-Z]{3}[PCHFATBLJG][A-Z]{1}[0-9]{4}[A-Z]{1}$/.test(value.trim().toUpperCase())) {
-                    return 'Invalid PAN format. Must be a valid 10-character PAN (e.g. ABCPE1234F).';
-                }
+            case 'panNumber': {
+                const panRes = validatePan(value);
+                if (!panRes.isValid) return panRes.error;
                 break;
+            }
             default:
                 break;
         }
@@ -601,26 +624,34 @@ const SignUp = () => {
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
-        const newValue = type === 'checkbox' ? checked : value;
+        let newValue = type === 'checkbox' ? checked : value;
+        if (name === 'panNumber' && typeof newValue === 'string') {
+            newValue = sanitizePanInput(newValue);
+        }
         
         let newFormData = { ...formData, [name]: newValue };
 
         // Auto fetch PAN from GST No
         if (name === 'gstNumber') {
-            const gstPattern = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-            if (newValue && gstPattern.test(newValue.trim().toUpperCase())) {
-                newFormData.panNumber = newValue.trim().substring(2, 12).toUpperCase();
-                setFieldErrors(prev => ({ ...prev, panNumber: '' }));
+            const cleanGst = typeof newValue === 'string' ? newValue.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15) : newValue;
+            newValue = cleanGst;
+            newFormData.gstNumber = cleanGst;
+
+            if (cleanGst && cleanGst.length >= 12) {
+                const extractedPan = cleanGst.substring(2, 12);
+                const panCheck = validatePan(extractedPan);
+                if (panCheck.isValid) {
+                    newFormData.panNumber = sanitizePanInput(extractedPan);
+                    setFieldErrors(prev => ({ ...prev, panNumber: '' }));
+                }
             }
         }
 
         setFormData(newFormData);
 
-        if (fieldErrors[name]) {
+        if (fieldErrors[name] || name === 'panNumber') {
             const validationError = validateField(name, newValue);
-            if (!validationError) {
-                setFieldErrors(prev => ({ ...prev, [name]: '' }));
-            }
+            setFieldErrors(prev => ({ ...prev, [name]: validationError }));
         }
         if (error) setError('');
     };
@@ -1224,6 +1255,7 @@ const SignUp = () => {
                                             optional={false}
                                             placeholder={t('auth:placeholder_pan')}
                                             name="panNumber"
+                                            maxLength={10}
                                             value={formData.panNumber}
                                             onChange={handleChange}
                                             onBlur={handleBlur}

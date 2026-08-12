@@ -190,25 +190,14 @@ const ProductMaster = () => {
   };
 
   const handleImportExcel = async (formData) => {
-    const loadingToast = toast.loading(t('common:importing', 'Importing data...'), { id: 'import-toast' });
-    
     try {
       const response = await productService.importProducts(formData);
-      toast.dismiss('import-toast');
-      
-      toast.custom((t) => (
-        <SuccessToast 
-          message={response?.message || t('common:import_success', 'Data imported successfully')} 
-          onClose={() => toast.dismiss(t.id)} 
-        />
-      ), { duration: 4000, position: 'top-right' });
-
+      const res = response?.data || response;
       fetchProducts();
-      return Promise.resolve();
+      return res;
     } catch (error) {
-      toast.dismiss('import-toast');
-      toast.error(error?.response?.data?.message || t('common:import_failed', 'Failed to import data'));
-      return Promise.reject(error);
+      console.error("Import error:", error);
+      throw error;
     }
   };
 

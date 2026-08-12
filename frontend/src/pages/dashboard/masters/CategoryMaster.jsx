@@ -500,28 +500,14 @@ const CategoryMaster = () => {
   };
 
   const handleImportExcel = async (formData) => {
-    const loadingToast = toast.loading(
-      t("common:importing", "Importing data..."),
-    );
-
     try {
       const response = await categoryService.importCategories(formData);
-      toast.dismiss(loadingToast);
-      toast.custom((tToast) => (
-        <SuccessToast 
-          message={response?.message || t('common:import_success', 'Data imported successfully')} 
-          onClose={() => toast.dismiss(tToast.id)} 
-        />
-      ), { duration: 4000, position: 'top-right' });
+      const res = response?.data || response;
       fetchCategories();
-      return Promise.resolve();
+      return res;
     } catch (error) {
-      toast.dismiss(loadingToast);
-      toast.error(
-        error?.response?.data?.message ||
-        t("common:import_failed", "Failed to import data"),
-      );
-      return Promise.reject(error);
+      console.error("Import error:", error);
+      throw error;
     }
   };
 

@@ -208,15 +208,13 @@ const PurchaseInvoice = ({ defaultTab }) => {
     };
 
     const handleImportExcel = async (formData) => {
-        const loadingToast = toast.loading(t('common:processing'));
         try {
-            await purchaseInvoiceService.importInvoices(formData);
-            toast.dismiss(loadingToast);
-            toast.custom(() => <SuccessToast message="Invoices imported successfully" />, { duration: 2000, position: 'top-right' });
+            const response = await purchaseInvoiceService.importInvoices(formData);
+            const res = response?.data || response;
             fetchData();
+            return res;
         } catch (error) {
-            toast.dismiss(loadingToast);
-            toast.error(error?.response?.data?.message || t('common:import_failed'));
+            console.error("Import error:", error);
             throw error;
         }
     };

@@ -298,16 +298,13 @@ const UnitMaster = () => {
 
     const handleImportExcel = async (formData) => {
         try {
-            toast.loading(t('common:importing', 'Importing...'), { id: 'import-toast' });
-            await unitService.importUnits(formData);
-            toast.dismiss('import-toast');
-            toast.success(t('common:import_success', 'Data imported successfully'));
+            const response = await unitService.importUnits(formData);
+            const res = response?.data || response;
             fetchUnits();
-            return Promise.resolve();
+            return res;
         } catch (error) {
-            toast.dismiss('import-toast');
-            toast.error(error?.response?.data?.message || t('common:import_failed', 'Failed to import data'));
-            return Promise.reject(error);
+            console.error("Import error:", error);
+            throw error;
         }
     };
 

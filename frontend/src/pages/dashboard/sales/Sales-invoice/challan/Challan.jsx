@@ -228,26 +228,13 @@ const Challan = () => {
     };
 
     const handleImportExcel = async (formData) => {
-        const loadingToast = toast.loading(t('common:processing'));
         try {
-            const res = await challanService.importChallans(formData);
-            toast.dismiss(loadingToast);
-            if (res.success) {
-                toast.success(t('common:import_success'));
-                setImportSummary(res.summary ? {
-                    totalRows: res.summary.totalRows,
-                    successful: res.summary.successful,
-                    failed: res.summary.failed,
-                    successFile: res.successFile,
-                    errorFile: res.errorFile
-                } : null);
-                fetchData();
-            } else {
-                toast.error(res.message || t('common:import_failed'));
-            }
+            const response = await challanService.importChallans(formData);
+            const res = response?.data || response;
+            fetchData();
+            return res;
         } catch (error) {
-            toast.dismiss(loadingToast);
-            toast.error(error?.response?.data?.message || t('common:import_failed'));
+            console.error("Import error:", error);
             throw error;
         }
     };

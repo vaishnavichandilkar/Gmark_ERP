@@ -266,9 +266,11 @@ const VerifyOTP = () => {
                         className="h-18 w-auto block object-contain self-start"
                         onError={(e) => { e.target.style.display = 'none' }}
                     />
-                    <div className="bg-[#F3F4F6] text-[#374151] px-[12px] py-[6px] rounded-full text-[12px] font-medium">
-                        {t('step_label')} 01/04
-                    </div>
+                    {mode === 'signup' && (
+                        <div className="bg-[#F3F4F6] text-[#374151] px-[12px] py-[6px] rounded-full text-[12px] font-medium">
+                            {t('step_label')} 01/04
+                        </div>
+                    )}
                 </div>
                 <div className="text-left w-full mb-8">
                     <h2 className="text-[30px] font-['Geist_Sans'] font-bold mb-1 leading-tight text-gray-900">

@@ -348,24 +348,14 @@ const GroupMaster = () => {
     };
 
     const handleImportExcel = async (formData) => {
-        const loadingToast = toast.loading(t('common:importing', 'Importing data...'), { id: 'import-toast' });
-        
         try {
             const response = await masterService.importGroups(formData);
-            toast.dismiss('import-toast');
-            
-            if (response.errors && response.errors.length > 0) {
-                showToast(response.message || 'Import completed with some errors', 'error');
-            } else {
-                showToast(t('common:import_success', 'Data imported successfully'), 'success');
-            }
-            
+            const res = response?.data || response;
             fetchGroups();
-            return Promise.resolve();
+            return res;
         } catch (error) {
-            toast.dismiss('import-toast');
-            showToast(error?.response?.data?.message || t('common:import_failed', 'Failed to import data'), 'error');
-            return Promise.reject(error);
+            console.error("Import error:", error);
+            throw error;
         }
     };
 

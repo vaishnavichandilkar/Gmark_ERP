@@ -971,7 +971,7 @@ const AddSO = () => {
                         </div>
 
                         <DateInput
-                            label={t('modules:expiry_date')}
+                            label={t('modules:so_expiry_date', 'SO Expiry Date')}
                             required
                             value={formData.expiry_date}
                             minDate={toDisplayDate(new Date())}

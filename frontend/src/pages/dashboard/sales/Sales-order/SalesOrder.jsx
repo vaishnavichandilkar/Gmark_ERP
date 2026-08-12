@@ -222,16 +222,23 @@ const SalesOrder = () => {
       expiryEndOfDay.setHours(23, 59, 59, 999);
       const diffHrs = (expiryEndOfDay.getTime() - now.getTime()) / (1000 * 60 * 60);
 
+      const totalSoQty = so.items?.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0) || 0;
+      const totalChallanQty = so.salesChallans?.reduce((sum, ch) => sum + (ch.items?.reduce((iSum, ci) => iSum + (Number(ci.challanQty) || 0), 0) || 0), 0) || 0;
+      const totalInvoicedQty = so.salesInvoices?.reduce((sum, inv) => sum + (inv.items?.reduce((iSum, ii) => iSum + (Number(ii.quantity) || 0), 0) || 0), 0) || 0;
+
+      const isFullyChallaned = totalSoQty > 0 && totalChallanQty >= (totalSoQty - 0.001);
+      const isFullyInvoiced = totalSoQty > 0 && totalInvoicedQty >= (totalSoQty - 0.001);
+
       let computedStatusLabel = "Pending";
       let bgClass = "bg-blue-50 text-blue-600 border border-blue-100";
 
       if (status === 'DELETED' || status === 'deleted') {
         computedStatusLabel = "Deleted"; bgClass = "bg-red-50 text-red-600 border border-red-100";
-      } else if (status === 'INVOICE_GENERATED' || status === 'INVOICE_COMPLETED' || status === 'completed' || status === 'COMPLETED') {
+      } else if (status === 'INVOICE_GENERATED' || status === 'INVOICE_COMPLETED' || status === 'completed' || status === 'COMPLETED' || isFullyInvoiced) {
         computedStatusLabel = "Completed"; bgClass = "bg-emerald-50 text-emerald-600 border border-emerald-100";
-      } else if (status === 'CHALLAN_COMPLETED') {
+      } else if (status === 'CHALLAN_COMPLETED' || isFullyChallaned) {
         computedStatusLabel = "Challan Completed"; bgClass = "bg-teal-50 text-teal-600 border border-teal-100";
-      } else if (so.salesChallans?.length > 0 || so.salesInvoices?.length > 0) {
+      } else if (status === 'PARTIAL_CHALLAN' || totalChallanQty > 0 || totalInvoicedQty > 0 || so.salesChallans?.length > 0) {
         computedStatusLabel = "Partial Challan"; bgClass = "bg-indigo-50 text-indigo-600 border border-indigo-100";
       } else if (expiryEndOfDay < now) {
         computedStatusLabel = "Expired"; bgClass = "bg-red-50 text-red-600 border border-red-100";
@@ -390,7 +397,7 @@ const SalesOrder = () => {
         "CUSTOMER PO DATE": so.poDate ? formatDate(so.poDate) : '-',
         "CUSTOMER PO EXP. DATE": so.poExpiryDate ? formatDate(so.poExpiryDate) : '-',
         "CREATION DATE": formatDate(so.soCreationDate),
-        "EXPIRY DATE": formatDate(so.expiryDate),
+        "SO EXPIRY DATE": formatDate(so.expiryDate),
         "AMOUNT": (so.totalAmount || 0).toFixed(2),
         "GST NUMBER": so.gstNumber || '-',
         "CREDIT DAYS": so.creditDays || 0,
@@ -621,28 +628,14 @@ const SalesOrder = () => {
   };
 
   const handleSubmitImport = async (formData) => {
-    setIsRefreshing(true);
     try {
-      const res = await salesOrderService.importSalesOrders(formData);
-      if (res.success) {
-        toast.success(t('modules:import_completed', 'Import completed successfully!'));
-        setImportSummary(res.summary ? {
-          totalRows: res.summary.totalRows,
-          successful: res.summary.successful,
-          failed: res.summary.failed,
-          successFile: res.successFile,
-          errorFile: res.errorFile
-        } : null);
-        handleRefresh();
-      } else {
-        toast.error(res.message || t('common:import_failed'));
-      }
+      const response = await salesOrderService.importSalesOrders(formData);
+      const res = response?.data || response;
+      fetchData();
+      return res;
     } catch (error) {
       console.error("Import error:", error);
-      toast.error(error.response?.data?.message || t('common:import_failed'));
       throw error;
-    } finally {
-      setIsRefreshing(false);
     }
   };
 
@@ -712,7 +705,7 @@ const SalesOrder = () => {
               <tr className="bg-emerald-900 text-white font-bold text-[15px] uppercase">
                 {[
                   t('modules:soNo'), t('modules:customerName'), t('modules:customer_type'), t('modules:customerPoNumber'), 
-                  t('modules:customerPoDate'), t('modules:customerPoExpDate'), t('modules:creation_date'), t('modules:expiry_date'), 
+                  t('modules:customerPoDate'), t('modules:customerPoExpDate'), t('modules:creation_date'), t('modules:so_expiry_date', 'SO Expiry Date'), 
                   t('modules:amount_col', 'Amount'), t('modules:gst_no'), t('modules:credit_days'), t('modules:taxAmount'), 
                   t('modules:total_amount_col'), t('common:status'), t('common:action')
                 ].map(h => (
@@ -728,7 +721,7 @@ const SalesOrder = () => {
                   { key: 'poDate', placeholder: 'PO Date' },
                   { key: 'poExpiryDate', placeholder: 'Exp Date' },
                   { key: 'soCreationDate', placeholder: 'Created' },
-                  { key: 'expiryDate', placeholder: 'Expiry' },
+                  { key: 'expiryDate', placeholder: 'SO Expiry' },
                   { key: 'amount', placeholder: 'Amount' },
                   { key: 'gstNo', placeholder: 'GST No' },
                   { key: 'creditDays', placeholder: 'Credit' },

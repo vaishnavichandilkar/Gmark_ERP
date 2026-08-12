@@ -16,6 +16,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import ScrollableTable from "../../../components/common/ScrollableTable";
+import { sanitizePanInput } from '../../../utils/panUtils';
 
 const AccountMaster = () => {
     const { t } = useTranslation(['common', 'modules']);
@@ -255,7 +256,8 @@ const AccountMaster = () => {
                 return { ...prev, groupName: nextGroups.join(',') };
             });
         } else {
-            setFilterInputs(prev => ({ ...prev, [name]: value }));
+            const valToUse = name === 'panNo' ? sanitizePanInput(value) : value;
+            setFilterInputs(prev => ({ ...prev, [name]: valToUse }));
         }
     };
 
@@ -366,23 +368,14 @@ const AccountMaster = () => {
     };
 
     const handleImportExcel = async (formData) => {
-        const loadingToast = toast.loading(t('common:importing', 'Importing data...'));
-        
         try {
             const response = await accountService.importAccounts(formData);
-            toast.dismiss(loadingToast);
-            toast.custom((t) => (
-                <SuccessToast 
-                    message={response?.message || t('common:import_success', 'Data imported successfully')} 
-                    onClose={() => toast.dismiss(t.id)} 
-                />
-            ), { duration: 4000, position: 'top-right' });
-            handleRefresh();
-            return Promise.resolve();
+            const res = response?.data || response;
+            dispatch(fetchAllAccounts({ page: currentPage, limit: rowsPerPage, search: searchQuery, ...appliedFilters }));
+            return res;
         } catch (error) {
-            toast.dismiss(loadingToast);
-            toast.error(error?.response?.data?.message || t('common:import_failed', 'Failed to import data'));
-            return Promise.reject(error);
+            console.error("Import error:", error);
+            throw error;
         }
     };
 

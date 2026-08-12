@@ -100,95 +100,33 @@ const GRN = () => {
     const exportRef = useRef(null);
 
     const sampleHeaders = [
-        'Supplier Name', 'Supplier Challan No', 'Supplier Challan Date', 'Booking Date',
-        'PO Number', 'GST Number', 'Credit Days', 'Product Code', 'Product Name',
-        'Quantity', 'Rate', 'UOM', 'Discount Amount', 'Discount Percent', 'Tax Percent', 'Print Description'
+        'GRN No*', 'GRN Date*', 'PO NO', 'Supplier Name*', 'Product Name*', 'Qty*', 'Rate*', 'Discount (₹)', 'Discount (%)'
     ];
 
-    const handleImportExcel = async (formData) => {
-        const file = formData.get('file');
-        if (!file) return;
-
-        const loadingToast = toast.loading(t('common:processing', 'Processing GRN import...'));
+    const handleDownloadSample = async () => {
         try {
-            const data = await file.arrayBuffer();
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+            const res = await grnService.downloadSample();
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'grn_import_sample.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (err) {
+            console.error("Failed to download sample file:", err);
+            toast.error("Failed to download sample file");
+        }
+    };
 
-            if (!jsonRows || jsonRows.length === 0) {
-                toast.dismiss(loadingToast);
-                toast.error("The uploaded file is empty.");
-                return;
-            }
-
-            const grnGroups = {};
-            jsonRows.forEach((row) => {
-                const supplierName = row['Supplier Name'] || row['Supplier'] || row['supplierName'] || '';
-                const challanNo = row['Supplier Challan No'] || row['Challan No'] || row['challanNumber'] || '';
-                
-                if (!supplierName || !challanNo) return;
-                const key = `${supplierName}___${challanNo}`;
-
-                if (!grnGroups[key]) {
-                    grnGroups[key] = {
-                        supplierName: String(supplierName).trim(),
-                        challanNumber: String(challanNo).trim(),
-                        grnDate: row['Supplier Challan Date'] || row['Challan Date'] || new Date().toISOString().split('T')[0],
-                        bookingDate: row['Booking Date'] || new Date().toISOString().split('T')[0],
-                        poNumber: String(row['PO Number'] || row['PO No'] || '').trim(),
-                        gstNumber: String(row['GST Number'] || row['GST No'] || '').trim(),
-                        creditDays: parseInt(row['Credit Days'] || 0, 10),
-                        items: []
-                    };
-                }
-
-                grnGroups[key].items.push({
-                    productCode: String(row['Product Code'] || '').trim(),
-                    productName: String(row['Product Name'] || '').trim(),
-                    quantity: parseFloat(row['Quantity'] || row['Qty'] || 0),
-                    rate: parseFloat(row['Rate'] || row['Price'] || 0),
-                    uom: String(row['UOM'] || 'NOS').trim(),
-                    discountAmount: parseFloat(row['Discount Amount'] || 0),
-                    discountPercent: parseFloat(row['Discount Percent'] || 0),
-                    taxPercent: parseFloat(row['Tax Percent'] || row['Tax %'] || 0),
-                    printDescription: String(row['Print Description'] || row['Description'] || '').trim()
-                });
-            });
-
-            const keys = Object.keys(grnGroups);
-            if (keys.length === 0) {
-                toast.dismiss(loadingToast);
-                toast.error("No valid GRN records found in the Excel file.");
-                return;
-            }
-
-            let successCount = 0;
-            let failCount = 0;
-
-            for (const key of keys) {
-                const grnData = grnGroups[key];
-                try {
-                    await grnService.createGRN(grnData);
-                    successCount++;
-                } catch (err) {
-                    console.error("Failed to import GRN record:", grnData, err);
-                    failCount++;
-                }
-            }
-
-            toast.dismiss(loadingToast);
-            if (successCount > 0) {
-                toast.success(`Successfully imported ${successCount} GRN(s)${failCount > 0 ? `, ${failCount} failed` : ''}`);
-                fetchData();
-            } else {
-                toast.error("Failed to import GRN records.");
-            }
+    const handleImportExcel = async (formData) => {
+        try {
+            const res = await grnService.importGRNs(formData);
+            fetchData();
+            return res;
         } catch (err) {
             console.error("Import error:", err);
-            toast.dismiss(loadingToast);
-            toast.error("Failed to process Excel file.");
+            throw err;
         }
     };
 
@@ -586,6 +524,7 @@ const GRN = () => {
                         isOpen={isImportModalOpen}
                         onClose={() => setIsImportModalOpen(false)}
                         onImport={handleImportExcel}
+                        onDownloadSample={handleDownloadSample}
                         sampleFileName="grn_import_sample.xlsx"
                         sampleHeaders={sampleHeaders}
                     />

@@ -20,6 +20,7 @@ import accountService from "../../../../services/accountService";
 import masterService from "../../../../services/masterService";
 import toast from "react-hot-toast";
 import { getImageUrl, getCleanFileName } from "../../../../utils/url";
+import { sanitizePanInput, validatePan } from "../../../../utils/panUtils";
 
 const CustomSelect = ({
   label,
@@ -635,13 +636,27 @@ const AddAccount = ({
       accountService.lookupPincode(formData.pinCode)
         .then(res => {
           if (res) {
-            const officeVillages = res.officeVillages || {};
-            const postalAddresses = Object.keys(officeVillages).sort();
+            let officeVillages = (res.officeVillages && typeof res.officeVillages === 'object' && !Array.isArray(res.officeVillages)) ? { ...res.officeVillages } : {};
+            let postalAddresses = Object.keys(officeVillages).sort();
+
+            if (postalAddresses.length === 0 && res.areas && res.areas.length > 0) {
+              officeVillages = {};
+              res.areas.forEach(area => {
+                officeVillages[area] = res.areas;
+              });
+              postalAddresses = Object.keys(officeVillages).sort();
+            }
+
+            if (postalAddresses.length === 0 && res.district) {
+              officeVillages = { [res.district]: [res.district] };
+              postalAddresses = [res.district];
+            }
+
             setPostalAddressOptions(postalAddresses);
             setOfficeVillagesMapping(officeVillages);
             
             if (formData.postalAddress) {
-              setAreaOptions(officeVillages[formData.postalAddress] || []);
+              setAreaOptions(officeVillages[formData.postalAddress] || res.areas || []);
             } else if (formData.area) {
               const foundOffice = postalAddresses.find(office => 
                 (officeVillages[office] || []).includes(formData.area)
@@ -652,6 +667,8 @@ const AddAccount = ({
               } else {
                 setAreaOptions(res.areas || []);
               }
+            } else {
+              setAreaOptions(res.areas || []);
             }
           }
         })
@@ -717,14 +734,13 @@ const AddAccount = ({
           return t("modules:error_gst_no", "Invalid GST Number format");
         }
         break;
-      case "panNo":
-        if (
-          !value?.trim() ||
-          !/^[A-Z]{3}[PCHFATBLJG][A-Z]{1}[0-9]{4}[A-Z]{1}$/.test(value.trim().toUpperCase())
-        ) {
-          return t("modules:error_pan_no");
+      case "panNo": {
+        const panCheck = validatePan(value, formData.regUnder || null);
+        if (!panCheck.isValid) {
+          return panCheck.error;
         }
         break;
+      }
       case "address1":
         if (!value?.trim()) return t("modules:error_address");
         break;
@@ -837,24 +853,23 @@ const AddAccount = ({
   };
 
   const handleInputChange = async (field, value) => {
-    const newFormData = { ...formData, [field]: value };
-
+    let sanitizedValue = value;
+    if (field === "panNo") {
+      sanitizedValue = sanitizePanInput(value);
+    }
     if (field === "accountName") {
       setIsDuplicateName(false);
     }
-
-    // Clear credit days when registration type changes
+    let updatedFormData = { ...formData, [field]: sanitizedValue };
     if (field === "regType") {
-      newFormData.vendorCreditDays = "";
-      newFormData.customerCreditDays = "";
+      updatedFormData.vendorCreditDays = "";
+      updatedFormData.customerCreditDays = "";
     }
-
-    // Auto fetch PAN from GST No
     if (field === "gstNo") {
       const gstPattern =
         /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
       if (value && gstPattern.test(value.trim().toUpperCase())) {
-        newFormData.panNo = value.trim().substring(2, 12).toUpperCase();
+        updatedFormData.panNo = sanitizePanInput(value.trim().substring(2, 12));
 
         if (errors.panNo) {
           setErrors((prev) => {
@@ -866,7 +881,7 @@ const AddAccount = ({
       }
     }
 
-    setFormData(newFormData);
+    setFormData((prev) => ({ ...prev, [field]: sanitizedValue, ...(field === 'regType' ? { vendorCreditDays: "", customerCreditDays: "" } : {}), ...(updatedFormData.panNo ? { panNo: updatedFormData.panNo } : {}) }));
 
     // Remove error automatically when corrected
     const fieldToValidate =
@@ -916,8 +931,22 @@ const AddAccount = ({
       try {
         const res = await accountService.lookupPincode(value);
         if (res) {
-          const officeVillages = res.officeVillages || {};
-          const postalAddresses = Object.keys(officeVillages).sort();
+          let officeVillages = (res.officeVillages && typeof res.officeVillages === 'object' && !Array.isArray(res.officeVillages)) ? { ...res.officeVillages } : {};
+          let postalAddresses = Object.keys(officeVillages).sort();
+
+          if (postalAddresses.length === 0 && res.areas && res.areas.length > 0) {
+            officeVillages = {};
+            res.areas.forEach(area => {
+              officeVillages[area] = res.areas;
+            });
+            postalAddresses = Object.keys(officeVillages).sort();
+          }
+
+          if (postalAddresses.length === 0 && res.district) {
+            officeVillages = { [res.district]: [res.district] };
+            postalAddresses = [res.district];
+          }
+
           setFormData((prev) => ({
             ...prev,
             city: res.district || prev.city,
@@ -930,7 +959,7 @@ const AddAccount = ({
           }));
           setPostalAddressOptions(postalAddresses);
           setOfficeVillagesMapping(officeVillages);
-          setAreaOptions([]);
+          setAreaOptions(res.areas || []);
           toast.success(t("modules:success_location_fetched"));
         }
       } catch (_err) {
@@ -1124,10 +1153,7 @@ const AddAccount = ({
     if (!formData.accountName?.trim() || formData.accountName.trim().length < 3)
       return false;
     if (!formData.isCustomer && !formData.isVendor) return false;
-    if (
-      !formData.panNo?.trim() ||
-      !/^[A-Z]{3}[PCHFATBLJG][A-Z]{1}[0-9]{4}[A-Z]{1}$/.test(formData.panNo.trim().toUpperCase())
-    )
+    if (!validatePan(formData.panNo, formData.regUnder || null).isValid)
       return false;
     if (
       formData.gstNo &&
@@ -1331,7 +1357,7 @@ const AddAccount = ({
                         setShowPanTooltip(false);
                       }}
                       onChange={(e) =>
-                        handleInputChange("panNo", e.target.value.toUpperCase())
+                        handleInputChange("panNo", sanitizePanInput(e.target.value))
                       }
                     />
                     <div
@@ -1445,10 +1471,20 @@ const AddAccount = ({
                 options={postalAddressOptions}
                 value={formData.postalAddress}
                 onChange={(val) => {
-                  handleInputChange("postalAddress", val);
                   const villages = officeVillagesMapping[val] || [];
                   setAreaOptions(villages);
-                  handleInputChange("area", "");
+                  setFormData((prev) => ({
+                    ...prev,
+                    postalAddress: val,
+                    area: "",
+                  }));
+                  if (errors.postalAddress) {
+                    setErrors((prev) => {
+                      const newErrs = { ...prev };
+                      delete newErrs.postalAddress;
+                      return newErrs;
+                    });
+                  }
                 }}
                 isSearchable={true}
                 disabled={postalAddressOptions.length === 0}

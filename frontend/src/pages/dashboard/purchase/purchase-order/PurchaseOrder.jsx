@@ -209,16 +209,23 @@ const PurchaseOrder = () => {
       expiryEndOfDay.setHours(23, 59, 59, 999);
       const diffHrs = (expiryEndOfDay.getTime() - now.getTime()) / (1000 * 60 * 60);
 
+      const totalPoQty = po.items?.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0) || 0;
+      const totalReceivedQty = po.grn?.reduce((sum, g) => sum + (g.items?.reduce((iSum, gi) => iSum + (Number(gi.receivedQty) || 0), 0) || 0), 0) || 0;
+      const totalInvoicedQty = po.purchaseInvoices?.reduce((sum, inv) => sum + (inv.items?.reduce((iSum, ii) => iSum + (Number(ii.quantity) || 0), 0) || 0), 0) || 0;
+
+      const isFullyReceived = totalPoQty > 0 && totalReceivedQty >= (totalPoQty - 0.001);
+      const isFullyInvoiced = totalPoQty > 0 && totalInvoicedQty >= (totalPoQty - 0.001);
+
       let computedStatusLabel = "Pending";
       let bgClass = "bg-orange-100 text-orange-600";
 
       if (status === 'DELETED') {
         computedStatusLabel = "Deleted"; bgClass = "bg-red-50 text-red-600 border border-red-100";
-      } else if (status === 'INVOICE_GENERATED' || status === 'INVOICE_COMPLETED' || status === 'COMPLETED') {
+      } else if (status === 'INVOICE_GENERATED' || status === 'INVOICE_COMPLETED' || status === 'COMPLETED' || isFullyInvoiced) {
         computedStatusLabel = "Completed"; bgClass = "bg-emerald-50 text-emerald-600 border border-emerald-100";
-      } else if (status === 'GRN_COMPLETED') {
+      } else if (status === 'GRN_COMPLETED' || isFullyReceived) {
         computedStatusLabel = "GRN Completed"; bgClass = "bg-teal-50 text-teal-600 border border-teal-100";
-      } else if (po.grn?.length > 0 || po.purchaseInvoices?.length > 0) {
+      } else if (status === 'PARTIAL_GRN' || totalReceivedQty > 0 || totalInvoicedQty > 0 || po.grn?.length > 0) {
         computedStatusLabel = "Partial GRN"; bgClass = "bg-indigo-50 text-indigo-600 border border-indigo-100";
       } else if (expiryEndOfDay < now) {
         computedStatusLabel = "Expired"; bgClass = "bg-red-50 text-red-600 border border-red-100";
@@ -410,18 +417,13 @@ const PurchaseOrder = () => {
 
   const handleSubmitImport = async (formData) => {
     try {
-      setIsRefreshing(true);
-      await purchaseOrderService.importPurchaseOrders(formData);
-      setIsImportModalOpen(false);
-      toast.success(t('modules:data_imported'));
-      handleRefresh();
-      return Promise.resolve();
+      const response = await purchaseOrderService.importPurchaseOrders(formData);
+      const res = response?.data || response;
+      fetchData();
+      return res;
     } catch (error) {
       console.error("Import error:", error);
-      toast.error(error.response?.data?.message || t('common:import_failed'));
-      return Promise.reject(error);
-    } finally {
-      setIsRefreshing(false);
+      throw error;
     }
   };
 

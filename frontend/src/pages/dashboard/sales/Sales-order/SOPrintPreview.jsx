@@ -606,7 +606,7 @@ const SOPrintPreview = () => {
                                                     <span className="font-semibold text-[11px] whitespace-nowrap">{final_credit_days} {t('modules:days', 'Days')}</span>
                                                 </div>
                                                 <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
-                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:expiry_date', 'Expiry Date')} :</span>
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:so_expiry_date', 'SO Expiry Date')} :</span>
                                                     <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(final_expiryDate)}</span>
                                                 </div>
                                             </div>
@@ -627,34 +627,34 @@ const SOPrintPreview = () => {
                                 {page.items.length > 0 && (
                                     <table className="w-full border-none m-0">
                                         <thead>
-                                            <tr className="text-[11px] font-black h-[40px]">
-                                                <th className="w-[35px] border-b border-r border-black">{t('modules:sn', 'Sn.')}</th>
-                                                <th className="border-b border-r border-black px-4 text-left">{t('modules:description', 'Description')}</th>
-                                                <th className="w-[70px] border-b border-r border-black">{t('modules:hsn_sac', 'HSN/SAC')}</th>
-                                                <th className="w-[45px] border-b border-r border-black text-center">{t('modules:tax_percent', 'Tax%')}</th>
-                                                <th className="w-[70px] border-b border-r border-black text-center">{t('modules:quantity', 'Quantity')}</th>
-                                                <th className="w-[45px] border-b border-r border-black text-center">{t('modules:units', 'Units')}</th>
-                                                <th className="w-[60px] border-b border-r border-black text-center">{t('modules:rate', 'Rate')}</th>
-                                                <th className="w-[40px] border-b border-r border-black text-center">{t('modules:dis_percent', 'Dis%')}</th>
-                                                <th className="w-[80px] border-b border-black text-right px-4">{t('modules:amount', 'Amount')}</th>
+                                            <tr className="text-[9px] font-black h-[32px] uppercase tracking-tight">
+                                                <th className="w-[32px] border-b border-r border-black text-center px-0.5">{t('modules:sn', 'SN.')}</th>
+                                                <th className="border-b border-r border-black px-3 text-left">{t('modules:description', 'DESCRIPTION')}</th>
+                                                <th className="w-[68px] border-b border-r border-black text-center px-0.5">{t('modules:hsn_sac', 'HSN/SAC')}</th>
+                                                <th className="w-[46px] border-b border-r border-black text-center px-0.5">{t('modules:tax_percent', 'TAX %')}</th>
+                                                <th className="w-[66px] border-b border-r border-black text-center px-0.5">{t('modules:quantity', 'QUANTITY')}</th>
+                                                <th className="w-[72px] border-b border-r border-black text-center px-0.5">{t('modules:units', 'UNITS')}</th>
+                                                <th className="w-[58px] border-b border-r border-black text-center px-0.5">{t('modules:rate', 'RATE')}</th>
+                                                <th className="w-[44px] border-b border-r border-black text-center px-0.5">{t('modules:dis_percent', 'DIS %')}</th>
+                                                <th className="w-[78px] border-b border-black text-right px-2">{t('modules:amount', 'AMOUNT')}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                              {page.items.map((item, idx) => (
-                                                 <tr key={idx} className="text-[12px] font-semibold">
-                                                     <td className="text-center py-[6px]">{item.sn}</td>
-                                                     <td className="px-2 py-[6px]">
-                                                         <div className="font-bold text-[13px] whitespace-pre-wrap text-justify" style={{ lineHeight: '16px', textAlign: 'justify', textAlignLast: 'left', WebkitTextAlignLast: 'left', hyphens: 'auto', WebkitHyphens: 'auto' }}>
+                                                 <tr key={idx} className="text-[10px] font-medium">
+                                                     <td className="text-center py-[4px] px-0.5 text-[9.5px]">{item.sn}</td>
+                                                     <td className="px-2 py-[4px]">
+                                                         <div className="font-semibold text-[10.5px] whitespace-pre-wrap text-left" style={{ lineHeight: '13px' }}>
                                                              {item.printDescription}
                                                          </div>
                                                      </td>
-                                                     <td className="text-center py-[6px]">{item.hsnCode}</td>
-                                                     <td className="text-center py-[6px]">{item.taxPercent !== "" ? item.taxPercent : ""}</td>
-                                                     <td className="text-center py-[6px]">{item.quantity}</td>
-                                                     <td className="text-center uppercase py-[6px]">{item.uom ? getStandardGstUom(item.uom) : ""}</td>
-                                                     <td className="text-center py-[6px]">{item.rate}</td>
-                                                     <td className="text-center py-[6px]">{item.discountPercent !== "" ? item.discountPercent : ""}</td>
-                                                     <td className="text-right px-4 py-[6px] font-black">
+                                                     <td className="text-center py-[4px] px-0.5 text-[9.5px] whitespace-nowrap">{item.hsnCode}</td>
+                                                     <td className="text-center py-[4px] px-0.5 text-[9.5px] whitespace-nowrap">{item.taxPercent !== "" ? item.taxPercent : ""}</td>
+                                                     <td className="text-center py-[4px] px-0.5 text-[9.5px] font-medium whitespace-nowrap">{item.quantity}</td>
+                                                     <td className="text-center uppercase py-[4px] px-0.5 text-[8.5px] font-bold whitespace-nowrap">{item.uom ? getStandardGstUom(item.uom) : ""}</td>
+                                                     <td className="text-center py-[4px] px-0.5 text-[9.5px] font-medium whitespace-nowrap">{item.rate}</td>
+                                                     <td className="text-center py-[4px] px-0.5 text-[9.5px] whitespace-nowrap">{item.discountPercent !== "" ? item.discountPercent : ""}</td>
+                                                     <td className="text-right px-2 py-[4px] text-[10px] font-bold whitespace-nowrap">
                                                          {item.isContinuation ? "" : (parseFloat(item.totalAmount) || 0).toFixed(2)}
                                                      </td>
                                                  </tr>
