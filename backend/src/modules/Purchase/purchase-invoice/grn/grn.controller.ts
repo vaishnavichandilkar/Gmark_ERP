@@ -99,6 +99,28 @@ export class GrnController {
     res.send(buffer);
   }
 
+  @Get('download-sample')
+  @ApiOperation({ summary: 'Download sample Excel file for GRN import' })
+  async downloadSample(@Res() res: Response) {
+    const { buffer, filename, mimetype } = await this.grnService.downloadSample();
+    res.set({ 'Content-Type': mimetype, 'Content-Disposition': `attachment; filename=${filename}` });
+    res.send(buffer);
+  }
+
+  @Post('import')
+  @ApiOperation({ summary: 'Import GRNs from XLSX' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  async importGrns(@UploadedFile() file: any, @Request() req) {
+    return this.grnService.importGrns(file.buffer, req.user.id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get GRN details by ID' })
   async findOne(@Param('id', ParseIntPipe) id: number, @Request() req) {
@@ -151,14 +173,6 @@ export class GrnController {
   @ApiOperation({ summary: 'Download GRN as PDF' })
   async download(@Param('id', ParseIntPipe) id: number, @Request() req, @Res() res: Response) {
     const { buffer, filename, mimetype } = await this.grnService.printGrn(id, req.user.id);
-    res.set({ 'Content-Type': mimetype, 'Content-Disposition': `attachment; filename=${filename}` });
-    res.send(buffer);
-  }
-
-  @Get('download-sample')
-  @ApiOperation({ summary: 'Download sample Excel file for GRN import' })
-  async downloadSample(@Res() res: Response) {
-    const { buffer, filename, mimetype } = await this.grnService.downloadSample();
     res.set({ 'Content-Type': mimetype, 'Content-Disposition': `attachment; filename=${filename}` });
     res.send(buffer);
   }

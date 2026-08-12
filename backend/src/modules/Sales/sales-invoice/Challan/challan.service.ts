@@ -7,11 +7,14 @@ import * as PDFDocument from 'pdfkit';
 import { formatDate, parseDDMMYYYY } from '../../../../utils/dateFormatter';
 import { determineSalesGst } from '../../../../common/utils/gst.helper';
 
+import { ImportValidationService } from '../../../../common/services/import-validation.service';
+
 @Injectable()
 export class ChallanService {
   constructor(
     private prisma: PrismaService,
-    private soService: SalesOrderService
+    private soService: SalesOrderService,
+    private importValidator: ImportValidationService
   ) { }
 
   private async _getMatchedCustomerNames(customerName: string, userId: number): Promise<string[]> {
@@ -357,12 +360,14 @@ export class ChallanService {
     const consumedQty = Math.max(totalDeliveredQty, totalInvoicedQty);
 
     let newStatus = so.status;
-    if (consumedQty >= totalSoQty) {
-      if (totalInvoicedQty >= totalSoQty) {
+    if (consumedQty >= (totalSoQty - 0.001)) {
+      if (totalInvoicedQty >= (totalSoQty - 0.001)) {
         newStatus = 'INVOICE_COMPLETED';
       } else {
         newStatus = 'CHALLAN_COMPLETED';
       }
+    } else if (consumedQty > 0) {
+      newStatus = 'PARTIAL_CHALLAN';
     } else {
       newStatus = 'PENDING';
     }
@@ -783,7 +788,7 @@ export class ChallanService {
     worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
     const headers = [
-      'Challan Number*', 'Challan Date*', 'SO Number*', 'Customer Name*',
+      'Challan Number*', 'Challan Date* (DD/MM/YYYY)', 'SO Number*', 'Customer Name*',
       'Product Name*', 'Quantity*', 'Rate*', 'Discount (₹)', 'Discount (%)'
     ];
     const headerRow = worksheet.getRow(1);
@@ -810,10 +815,26 @@ export class ChallanService {
 
 
     worksheet.columns = headers.map((h, i) => {
-      let width = Math.max(20, h.length + 5);
+      let width = Math.max(25, h.length + 6);
       if (i === 3) width = 30; // Customer Name
       if (i === 4) width = 30; // Product Name
       return { width };
+    });
+
+    headerRow.eachCell((cell) => { cell.protection = { locked: true }; });
+    for (let r = 2; r <= 1000; r++) {
+      const row = worksheet.getRow(r);
+      for (let c = 1; c <= headers.length; c++) {
+        row.getCell(c).protection = { locked: false };
+      }
+    }
+    await worksheet.protect('', {
+      selectLockedCells: true,
+      selectUnlockedCells: true,
+      insertRows: true,
+      deleteRows: true,
+      sort: true,
+      autoFilter: true,
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
@@ -853,13 +874,14 @@ export class ChallanService {
       let found = false;
       row.eachCell((cell, colNumber) => {
         const val = String(cell.value || '').trim().toLowerCase();
-        if (val.includes('challan number')) { colMap['challanNumber'] = colNumber; found = true; }
+        if (val.includes('challan number') || val.includes('challan no')) { colMap['challanNumber'] = colNumber; found = true; }
         if (val.includes('challan date')) colMap['challanDate'] = colNumber;
-        if (val.includes('so number')) colMap['soNumber'] = colNumber;
-        if (val.includes('customer name')) colMap['customerName'] = colNumber;
-        if (val.includes('product name')) colMap['productName'] = colNumber;
-        if (val.includes('quantity')) colMap['quantity'] = colNumber;
-        if (val.includes('rate')) colMap['rate'] = colNumber;
+        if (val.includes('so number') || val.includes('so no')) colMap['soNumber'] = colNumber;
+        if (val.includes('customer name') || val.includes('customer')) colMap['customerName'] = colNumber;
+        if (val.includes('product name') || val.includes('product')) colMap['productName'] = colNumber;
+        if (val.includes('product code')) colMap['productCode'] = colNumber;
+        if (val.includes('quantity') || val.includes('qty')) colMap['quantity'] = colNumber;
+        if (val.includes('rate') || val.includes('price')) colMap['rate'] = colNumber;
         if (val.includes('discount (₹)') || val.includes('discount amount') || val.includes('discount rs')) colMap['discountAmount'] = colNumber;
         if (val.includes('discount (%)') || val.includes('discount percent')) colMap['discountPercent'] = colNumber;
       });
@@ -869,10 +891,29 @@ export class ChallanService {
       }
     }
 
-    const mandatoryCols = ['challanNumber', 'challanDate', 'soNumber', 'customerName', 'productName', 'quantity', 'rate'];
+    // Scan first 10 rows to detect if user uploaded a PO file or wrong template
+    let isPoFile = false;
+
+    for (let r = 1; r <= Math.min(rowCount, 10); r++) {
+      const row = worksheet.getRow(r);
+      row.eachCell((cell) => {
+        const val = String(cell.value || '').trim().toLowerCase();
+        if (
+          val.includes('po number') || val.includes('po no') || val.includes('po date') || val.includes('supplier name') || (val.includes('po no') && !val.includes('challan'))
+        ) {
+          isPoFile = true;
+        }
+      });
+    }
+
+    if (!colMap['challanNumber']) {
+      throw new BadRequestException('Invalid template format');
+    }
+
+    const mandatoryCols = ['challanNumber', 'customerName', 'productName', 'quantity', 'rate'];
     const missing = mandatoryCols.filter(col => !colMap[col]);
     if (headerRowIndex === -1 || missing.length > 0) {
-      throw new BadRequestException(`Invalid template. Missing mandatory columns: ${missing.join(', ')}`);
+      throw new BadRequestException('Invalid template format');
     }
 
     const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
@@ -881,7 +922,7 @@ export class ChallanService {
       const cell = row.getCell(colIdx);
       let val = cell.value;
       if (val && typeof val === 'object' && 'result' in val) {
-        val = val.result;
+        val = (val as any).result;
       }
       if (val && (val instanceof Date || Object.prototype.toString.call(val) === '[object Date]' || typeof (val as any).getTime === 'function')) {
         return val;
@@ -890,7 +931,33 @@ export class ChallanService {
     };
 
     // Preload Lookups
-    const parsedRows: any[] = [];
+    const [{ customerMap }, { productCodeMap, productNameMap }, dbChallans, existingSos, userShop, userGstDoc] = await Promise.all([
+      this.importValidator.fetchAccountMasterData(userId),
+      this.importValidator.fetchProductMasterData(userId),
+      this.prisma.salesChallan.findMany({
+        where: { userId, status: { not: 'DELETED' } },
+        select: { challanNumber: true },
+      }),
+      this.prisma.salesOrder.findMany({
+        where: { userId, status: { not: 'DELETED' } },
+        include: { items: true, salesChallans: { where: { status: { not: 'DELETED' } }, include: { items: true } } },
+      }),
+      this.prisma.shopDetail.findUnique({ where: { userId } }),
+      this.prisma.sellerDocument.findFirst({
+        where: { uploadedByUserId: userId, type: 'GST' },
+        orderBy: { createdAt: 'desc' },
+        select: { name: true },
+      }),
+    ]);
+
+    const dbChallanNumbers = new Set(dbChallans.map(ch => ch.challanNumber.toLowerCase().trim()));
+    const importedChallanNumbersInFile = new Set<string>();
+
+    const soMap = new Map<string, any>();
+    for (const so of existingSos) {
+      soMap.set(so.soNumber.toLowerCase().trim(), so);
+    }
+
     const groupMap = new Map<string, any[]>();
 
     for (let r = headerRowIndex + 1; r <= rowCount; r++) {
@@ -906,156 +973,107 @@ export class ChallanService {
         soNumber: getVal(row, 'soNumber'),
         customerName: getVal(row, 'customerName'),
         productName: getVal(row, 'productName'),
+        productCode: getVal(row, 'productCode'),
         quantityStr: getVal(row, 'quantity'),
         rateStr: getVal(row, 'rate'),
         discountAmountStr: getVal(row, 'discountAmount'),
         discountPercentStr: getVal(row, 'discountPercent'),
       };
 
-      parsedRows.push(item);
       if (!groupMap.has(challanNumber)) {
         groupMap.set(challanNumber, []);
       }
-      groupMap.get(challanNumber).push(item);
+      groupMap.get(challanNumber)!.push(item);
     }
 
-    const distinctSoNumbers = Array.from(new Set(parsedRows.map(r => r.soNumber).filter(Boolean)));
-
-    const [dbCustomers, dbProducts, userShop, userGstDoc, dbSalesOrders, dbChallans, challanItems] = await Promise.all([
-      this.prisma.accountMaster.findMany({
-        where: { userId, customerStatus: 'ACTIVE' }
-      }),
-      this.prisma.product.findMany({
-        where: { created_by: userId, status: 'ACTIVE' },
-        include: { uom: true }
-      }),
-      this.prisma.shopDetail.findUnique({
-        where: { userId }
-      }),
-      this.prisma.sellerDocument.findFirst({
-        where: { uploadedByUserId: userId, type: 'GST', url: 'N/A' },
-        select: { name: true }
-      }),
-      this.prisma.salesOrder.findMany({
-        where: { userId, soNumber: { in: distinctSoNumbers }, status: { not: 'DELETED' } },
-        include: { items: true }
-      }),
-      this.prisma.salesChallan.findMany({
-        where: { userId, status: { not: 'DELETED' } },
-        select: { challanNumber: true }
-      }),
-      this.prisma.salesChallanItem.findMany({
-        where: {
-          salesChallan: {
-            userId,
-            status: { not: 'DELETED' },
-            soNumber: { in: distinctSoNumbers }
-          }
-        },
-        select: {
-          productCode: true,
-          challanQty: true,
-          salesChallan: {
-            select: { soNumber: true }
-          }
-        }
-      })
-    ]);
-
-    const customerMap = new Map<string, any>();
-    for (const cust of dbCustomers) {
-      customerMap.set(cust.accountName.toLowerCase().trim(), cust);
-    }
-
-    const productMap = new Map<string, any>();
-    for (const prod of dbProducts) {
-      productMap.set(prod.product_name.toLowerCase().trim(), prod);
-    }
-
-    const soMap = new Map<string, any>();
-    for (const so of dbSalesOrders) {
-      soMap.set(so.soNumber.toLowerCase().trim(), so);
-    }
-
-    const dbChallanNumbers = new Set(dbChallans.map(ch => ch.challanNumber.toLowerCase().trim()));
-    const importedChallanNumbersInFile = new Set<string>();
-
-    const deliveredQtyMap = new Map<string, number>();
-    for (const item of challanItems) {
-      const soNo = item.salesChallan.soNumber?.toLowerCase().trim() || '';
-      const pCode = item.productCode.toLowerCase().trim();
-      const key = `${soNo}_${pCode}`;
-      deliveredQtyMap.set(key, (deliveredQtyMap.get(key) || 0) + item.challanQty);
+    if (groupMap.size === 0) {
+      throw new BadRequestException('Invalid template format');
     }
 
     const successRows: any[] = [];
     const failedRows: { rowNum: number; values: any[]; error: string }[] = [];
-    const rowErrors: { row: number; error: string }[] = [];
-
-    const isValidGst = (name?: string | null) => Boolean(
-      name && 
-      name.trim().toUpperCase() !== 'N/A' && 
-      name.trim().toUpperCase() !== 'NOT AVAILABLE' && 
-      name.trim().toUpperCase() !== '-' && 
-      name.trim().length >= 10
-    );
 
     const userGst = userGstDoc?.name;
-    const companyState = (userShop?.state || "").trim().toLowerCase();
-    const isGstApplicable = isValidGst(userGst);
+    const companyState = (userShop?.state || '').trim().toLowerCase();
+    const isGstApplicable = Boolean(
+      userGst &&
+      userGst.trim().toUpperCase() !== 'N/A' &&
+      userGst.trim().toUpperCase() !== 'NOT AVAILABLE' &&
+      userGst.trim().toUpperCase() !== '-' &&
+      userGst.trim().length >= 10
+    );
 
     for (const [challanNumber, rows] of groupMap.entries()) {
       const groupErrors: string[] = [];
       const firstRow = rows[0];
 
-      // Check duplicates
-      if (dbChallanNumbers.has(challanNumber.toLowerCase())) {
-        groupErrors.push(`Record already exists.`);
-      }
-      if (importedChallanNumbersInFile.has(challanNumber.toLowerCase())) {
-        groupErrors.push(`Duplicate Challan Number in file.`);
-      }
-
-      // Customer check
-      const custName = firstRow.customerName;
-      const customer = customerMap.get(custName.toLowerCase());
-      if (!customer) {
-        groupErrors.push(`Customer "${custName}" not found. Please create the customer first.`);
+      // 1. Challan Number uniqueness check
+      const docNoValidation = this.importValidator.validateDocumentNumber(
+        'Sales Challan',
+        challanNumber,
+        dbChallanNumbers,
+        importedChallanNumbersInFile,
+        firstRow.rowNum
+      );
+      if (!docNoValidation.valid) {
+        groupErrors.push((docNoValidation as any).error);
       }
 
-      const parsedChallanDate = parseDDMMYYYY(firstRow.challanDateStr);
-      if (!parsedChallanDate) {
-        groupErrors.push(`Invalid Challan Date format. Please use DD/MM/YYYY.`);
-      }
-
-      // Sales Order check
-      const soNumber = firstRow.soNumber;
-      const salesOrder = soMap.get(soNumber.toLowerCase().trim());
-      if (!salesOrder) {
-        groupErrors.push(`Sales Order not found.`);
+      // 2. Customer validation & auto-fetching
+      const custValidation = this.importValidator.validateCustomer(firstRow.customerName, customerMap, 'Challan');
+      let customerData: any = null;
+      if (!custValidation.valid) {
+        groupErrors.push((custValidation as any).error);
       } else {
-        if (parsedChallanDate && salesOrder.soCreationDate) {
-          const soDate = new Date(salesOrder.soCreationDate);
-          if (parsedChallanDate < soDate) {
-            groupErrors.push(`Challan Date must be greater than or equal to SO Date.`);
-          }
+        customerData = custValidation.data;
+      }
+
+      // 3. Date validation
+      let parsedChallanDate: Date = new Date();
+      if (firstRow.challanDateStr) {
+        const dateVal = this.importValidator.validateImportDate(firstRow.challanDateStr, 'Challan Date');
+        if (!dateVal.valid) {
+          groupErrors.push((dateVal as any).error);
+        } else {
+          parsedChallanDate = dateVal.date;
         }
       }
 
+      // 4. Optional SO Reference validation
+      let referencedSo: any = null;
+      if (firstRow.soNumber && firstRow.soNumber.trim()) {
+        const rawSoNo = firstRow.soNumber.trim();
+        referencedSo = soMap.get(rawSoNo.toLowerCase());
+        if (!referencedSo) {
+          groupErrors.push(`Sales Order '${rawSoNo}' does not exist. Please provide a valid Sales Order Number.`);
+        } else if (customerData && referencedSo.customerName.toLowerCase().trim() !== customerData.name.toLowerCase().trim()) {
+          groupErrors.push(`Customer '${customerData.name}' does not match the customer of Sales Order '${rawSoNo}'.`);
+        }
+      }
+
+      // 5. Products validation & remaining SO quantity check
       const processedItems: any[] = [];
       let totalQuantity = 0;
       let taxableAmount = 0;
       let totalTaxAmount = 0;
 
       for (const row of rows) {
-        const prod = productMap.get(row.productName.toLowerCase());
-        if (!prod) {
-          groupErrors.push(`Product "${row.productName}" not found. Please create the product first.`);
+        const prodVal = this.importValidator.validateProduct(
+          row.productName,
+          row.productCode,
+          productCodeMap,
+          productNameMap
+        );
+
+        if (!prodVal.valid) {
+          groupErrors.push(`Row ${row.rowNum}: ${(prodVal as any).error}`);
           continue;
         }
 
+        const prod = prodVal.data;
         const qty = parseFloat(row.quantityStr);
         const rate = parseFloat(row.rateStr);
+
         if (isNaN(qty) || qty <= 0) groupErrors.push(`Row ${row.rowNum}: Quantity must be greater than 0.`);
         if (isNaN(rate) || rate < 0) groupErrors.push(`Row ${row.rowNum}: Rate must be 0 or positive.`);
 
@@ -1064,49 +1082,68 @@ export class ChallanService {
         if (isNaN(discountAmt) || discountAmt < 0) groupErrors.push(`Row ${row.rowNum}: Discount amount must be positive.`);
         if (isNaN(discountPct) || discountPct < 0 || discountPct > 100) groupErrors.push(`Row ${row.rowNum}: Discount percent must be between 0 and 100.`);
 
-        if (groupErrors.length > 0) continue;
+        // Check remaining SO quantity if SO reference exists
+        let totalSoQty = qty;
+        let givenSoQty = 0;
+        let remainingSoQty = qty;
 
-        // SO validation details
-        if (salesOrder) {
-          const soItem = salesOrder.items.find(
-            (it: any) => it.productCode.toLowerCase().trim() === prod.product_code.toLowerCase().trim()
+        if (referencedSo) {
+          const soItem = referencedSo.items.find(
+            (i: any) =>
+              i.productCode.toLowerCase().trim() === prod.product_code.toLowerCase().trim() ||
+              i.productName.toLowerCase().trim() === prod.product_name.toLowerCase().trim()
           );
 
           if (!soItem) {
-            groupErrors.push(`Row ${row.rowNum}: Product "${row.productName}" does not belong to Sales Order ${soNumber}.`);
-            continue;
-          }
-
-          // Rate check
-          if (Math.abs(rate - soItem.rate) >= 0.01) {
-            groupErrors.push(`Row ${row.rowNum}: Rate mismatch with Sales Order.`);
-          }
-
-          // Discount checks
-          if (Math.abs(discountAmt - soItem.discountAmount) >= 0.01) {
-            groupErrors.push(`Row ${row.rowNum}: Discount mismatch with Sales Order.`);
-          }
-          if (Math.abs(discountPct - soItem.discountPercent) >= 0.01) {
-            groupErrors.push(`Row ${row.rowNum}: Discount mismatch with Sales Order.`);
-          }
-
-          // Remaining quantity check
-          const key = `${soNumber.toLowerCase().trim()}_${prod.product_code.toLowerCase().trim()}`;
-          const alreadyDelivered = deliveredQtyMap.get(key) || 0;
-          const remaining = soItem.quantity - alreadyDelivered;
-
-          if (qty > remaining) {
-            groupErrors.push(`Row ${row.rowNum}: Quantity exceeds Sales Order quantity.`);
+            groupErrors.push(`Product '${prod.product_name}' is not part of Sales Order '${referencedSo.soNumber}'.`);
           } else {
-            // Update in-memory map to reflect current row's allocation for subsequent rows in same Challan/file
-            deliveredQtyMap.set(key, alreadyDelivered + qty);
+            totalSoQty = soItem.quantity;
+            let alreadyDelivered = 0;
+            for (const prevChallan of referencedSo.challans || []) {
+              for (const prevItem of prevChallan.items || []) {
+                if (
+                  prevItem.productCode.toLowerCase().trim() === prod.product_code.toLowerCase().trim() ||
+                  prevItem.productName.toLowerCase().trim() === prod.product_name.toLowerCase().trim()
+                ) {
+                  alreadyDelivered += Number(prevItem.challanQty || 0);
+                }
+              }
+            }
+            givenSoQty = alreadyDelivered;
+            remainingSoQty = Math.max(0, totalSoQty - alreadyDelivered);
+
+            if (qty > remainingSoQty) {
+              groupErrors.push(
+                `Challan quantity for product '${prod.product_name}' exceeds the remaining Sales Order quantity. Available quantity: ${remainingSoQty}, Imported quantity: ${qty}.`
+              );
+            }
           }
         }
 
         if (groupErrors.length > 0) continue;
 
-        const beforeTaxAmount = (qty * rate) - discountAmt;
+        const baseTotal = qty * rate;
+        let finalDiscPercent = discountPct;
+        let finalDiscAmount = discountAmt;
+
+        if (finalDiscAmount > 0 && finalDiscPercent === 0) {
+          finalDiscPercent = baseTotal > 0 ? (finalDiscAmount / baseTotal) * 100 : 0;
+        } else {
+          finalDiscAmount = (baseTotal * finalDiscPercent) / 100;
+        }
+
+        const beforeTaxAmount = baseTotal - finalDiscAmount;
         const taxRate = Number(prod.tax_rate || 0);
+        const customerGst = customerData?.gstNo;
+        const customerState = (customerData?.state || '').trim().toLowerCase();
+
+        const isInterState = this.importValidator.determineIsInterState(
+          userGst,
+          companyState,
+          customerGst,
+          customerState
+        );
+
         const taxAmount = isGstApplicable ? ((beforeTaxAmount * taxRate) / 100) : 0;
         const totalItemAmount = beforeTaxAmount + taxAmount;
 
@@ -1118,37 +1155,36 @@ export class ChallanService {
           productId: prod.id,
           productCode: prod.product_code,
           productName: prod.product_name,
-          hsnCode: prod.hsn_code || null,
-          totalSoQty: salesOrder ? salesOrder.items.find((it: any) => it.productCode === prod.product_code)?.quantity || 0 : 0,
-          givenSoQty: salesOrder ? (deliveredQtyMap.get(`${soNumber.toLowerCase()}_${prod.product_code.toLowerCase()}`) || 0) - qty : 0,
+          hsnCode: prod.hsn_code || '',
+          totalSoQty,
+          givenSoQty,
           challanQty: qty,
-          remainingQty: salesOrder ? Math.max(0, (salesOrder.items.find((it: any) => it.productCode === prod.product_code)?.quantity || 0) - (deliveredQtyMap.get(`${soNumber.toLowerCase()}_${prod.product_code.toLowerCase()}`) || 0)) : 0,
+          remainingQty: Math.max(0, remainingSoQty - qty),
           rate,
           uom: prod.uom?.unit_name || 'Nos',
-          discountPercent: discountPct,
-          discountAmount: discountAmt,
+          discountPercent: finalDiscPercent,
+          discountAmount: finalDiscAmount,
           taxPercent: taxRate,
           taxAmount,
           beforeTaxAmount,
           totalAmount: totalItemAmount,
-          printDescription: prod.product_name
+          printDescription: prod.description || prod.hsn_description || prod.product_name,
         });
       }
 
       if (groupErrors.length > 0) {
         const combinedErrorMsg = groupErrors.join(' | ');
         for (const row of rows) {
-          rowErrors.push({ row: row.rowNum, error: combinedErrorMsg });
           failedRows.push({
             rowNum: row.rowNum,
             values: row.originalRowValues,
-            error: combinedErrorMsg
+            error: combinedErrorMsg,
           });
         }
       } else {
         try {
-          const customerGst = customer?.gstNo;
-          const customerState = (customer?.state || "").trim().toLowerCase();
+          const customerGst = customerData?.gstNo;
+          const customerState = (customerData?.state || '').trim().toLowerCase();
 
           let isInterState = false;
           if (isGstApplicable) {
@@ -1175,14 +1211,14 @@ export class ChallanService {
             await tx.salesChallan.create({
               data: {
                 challanNumber,
-                customerName: customer.accountName,
-                address: customer.addressLine1 + (customer.addressLine2 ? ', ' + customer.addressLine2 : ''),
-                gstNumber: customer.gstNo || '',
-                soNumber: soNumber || null,
+                customerName: customerData.name,
+                address: customerData.address,
+                gstNumber: customerData.gstNo,
+                soNumber: referencedSo ? referencedSo.soNumber : (firstRow.soNumber || null),
                 challanDate: parsedChallanDate,
-                bookingDate: new Date(),
-                creditDays: customer.customerCreditDays || 0,
-                soId: salesOrder ? salesOrder.id : null,
+                bookingDate: parsedChallanDate,
+                creditDays: customerData.creditDays,
+                soId: referencedSo ? referencedSo.id : null,
                 grandTotal: taxableAmount + totalTaxAmount,
                 cgstAmount,
                 sgstAmount,
@@ -1210,30 +1246,14 @@ export class ChallanService {
                     beforeTaxAmount: item.beforeTaxAmount,
                     taxAmount: item.taxAmount,
                     totalAmount: item.totalAmount,
-                    printDescription: item.printDescription
-                  }))
-                }
-              }
+                    printDescription: item.printDescription,
+                  })),
+                },
+              },
             });
 
-            // Update SO Status to COMPLETED if all items are fully delivered
-            if (salesOrder) {
-              const allSoItems = salesOrder.items;
-              let isFullyDelivered = true;
-              for (const it of allSoItems) {
-                const key = `${soNumber.toLowerCase().trim()}_${it.productCode.toLowerCase().trim()}`;
-                const totalDelivered = deliveredQtyMap.get(key) || 0;
-                if (totalDelivered < it.quantity) {
-                  isFullyDelivered = false;
-                  break;
-                }
-              }
-              if (isFullyDelivered) {
-                await tx.salesOrder.update({
-                  where: { id: salesOrder.id },
-                  data: { status: 'CHALLAN_COMPLETED' }
-                });
-              }
+            if (referencedSo) {
+              await this.updateSOStatusAfterChallan(referencedSo.id, tx);
             }
           });
 
@@ -1244,58 +1264,22 @@ export class ChallanService {
         } catch (dbError: any) {
           const dbErrMsg = `Database Save Failed: ${dbError.message || dbError}`;
           for (const row of rows) {
-            rowErrors.push({ row: row.rowNum, error: dbErrMsg });
             failedRows.push({
               rowNum: row.rowNum,
               values: row.originalRowValues,
-              error: dbErrMsg
+              error: dbErrMsg,
             });
           }
         }
       }
     }
 
-    // Build Excel response files
     const headers = [
-      'Challan Number*', 'Challan Date*', 'SO Number*', 'Customer Name*',
-      'Product Name*', 'Quantity*', 'Rate*', 'Discount (₹)', 'Discount (%)'
+      'Challan Number*', 'Challan Date*', 'SO Number', 'Customer Name*',
+      'Product Name*', 'Product Code', 'Quantity*', 'Rate*', 'Discount (₹)', 'Discount (%)'
     ];
 
-    const successWb = new ExcelJS.Workbook();
-    const successWs = successWb.addWorksheet('Success Reports');
-    successWs.addRow(headers);
-    successWs.getRow(1).font = { bold: true };
-    successWs.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
-    successRows.forEach(r => {
-      const rowVals = r.originalRowValues.slice(1);
-      successWs.addRow(rowVals);
-    });
-    const successBuffer = await successWb.xlsx.writeBuffer();
-
-    const failedWb = new ExcelJS.Workbook();
-    const failedWs = failedWb.addWorksheet('Error Reports');
-    failedWs.addRow([...headers, 'Error Description']);
-    failedWs.getRow(1).font = { bold: true };
-    failedWs.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
-    failedRows.forEach(r => {
-      const rowVals = r.values.slice(1);
-      while (rowVals.length < headers.length) rowVals.push('');
-      rowVals[headers.length] = r.error;
-      failedWs.addRow(rowVals);
-    });
-    const failedBuffer = await failedWb.xlsx.writeBuffer();
-
-    return {
-      success: true,
-      summary: {
-        totalRows: parsedRows.length,
-        successful: successRows.length,
-        failed: failedRows.length
-      },
-      errors: rowErrors,
-      successFile: Buffer.from(successBuffer).toString('base64'),
-      errorFile: Buffer.from(failedBuffer).toString('base64')
-    };
+    return this.importValidator.buildResponseSummary(headers, successRows, failedRows);
   }
 
   async printChallan(id: number, userId: number) {

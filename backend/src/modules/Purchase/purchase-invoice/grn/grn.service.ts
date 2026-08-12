@@ -8,11 +8,14 @@ import * as PDFDocument from 'pdfkit';
 import { formatDate } from '../../../../utils/dateFormatter';
 import { generateGRNSampleExcel } from '../../../../common/utils/procurement-bulk-import.processor';
 
+import { ImportValidationService } from '../../../../common/services/import-validation.service';
+
 @Injectable()
 export class GrnService {
   constructor(
     private prisma: PrismaService,
-    private poService: PurchaseOrderService
+    private poService: PurchaseOrderService,
+    private importValidator: ImportValidationService
   ) { }
 
   private async calculateGrnTotals(dto: CreateGrnDto, userId: number, existingId?: number) {
@@ -289,14 +292,14 @@ export class GrnService {
       const consumedQty = Math.max(totalReceivedQty, totalInvoicedQty);
 
       let newStatus = po.status;
-      if (consumedQty >= totalPoQty) {
-        // If fully processed, decide which completed status to use. 
-        // Invoice completion is generally the final stage.
-        if (totalInvoicedQty >= totalPoQty) {
+      if (consumedQty >= (totalPoQty - 0.001)) {
+        if (totalInvoicedQty >= (totalPoQty - 0.001)) {
             newStatus = 'INVOICE_COMPLETED';
         } else {
             newStatus = 'GRN_COMPLETED';
         }
+      } else if (consumedQty > 0) {
+        newStatus = 'PARTIAL_GRN';
       } else {
         newStatus = 'PENDING';
       }
@@ -829,5 +832,416 @@ export class GrnService {
       filename: 'grn_sample.xlsx',
       mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     };
+  }
+
+  async importGrns(fileBuffer: Buffer, userId: number) {
+    if (!fileBuffer || fileBuffer.length === 0) {
+      throw new BadRequestException('Empty or invalid file uploaded');
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    try {
+      await workbook.xlsx.load(fileBuffer as any);
+    } catch (error) {
+      throw new BadRequestException('Invalid Excel file format. Please upload a valid .xlsx file.');
+    }
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) {
+      throw new BadRequestException('Invalid Excel file format');
+    }
+
+    const rowCount = worksheet.rowCount;
+    if (rowCount < 2) {
+      throw new BadRequestException('No data found to import');
+    }
+
+    let headerRowIndex = -1;
+    const colMap: Record<string, number> = {};
+
+    for (let r = 1; r <= Math.min(rowCount, 10); r++) {
+      const row = worksheet.getRow(r);
+      let found = false;
+      row.eachCell((cell, colNumber) => {
+        const val = String(cell.value || '').trim().toLowerCase();
+        if (val.includes('grn no') || val.includes('grn number') || val.includes('challan number')) { colMap['grnNo'] = colNumber; found = true; }
+        if (val.includes('grn date') || val.includes('booking date')) colMap['grnDate'] = colNumber;
+        if (val.includes('po no') || val.includes('po number')) colMap['poNo'] = colNumber;
+        if (val.includes('supplier name') || val.includes('supplier')) colMap['supplierName'] = colNumber;
+        if (val.includes('product name') || val.includes('product')) colMap['productName'] = colNumber;
+        if (val.includes('product code')) colMap['productCode'] = colNumber;
+        if (val.includes('quantity') || val.includes('qty')) colMap['quantity'] = colNumber;
+        if (val.includes('rate') || val.includes('price')) colMap['rate'] = colNumber;
+        if (val.includes('discount (₹)') || val.includes('discount amount') || val.includes('discount rs')) colMap['discountAmount'] = colNumber;
+        if (val.includes('discount (%)') || val.includes('discount percent')) colMap['discountPercent'] = colNumber;
+      });
+      if (found) {
+        headerRowIndex = r;
+        break;
+      }
+    }
+
+    // Scan first 10 rows to detect if user uploaded a PO file or wrong template
+    let isPoFile = false;
+    let isSoFile = false;
+
+    for (let r = 1; r <= Math.min(rowCount, 10); r++) {
+      const row = worksheet.getRow(r);
+      row.eachCell((cell) => {
+        const val = String(cell.value || '').trim().toLowerCase();
+        if (
+          (val.includes('po number') || val.includes('po no') || val.includes('po date') || val.includes('customer po') || val.includes('expiry date') || val.includes('po amt') || val.includes('purchase order')) &&
+          !val.includes('grn')
+        ) {
+          isPoFile = true;
+        }
+        if (val.includes('so no') || val.includes('so number') || val.includes('sales order')) {
+          isSoFile = true;
+        }
+      });
+    }
+
+    if (!colMap['grnNo']) {
+      throw new BadRequestException('Invalid template format');
+    }
+
+    const mandatoryCols = ['grnNo', 'supplierName', 'productName', 'quantity', 'rate'];
+    const missing = mandatoryCols.filter(col => !colMap[col]);
+    if (headerRowIndex === -1 || missing.length > 0) {
+      throw new BadRequestException('Invalid template format');
+    }
+
+    const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
+      const colIdx = colMap[key];
+      if (!colIdx) return defaultVal;
+      const cell = row.getCell(colIdx);
+      let val = cell.value;
+      if (val && typeof val === 'object' && 'result' in val) {
+        val = (val as any).result;
+      }
+      if (val && (val instanceof Date || Object.prototype.toString.call(val) === '[object Date]' || typeof (val as any).getTime === 'function')) {
+        return val;
+      }
+      return String(val !== undefined && val !== null ? val : '').trim();
+    };
+
+    // Preload Lookups
+    const [{ supplierMap }, { productCodeMap, productNameMap }, existingGrns, existingPos, userShop, userGstDoc] = await Promise.all([
+      this.importValidator.fetchAccountMasterData(userId),
+      this.importValidator.fetchProductMasterData(userId),
+      this.prisma.grn.findMany({
+        where: { userId, status: { not: 'DELETED' } },
+        select: { challanNumber: true },
+      }),
+      this.prisma.purchaseOrder.findMany({
+        where: { userId, status: { not: 'DELETED' } },
+        include: { items: true, grn: { where: { status: { not: 'DELETED' } }, include: { items: true } } },
+      }),
+      this.prisma.shopDetail.findUnique({ where: { userId } }),
+      this.prisma.sellerDocument.findFirst({
+        where: { uploadedByUserId: userId, type: 'GST' },
+        orderBy: { createdAt: 'desc' },
+        select: { name: true },
+      }),
+    ]);
+
+    const dbGrnNumbers = new Set(existingGrns.map(g => g.challanNumber.toLowerCase().trim()));
+    const importedGrnNumbersInFile = new Set<string>();
+
+    const poMap = new Map<string, any>();
+    for (const po of existingPos) {
+      poMap.set(po.poNumber.toLowerCase().trim(), po);
+    }
+
+    const groupMap = new Map<string, any[]>();
+
+    for (let r = headerRowIndex + 1; r <= rowCount; r++) {
+      const row = worksheet.getRow(r);
+      const grnNo = getVal(row, 'grnNo');
+      if (!grnNo || grnNo === '-') continue;
+
+      const item = {
+        rowNum: r,
+        originalRowValues: row.values,
+        grnNo,
+        grnDateStr: getVal(row, 'grnDate'),
+        poNo: getVal(row, 'poNo'),
+        supplierName: getVal(row, 'supplierName'),
+        productName: getVal(row, 'productName'),
+        productCode: getVal(row, 'productCode'),
+        quantityStr: getVal(row, 'quantity'),
+        rateStr: getVal(row, 'rate'),
+        discountAmountStr: getVal(row, 'discountAmount'),
+        discountPercentStr: getVal(row, 'discountPercent'),
+      };
+
+      if (!groupMap.has(grnNo)) {
+        groupMap.set(grnNo, []);
+      }
+      groupMap.get(grnNo)!.push(item);
+    }
+
+    if (groupMap.size === 0) {
+      throw new BadRequestException('Invalid template format');
+    }
+
+    const successRows: any[] = [];
+    const failedRows: { rowNum: number; values: any[]; error: string }[] = [];
+
+    const userGst = userGstDoc?.name;
+    const companyState = (userShop?.state || '').trim().toLowerCase();
+    const isGstApplicable = isValidGst(userGst);
+
+    for (const [grnNo, rows] of groupMap.entries()) {
+      const groupErrors: string[] = [];
+      const firstRow = rows[0];
+
+      // 1. GRN Number uniqueness check
+      const docNoValidation = this.importValidator.validateDocumentNumber(
+        'GRN',
+        grnNo,
+        dbGrnNumbers,
+        importedGrnNumbersInFile,
+        firstRow.rowNum
+      );
+      if (!docNoValidation.valid) {
+        groupErrors.push(docNoValidation.error);
+      }
+
+      // 2. Supplier validation & auto-fetching
+      const suppValidation = this.importValidator.validateSupplier(firstRow.supplierName, supplierMap, 'GRN');
+      let supplierData: any = null;
+      if (!suppValidation.valid) {
+        groupErrors.push(suppValidation.error);
+      } else {
+        supplierData = suppValidation.data;
+      }
+
+      // 3. Date validation (DD/MM/YYYY format check only)
+      let parsedGrnDate: Date = new Date();
+      if (firstRow.grnDateStr) {
+        const dateVal = this.importValidator.validateImportDate(firstRow.grnDateStr, 'GRN Booking Date');
+        if (!dateVal.valid) {
+          groupErrors.push(dateVal.error);
+        } else {
+          parsedGrnDate = dateVal.date;
+        }
+      }
+
+      // 4. Optional PO Reference validation
+      let referencedPo: any = null;
+      if (firstRow.poNo && firstRow.poNo.trim()) {
+        const rawPoNo = firstRow.poNo.trim();
+        referencedPo = poMap.get(rawPoNo.toLowerCase());
+        if (!referencedPo) {
+          groupErrors.push(`Purchase Order '${rawPoNo}' does not exist. Please provide a valid Purchase Order Number.`);
+        } else if (supplierData && referencedPo.supplierName.toLowerCase().trim() !== supplierData.name.toLowerCase().trim()) {
+          groupErrors.push(`Supplier '${supplierData.name}' does not match the supplier of Purchase Order '${rawPoNo}'.`);
+        }
+      }
+
+      // 5. Products validation & remaining PO quantity check
+      const processedItems: any[] = [];
+      let totalAmount = 0;
+      let totalTaxAmount = 0;
+      let isInterState = false;
+
+      for (const row of rows) {
+        const prodVal = this.importValidator.validateProduct(
+          row.productName,
+          row.productCode,
+          productCodeMap,
+          productNameMap
+        );
+
+        if (!prodVal.valid) {
+          groupErrors.push(`Row ${row.rowNum}: ${prodVal.error}`);
+          continue;
+        }
+
+        const prod = prodVal.data;
+        const qty = parseFloat(row.quantityStr);
+        const rate = parseFloat(row.rateStr);
+
+        if (isNaN(qty) || qty <= 0) groupErrors.push(`Row ${row.rowNum}: Quantity must be greater than 0.`);
+        if (isNaN(rate) || rate < 0) groupErrors.push(`Row ${row.rowNum}: Rate must be 0 or positive.`);
+
+        const discountAmt = parseFloat(row.discountAmountStr || '0');
+        const discountPct = parseFloat(row.discountPercentStr || '0');
+        if (isNaN(discountAmt) || discountAmt < 0) groupErrors.push(`Row ${row.rowNum}: Discount amount must be positive.`);
+        if (isNaN(discountPct) || discountPct < 0 || discountPct > 100) groupErrors.push(`Row ${row.rowNum}: Discount percent must be between 0 and 100.`);
+
+        // Check remaining PO quantity if PO reference exists
+        let totalPoQty = qty;
+        let receivedPoQty = 0;
+        let remainingPoQty = qty;
+
+        if (referencedPo) {
+          const poItem = referencedPo.items.find(
+            (i: any) =>
+              i.productCode.toLowerCase().trim() === prod.product_code.toLowerCase().trim() ||
+              i.productName.toLowerCase().trim() === prod.product_name.toLowerCase().trim()
+          );
+
+          if (!poItem) {
+            groupErrors.push(`Product '${prod.product_name}' is not part of Purchase Order '${referencedPo.poNumber}'.`);
+          } else {
+            totalPoQty = poItem.quantity;
+            let alreadyReceived = 0;
+            for (const prevGrn of referencedPo.grn || []) {
+              for (const prevItem of prevGrn.items || []) {
+                if (
+                  prevItem.productCode.toLowerCase().trim() === prod.product_code.toLowerCase().trim() ||
+                  prevItem.productName.toLowerCase().trim() === prod.product_name.toLowerCase().trim()
+                ) {
+                  alreadyReceived += Number(prevItem.receivedQty || 0);
+                }
+              }
+            }
+            receivedPoQty = alreadyReceived;
+            remainingPoQty = Math.max(0, totalPoQty - alreadyReceived);
+
+            if (qty > remainingPoQty) {
+              groupErrors.push(
+                `GRN quantity for product '${prod.product_name}' exceeds the remaining PO quantity. Available quantity: ${remainingPoQty}, Imported quantity: ${qty}.`
+              );
+            }
+          }
+        }
+
+        if (groupErrors.length > 0) continue;
+
+        const baseTotal = qty * rate;
+        let finalDiscPercent = discountPct;
+        let finalDiscAmount = discountAmt;
+
+        if (finalDiscAmount > 0 && finalDiscPercent === 0) {
+          finalDiscPercent = baseTotal > 0 ? (finalDiscAmount / baseTotal) * 100 : 0;
+        } else {
+          finalDiscAmount = (baseTotal * finalDiscPercent) / 100;
+        }
+
+        const beforeTaxAmount = baseTotal - finalDiscAmount;
+        const taxRate = Number(prod.tax_rate || 0);
+        const supplierGst = supplierData?.gstNo;
+        const supplierState = (supplierData?.state || '').trim().toLowerCase();
+
+        isInterState = this.importValidator.determineIsInterState(
+          userGst,
+          companyState,
+          supplierGst,
+          supplierState
+        );
+
+        const taxAmount = isGstApplicable ? ((beforeTaxAmount * taxRate) / 100) : 0;
+        const totalItemAmount = beforeTaxAmount + taxAmount;
+
+        totalAmount += beforeTaxAmount;
+        totalTaxAmount += taxAmount;
+
+        processedItems.push({
+          productId: prod.id,
+          productCode: prod.product_code,
+          productName: prod.product_name,
+          printDescription: prod.description || prod.hsn_description || prod.product_name,
+          hsnCode: prod.hsn_code || '',
+          totalPoQty,
+          receivedPoQty,
+          receivedQty: qty,
+          remainingQty: Math.max(0, remainingPoQty - qty),
+          rate,
+          uom: prod.uom?.unit_name || 'Nos',
+          discountPercent: finalDiscPercent,
+          discountAmount: finalDiscAmount,
+          taxPercent: taxRate,
+          taxAmount,
+          beforeTaxAmount,
+          totalAmount: totalItemAmount,
+          amount: beforeTaxAmount,
+        });
+      }
+
+      if (groupErrors.length > 0) {
+        const combinedErrorMsg = groupErrors.join(' | ');
+        for (const row of rows) {
+          failedRows.push({
+            rowNum: row.rowNum,
+            values: row.originalRowValues,
+            error: combinedErrorMsg,
+          });
+        }
+      } else {
+        try {
+          await this.prisma.$transaction(async (tx) => {
+            await tx.grn.create({
+              data: {
+                challanNumber: grnNo,
+                poNumber: referencedPo ? referencedPo.poNumber : (firstRow.poNo || null),
+                poId: referencedPo ? referencedPo.id : null,
+                supplierName: supplierData.name,
+                address: supplierData.address,
+                creditDays: supplierData.creditDays,
+                gstNumber: supplierData.gstNo,
+                grnDate: parsedGrnDate,
+                bookingDate: parsedGrnDate,
+                taxableAmount: totalAmount,
+                cgstAmount: isInterState ? 0 : totalTaxAmount / 2,
+                sgstAmount: isInterState ? 0 : totalTaxAmount / 2,
+                igstAmount: isInterState ? totalTaxAmount : 0,
+                grandTotal: totalAmount + totalTaxAmount,
+                userId,
+                status: 'GENERATED',
+                items: {
+                  create: processedItems.map(item => ({
+                    productId: item.productId,
+                    productCode: item.productCode,
+                    productName: item.productName,
+                    printDescription: item.printDescription,
+                    hsnCode: item.hsnCode,
+                    totalPoQty: item.totalPoQty,
+                    receivedPoQty: item.receivedPoQty,
+                    receivedQty: item.receivedQty,
+                    remainingQty: item.remainingQty,
+                    rate: item.rate,
+                    uom: item.uom,
+                    discountPercent: item.discountPercent,
+                    discountAmount: item.discountAmount,
+                    taxPercent: item.taxPercent,
+                    taxAmount: item.taxAmount,
+                    beforeTaxAmount: item.beforeTaxAmount,
+                    totalAmount: item.totalAmount,
+                    amount: item.amount,
+                  })),
+                },
+              },
+            });
+
+            if (referencedPo) {
+              await this.updatePOStatusAfterGrn(referencedPo.id, tx);
+            }
+          });
+
+          importedGrnNumbersInFile.add(grnNo.toLowerCase());
+          for (const row of rows) {
+            successRows.push(row);
+          }
+        } catch (dbError: any) {
+          const dbErrMsg = `Database Save Failed: ${dbError.message || dbError}`;
+          for (const row of rows) {
+            failedRows.push({
+              rowNum: row.rowNum,
+              values: row.originalRowValues,
+              error: dbErrMsg,
+            });
+          }
+        }
+      }
+    }
+
+    const headers = [
+      'GRN No*', 'GRN Date*', 'PO NO', 'Supplier Name*',
+      'Product Name*', 'Product Code', 'Qty*', 'Rate*', 'Discount (₹)', 'Discount (%)'
+    ];
+
+    return this.importValidator.buildResponseSummary(headers, successRows, failedRows);
   }
 }

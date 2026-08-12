@@ -1,5 +1,6 @@
 import { IsEmail, IsNotEmpty, IsString, IsOptional, Length, IsBoolean, ValidateIf, Matches, IsInt, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { RegType } from '@prisma/client';
 
 export class Step1LanguageDto {
@@ -87,7 +88,8 @@ export class Step5BusinessDto {
     @ApiProperty({ example: 'ABCDE1234F', required: true })
     @IsString()
     @IsNotEmpty({ message: 'PAN Number is required' })
-    @Matches(/^[A-Z]{3}[PCHFATBLJG][A-Z]{1}[0-9]{4}[A-Z]{1}$/, { message: 'Invalid PAN format. Must be a valid 10-character PAN (e.g., ABCPE1234F) where the 4th character is one of: P, C, H, F, A, T, B, L, J, G' })
+    @Transform(({ value }) => typeof value === 'string' ? value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10) : value)
+    @Matches(/^[A-Z]{3}[PCHF][A-Z]{1}[0-9]{4}[A-Z]{1}$/, { message: 'Invalid PAN format. PAN must contain exactly 10 characters (AAAAA9999A) with 4th character P (Individual), C (Company), H (HUF), or F (Firm/LLP)' })
     panNumber: string;
 }
 

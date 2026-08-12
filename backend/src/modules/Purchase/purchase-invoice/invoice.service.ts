@@ -10,12 +10,15 @@ import { isValidGst, determinePurchaseGst } from '../../../common/utils/gst.help
 import { generatePISampleExcel } from '../../../common/utils/procurement-bulk-import.processor';
 import { TransactionService } from '../../Finance/transaction.service';
 
+import { ImportValidationService } from '../../../common/services/import-validation.service';
+
 @Injectable()
 export class PurchaseInvoiceService {
   constructor(
     private prisma: PrismaService,
     private poService: PurchaseOrderService,
-    private transactionService: TransactionService
+    private transactionService: TransactionService,
+    private importValidator: ImportValidationService
   ) { }
 
   private async updateCompletionStatusesAfterInvoice(invoiceId: number, tx: any) {
@@ -51,13 +54,17 @@ export class PurchaseInvoiceService {
 
         const consumedQty = Math.max(totalInvoicedQty, totalReceivedQty);
 
-        let newStatus = 'PENDING';
-        if (consumedQty >= totalPoQty) {
-            if (totalInvoicedQty >= totalPoQty) {
+        let newStatus = po.status;
+        if (consumedQty >= (totalPoQty - 0.001)) {
+            if (totalInvoicedQty >= (totalPoQty - 0.001)) {
                 newStatus = 'INVOICE_COMPLETED';
             } else {
                 newStatus = 'GRN_COMPLETED';
             }
+        } else if (consumedQty > 0) {
+            newStatus = 'PARTIAL_GRN';
+        } else {
+            newStatus = 'PENDING';
         }
 
         if (po.status !== newStatus) {
@@ -1128,99 +1135,465 @@ export class PurchaseInvoiceService {
     }
   }
 
-  async importPurchaseInvoices(buffer: Buffer, userId: number) {
+  async importPurchaseInvoices(fileBuffer: Buffer, userId: number) {
+    if (!fileBuffer || fileBuffer.length === 0) {
+      throw new BadRequestException('Empty or invalid file uploaded');
+    }
+
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as any);
-    const worksheet = workbook.getWorksheet(1);
+    try {
+      await workbook.xlsx.load(fileBuffer as any);
+    } catch (error) {
+      throw new BadRequestException('Invalid Excel file format. Please upload a valid .xlsx file.');
+    }
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) {
+      throw new BadRequestException('Invalid Excel file format');
+    }
+
     const rowCount = worksheet.rowCount;
-    if (rowCount < 2) throw new BadRequestException('No data to import');
+    if (rowCount < 2) {
+      throw new BadRequestException('No data found to import');
+    }
 
-    let imported = 0;
-    let failed = 0;
-    const errors: string[] = [];
+    let headerRowIndex = -1;
+    const colMap: Record<string, number> = {};
 
-    const parseDate = (val: any): Date | undefined => {
-      if (!val) return undefined;
-      const date = new Date(val);
-      if (isNaN(date.getTime())) return undefined;
-      return date;
-    };
-
-    for (let i = 2; i <= rowCount; i++) {
-      const row = worksheet.getRow(i);
-      try {
-        const supplierName = String(row.getCell(1).value || '').trim();
-        const supplierInvoiceNumber = String(row.getCell(2).value || '').trim();
-        const supplierInvoiceDateRaw = row.getCell(3).value;
-
-        if (!supplierInvoiceNumber || !supplierName || supplierInvoiceNumber === 'Supplier Invoice No*') continue;
-
-        const supplierInvoiceDate = parseDate(supplierInvoiceDateRaw);
-        if (!supplierInvoiceDate) {
-          throw new Error(`Invalid Supplier Invoice Date at row ${i}`);
-        }
-
-        const supplier = await this.prisma.accountMaster.findFirst({
-            where: { accountName: supplierName, userId }
-        });
-
-        if (!supplier) {
-            throw new Error(`Supplier ${supplierName} not found`);
-        }
-
-        const items: ItemDto[] = [{
-          productId: '0',
-          productCode: String(row.getCell(9).value || '').trim(),
-          productName: 'Imported Item',
-          quantity: parseFloat(String(row.getCell(10).value || 0)),
-          rate: parseFloat(String(row.getCell(11).value || 0)),
-          uom: String(row.getCell(12).value || 'NOS').trim(),
-          hsnCode: '',
-          discount: 0,
-          taxPercent: 0,
-          beforeTaxAmount: 0,
-          taxAmount: 0,
-          totalAmount: 0,
-          baseAmount: 0
-        }];
-
-        let beforeTaxAmount = 0;
-        items.forEach(p => {
-           p.baseAmount = p.quantity * p.rate;
-           p.taxAmount = 0;
-           p.totalAmount = p.baseAmount;
-           beforeTaxAmount += p.baseAmount;
-        });
-
-        const dto: CreatePurchaseInvoiceDto = {
-          supplierId: supplier.id.toString(),
-          supplierName,
-          invoiceNumber: supplierInvoiceNumber,
-          invoiceDate: supplierInvoiceDate.toISOString(),
-          bookingDate: (parseDate(row.getCell(4).value) || new Date()).toISOString(),
-          address: String(row.getCell(5).value || '').trim() || 'Imported Address',
-          creditDays: Math.max(1, parseInt(String(row.getCell(6).value || 0), 10)),
-          gstNumber: supplier.gstNo || '',
-          challanNumbers: String(row.getCell(7).value || '').trim() ? [String(row.getCell(7).value).trim()] : [],
-          poIds: String(row.getCell(8).value || '').trim() ? [String(row.getCell(8).value).trim()] : [],
-          items,
-          accountSummary: {
-            materialPurchase: beforeTaxAmount,
-            cgst: 0,
-            sgst: 0,
-            igst: 0,
-            grandTotal: beforeTaxAmount
-          }
-        };
-
-        await this.create(dto, userId);
-        imported++;
-      } catch (err) {
-        failed++;
-        errors.push(`Row ${i}: ${err.message}`);
+    for (let r = 1; r <= Math.min(rowCount, 10); r++) {
+      const row = worksheet.getRow(r);
+      let found = false;
+      row.eachCell((cell, colNumber) => {
+        const val = String(cell.value || '').trim().toLowerCase();
+        if (val.includes('invoice no') || val.includes('invoice number') || val.includes('supplier invoice no')) { colMap['invoiceNo'] = colNumber; found = true; }
+        if (val.includes('invoice date')) colMap['invoiceDate'] = colNumber;
+        if (val.includes('booking date')) colMap['bookingDate'] = colNumber;
+        if (val.includes('supplier name') || val.includes('supplier')) colMap['supplierName'] = colNumber;
+        if (val.includes('po number') || val.includes('po no')) colMap['poNumber'] = colNumber;
+        if (val.includes('grn number') || val.includes('grn no') || val.includes('challan number')) colMap['grnNumber'] = colNumber;
+        if (val.includes('product name') || val.includes('product')) colMap['productName'] = colNumber;
+        if (val.includes('product code')) colMap['productCode'] = colNumber;
+        if (val.includes('quantity') || val.includes('qty')) colMap['quantity'] = colNumber;
+        if (val.includes('rate') || val.includes('price')) colMap['rate'] = colNumber;
+        if (val.includes('discount (₹)') || val.includes('discount amount') || val.includes('discount rs')) colMap['discountAmount'] = colNumber;
+        if (val.includes('discount (%)') || val.includes('discount percent')) colMap['discountPercent'] = colNumber;
+      });
+      if (found) {
+        headerRowIndex = r;
+        break;
       }
     }
-    return { success: true, message: `Imported ${imported} invoices. ${failed} failed.`, errors };
+
+    // Scan first 10 rows to detect if user uploaded a PO file or wrong template
+    let isPoFile = false;
+
+    for (let r = 1; r <= Math.min(rowCount, 10); r++) {
+      const row = worksheet.getRow(r);
+      row.eachCell((cell) => {
+        const val = String(cell.value || '').trim().toLowerCase();
+        if (
+          val.includes('po number') || val.includes('po no') || val.includes('po date') || val.includes('expiry date') || (val.includes('po no') && !val.includes('invoice'))
+        ) {
+          isPoFile = true;
+        }
+      });
+    }
+
+    if (!colMap['invoiceNo']) {
+      throw new BadRequestException('Invalid template format');
+    }
+
+    const mandatoryCols = ['invoiceNo', 'supplierName', 'productName', 'quantity', 'rate'];
+    const missing = mandatoryCols.filter(col => !colMap[col]);
+    if (headerRowIndex === -1 || missing.length > 0) {
+      throw new BadRequestException('Invalid template format');
+    }
+
+    const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
+      const colIdx = colMap[key];
+      if (!colIdx) return defaultVal;
+      const cell = row.getCell(colIdx);
+      let val = cell.value;
+      if (val && typeof val === 'object' && 'result' in val) {
+        val = (val as any).result;
+      }
+      if (val && (val instanceof Date || Object.prototype.toString.call(val) === '[object Date]' || typeof (val as any).getTime === 'function')) {
+        return val;
+      }
+      return String(val !== undefined && val !== null ? val : '').trim();
+    };
+
+    // Preload Lookups
+    const [{ supplierMap }, { productCodeMap, productNameMap }, existingInvoices, existingPos, existingGrns, userShop, userGstDoc] = await Promise.all([
+      this.importValidator.fetchAccountMasterData(userId),
+      this.importValidator.fetchProductMasterData(userId),
+      this.prisma.purchaseInvoice.findMany({
+        where: { userId, status: { not: 'DELETED' } },
+        select: { invoiceNumber: true, supplierInvoiceNumber: true },
+      }),
+      this.prisma.purchaseOrder.findMany({
+        where: { userId, status: { not: 'DELETED' } },
+        include: { items: true, purchaseInvoices: { where: { status: { not: 'DELETED' } }, include: { items: true } } },
+      }),
+      this.prisma.grn.findMany({
+        where: { userId, status: { not: 'DELETED' } },
+        include: { items: true },
+      }),
+      this.prisma.shopDetail.findUnique({ where: { userId } }),
+      this.prisma.sellerDocument.findFirst({
+        where: { uploadedByUserId: userId, type: 'GST' },
+        orderBy: { createdAt: 'desc' },
+        select: { name: true },
+      }),
+    ]);
+
+    const dbInvoiceNumbers = new Set(
+      existingInvoices.flatMap(i => [i.invoiceNumber.toLowerCase().trim(), i.supplierInvoiceNumber.toLowerCase().trim()])
+    );
+    const importedInvoiceNumbersInFile = new Set<string>();
+
+    const poMap = new Map<string, any>();
+    for (const po of existingPos) poMap.set(po.poNumber.toLowerCase().trim(), po);
+
+    const grnMap = new Map<string, any>();
+    for (const grn of existingGrns) grnMap.set(grn.challanNumber.toLowerCase().trim(), grn);
+
+    const allPIs = await this.prisma.purchaseInvoice.findMany({
+      where: { userId, status: { not: 'DELETED' } },
+      include: { items: true },
+    });
+
+    const groupMap = new Map<string, any[]>();
+
+    for (let r = headerRowIndex + 1; r <= rowCount; r++) {
+      const row = worksheet.getRow(r);
+      const invoiceNo = getVal(row, 'invoiceNo');
+      if (!invoiceNo || invoiceNo === '-') continue;
+
+      const item = {
+        rowNum: r,
+        originalRowValues: row.values,
+        invoiceNo,
+        invoiceDateStr: getVal(row, 'invoiceDate'),
+        bookingDateStr: getVal(row, 'bookingDate'),
+        supplierName: getVal(row, 'supplierName'),
+        poNumber: getVal(row, 'poNumber'),
+        grnNumber: getVal(row, 'grnNumber'),
+        productName: getVal(row, 'productName'),
+        productCode: getVal(row, 'productCode'),
+        quantityStr: getVal(row, 'quantity'),
+        rateStr: getVal(row, 'rate'),
+        discountAmountStr: getVal(row, 'discountAmount'),
+        discountPercentStr: getVal(row, 'discountPercent'),
+      };
+
+      if (!groupMap.has(invoiceNo)) {
+        groupMap.set(invoiceNo, []);
+      }
+      groupMap.get(invoiceNo)!.push(item);
+    }
+
+    if (groupMap.size === 0) {
+      throw new BadRequestException('Invalid template format');
+    }
+
+    const successRows: any[] = [];
+    const failedRows: { rowNum: number; values: any[]; error: string }[] = [];
+
+    const userGst = userGstDoc?.name;
+    const companyState = (userShop?.state || '').trim().toLowerCase();
+    const isGstApplicable = isValidGst(userGst);
+
+    for (const [invoiceNo, rows] of groupMap.entries()) {
+      const groupErrors: string[] = [];
+      const firstRow = rows[0];
+
+      // 1. Invoice Number uniqueness check
+      const docNoValidation = this.importValidator.validateDocumentNumber(
+        'Purchase Invoice',
+        invoiceNo,
+        dbInvoiceNumbers,
+        importedInvoiceNumbersInFile,
+        firstRow.rowNum
+      );
+      if (!docNoValidation.valid) {
+        groupErrors.push(docNoValidation.error);
+      }
+
+      // 2. Supplier validation & auto-fetching
+      const suppValidation = this.importValidator.validateSupplier(firstRow.supplierName, supplierMap, 'PI');
+      let supplierData: any = null;
+      if (!suppValidation.valid) {
+        groupErrors.push(suppValidation.error);
+      } else {
+        supplierData = suppValidation.data;
+      }
+
+      // 3. Date validation
+      let parsedInvoiceDate: Date = new Date();
+      if (firstRow.invoiceDateStr) {
+        const invDateVal = this.importValidator.validateImportDate(firstRow.invoiceDateStr, 'Invoice Date');
+        if (!invDateVal.valid) {
+          groupErrors.push(invDateVal.error);
+        } else {
+          parsedInvoiceDate = invDateVal.date;
+        }
+      }
+
+      let parsedBookingDate: Date = new Date();
+      if (firstRow.bookingDateStr) {
+        const bookDateVal = this.importValidator.validateImportDate(firstRow.bookingDateStr, 'Booking Date');
+        if (!bookDateVal.valid) {
+          groupErrors.push(bookDateVal.error);
+        } else {
+          parsedBookingDate = bookDateVal.date;
+        }
+      }
+
+      // 4. Reference validation (PO Number and/or GRN Number)
+      let referencedPo: any = null;
+      if (firstRow.poNumber && firstRow.poNumber.trim()) {
+        const rawPoNo = firstRow.poNumber.trim();
+        referencedPo = poMap.get(rawPoNo.toLowerCase());
+        if (!referencedPo) {
+          groupErrors.push(`Purchase Order '${rawPoNo}' does not exist. Please provide a valid Purchase Order Number.`);
+        } else if (supplierData && referencedPo.supplierName.toLowerCase().trim() !== supplierData.name.toLowerCase().trim()) {
+          groupErrors.push(`Supplier '${supplierData.name}' does not match the supplier of Purchase Order '${rawPoNo}'.`);
+        }
+      }
+
+      let referencedGrn: any = null;
+      if (firstRow.grnNumber && firstRow.grnNumber.trim()) {
+        const rawGrnNo = firstRow.grnNumber.trim();
+        referencedGrn = grnMap.get(rawGrnNo.toLowerCase());
+        if (!referencedGrn) {
+          groupErrors.push(`Challan '${rawGrnNo}' does not exist. Please provide a valid Challan Number.`);
+        } else if (supplierData && referencedGrn.supplierName.toLowerCase().trim() !== supplierData.name.toLowerCase().trim()) {
+          groupErrors.push(`Supplier '${supplierData.name}' does not match the supplier of GRN '${rawGrnNo}'.`);
+        }
+      }
+
+      // 5. Products validation & remaining quantity checks
+      const processedItems: any[] = [];
+      let totalAmount = 0;
+      let totalTaxAmount = 0;
+      let isInterState = false;
+
+      for (const row of rows) {
+        const prodVal = this.importValidator.validateProduct(
+          row.productName,
+          row.productCode,
+          productCodeMap,
+          productNameMap
+        );
+
+        if (!prodVal.valid) {
+          groupErrors.push(`Row ${row.rowNum}: ${prodVal.error}`);
+          continue;
+        }
+
+        const prod = prodVal.data;
+        const qty = parseFloat(row.quantityStr);
+        const rate = parseFloat(row.rateStr);
+
+        if (isNaN(qty) || qty <= 0) groupErrors.push(`Row ${row.rowNum}: Quantity must be greater than 0.`);
+        if (isNaN(rate) || rate < 0) groupErrors.push(`Row ${row.rowNum}: Rate must be 0 or positive.`);
+
+        const discountAmt = parseFloat(row.discountAmountStr || '0');
+        const discountPct = parseFloat(row.discountPercentStr || '0');
+        if (isNaN(discountAmt) || discountAmt < 0) groupErrors.push(`Row ${row.rowNum}: Discount amount must be positive.`);
+        if (isNaN(discountPct) || discountPct < 0 || discountPct > 100) groupErrors.push(`Row ${row.rowNum}: Discount percent must be between 0 and 100.`);
+
+        // Quantity validation against PO
+        if (referencedPo) {
+          const poItem = referencedPo.items.find(
+            (i: any) =>
+              i.productCode.toLowerCase().trim() === prod.product_code.toLowerCase().trim() ||
+              i.productName.toLowerCase().trim() === prod.product_name.toLowerCase().trim()
+          );
+
+          if (!poItem) {
+            groupErrors.push(`Product '${prod.product_name}' is not part of Purchase Order '${referencedPo.poNumber}'.`);
+          } else {
+            let alreadyInvoiced = 0;
+            for (const prevPI of referencedPo.purchaseInvoices || []) {
+              for (const prevItem of prevPI.items || []) {
+                if (
+                  prevItem.productCode.toLowerCase().trim() === prod.product_code.toLowerCase().trim() ||
+                  prevItem.productName.toLowerCase().trim() === prod.product_name.toLowerCase().trim()
+                ) {
+                  alreadyInvoiced += Number(prevItem.quantity || 0);
+                }
+              }
+            }
+            const remainingPoQty = Math.max(0, poItem.quantity - alreadyInvoiced);
+            if (qty > remainingPoQty) {
+              groupErrors.push(
+                `Purchase Invoice quantity for product '${prod.product_name}' exceeds the remaining PO quantity. Available quantity: ${remainingPoQty}, Imported quantity: ${qty}.`
+              );
+            }
+          }
+        }
+
+        // Quantity validation against GRN/Challan
+        if (referencedGrn) {
+          const grnItem = referencedGrn.items.find(
+            (i: any) =>
+              i.productCode.toLowerCase().trim() === prod.product_code.toLowerCase().trim() ||
+              i.productName.toLowerCase().trim() === prod.product_name.toLowerCase().trim()
+          );
+
+          if (!grnItem) {
+            groupErrors.push(`Product '${prod.product_name}' is not part of GRN '${referencedGrn.challanNumber}'.`);
+          } else {
+            let alreadyInvoicedForGrn = 0;
+            for (const prevPI of allPIs) {
+              if (prevPI.challanNumber && prevPI.challanNumber.toLowerCase().includes(referencedGrn.challanNumber.toLowerCase())) {
+                for (const prevItem of prevPI.items || []) {
+                  if (
+                    prevItem.productCode.toLowerCase().trim() === prod.product_code.toLowerCase().trim() ||
+                    prevItem.productName.toLowerCase().trim() === prod.product_name.toLowerCase().trim()
+                  ) {
+                    alreadyInvoicedForGrn += Number(prevItem.quantity || 0);
+                  }
+                }
+              }
+            }
+            const totalGrnQty = Number(grnItem.receivedQty || 0);
+            const remainingGrnQty = Math.max(0, totalGrnQty - alreadyInvoicedForGrn);
+            if (qty > remainingGrnQty) {
+              groupErrors.push(
+                `Purchase Invoice quantity for product '${prod.product_name}' exceeds the remaining Challan quantity. Available quantity: ${remainingGrnQty}, Imported quantity: ${qty}.`
+              );
+            }
+          }
+        }
+
+        if (groupErrors.length > 0) continue;
+
+        const baseTotal = qty * rate;
+        let finalDiscPercent = discountPct;
+        let finalDiscAmount = discountAmt;
+
+        if (finalDiscAmount > 0 && finalDiscPercent === 0) {
+          finalDiscPercent = baseTotal > 0 ? (finalDiscAmount / baseTotal) * 100 : 0;
+        } else {
+          finalDiscAmount = (baseTotal * finalDiscPercent) / 100;
+        }
+
+        const beforeTaxAmount = baseTotal - finalDiscAmount;
+        const taxRate = Number(prod.tax_rate || 0);
+        const supplierGst = supplierData?.gstNo;
+        const supplierState = (supplierData?.state || '').trim().toLowerCase();
+
+        isInterState = this.importValidator.determineIsInterState(
+          userGst,
+          companyState,
+          supplierGst,
+          supplierState
+        );
+
+        const taxAmount = isGstApplicable ? ((beforeTaxAmount * taxRate) / 100) : 0;
+        const totalItemAmount = beforeTaxAmount + taxAmount;
+
+        totalAmount += beforeTaxAmount;
+        totalTaxAmount += taxAmount;
+
+        processedItems.push({
+          productId: prod.id,
+          productCode: prod.product_code,
+          productName: prod.product_name,
+          hsnCode: prod.hsn_code || '',
+          quantity: qty,
+          rate,
+          uom: prod.uom?.unit_name || 'Nos',
+          discountPercent: finalDiscPercent,
+          discountAmount: finalDiscAmount,
+          taxPercent: taxRate,
+          taxAmount,
+          beforeTaxAmount,
+          amount: beforeTaxAmount,
+        });
+      }
+
+      if (groupErrors.length > 0) {
+        const combinedErrorMsg = groupErrors.join(' | ');
+        for (const row of rows) {
+          failedRows.push({
+            rowNum: row.rowNum,
+            values: row.originalRowValues,
+            error: combinedErrorMsg,
+          });
+        }
+      } else {
+        try {
+          await this.prisma.$transaction(async (tx) => {
+            const pi = await tx.purchaseInvoice.create({
+              data: {
+                invoiceNumber: invoiceNo,
+                supplierInvoiceNumber: invoiceNo,
+                supplierInvoiceDate: parsedInvoiceDate,
+                invoiceDate: parsedInvoiceDate,
+                bookingDate: parsedBookingDate,
+                supplierName: supplierData.name,
+                address: supplierData.address,
+                creditDays: supplierData.creditDays,
+                gstNumber: supplierData.gstNo,
+                poNumber: referencedPo ? referencedPo.poNumber : (firstRow.poNumber || null),
+                poId: referencedPo ? referencedPo.id : null,
+                challanNumber: referencedGrn ? referencedGrn.challanNumber : (firstRow.grnNumber || null),
+                supplierId: supplierData.id,
+                taxableAmount: totalAmount,
+                cgstAmount: isInterState ? 0 : totalTaxAmount / 2,
+                sgstAmount: isInterState ? 0 : totalTaxAmount / 2,
+                igstAmount: isInterState ? totalTaxAmount : 0,
+                grandTotal: totalAmount + totalTaxAmount,
+                userId,
+                status: 'GENERATED',
+                items: {
+                  create: processedItems.map(item => ({
+                    productId: item.productId,
+                    productCode: item.productCode,
+                    productName: item.productName,
+                    hsnCode: item.hsnCode,
+                    quantity: item.quantity,
+                    rate: item.rate,
+                    uom: item.uom,
+                    discountPercent: item.discountPercent,
+                    discountAmount: item.discountAmount,
+                    taxPercent: item.taxPercent,
+                    taxAmount: item.taxAmount,
+                    beforeTaxAmount: item.beforeTaxAmount,
+                    amount: item.amount,
+                  })),
+                },
+              },
+            });
+            await this.updateCompletionStatusesAfterInvoice(pi.id, tx);
+          });
+
+          importedInvoiceNumbersInFile.add(invoiceNo.toLowerCase());
+          for (const row of rows) {
+            successRows.push(row);
+          }
+        } catch (dbError: any) {
+          const dbErrMsg = `Database Save Failed: ${dbError.message || dbError}`;
+          for (const row of rows) {
+            failedRows.push({
+              rowNum: row.rowNum,
+              values: row.originalRowValues,
+              error: dbErrMsg,
+            });
+          }
+        }
+      }
+    }
+
+    const headers = [
+      'Invoice No*', 'Invoice Date*', 'Booking Date*', 'Supplier Name*',
+      'PO Number', 'GRN Number', 'Product Name*', 'Qty*', 'Rate*', 'Discount (₹)', 'Discount (%)'
+    ];
+
+    return this.importValidator.buildResponseSummary(headers, successRows, failedRows);
   }
 
   async printPurchaseInvoice(id: number, userId: number) {
@@ -1319,34 +1692,6 @@ export class PurchaseInvoiceService {
     });
   }
 
-  private async getOrCreateAccount(accountName: string, groupName: string[], userId: number, tx: any) {
-    let account = await tx.accountMaster.findFirst({
-      where: {
-        accountName,
-        userId,
-      },
-    });
-
-    if (!account) {
-      account = await tx.accountMaster.create({
-        data: {
-          accountName,
-          groupName,
-          userId,
-          status: 'ACTIVE',
-          panNo: 'N/A',
-          addressLine1: 'Default Address',
-          pincode: '000000',
-          state: 'Unknown',
-          prefix: 'Mr',
-          contactPersonName: 'Admin',
-          mobileNo: '0000000000',
-        },
-      });
-    }
-    return account;
-  }
-
   private async syncLedgerTransactions(invoice: any, userId: number, tx: any) {
     // 1. Delete all existing transactions for this purchase invoice
     await tx.transaction.deleteMany({
@@ -1357,61 +1702,19 @@ export class PurchaseInvoiceService {
       }
     });
 
-    // 2. Credit Supplier
-    await tx.transaction.create({
-      data: {
-        accountId: invoice.supplierId,
-        userId,
-        bookingDate: new Date(invoice.bookingDate),
-        invoiceNumber: invoice.supplierInvoiceNumber || invoice.invoiceNumber,
-        transactionType: TransactionType.Purchase,
-        amount: invoice.grandTotal,
-        entryType: BalanceType.Cr,
-      }
-    });
-
-    // 3. Debit Purchase (Material Purchase excl GST)
-    const purchaseAccount = await this.getOrCreateAccount(
-      'MATERIAL PURCHASE (EXCL. GST)',
-      ['Purchase Accounts'],
-      userId,
-      tx
-    );
-    await tx.transaction.create({
-      data: {
-        accountId: purchaseAccount.id,
-        userId,
-        bookingDate: new Date(invoice.bookingDate),
-        invoiceNumber: invoice.supplierInvoiceNumber || invoice.invoiceNumber,
-        transactionType: TransactionType.Purchase,
-        amount: invoice.taxableAmount,
-        entryType: BalanceType.Dr,
-      }
-    });
-
-    // 4. Debit Expenses
-    if (invoice.expenses) {
-      for (const exp of invoice.expenses) {
-        if (exp.amount > 0) {
-          const expAccount = await this.getOrCreateAccount(
-            exp.groupName,
-            ['Direct Expenses'],
-            userId,
-            tx
-          );
-          await tx.transaction.create({
-            data: {
-              accountId: expAccount.id,
-              userId,
-              bookingDate: new Date(invoice.bookingDate),
-              invoiceNumber: invoice.supplierInvoiceNumber || invoice.invoiceNumber,
-              transactionType: TransactionType.Purchase,
-              amount: exp.amount,
-              entryType: BalanceType.Dr,
-            }
-          });
+    // 2. Credit Supplier (if supplierId exists)
+    if (invoice.supplierId) {
+      await tx.transaction.create({
+        data: {
+          accountId: invoice.supplierId,
+          userId,
+          bookingDate: new Date(invoice.bookingDate),
+          invoiceNumber: invoice.supplierInvoiceNumber || invoice.invoiceNumber,
+          transactionType: TransactionType.Purchase,
+          amount: invoice.grandTotal,
+          entryType: BalanceType.Cr,
         }
-      }
+      });
     }
   }
 }

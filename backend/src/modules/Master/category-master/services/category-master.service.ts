@@ -543,30 +543,36 @@ export class CategoryMasterService {
 
         const flattenedData: any[] = [];
         categories.forEach(cat => {
-            flattenedData.push({
-                name: cat.name,
-                level: 'Category',
-                parent: '-',
-                status: cat.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive'
-            });
-
-            (cat.sub_categories || []).forEach((sub: any) => {
+            const subCats = cat.sub_categories || [];
+            if (subCats.length > 0) {
+                subCats.forEach((sub: any) => {
+                    const subSubCats = sub.sub_sub_categories || [];
+                    if (subSubCats.length > 0) {
+                        subSubCats.forEach((ss: any) => {
+                            flattenedData.push({
+                                categoryName: cat.name,
+                                subCategoryName: sub.name,
+                                subSubCategoryName: ss.name,
+                                status: cat.status === MasterStatus.ACTIVE && sub.status === MasterStatus.ACTIVE && ss.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive'
+                            });
+                        });
+                    } else {
+                        flattenedData.push({
+                            categoryName: cat.name,
+                            subCategoryName: sub.name,
+                            subSubCategoryName: '',
+                            status: cat.status === MasterStatus.ACTIVE && sub.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive'
+                        });
+                    }
+                });
+            } else {
                 flattenedData.push({
-                    name: sub.name,
-                    level: 'Sub Category',
-                    parent: cat.name,
-                    status: sub.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive'
+                    categoryName: cat.name,
+                    subCategoryName: '',
+                    subSubCategoryName: '',
+                    status: cat.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive'
                 });
-
-                (sub.sub_sub_categories || []).forEach((ss: any) => {
-                    flattenedData.push({
-                        name: ss.name,
-                        level: 'Sub-SubCategory',
-                        parent: sub.name,
-                        status: ss.status === MasterStatus.ACTIVE ? 'Active' : 'Inactive'
-                    });
-                });
-            });
+            }
         });
 
         const now = new Date();
@@ -579,32 +585,28 @@ export class CategoryMasterService {
             worksheet.views = [{ state: 'frozen', ySplit: 5 }];
 
             worksheet.columns = [
-                { header: 'Sr. No', key: 'srNo', width: 10 },
-                { header: 'Name', key: 'name', width: 35 },
-                { header: 'Hierarchy Level', key: 'level', width: 20 },
-                { header: 'Parent Name', key: 'parent', width: 30 },
-                { header: 'Status', key: 'status', width: 12 }
+                { header: 'Category Name', key: 'categoryName', width: 30 },
+                { header: 'Sub Category', key: 'subCategoryName', width: 30 },
+                { header: 'Sub Sub Category', key: 'subSubCategoryName', width: 30 },
+                { header: 'Status', key: 'status', width: 15 }
             ];
 
-            flattenedData.forEach((item, index) => {
-                worksheet.addRow({
-                    srNo: index + 1,
-                    ...item
-                });
+            flattenedData.forEach((item) => {
+                worksheet.addRow(item);
             });
 
             worksheet.spliceRows(1, 0, [], [], [], []);
-            worksheet.mergeCells('A1:E1');
+            worksheet.mergeCells('A1:D1');
             worksheet.getCell('A1').value = 'ERP';
             worksheet.getCell('A1').font = { size: 18, bold: true };
             worksheet.getCell('A1').alignment = { horizontal: 'center' };
 
-            worksheet.mergeCells('A2:E2');
+            worksheet.mergeCells('A2:D2');
             worksheet.getCell('A2').value = 'Category Master Report';
             worksheet.getCell('A2').font = { size: 14 };
             worksheet.getCell('A2').alignment = { horizontal: 'center' };
 
-            worksheet.mergeCells('A3:E3');
+            worksheet.mergeCells('A3:D3');
             worksheet.getCell('A3').value = `Exported on: ${timestamp}`;
             worksheet.getCell('A3').alignment = { horizontal: 'right' };
 
@@ -639,8 +641,8 @@ export class CategoryMasterService {
                 doc.moveDown();
 
                 const tableTop = 100;
-                const colX = [40, 80, 240, 380, 480];
-                const headers = ['Sr.', 'Name', 'Hierarchy Level', 'Parent Name', 'Status'];
+                const colX = [40, 170, 310, 460];
+                const headers = ['Category Name', 'Sub Category', 'Sub Sub Category', 'Status'];
 
                 doc.rect(30, tableTop - 5, 535, 20).fill('#4472C4');
                 doc.fontSize(10).font('Helvetica-Bold').fillColor('#FFFFFF');
@@ -662,11 +664,10 @@ export class CategoryMasterService {
 
                     if (i % 2 === 1) doc.rect(30, y - 3, 535, 15).fill('#F2F2F2').fillColor('#000000');
 
-                    doc.text((i + 1).toString(), colX[0], y);
-                    doc.text(item.name, colX[1], y, { width: 150 });
-                    doc.text(item.level, colX[2], y);
-                    doc.text(item.parent, colX[3], y, { width: 90 });
-                    doc.text(item.status, colX[4], y);
+                    doc.text(item.categoryName, colX[0], y, { width: 120 });
+                    doc.text(item.subCategoryName || '-', colX[1], y, { width: 130 });
+                    doc.text(item.subSubCategoryName || '-', colX[2], y, { width: 140 });
+                    doc.text(item.status, colX[3], y);
                     y += 18;
                 });
 
@@ -704,7 +705,23 @@ export class CategoryMasterService {
             };
         });
 
-        worksheet.columns = headers.map(() => ({ width: 22 }));
+        worksheet.columns = headers.map((h) => ({ width: Math.max(25, h.length + 6) }));
+
+        headerRow.eachCell((cell) => { cell.protection = { locked: true }; });
+        for (let r = 2; r <= 1000; r++) {
+            const row = worksheet.getRow(r);
+            for (let c = 1; c <= headers.length; c++) {
+                row.getCell(c).protection = { locked: false };
+            }
+        }
+        await worksheet.protect('', {
+            selectLockedCells: true,
+            selectUnlockedCells: true,
+            insertRows: true,
+            deleteRows: true,
+            sort: true,
+            autoFilter: true,
+        });
 
         const buffer = await workbook.xlsx.writeBuffer();
         return {

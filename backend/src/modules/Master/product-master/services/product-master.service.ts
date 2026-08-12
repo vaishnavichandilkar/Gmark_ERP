@@ -584,7 +584,23 @@ export class ProductMasterService {
             worksheet.getCell(`G${i}`).numFmt = '@';
         }
 
-        worksheet.columns = headers.map(() => ({ width: 22 }));
+        worksheet.columns = headers.map((h) => ({ width: Math.max(25, h.length + 6) }));
+
+        headerRow.eachCell((cell) => { cell.protection = { locked: true }; });
+        for (let r = 2; r <= 1000; r++) {
+            const row = worksheet.getRow(r);
+            for (let c = 1; c <= headers.length; c++) {
+                row.getCell(c).protection = { locked: false };
+            }
+        }
+        await worksheet.protect('', {
+            selectLockedCells: true,
+            selectUnlockedCells: true,
+            insertRows: true,
+            deleteRows: true,
+            sort: true,
+            autoFilter: true,
+        });
 
         const buffer = await workbook.xlsx.writeBuffer();
         return {

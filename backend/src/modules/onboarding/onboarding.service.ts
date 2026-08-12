@@ -25,7 +25,20 @@ export class OnboardingService {
         });
 
         if (localData) {
-            return localData;
+            let officeVillages = localData.officeVillages as Record<string, string[]> | null;
+            if (!officeVillages || typeof officeVillages !== 'object' || Object.keys(officeVillages).length === 0) {
+                officeVillages = {};
+                const areaList = Array.isArray(localData.areas) && localData.areas.length > 0
+                    ? localData.areas
+                    : (localData.district ? [localData.district] : []);
+                for (const area of areaList) {
+                    officeVillages[area] = areaList;
+                }
+            }
+            return {
+                ...localData,
+                officeVillages
+            };
         }
 
         // Step 2: If NOT found, fetch from API

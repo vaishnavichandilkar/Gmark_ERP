@@ -3,6 +3,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CreateAccountMasterDto, GroupNameEnum, UpdateAccountMasterDto, UpdateAccountStatusDto } from './dto/account-master.dto';
 import { Prisma, MasterStatus, ContactPrefix, AccountType } from '@prisma/client';
 import { GroupMasterService } from '../group-master/services/group.service';
+import { sanitizePan, validatePan } from '../../../common/utils/pan.helper';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import * as fs from 'fs';
@@ -350,7 +351,11 @@ export class AccountMasterService {
     }
 
     if (createDto.panNo) {
-      createDto.panNo = createDto.panNo.trim().toUpperCase();
+      createDto.panNo = sanitizePan(createDto.panNo);
+      const panCheck = validatePan(createDto.panNo, createDto.regUnder || null);
+      if (!panCheck.isValid) {
+        throw new BadRequestException(panCheck.error);
+      }
     }
 
     let { subDistrict, district, country, state } = createDto;
@@ -524,6 +529,28 @@ export class AccountMasterService {
   }) {
     const where: Prisma.AccountMasterWhereInput = { userId: filter.userId };
 
+    // Cleanup any legacy auto-created system pseudo-accounts
+    try {
+      const systemAccountIds = (await this.prisma.accountMaster.findMany({
+        where: {
+          userId: filter.userId,
+          accountName: { in: ['MATERIAL PURCHASE (EXCL. GST)', 'SALES INCOME (EXCL. GST)'] }
+        },
+        select: { id: true }
+      })).map(a => a.id);
+
+      if (systemAccountIds.length > 0) {
+        await this.prisma.transaction.deleteMany({
+          where: { accountId: { in: systemAccountIds } }
+        });
+        await this.prisma.accountMaster.deleteMany({
+          where: { id: { in: systemAccountIds } }
+        });
+      }
+    } catch (err) {
+      // ignore cleanup error
+    }
+
     // Fetch all active group names to exclude shadow accounts representing groups from the Account Master list
     const [groups, subGroups, subSubGroups, subSubSubGroups, subSubSubSubGroups] = await Promise.all([
       this.prisma.group.findMany({ where: { OR: [{ userId: filter.userId }, { userId: null }] }, select: { group_name: true } }),
@@ -538,7 +565,9 @@ export class AccountMasterService {
       ...subGroups.map(sg => sg.subgroup_name),
       ...subSubGroups.map(ssg => ssg.name),
       ...subSubSubGroups.map(sssg => sssg.name),
-      ...subSubSubSubGroups.map(ssssg => ssssg.name)
+      ...subSubSubSubGroups.map(ssssg => ssssg.name),
+      'MATERIAL PURCHASE (EXCL. GST)',
+      'SALES INCOME (EXCL. GST)'
     ];
 
     where.accountName = {
@@ -1251,7 +1280,11 @@ export class AccountMasterService {
     }
 
     if (updateDto.panNo) {
-      updateDto.panNo = updateDto.panNo.trim().toUpperCase();
+      updateDto.panNo = sanitizePan(updateDto.panNo);
+      const panCheck = validatePan(updateDto.panNo, updateDto.regUnder !== undefined ? updateDto.regUnder : existingOriginal.regUnder);
+      if (!panCheck.isValid) {
+        throw new BadRequestException(panCheck.error);
+      }
     }
 
     let supplierCreditDays = updateDto.supplierCreditDays;
@@ -1452,9 +1485,19 @@ export class AccountMasterService {
       });
 
       if (localPincode && localPincode.areas && localPincode.areas.length > 0) {
+        let officeVillages = localPincode.officeVillages as Record<string, string[]> | null;
+        if (!officeVillages || typeof officeVillages !== 'object' || Object.keys(officeVillages).length === 0) {
+          officeVillages = {};
+          const areaList = Array.isArray(localPincode.areas) && localPincode.areas.length > 0
+            ? localPincode.areas
+            : (localPincode.district ? [localPincode.district] : []);
+          for (const area of areaList) {
+            officeVillages[area] = areaList;
+          }
+        }
         return {
           areas: localPincode.areas,
-          officeVillages: localPincode.officeVillages || {},
+          officeVillages: officeVillages,
           district: localPincode.district,
           state: localPincode.state,
           subDistrict: localPincode.subDistrict || '',
@@ -2144,7 +2187,7 @@ export class AccountMasterService {
 
           // IDs and Basic Info
           gstNo: parseOptional(getVal(row, 'gstNo')),
-          panNo: String(getVal(row, 'panNo') || ''),
+          panNo: sanitizePan(getVal(row, 'panNo')),
 
           // Address Mapping
           addressLine1,

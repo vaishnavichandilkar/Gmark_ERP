@@ -66,27 +66,48 @@ export function calculateLineTotal(qty: number, rate: number, discountAmt: numbe
   };
 }
 
-// Helper to validate YYYY-MM-DD date strings
+// Helper to validate date strings (supports DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD)
 export function isValidDate(dateStr: any): boolean {
   if (!dateStr) return false;
-  if (dateStr instanceof Date) return !isNaN(dateStr.getTime());
-  const str = String(dateStr).trim();
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRegex.test(str)) return false;
-  const d = new Date(str);
-  return !isNaN(d.getTime());
+  const formatted = formatDateStr(dateStr);
+  return /^\d{4}-\d{2}-\d{2}$/.test(formatted);
 }
 
 export function formatDateStr(dateVal: any): string {
   if (!dateVal) return '';
   if (dateVal instanceof Date) {
-    return dateVal.toISOString().split('T')[0];
+    const yyyy = dateVal.getFullYear();
+    const mm = String(dateVal.getMonth() + 1).padStart(2, '0');
+    const dd = String(dateVal.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   }
   const str = String(dateVal).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (!str) return '';
+
+  // Match DD/MM/YYYY or DD-MM-YYYY
+  const ddmmyyyy = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.exec(str);
+  if (ddmmyyyy) {
+    const dd = ddmmyyyy[1].padStart(2, '0');
+    const mm = ddmmyyyy[2].padStart(2, '0');
+    const yyyy = ddmmyyyy[3];
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // Match YYYY-MM-DD or YYYY/MM/DD
+  const yyyymmdd = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/.exec(str);
+  if (yyyymmdd) {
+    const yyyy = yyyymmdd[1];
+    const mm = yyyymmdd[2].padStart(2, '0');
+    const dd = yyyymmdd[3].padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().split('T')[0];
+    const yyyy = parsed.getFullYear();
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   }
   return str;
 }
@@ -103,6 +124,7 @@ export function styleHeaderRow(ws: ExcelJS.Worksheet, headers: string[]) {
     const cell = headerRow.getCell(index + 1);
     const isRequired = headerText.includes('*');
     cell.value = headerText;
+    cell.protection = { locked: true };
     cell.font = {
       bold: true,
       color: { argb: isRequired ? 'FF9F1239' : 'FF334155' }, // Deep crimson for required (*), Slate for optional
@@ -124,6 +146,33 @@ export function styleHeaderRow(ws: ExcelJS.Worksheet, headers: string[]) {
   });
 }
 
+export async function protectHeaderRow(ws: ExcelJS.Worksheet, headersCount: number, maxDataRows: number = 1000) {
+  // Lock Row 1 (Header row)
+  const headerRow = ws.getRow(1);
+  headerRow.eachCell((cell) => {
+    cell.protection = { locked: true };
+  });
+
+  // Unlock Rows 2 to maxDataRows
+  for (let r = 2; r <= maxDataRows; r++) {
+    const row = ws.getRow(r);
+    for (let c = 1; c <= headersCount; c++) {
+      const cell = row.getCell(c);
+      cell.protection = { locked: false };
+    }
+  }
+
+  // Protect worksheet
+  await ws.protect('', {
+    selectLockedCells: true,
+    selectUnlockedCells: true,
+    insertRows: true,
+    deleteRows: true,
+    sort: true,
+    autoFilter: true,
+  });
+}
+
 // ============================================================================
 // SAMPLE FILE GENERATORS
 // ============================================================================
@@ -135,35 +184,21 @@ export async function generatePISampleExcel(): Promise<Buffer> {
 
   const headers = [
     'Invoice No*',
-    'Invoice Date*',
-    'Booking Date*',
+    'Invoice Date* (DD/MM/YYYY)',
+    'Booking Date* (DD/MM/YYYY)',
     'Supplier Name*',
     'PO Number',
     'GRN Number',
     'Product Name*',
     'Qty*',
     'Rate*',
-    'Discount (Amount)',
+    'Discount (₹)',
     'Discount (%)',
   ];
 
   styleHeaderRow(ws, headers);
-  ws.columns = headers.map(() => ({ width: 22 }));
-
-  const today = new Date().toISOString().split('T')[0];
-  ws.addRow([
-    'INV-2026-001',
-    today,
-    today,
-    'Sample Supplier',
-    'PO-2026-001',
-    'GRN-2026-001',
-    'Sample Product SKU',
-    10,
-    150,
-    0,
-    5,
-  ]);
+  ws.columns = headers.map((h) => ({ width: Math.max(25, h.length + 6) }));
+  await protectHeaderRow(ws, headers.length);
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
@@ -175,35 +210,19 @@ export async function generatePOSampleExcel(): Promise<Buffer> {
 
   const headers = [
     'PO Number*',
-    'PO Date*',
-    'PO Expiry Date*',
+    'PO Date* (DD/MM/YYYY)',
+    'PO Expiry Date* (DD/MM/YYYY)',
     'Supplier Name*',
     'Product Name*',
     'Qty*',
     'Rate*',
-    'Discount (Amount)',
+    'Discount (₹)',
     'Discount (%)',
   ];
 
   styleHeaderRow(ws, headers);
-  ws.columns = headers.map(() => ({ width: 22 }));
-
-  const today = new Date();
-  const poDateStr = today.toISOString().split('T')[0];
-  const expDate = new Date(Date.now() + 30 * 86400000);
-  const expDateStr = expDate.toISOString().split('T')[0];
-
-  ws.addRow([
-    'PO-2026-001',
-    poDateStr,
-    expDateStr,
-    'Sample Supplier',
-    'Sample Product SKU',
-    20,
-    250,
-    50,
-    0,
-  ]);
+  ws.columns = headers.map((h) => ({ width: Math.max(25, h.length + 6) }));
+  await protectHeaderRow(ws, headers.length);
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
@@ -215,31 +234,19 @@ export async function generateGRNSampleExcel(): Promise<Buffer> {
 
   const headers = [
     'GRN No*',
-    'GRN Date*',
+    'GRN Date* (DD/MM/YYYY)',
     'PO NO',
     'Supplier Name*',
     'Product Name*',
     'Qty*',
     'Rate*',
-    'Discount (Amount)',
+    'Discount (₹)',
     'Discount (%)',
   ];
 
   styleHeaderRow(ws, headers);
-  ws.columns = headers.map(() => ({ width: 22 }));
-
-  const today = new Date().toISOString().split('T')[0];
-  ws.addRow([
-    'GRN-2026-001',
-    today,
-    'PO-2026-001',
-    'Sample Supplier',
-    'Sample Product SKU',
-    15,
-    180,
-    0,
-    2,
-  ]);
+  ws.columns = headers.map((h) => ({ width: Math.max(25, h.length + 6) }));
+  await protectHeaderRow(ws, headers.length);
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
@@ -307,7 +314,7 @@ export function validateAndParseRow(
     errors.push({ row_number: rowNum, column_name: 'Rate', error_reason: 'Rate must be a non-negative numeric value (>= 0)' });
   }
 
-  const discountAmountInput = getNum(['Discount (Amount)', 'Discount Amount', 'DiscountAmt'], 0);
+  const discountAmountInput = getNum(['Discount (₹)', 'Discount (Amount)', 'Discount Amount', 'DiscountAmt', 'Discount'], 0);
   if (discountAmountInput < 0) {
     errors.push({ row_number: rowNum, column_name: 'Discount (Amount)', error_reason: 'Discount Amount must be non-negative (>= 0)' });
   }

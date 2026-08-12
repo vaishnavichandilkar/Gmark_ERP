@@ -5,6 +5,7 @@ import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { formatDate, parseDDMMYYYY } from '../../../utils/dateFormatter';
 import { generatePOSampleExcel } from '../../../common/utils/procurement-bulk-import.processor';
+import { ImportValidationService } from '../../../common/services/import-validation.service';
 
 const isValidGst = (gst?: string | null): boolean => {
   return Boolean(
@@ -13,13 +14,17 @@ const isValidGst = (gst?: string | null): boolean => {
       gst.trim() !== '' &&
       gst.trim().toUpperCase() !== 'N/A' &&
       gst.trim().toUpperCase() !== 'NOT AVAILABLE' &&
+      gst.trim().toUpperCase() !== 'NOT AVAILABLE' &&
       gst.trim().length >= 10
   );
 };
 
 @Injectable()
 export class PurchaseOrderService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private importValidator: ImportValidationService,
+  ) {}
 
   async getNextNumber(userId: number): Promise<string> {
     const last = await this.prisma.purchaseOrder.findFirst({
@@ -153,8 +158,8 @@ export class PurchaseOrderService {
       where,
       include: { 
         items: true,
-        grn: { select: { id: true } },
-        purchaseInvoices: { select: { id: true } }
+        grn: { where: { status: { not: 'DELETED' } }, include: { items: true } },
+        purchaseInvoices: { where: { status: { not: 'DELETED' } }, include: { items: true } }
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -165,8 +170,8 @@ export class PurchaseOrderService {
       where: { id, userId },
       include: { 
         items: true,
-        grn: { select: { id: true } },
-        purchaseInvoices: { select: { id: true } }
+        grn: { where: { status: { not: 'DELETED' } }, include: { items: true } },
+        purchaseInvoices: { where: { status: { not: 'DELETED' } }, include: { items: true } }
       },
     });
     if (!po) throw new NotFoundException(`Purchase Order ID ${id} not found`);
@@ -265,65 +270,337 @@ export class PurchaseOrderService {
   }
 
   async importPurchaseOrders(fileBuffer: Buffer, userId: number) {
+    if (!fileBuffer || fileBuffer.length === 0) {
+      throw new BadRequestException('Empty or invalid file uploaded');
+    }
+
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(fileBuffer as any);
-    const ws = workbook.worksheets[0];
+    try {
+      await workbook.xlsx.load(fileBuffer as any);
+    } catch (error) {
+      throw new BadRequestException('Invalid Excel file format. Please upload a valid .xlsx file.');
+    }
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) {
+      throw new BadRequestException('Invalid Excel file format');
+    }
 
-    const rows: any[] = [];
-    ws.eachRow((row, rowNum) => {
-      if (rowNum === 1) return; // skip header
-      const values = row.values as any[];
-      rows.push({
-        supplierId: values[1],
-        creditDays: values[2],
-        address: values[3],
-        gstNo: values[4],
-        poCreationDate: parseDDMMYYYY(values[5]),
-        expiryDate: parseDDMMYYYY(values[6]),
-        productCode: values[7],
-        productName: values[8],
-        hsnCode: values[9],
-        quantity: values[10],
-        rate: values[11],
-        uom: values[12],
-        taxPercent: values[13],
+    const rowCount = worksheet.rowCount;
+    if (rowCount < 2) {
+      throw new BadRequestException('No data found to import');
+    }
+
+    let headerRowIndex = -1;
+    const colMap: Record<string, number> = {};
+
+    for (let r = 1; r <= Math.min(rowCount, 10); r++) {
+      const row = worksheet.getRow(r);
+      let found = false;
+      row.eachCell((cell, colNumber) => {
+        const val = String(cell.value || '').trim().toLowerCase();
+        if (val.includes('po number') || val.includes('po no')) { colMap['poNumber'] = colNumber; found = true; }
+        if (val.includes('po date')) colMap['poDate'] = colNumber;
+        if (val.includes('expiry date') || val.includes('po expiry')) colMap['expiryDate'] = colNumber;
+        if (val.includes('supplier name') || val.includes('supplier')) colMap['supplierName'] = colNumber;
+        if (val.includes('product name') || val.includes('product')) colMap['productName'] = colNumber;
+        if (val.includes('product code')) colMap['productCode'] = colNumber;
+        if (val.includes('quantity') || val.includes('qty')) colMap['quantity'] = colNumber;
+        if (val.includes('rate') || val.includes('price')) colMap['rate'] = colNumber;
+        if (val.includes('discount (₹)') || val.includes('discount amount') || val.includes('discount rs')) colMap['discountAmount'] = colNumber;
+        if (val.includes('discount (%)') || val.includes('discount percent')) colMap['discountPercent'] = colNumber;
       });
-    });
-
-    const results = [];
-    for (const row of rows) {
-      try {
-        const po = await this.create(
-          {
-            supplierId: Number(row.supplierId),
-            creditDays: Number(row.creditDays),
-            address: row.address,
-            gstNo: row.gstNo,
-            poCreationDate: row.poCreationDate,
-            expiryDate: row.expiryDate,
-            items: [
-              {
-                productCode: row.productCode,
-                productName: row.productName,
-                hsnCode: row.hsnCode || '',
-                quantity: Number(row.quantity),
-                rate: Number(row.rate),
-                uom: row.uom,
-                taxPercent: Number(row.taxPercent),
-                discountPercent: 0,
-                discountAmount: 0,
-              },
-            ],
-          },
-          userId,
-        );
-        results.push({ success: true, po });
-      } catch (e) {
-        results.push({ success: false, error: e.message, row });
+      if (found) {
+        headerRowIndex = r;
+        break;
       }
     }
 
-    return { imported: results.filter((r) => r.success).length, errors: results.filter((r) => !r.success) };
+    // Scan first 10 rows to detect if user uploaded a GRN, SO, or wrong template
+    let isGrnFile = false;
+    let isSoFile = false;
+
+    for (let r = 1; r <= Math.min(rowCount, 10); r++) {
+      const row = worksheet.getRow(r);
+      row.eachCell((cell) => {
+        const val = String(cell.value || '').trim().toLowerCase();
+        if (val.includes('grn no') || val.includes('grn number') || val.includes('supplier challan')) {
+          isGrnFile = true;
+        }
+        if (val.includes('so no') || val.includes('so number')) {
+          isSoFile = true;
+        }
+      });
+    }
+
+    if (isGrnFile || isSoFile || !colMap['poNumber']) {
+      throw new BadRequestException('Invalid template format');
+    }
+
+    const mandatoryCols = ['poNumber', 'supplierName', 'productName', 'quantity', 'rate'];
+    const missing = mandatoryCols.filter(col => !colMap[col]);
+    if (headerRowIndex === -1 || missing.length > 0) {
+      throw new BadRequestException('Invalid template format');
+    }
+
+    const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
+      const colIdx = colMap[key];
+      if (!colIdx) return defaultVal;
+      const cell = row.getCell(colIdx);
+      let val = cell.value;
+      if (val && typeof val === 'object' && 'result' in val) {
+        val = (val as any).result;
+      }
+      if (val && (val instanceof Date || Object.prototype.toString.call(val) === '[object Date]' || typeof (val as any).getTime === 'function')) {
+        return val;
+      }
+      return String(val !== undefined && val !== null ? val : '').trim();
+    };
+
+    const [{ supplierMap }, { productCodeMap, productNameMap }, existingPos, userShop, userGstDoc] = await Promise.all([
+      this.importValidator.fetchAccountMasterData(userId),
+      this.importValidator.fetchProductMasterData(userId),
+      this.prisma.purchaseOrder.findMany({
+        where: { userId, status: { not: 'DELETED' } },
+        select: { poNumber: true },
+      }),
+      this.prisma.shopDetail.findUnique({ where: { userId } }),
+      this.prisma.sellerDocument.findFirst({
+        where: { uploadedByUserId: userId, type: 'GST' },
+        orderBy: { createdAt: 'desc' },
+        select: { name: true },
+      }),
+    ]);
+
+    const dbPoNumbers = new Set(existingPos.map(p => p.poNumber.toLowerCase().trim()));
+    const importedPoNumbersInFile = new Set<string>();
+
+    const groupMap = new Map<string, any[]>();
+
+    for (let r = headerRowIndex + 1; r <= rowCount; r++) {
+      const row = worksheet.getRow(r);
+      const poNumber = getVal(row, 'poNumber');
+      if (!poNumber || poNumber === '-') continue;
+
+      const item = {
+        rowNum: r,
+        originalRowValues: row.values,
+        poNumber,
+        poDateStr: getVal(row, 'poDate'),
+        expiryDateStr: getVal(row, 'expiryDate'),
+        supplierName: getVal(row, 'supplierName'),
+        productName: getVal(row, 'productName'),
+        productCode: getVal(row, 'productCode'),
+        quantityStr: getVal(row, 'quantity'),
+        rateStr: getVal(row, 'rate'),
+        discountAmountStr: getVal(row, 'discountAmount'),
+        discountPercentStr: getVal(row, 'discountPercent'),
+      };
+
+      if (!groupMap.has(poNumber)) {
+        groupMap.set(poNumber, []);
+      }
+      groupMap.get(poNumber)!.push(item);
+    }
+
+    if (groupMap.size === 0) {
+      throw new BadRequestException('Invalid template format');
+    }
+
+    const successRows: any[] = [];
+    const failedRows: { rowNum: number; values: any[]; error: string }[] = [];
+
+    const userGst = userGstDoc?.name;
+    const companyState = (userShop?.state || '').trim().toLowerCase();
+    const isGstApplicable = isValidGst(userGst);
+
+    for (const [poNumber, rows] of groupMap.entries()) {
+      const groupErrors: string[] = [];
+      const firstRow = rows[0];
+
+      const docNoValidation = this.importValidator.validateDocumentNumber(
+        'PO',
+        poNumber,
+        dbPoNumbers,
+        importedPoNumbersInFile,
+        firstRow.rowNum
+      );
+      if (!docNoValidation.valid) {
+        groupErrors.push(docNoValidation.error);
+      }
+
+      const suppValidation = this.importValidator.validateSupplier(firstRow.supplierName, supplierMap, 'PO');
+      let supplierData: any = null;
+      if (!suppValidation.valid) {
+        groupErrors.push(suppValidation.error);
+      } else {
+        supplierData = suppValidation.data;
+      }
+
+      let parsedExpiryDate: Date = new Date();
+      if (firstRow.expiryDateStr) {
+        const dateVal = this.importValidator.validateImportDate(firstRow.expiryDateStr, 'PO Expiry Date');
+        if (!dateVal.valid) {
+          groupErrors.push(dateVal.error);
+        } else {
+          parsedExpiryDate = dateVal.date;
+        }
+      }
+
+      let parsedPoDate: Date = new Date();
+      if (firstRow.poDateStr) {
+        const poDateVal = this.importValidator.validateImportDate(firstRow.poDateStr, 'PO Date');
+        if (poDateVal.valid) {
+          parsedPoDate = poDateVal.date;
+        }
+      }
+
+      const processedItems: any[] = [];
+      let totalAmount = 0;
+      let totalTaxAmount = 0;
+
+      for (const row of rows) {
+        const prodVal = this.importValidator.validateProduct(
+          row.productName,
+          row.productCode,
+          productCodeMap,
+          productNameMap
+        );
+
+        if (!prodVal.valid) {
+          groupErrors.push(`Row ${row.rowNum}: ${prodVal.error}`);
+          continue;
+        }
+
+        const prod = prodVal.data;
+        const qty = parseFloat(row.quantityStr);
+        const rate = parseFloat(row.rateStr);
+
+        if (isNaN(qty) || qty <= 0) groupErrors.push(`Row ${row.rowNum}: Quantity must be greater than 0.`);
+        if (isNaN(rate) || rate < 0) groupErrors.push(`Row ${row.rowNum}: Rate must be 0 or positive.`);
+
+        const discountAmt = parseFloat(row.discountAmountStr || '0');
+        const discountPct = parseFloat(row.discountPercentStr || '0');
+        if (isNaN(discountAmt) || discountAmt < 0) groupErrors.push(`Row ${row.rowNum}: Discount amount must be positive.`);
+        if (isNaN(discountPct) || discountPct < 0 || discountPct > 100) groupErrors.push(`Row ${row.rowNum}: Discount percent must be between 0 and 100.`);
+
+        if (groupErrors.length > 0) continue;
+
+        const baseTotal = qty * rate;
+        let finalDiscPercent = discountPct;
+        let finalDiscAmount = discountAmt;
+
+        if (finalDiscAmount > 0 && finalDiscPercent === 0) {
+          finalDiscPercent = baseTotal > 0 ? (finalDiscAmount / baseTotal) * 100 : 0;
+        } else {
+          finalDiscAmount = (baseTotal * finalDiscPercent) / 100;
+        }
+
+        const beforeTaxAmount = baseTotal - finalDiscAmount;
+        const taxRate = Number(prod.tax_rate || 0);
+        const supplierGst = supplierData?.gstNo;
+        const supplierState = (supplierData?.state || '').trim().toLowerCase();
+
+        const isInterState = this.importValidator.determineIsInterState(
+          userGst,
+          companyState,
+          supplierGst,
+          supplierState
+        );
+
+        const taxAmount = isGstApplicable ? ((beforeTaxAmount * taxRate) / 100) : 0;
+        const totalItemAmount = beforeTaxAmount + taxAmount;
+
+        totalAmount += beforeTaxAmount;
+        totalTaxAmount += taxAmount;
+
+        processedItems.push({
+          productId: prod.id,
+          productCode: prod.product_code,
+          productName: prod.product_name,
+          printDescription: prod.description || prod.hsn_description || prod.product_name,
+          hsnCode: prod.hsn_code || '',
+          quantity: qty,
+          rate,
+          uom: prod.uom?.unit_name || 'Nos',
+          discountPercent: finalDiscPercent,
+          discountAmount: finalDiscAmount,
+          taxPercent: taxRate,
+          taxAmount,
+          beforeTaxAmount,
+          totalAmount: totalItemAmount,
+        });
+      }
+
+      if (groupErrors.length > 0) {
+        const combinedErrorMsg = groupErrors.join(' | ');
+        for (const row of rows) {
+          failedRows.push({
+            rowNum: row.rowNum,
+            values: row.originalRowValues,
+            error: combinedErrorMsg,
+          });
+        }
+      } else {
+        try {
+          await this.prisma.$transaction(async (tx) => {
+            await tx.purchaseOrder.create({
+              data: {
+                poNumber,
+                supplierName: supplierData.name,
+                address: supplierData.address,
+                creditDays: supplierData.creditDays,
+                gstNumber: supplierData.gstNo,
+                poCreationDate: parsedPoDate,
+                expiryDate: parsedExpiryDate,
+                totalAmount: totalAmount + totalTaxAmount,
+                taxAmount: totalTaxAmount,
+                userId,
+                status: 'PENDING',
+                items: {
+                  create: processedItems.map(item => ({
+                    productId: item.productId,
+                    productCode: item.productCode,
+                    productName: item.productName,
+                    printDescription: item.printDescription,
+                    hsnCode: item.hsnCode,
+                    quantity: item.quantity,
+                    rate: item.rate,
+                    uom: item.uom,
+                    discountPercent: item.discountPercent,
+                    discountAmount: item.discountAmount,
+                    taxPercent: item.taxPercent,
+                    taxAmount: item.taxAmount,
+                    beforeTaxAmount: item.beforeTaxAmount,
+                    totalAmount: item.totalAmount,
+                  })),
+                },
+              },
+            });
+          });
+
+          importedPoNumbersInFile.add(poNumber.toLowerCase());
+          for (const row of rows) {
+            successRows.push(row);
+          }
+        } catch (dbError: any) {
+          const dbErrMsg = `Database Save Failed: ${dbError.message || dbError}`;
+          for (const row of rows) {
+            failedRows.push({
+              rowNum: row.rowNum,
+              values: row.originalRowValues,
+              error: dbErrMsg,
+            });
+          }
+        }
+      }
+    }
+
+    const headers = [
+      'PO Number*', 'PO Date*', 'PO Expiry Date*', 'Supplier Name*',
+      'Product Name*', 'Product Code', 'Qty*', 'Rate*', 'Discount (₹)', 'Discount (%)'
+    ];
+
+    return this.importValidator.buildResponseSummary(headers, successRows, failedRows);
   }
 
   async exportPurchaseOrders(

@@ -22,6 +22,8 @@ import { LedgerModule } from './modules/Ledger/ledger.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { QueueModule } from './infrastructure/queue/queue.module';
 import { AppController } from './app.controller';
+import { ImportValidationModule } from './common/services/import-validation.module';
+
 @Module({
     imports: [
         ConfigModule.forRoot({
@@ -31,6 +33,7 @@ import { AppController } from './app.controller';
         PrismaModule,
         RedisModule,
         QueueModule,
+        ImportValidationModule,
         AuthModule,
         UploadModule,
         BusinessModule,

@@ -48,9 +48,9 @@ export class CreateAccountMasterDto {
 
   @ApiProperty()
   @IsString()
-  @IsNotEmpty()
-  @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value)
-  @Matches(/^[A-Z]{3}[PCHFATBLJG][A-Z]{1}[0-9]{4}[A-Z]{1}$/, { message: 'Invalid PAN format. Must be a valid 10-character PAN (e.g., ABCPE1234F) where the 4th character is one of: P, C, H, F, A, T, B, L, J, G' })
+  @IsNotEmpty({ message: 'PAN Number is required' })
+  @Transform(({ value }) => typeof value === 'string' ? value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10) : value)
+  @Matches(/^[A-Z]{3}[PCHF][A-Z]{1}[0-9]{4}[A-Z]{1}$/, { message: 'Invalid PAN format. PAN must contain exactly 10 characters (AAAAA9999A) with 4th character P (Individual), C (Company), H (HUF), or F (Firm/LLP)' })
   panNo: string;
 
   @ApiProperty()

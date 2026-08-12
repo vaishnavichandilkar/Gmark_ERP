@@ -111,6 +111,72 @@ export class LedgerService {
   }
 
   async getGroupLedgersSummary(query: LedgerQueryDto, userId: number) {
+    // 1. Fetch group hierarchy across all levels to resolve parent-child relationships
+    const [l1Groups, l2SubGroups, l3SubSubGroups, l4SubSubSubGroups, l5SubSubSubSubGroups] = await Promise.all([
+      this.prisma.group.findMany({ select: { id: true, group_name: true, parent_id: true } }),
+      this.prisma.subGroup.findMany({ select: { id: true, subgroup_name: true, group_id: true } }),
+      this.prisma.subSubGroup.findMany({ select: { id: true, name: true, sub_group_id: true } }),
+      this.prisma.subSubSubGroup.findMany({ select: { id: true, name: true, sub_sub_group_id: true } }),
+      this.prisma.subSubSubSubGroup.findMany({ select: { id: true, name: true, sub_sub_sub_group_id: true } }),
+    ]);
+
+    const groupParentMap = new Map<string, string>();
+    const l1Map = new Map<number, any>(l1Groups.map(g => [g.id, g]));
+    for (const g of l1Groups) {
+      if (g.parent_id && l1Map.has(g.parent_id)) {
+        groupParentMap.set(g.group_name.trim().toLowerCase(), l1Map.get(g.parent_id).group_name);
+      }
+    }
+    for (const sg of l2SubGroups) {
+      if (l1Map.has(sg.group_id)) {
+        groupParentMap.set(sg.subgroup_name.trim().toLowerCase(), l1Map.get(sg.group_id).group_name);
+      }
+    }
+    const l2Map = new Map<number, any>(l2SubGroups.map(sg => [sg.id, sg]));
+    for (const ssg of l3SubSubGroups) {
+      if (l2Map.has(ssg.sub_group_id)) {
+        groupParentMap.set(ssg.name.trim().toLowerCase(), l2Map.get(ssg.sub_group_id).subgroup_name);
+      }
+    }
+    const l3Map = new Map<number, any>(l3SubSubGroups.map(ssg => [ssg.id, ssg]));
+    for (const sssg of l4SubSubSubGroups) {
+      if (l3Map.has(sssg.sub_sub_group_id)) {
+        groupParentMap.set(sssg.name.trim().toLowerCase(), l3Map.get(sssg.sub_sub_group_id).name);
+      }
+    }
+    const l4Map = new Map<number, any>(l4SubSubSubGroups.map(sssg => [sssg.id, sssg]));
+    for (const ssssg of l5SubSubSubSubGroups) {
+      if (l4Map.has(ssssg.sub_sub_sub_group_id)) {
+        groupParentMap.set(ssssg.name.trim().toLowerCase(), l4Map.get(ssssg.sub_sub_sub_group_id).name);
+      }
+    }
+
+    const resolveAncestors = (groupNameStr: string): string[] => {
+      const ancestors: string[] = [groupNameStr];
+      let curr = groupNameStr.trim().toLowerCase();
+      const visited = new Set<string>([curr]);
+      while (groupParentMap.has(curr)) {
+        const parentName = groupParentMap.get(curr)!;
+        const parentLower = parentName.trim().toLowerCase();
+        if (visited.has(parentLower)) break;
+        visited.add(parentLower);
+        ancestors.unshift(parentName);
+        curr = parentLower;
+      }
+      return ancestors;
+    };
+
+    const shadowGroupNames = new Set([
+      'direct expense', 'indirect expense', 'purchase', 'opening stock', 
+      'direct sale', 'indirect sale', 'sale', 'closing stock', 
+      'liabilities', 'assets', 'non-current liabilities', 'current liabilities', 
+      'non-current assets', 'current assets', 'long term borrowings', 
+      'other long term liabilities', 'long term provisions', 'short term borrowings', 
+      'suppliers', 'other current liabilities', 'short term provisions', 
+      'fixed assets', 'long term loans & advances', 'current investment', 
+      'inventories', 'customers', 'short term loans and advances', 'other current assets'
+    ]);
+
     const accounts = await this.prisma.accountMaster.findMany({
       where: {
         userId,
@@ -127,7 +193,13 @@ export class LedgerService {
       },
     });
 
-    const mapped = accounts.map((account) => {
+    const realAccounts = accounts.filter(acc => {
+      const nameLower = acc.accountName.trim().toLowerCase();
+      const isShadow = acc.groupName.some(g => g.trim().toLowerCase() === nameLower) || (acc.accountType === null && shadowGroupNames.has(nameLower));
+      return !isShadow;
+    });
+
+    const mapped = realAccounts.map((account) => {
       const opBal = Number(account.supplierOpeningBalance || account.customerOpeningBalance || 0);
       const opType = account.supplierBalanceType || account.customerBalanceType || 'Dr';
       const openingBalance = opType === 'Cr' ? opBal : -opBal;
@@ -140,16 +212,33 @@ export class LedgerService {
         .reduce((sum, t) => sum + Number(t.amount), 0);
       const closingBalance = openingBalance + credit - debit;
 
-      let groupList = Array.isArray(account.groupName) ? [...account.groupName] : [account.groupName || 'General'];
+      const rawGroupList = Array.isArray(account.groupName) ? account.groupName : [account.groupName || 'General'];
+      let groupList: string[] = [];
+      for (const g of rawGroupList) {
+        if (!g) continue;
+        const anc = resolveAncestors(g);
+        for (const a of anc) {
+          if (!groupList.includes(a)) {
+            groupList.push(a);
+          }
+        }
+      }
+      if (groupList.length === 0) groupList = ['General'];
+
       const accType = String(account.accountType || '').toUpperCase();
-      
       const gStr = groupList.map(g => String(g).toUpperCase()).join(' ');
       if (accType.includes('BANK') || accType.includes('CASH') || gStr.includes('BANK') || gStr.includes('CASH')) {
-        groupList = ['Assets', 'Current Assets', 'Bank & Cash'];
+        if (!groupList.includes('Bank & Cash')) groupList.push('Bank & Cash');
+        if (!groupList.includes('Current Assets')) groupList.unshift('Current Assets');
+        if (!groupList.includes('Assets')) groupList.unshift('Assets');
       } else if (accType.includes('DEBTOR') || accType.includes('CUSTOMER') || gStr.includes('DEBTOR') || gStr.includes('CUSTOMER')) {
-        groupList = ['Assets', 'Current Assets', 'Customers'];
+        if (!groupList.includes('Customers')) groupList.push('Customers');
+        if (!groupList.includes('Current Assets')) groupList.unshift('Current Assets');
+        if (!groupList.includes('Assets')) groupList.unshift('Assets');
       } else if (accType.includes('CREDITOR') || accType.includes('SUPPLIER') || gStr.includes('CREDITOR') || gStr.includes('SUPPLIER')) {
-        groupList = ['Liabilities', 'Current Liabilities', 'Suppliers'];
+        if (!groupList.includes('Suppliers')) groupList.push('Suppliers');
+        if (!groupList.includes('Current Liabilities')) groupList.unshift('Current Liabilities');
+        if (!groupList.includes('Liabilities')) groupList.unshift('Liabilities');
       }
 
       const groupNameStr = groupList.length > 0 ? groupList[groupList.length - 1] : 'General';
@@ -198,11 +287,45 @@ export class LedgerService {
     }
 
     if (query.group && query.group.trim().toUpperCase() !== 'ALL' && query.group.trim().toLowerCase() !== 'all groups') {
-      const searchGrp = query.group.trim().toLowerCase();
-      result = result.filter(acc => 
-        acc.allGroups.some(g => String(g).trim().toLowerCase() === searchGrp)
-      );
+      const normalize = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const targetNorm = normalize(query.group);
+      
+      const targetAliases = new Set<string>([targetNorm]);
+      if (targetNorm === 'indirectexpense' || targetNorm === 'indirectexpenses') {
+        targetAliases.add('indirectexpense');
+        targetAliases.add('indirectexpenses');
+      } else if (targetNorm === 'directexpense' || targetNorm === 'directexpenses') {
+        targetAliases.add('directexpense');
+        targetAliases.add('directexpenses');
+      } else if (targetNorm === 'purchase' || targetNorm === 'purchases' || targetNorm === 'purchaseaccounts') {
+        targetAliases.add('purchase');
+        targetAliases.add('purchases');
+        targetAliases.add('purchaseaccounts');
+      } else if (targetNorm === 'sale' || targetNorm === 'sales' || targetNorm === 'salesaccounts' || targetNorm === 'directsale' || targetNorm === 'indirectsale') {
+        targetAliases.add('sale');
+        targetAliases.add('sales');
+        targetAliases.add('salesaccounts');
+      } else if (targetNorm.includes('debtor') || targetNorm.includes('customer')) {
+        targetAliases.add('customers');
+        targetAliases.add('sundrydebtors');
+        targetAliases.add('debtors');
+      } else if (targetNorm.includes('creditor') || targetNorm.includes('supplier')) {
+        targetAliases.add('suppliers');
+        targetAliases.add('sundrycreditors');
+        targetAliases.add('creditors');
+      }
+
+      result = result.filter(acc => {
+        return acc.allGroups.some(g => {
+          const gNorm = normalize(String(g));
+          if (targetAliases.has(gNorm)) return true;
+          if (gNorm + 's' === targetNorm || targetNorm + 's' === gNorm) return true;
+          return false;
+        });
+      });
     }
+
+    return result;
 
     return result;
   }

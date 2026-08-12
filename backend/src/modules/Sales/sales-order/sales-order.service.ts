@@ -6,10 +6,14 @@ import { Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { formatDate, parseDDMMYYYY } from '../../../utils/dateFormatter';
+import { ImportValidationService } from '../../../common/services/import-validation.service';
 
 @Injectable()
 export class SalesOrderService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private importValidator: ImportValidationService
+    ) { }
 
     private async isSellerMsme(userId: number): Promise<boolean> {
         const user = await this.prisma.user.findUnique({
@@ -452,11 +456,11 @@ export class SalesOrderService {
                 items: true,
                 salesChallans: {
                     where: { status: { not: 'DELETED' } },
-                    select: { id: true }
+                    include: { items: true }
                 },
                 salesInvoices: {
                     where: { status: { not: 'DELETED' } },
-                    select: { id: true }
+                    include: { items: true }
                 }
             },
             orderBy: { createdAt: 'desc' },
@@ -470,11 +474,11 @@ export class SalesOrderService {
                 items: true,
                 salesChallans: {
                     where: { status: { not: 'DELETED' } },
-                    select: { id: true }
+                    include: { items: true }
                 },
                 salesInvoices: {
                     where: { status: { not: 'DELETED' } },
-                    select: { id: true }
+                    include: { items: true }
                 }
             },
         });
@@ -1028,8 +1032,8 @@ export class SalesOrderService {
     worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
     const headers = [
-      'SO Number*', 'SO Date*', 'Expiry Date*', 'Customer Name*',
-      'Customer PO Type* (Verbal/Written)', 'PO Date', 'PO Expiry Date',
+      'SO Number*', 'SO Date* (DD/MM/YYYY)', 'Expiry Date* (DD/MM/YYYY)', 'Customer Name*',
+      'Customer PO Type* (Verbal/Written)', 'PO Date (DD/MM/YYYY)', 'PO Expiry Date (DD/MM/YYYY)',
       'PO Amount (Excluding Tax)', 'PO Amount (Including Tax)',
       'Product Name*', 'Quantity*', 'Rate*', 'Discount (₹)', 'Discount (%)'
     ];
@@ -1068,10 +1072,26 @@ export class SalesOrderService {
     }
 
     worksheet.columns = headers.map((h, i) => {
-      let width = Math.max(20, h.length + 5);
+      let width = Math.max(25, h.length + 6);
       if (i === 3) width = 30; // Customer Name
       if (i === 9) width = 30; // Product Name
       return { width };
+    });
+
+    headerRow.eachCell((cell) => { cell.protection = { locked: true }; });
+    for (let r = 2; r <= 1000; r++) {
+      const row = worksheet.getRow(r);
+      for (let c = 1; c <= headers.length; c++) {
+        row.getCell(c).protection = { locked: false };
+      }
+    }
+    await worksheet.protect('', {
+      selectLockedCells: true,
+      selectUnlockedCells: true,
+      insertRows: true,
+      deleteRows: true,
+      sort: true,
+      autoFilter: true,
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
@@ -1133,10 +1153,36 @@ export class SalesOrderService {
       }
     }
 
+    // Scan first 10 rows to detect if user uploaded a PO file or wrong template
+    let isPoFile = false;
+    let isGrnFile = false;
+
+    for (let r = 1; r <= Math.min(rowCount, 10); r++) {
+      const row = worksheet.getRow(r);
+      row.eachCell((cell) => {
+        const val = String(cell.value || '').trim().toLowerCase();
+        if (val.includes('grn no') || val.includes('grn number') || val.includes('supplier challan')) {
+          isGrnFile = true;
+        }
+        if (
+          val.includes('po date') || 
+          val.includes('po expiry') || 
+          val.includes('supplier name') || 
+          (val.includes('po no') && !val.includes('so') && !val.includes('customer po'))
+        ) {
+          isPoFile = true;
+        }
+      });
+    }
+
+    if (!colMap['soNumber']) {
+      throw new BadRequestException('Invalid template format');
+    }
+
     const mandatoryCols = ['soNumber', 'soDate', 'expiryDate', 'customerName', 'customerType', 'productName', 'quantity', 'rate'];
     const missing = mandatoryCols.filter(col => !colMap[col]);
     if (headerRowIndex === -1 || missing.length > 0) {
-      throw new BadRequestException(`Invalid template. Missing mandatory columns: ${missing.join(', ')}`);
+      throw new BadRequestException('Invalid template format');
     }
 
     const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
@@ -1166,7 +1212,8 @@ export class SalesOrderService {
         where: { userId }
       }),
       this.prisma.sellerDocument.findFirst({
-        where: { uploadedByUserId: userId, type: 'GST', url: 'N/A' },
+        where: { uploadedByUserId: userId, type: 'GST' },
+        orderBy: { createdAt: 'desc' },
         select: { name: true }
       }),
       this.prisma.salesOrder.findMany({
@@ -1221,6 +1268,10 @@ export class SalesOrderService {
         groupMap.set(soNumber, []);
       }
       groupMap.get(soNumber).push(item);
+    }
+
+    if (groupMap.size === 0) {
+      throw new BadRequestException('Invalid template format');
     }
 
     const successRows: any[] = [];
@@ -1334,16 +1385,12 @@ export class SalesOrderService {
         const customerGst = customer?.gstNo;
         const customerState = (customer?.state || "").trim().toLowerCase();
 
-        let isInterState = false;
-        if (isGstApplicable) {
-          const userCode = userGst?.substring(0, 2);
-          const customerCode = customerGst ? customerGst.substring(0, 2) : null;
-          if (customerGst && /^\d{2}$/.test(userCode) && /^\d{2}$/.test(customerCode)) {
-            isInterState = userCode !== customerCode;
-          } else {
-            isInterState = companyState !== customerState;
-          }
-        }
+        const isInterState = this.importValidator.determineIsInterState(
+          userGst,
+          companyState,
+          customerGst,
+          customerState
+        );
 
         const taxAmount = isGstApplicable ? ((beforeTaxAmount * taxRate) / 100) : 0;
         const totalItemAmount = beforeTaxAmount + taxAmount;
@@ -1485,12 +1532,15 @@ export class SalesOrderService {
     const failedBuffer = await failedWb.xlsx.writeBuffer();
 
     return {
-      success: true,
+      success: failedRows.length === 0,
       summary: {
         totalRows: parsedRows.length,
         successful: successRows.length,
         failed: failedRows.length
       },
+      totalRows: parsedRows.length,
+      successful: successRows.length,
+      failed: failedRows.length,
       errors: rowErrors,
       successFile: Buffer.from(successBuffer).toString('base64'),
       errorFile: Buffer.from(failedBuffer).toString('base64')
