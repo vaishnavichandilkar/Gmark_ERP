@@ -36,6 +36,42 @@ const ReportTable = ({ data, type, status, onClose }) => {
         }).format(amount || 0);
     };
 
+    const calcTaxAmount = (item, val) => {
+        if (!item && (val === null || val === undefined)) return 0;
+
+        const valNum = Number(val);
+        if (!isNaN(valNum) && valNum > 0) return valNum;
+
+        const taxAmt = Number(item?.taxAmount || item?.tax_amount);
+        if (!isNaN(taxAmt) && taxAmt > 0) return taxAmt;
+
+        const gstSum = Number(item?.cgstAmount || 0) + Number(item?.sgstAmount || 0) + Number(item?.igstAmount || 0) + Number(item?.cgst_amount || 0) + Number(item?.sgst_amount || 0) + Number(item?.igst_amount || 0);
+        if (gstSum > 0) return gstSum;
+
+        const gross = Number(item?.grandTotal ?? item?.totalAmount ?? item?.grossAmount ?? item?.grand_total ?? item?.total_amount ?? 0);
+        const taxable = Number(item?.taxableAmount ?? item?.taxable_amount ?? item?.beforeTaxAmount ?? item?.before_tax_amount ?? item?.subTotal ?? 0);
+
+        if (gross > taxable && taxable > 0) {
+            return gross - taxable;
+        }
+
+        if (Array.isArray(item?.items) && item.items.length > 0) {
+            let itemsTax = 0;
+            item.items.forEach(i => {
+                const iTax = Number(i?.taxAmount || i?.tax_amount || 0);
+                if (iTax > 0) {
+                    itemsTax += iTax;
+                } else if (Number(i?.taxPercent || i?.tax_percent || 0) > 0) {
+                    const base = Number(i?.beforeTaxAmount || i?.before_tax_amount || (Number(i?.quantity || 0) * Number(i?.rate || 0)) || 0);
+                    itemsTax += (base * Number(i?.taxPercent || i?.tax_percent)) / 100;
+                }
+            });
+            if (itemsTax > 0) return itemsTax;
+        }
+
+        return 0;
+    };
+
     const renderStatus = (val, item) => {
         // Priority: Deleted -> Expired -> Expiring Soon -> Completed -> Pending
         if (['PO', 'SO'].includes(type) && item) {
@@ -89,7 +125,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     { header: 'Expiry Date', key: 'expiryDate', render: (val) => formatDate(val) },
                     { header: 'Gst Number', key: 'gstNumber' },
                     { header: 'Credit Days', key: 'creditDays' },
-                    { header: 'Tax Amount', key: 'taxAmount', render: (val) => formatCurrency(val) },
+                    { header: 'Tax Amount', key: 'taxAmount', render: (val, item) => formatCurrency(calcTaxAmount(item, val)) },
                     { header: 'Total Amount', key: 'totalAmount', render: (val) => formatCurrency(val) }
                 ];
             case 'SO':
@@ -102,7 +138,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     { header: 'Amount', key: 'totalAmount', render: (val) => formatCurrency(val) },
                     { header: 'Gst Number', key: 'gstNumber' },
                     { header: 'Credit Days', key: 'creditDays' },
-                    { header: 'Tax Amount', key: 'taxAmount', render: (val) => formatCurrency(val) },
+                    { header: 'Tax Amount', key: 'taxAmount', render: (val, item) => formatCurrency(calcTaxAmount(item, val)) },
                     { header: 'Total Amount', key: 'grandTotal', render: (val) => formatCurrency(val) }
                 ];
             case 'PRODUCT':
@@ -125,7 +161,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     { header: 'Gst No', key: 'gstNumber' },
                     { header: 'Credit Days', key: 'creditDays' },
                     { header: 'Taxable Amount', key: 'taxableAmount', render: (val) => formatCurrency(val) },
-                    { header: 'Tax Amount', key: 'taxAmount', render: (val) => formatCurrency(val) },
+                    { header: 'Tax Amount', key: 'taxAmount', render: (val, item) => formatCurrency(calcTaxAmount(item, val)) },
                     { header: 'Gross Amount', key: 'grandTotal', render: (val) => formatCurrency(val) }
                 ];
             case 'CHALLAN':
@@ -139,38 +175,63 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     { header: 'GST No', key: 'gstNo' },
                     { header: 'Credit Days', key: 'creditDays' },
                     { header: 'Taxable Amount', key: 'taxableAmount', render: (val) => formatCurrency(val) },
-                    { header: 'Tax Amount', key: 'taxAmount', render: (val) => formatCurrency(val) },
+                    { header: 'Tax Amount', key: 'taxAmount', render: (val, item) => formatCurrency(calcTaxAmount(item, val)) },
                     { header: 'Gross Amount', key: 'grandTotal', render: (val) => formatCurrency(val) }
                 ];
             case 'PI':
                 return [
-                    { header: 'Supplier Name', key: 'supplierName' },
-                    { header: 'Supplier Invoice Number', key: 'supplierInvoiceNumber' },
-                    { header: 'Supplier Invoice Date', key: 'supplierInvoiceDate', render: (val) => formatDate(val) },
+                    { header: 'Invoice No', key: 'supplierInvoiceNumber', render: (val, item) => val || item?.invoiceNumber || item?.piNumber || '-' },
+                    { header: 'Supplier Name', key: 'supplierName', render: (val, item) => val || item?.vendorName || '-' },
+                    { header: 'Supplier Invoice Date', key: 'supplierInvoiceDate', render: (val, item) => formatDate(val || item?.invoiceDate || item?.bookingDate) },
                     { header: 'Booking Date', key: 'bookingDate', render: (val) => formatDate(val) },
-                    { header: 'Po No', key: 'poNumber' },
-                    { header: 'Gst No', key: 'gstNumber' },
-                    { header: 'Credit Days', key: 'creditDays' },
+                    { header: 'PO No', key: 'poNumber', render: (val, item) => val || item?.poNo || '-' },
+                    { header: 'GST No', key: 'gstNumber', render: (val, item) => val || item?.gstNo || '-' },
+                    { header: 'Credit Days', key: 'creditDays', render: (val) => val ?? '-' },
                     { header: 'Taxable Amount', key: 'taxableAmount', render: (val) => formatCurrency(val) },
-                    { header: 'Tax Amount', key: 'taxAmount', render: (val) => formatCurrency(val) },
-                    { header: 'Gross Amount', key: 'grandTotal', render: (val) => formatCurrency(val) }
+                    { header: 'Tax Amount', key: 'taxAmount', render: (val, item) => formatCurrency(calcTaxAmount(item, val)) },
+                    { header: 'Gross Amount', key: 'grandTotal', render: (val, item) => formatCurrency(val || item?.totalAmount) }
                 ];
             case 'SI':
                 return [
-                    { header: 'Invoice No', key: 'soNumber' },
-                    { header: 'Customer Name', key: 'customerName' },
-                    { header: 'Customer Type', key: 'customerType' },
+                    { header: 'Invoice No', key: 'invoiceNumber', render: (val, item) => val || item?.customerInvoiceNumber || item?.soNumber || '-' },
+                    { header: 'Customer Name', key: 'customerName', render: (val) => val || '-' },
+                    { header: 'Customer Type', key: 'customerType', render: (val, item) => {
+                        const raw = val || item?.customerType || item?.customer?.customerType || item?.customerCategory || item?.type;
+                        if (!raw || raw === '-') return '-';
+                        return String(raw).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+                    }},
                     { header: 'Booking Date', key: 'bookingDate', render: (val) => formatDate(val) },
-                    { header: 'Invoice Date', key: 'soCreationDate', render: (val) => formatDate(val) },
-                    { header: 'SO No', key: 'soNumber' },
-                    { header: 'GST No', key: 'gstNumber' },
-                    { header: 'Credit Days', key: 'creditDays' },
+                    { header: 'Invoice Date', key: 'invoiceDate', render: (val, item) => formatDate(val || item?.customerInvoiceDate || item?.bookingDate || item?.createdAt) },
+                    { header: 'SO No', key: 'soNumber', render: (val, item) => val || (item?.soId ? `SO-${item.soId}` : '-') },
+                    { header: 'GST No', key: 'gstNumber', render: (val, item) => val || item?.gstNo || '-' },
+                    { header: 'Credit Days', key: 'creditDays', render: (val) => val ?? '-' },
                     { header: 'Taxable Amount', key: 'taxableAmount', render: (val) => formatCurrency(val) },
-                    { header: 'Tax Amount', key: 'taxAmount', render: (val) => formatCurrency(val) },
-                    { header: 'Gross Amount', key: 'grandTotal', render: (val) => formatCurrency(val) }
+                    { header: 'Tax Amount', key: 'taxAmount', render: (val, item) => formatCurrency(calcTaxAmount(item, val)) },
+                    { header: 'Gross Amount', key: 'grandTotal', render: (val, item) => formatCurrency(val || item?.totalAmount) }
                 ];
+            case 'STOCK':
+                return [
+                    { header: 'Product Name', key: 'productName' },
+                    { header: 'Product Code', key: 'productCode' },
+                    { header: 'Purchase Qty (X)', key: 'purchaseQty' },
+                    { header: 'Sales Qty (Y)', key: 'salesQty' },
+                    { header: 'Remaining Qty', key: 'remainingQty' },
+                    { header: 'Avg. Purchasing Amount', key: 'avgPurchasingAmount', render: (val) => formatCurrency(val) },
+                    { header: 'Total Amount', key: 'totalAmount', render: (val) => formatCurrency(val) }
+                ];
+            case 'EXPENSE':
+            case 'INCOME':
+            case 'LEDGER':
             default:
-                return [];
+                return [
+                    { header: 'Date', key: 'bookingDate', render: (val, item) => formatDate(val || item?.supplierInvoiceDate || item?.soCreationDate || item?.poCreationDate || item?.created_at) },
+                    { header: 'Particulars / Account', key: 'supplierName', render: (val, item) => val || item?.customerName || item?.accountName || item?.description || item?.name || 'General Transaction' },
+                    { header: 'Doc / Invoice No', key: 'supplierInvoiceNumber', render: (val, item) => val || item?.soNumber || item?.poNumber || item?.challanNumber || item?.voucherNo || '-' },
+                    { header: 'Status / Group', key: 'status', render: (val, item) => val || (Array.isArray(item?.groupName) ? item.groupName.join(', ') : item?.groupName) || 'COMPLETED' },
+                    { header: 'Taxable Amount', key: 'taxableAmount', render: (val) => formatCurrency(val) },
+                    { header: 'Tax Amount', key: 'taxAmount', render: (val, item) => formatCurrency(calcTaxAmount(item, val)) },
+                    { header: 'Total Amount', key: 'grandTotal', render: (val, item) => formatCurrency(val || item?.totalAmount || item?.amount) }
+                ];
         }
     }, [type, status]);
 
@@ -343,13 +404,20 @@ const ReportTable = ({ data, type, status, onClose }) => {
     }, [data, searchQuery]);
 
     const columnTotals = useMemo(() => {
-        const totals = {};
-        const numericKeys = ['totalAmount', 'grandTotal', 'taxableAmount', 'taxAmount'];
-        
-        numericKeys.forEach(key => {
-            totals[key] = filteredData.reduce((sum, item) => sum + (Number(item[key]) || 0), 0);
+        const totals = {
+            totalAmount: 0,
+            grandTotal: 0,
+            taxableAmount: 0,
+            taxAmount: 0
+        };
+
+        filteredData.forEach(item => {
+            totals.totalAmount += (Number(item.totalAmount) || Number(item.grandTotal) || 0);
+            totals.grandTotal += (Number(item.grandTotal) || Number(item.totalAmount) || 0);
+            totals.taxableAmount += (Number(item.taxableAmount) || 0);
+            totals.taxAmount += calcTaxAmount(item, item.taxAmount);
         });
-        
+
         return totals;
     }, [filteredData]);
 
@@ -425,7 +493,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                                             <td key={colIdx} className={`px-8 py-4 text-[14px] text-gray-600 font-medium ${col.isAction ? 'relative' : ''}`}>
                                                 {col.isAction
                                                     ? renderActionMenu(item, rowIdx)
-                                                    : (col.key === 'status' ? renderStatus(item[col.key], item) : (col.render ? col.render(item[col.key]) : (item[col.key] || '-')))
+                                                    : (col.key === 'status' ? renderStatus(item[col.key], item) : (col.render ? col.render(item[col.key], item) : (item[col.key] || '-')))
                                                 }
                                             </td>
                                         ))}

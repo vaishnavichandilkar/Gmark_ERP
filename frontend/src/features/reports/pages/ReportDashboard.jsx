@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import {
@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { fetchReportsStart } from '../reportSlice';
 import Card, { CardContent, CardHeader } from '../../../components/common/Card';
-import { FileText, ShoppingCart, TrendingUp, DollarSign, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent } from 'lucide-react';
+import { FileText, ShoppingCart, TrendingUp, DollarSign, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent, Package, Search, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import Loader from '../../../components/common/Loader';
 import ReportTable from '../components/ReportTable';
 import reportService from '../../../services/reportService';
@@ -17,27 +17,74 @@ const ReportDashboard = () => {
     const dispatch = useDispatch();
     const { purchaseData, salesData, salesInvoicesData, poData, loading, error, grnData, challanData } = useSelector(state => state.reports);
 
-    const [activeTab, setActiveTab] = useState('ALL'); // 'ALL', 'PURCHASE', 'SALES', 'PROFIT_LOSS'
+    const [activeTab, setActiveTab] = useState('ALL'); // 'ALL', 'PURCHASE', 'SALES', 'INVENTORY', 'PROFIT_LOSS'
     const [timeFilter, setTimeFilter] = useState('MONTHLY'); // 'DAILY', 'WEEKLY', 'MONTHLY'
     const [detailView, setDetailView] = useState(null); // { type: 'PO', status: 'Created', data: [] }
     const [profitLossData, setProfitLossData] = useState(null);
     const [plLoading, setPlLoading] = useState(false);
+    const [plFromDate, setPlFromDate] = useState('2026-04-01');
+    const [plToDate, setPlToDate] = useState('2027-03-31');
+
+    // Inventory report state
+    const [inventoryData, setInventoryData] = useState(null);
+    const [invLoading, setInvLoading] = useState(false);
+    const [invError, setInvError] = useState(null);
+    const [invSearch, setInvSearch] = useState('');
+    const [invPage, setInvPage] = useState(1);
+    const [invLimit, setInvLimit] = useState(10);
+    const [invSortBy, setInvSortBy] = useState('');
+    const [invSortOrder, setInvSortOrder] = useState('asc');
+
+    const fetchInventory = useCallback(async () => {
+        setInvLoading(true);
+        setInvError(null);
+        try {
+            const params = {
+                page: invPage,
+                limit: invLimit,
+                search: invSearch,
+                sortBy: invSortBy || undefined,
+                sortOrder: invSortBy ? invSortOrder : undefined,
+            };
+            const res = await reportService.getInventoryReport(params);
+            setInventoryData(res);
+        } catch (err) {
+            console.error("Error loading Inventory report:", err);
+            setInvError("Failed to load inventory report");
+        } finally {
+            setInvLoading(false);
+        }
+    }, [invPage, invLimit, invSearch, invSortBy, invSortOrder]);
+
+    const fetchPL = useCallback(async () => {
+        setPlLoading(true);
+        try {
+            const params = {};
+            if (plFromDate) params.fromDate = plFromDate;
+            if (plToDate) params.toDate = plToDate;
+            const data = await reportService.getProfitLoss(params);
+            setProfitLossData(data);
+        } catch (err) {
+            console.error("Error loading Profit & Loss report:", err);
+        } finally {
+            setPlLoading(false);
+        }
+    }, [plFromDate, plToDate]);
+
+    useEffect(() => {
+        if (activeTab === 'INVENTORY') {
+            fetchInventory();
+        }
+    }, [activeTab, fetchInventory]);
+
+    useEffect(() => {
+        if (activeTab === 'PROFIT_LOSS' || activeTab === 'ALL') {
+            fetchPL();
+        }
+    }, [activeTab, fetchPL]);
 
     useEffect(() => {
         dispatch(fetchReportsStart());
-
-        const fetchPL = async () => {
-            setPlLoading(true);
-            try {
-                const data = await reportService.getProfitLoss();
-                setProfitLossData(data);
-            } catch (err) {
-                console.error("Error loading Profit & Loss report:", err);
-            } finally {
-                setPlLoading(false);
-            }
-        };
-        fetchPL();
     }, [dispatch]);
 
     useEffect(() => {
@@ -298,18 +345,18 @@ const ReportDashboard = () => {
             });
         } else if (type === 'PI') {
             filtered = (data || []).filter(item => {
-                if (statusLabel === 'Total Invoices') return true;
                 if (statusLabel === 'Deleted') return item.status === 'DELETED';
                 if (statusLabel === 'Generated') return item.status === 'GENERATED';
-                return false;
+                return true;
             });
         } else if (type === 'SI') {
             filtered = (data || []).filter(item => {
-                if (statusLabel === 'Total Invoices') return true;
                 if (statusLabel === 'Deleted') return item.status === 'DELETED';
                 if (statusLabel === 'Generated') return item.status === 'GENERATED' || item.status === 'INVOICE_GENERATED';
-                return false;
+                return true;
             });
+        } else {
+            filtered = data || [];
         }
 
         setDetailView({ type, status: statusLabel, data: filtered });
@@ -389,6 +436,7 @@ const ReportDashboard = () => {
         { id: 'ALL', label: 'All Reports', icon: Activity },
         { id: 'PURCHASE', label: 'Purchase Reports', icon: ShoppingCart },
         { id: 'SALES', label: 'Sales Reports', icon: TrendingUp },
+        { id: 'INVENTORY', label: 'Inventory', icon: Package },
         { id: 'PROFIT_LOSS', label: 'Profit & Loss', icon: Scale },
     ];
 
@@ -406,6 +454,15 @@ const ReportDashboard = () => {
             currency: 'INR',
             maximumFractionDigits: 0
         }).format(amount);
+    };
+
+    const formatCurrencyWithDecimals = (amount) => {
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount || 0);
     };
 
     const renderSummaryCards = () => {
@@ -578,17 +635,17 @@ const ReportDashboard = () => {
             const netPurchase = trading.netPurchase ?? trading.purchase ?? profitLossData?.purchase ?? 0;
             const directExpenses = trading.directExpenses ?? profitLossData?.directExpenses ?? 0;
             const directIncome = trading.directIncome ?? profitLossData?.directIncome ?? 0;
-            const netSales = trading.netSales ?? trading.sales ?? profitLossData?.sale ?? 0;
+            const netSales = trading.netSales ?? trading.sales ?? profitLossData?.sales ?? 0;
             const closingStock = trading.closingStock ?? profitLossData?.closingStock ?? 0;
-            const grossProfit = trading.grossProfit ?? profitLossData?.grossProfit ?? 0;
 
+            const indirectIncome = pl.indirectIncome ?? profitLossData?.indirectIncome ?? 0;
             const indirectExpenses = pl.indirectExpenses ?? profitLossData?.indirectExpenses ?? 0;
-            const netProfit = pl.netProfit ?? profitLossData?.netProfit ?? 0;
 
-            const totalRevenue = profitLossData?.totalRevenue ?? (netSales + closingStock + directIncome);
-            const totalExpenditure = profitLossData?.totalExpenditure ?? (openingStock + netPurchase + directExpenses);
-            const isProfit = netProfit >= 0;
-            const totalExpensesVal = totalExpenditure + indirectExpenses;
+            const isNetProfit = pl.isNetProfit ?? (profitLossData?.netProfit >= profitLossData?.netLoss);
+            const netProfitVal = isNetProfit ? (pl.netProfit ?? profitLossData?.netProfit ?? 0) : (pl.netLoss ?? profitLossData?.netLoss ?? 0);
+
+            const totalRevenue = profitLossData?.income?.totalIncome ?? profitLossData?.totalRevenue ?? (netSales + closingStock + directIncome + indirectIncome);
+            const totalExpenditure = profitLossData?.expenditure?.totalExpenditure ?? profitLossData?.totalExpenditure ?? (openingStock + netPurchase + directExpenses + indirectExpenses);
 
             return (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -611,20 +668,92 @@ const ReportDashboard = () => {
                             </div>
                             <div>
                                 <p className="text-sm font-medium text-emerald-800/70 mb-1">Total Expenditure (Purchases)</p>
-                                <h4 className="text-2xl font-bold text-emerald-900">{formatCurrency(totalExpensesVal)}</h4>
+                                <h4 className="text-2xl font-bold text-emerald-900">{formatCurrency(totalExpenditure)}</h4>
                                 <p className="text-xs text-emerald-600 mt-1">{metrics.purchaseCount} Invoices (Inspect)</p>
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className={isProfit ? "bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-100" : "bg-gradient-to-br from-rose-50 to-rose-100/50 border-rose-100"}>
+                    <Card className={isNetProfit ? "bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-100" : "bg-gradient-to-br from-rose-50 to-rose-100/50 border-rose-100"}>
                         <CardContent className="flex items-center p-6">
-                            <div className={`w-12 h-12 rounded-full flex items-center justify-center mr-4 ${isProfit ? 'bg-purple-500/20 text-purple-700' : 'bg-rose-500/20 text-rose-700'}`}>
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center mr-4 ${isNetProfit ? 'bg-purple-500/20 text-purple-700' : 'bg-rose-500/20 text-rose-700'}`}>
                                 <Activity size={24} />
                             </div>
                             <div>
-                                <p className={`text-sm font-medium mb-1 ${isProfit ? 'text-purple-800/70' : 'text-rose-800/70'}`}>{isProfit ? 'Net Profit' : 'Net Loss'}</p>
-                                <h4 className={`text-2xl font-bold ${isProfit ? 'text-purple-900' : 'text-rose-900'}`}>{formatCurrency(Math.abs(netProfit))}</h4>
-                                <p className={`text-xs mt-1 ${isProfit ? 'text-purple-600' : 'text-rose-600'}`}>Revenues minus Expenditures</p>
+                                <p className={`text-sm font-medium mb-1 ${isNetProfit ? 'text-purple-800/70' : 'text-rose-800/70'}`}>{isNetProfit ? 'Net Profit' : 'Net Loss'}</p>
+                                <h4 className={`text-2xl font-bold ${isNetProfit ? 'text-purple-900' : 'text-rose-900'}`}>{formatCurrency(netProfitVal)}</h4>
+                                <p className={`text-xs mt-1 ${isNetProfit ? 'text-purple-600' : 'text-rose-600'}`}>Revenues minus Expenditures</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            );
+        }
+        if (activeTab === 'INVENTORY') {
+            const summary = inventoryData?.summary || {};
+            const totalProducts = summary.totalProducts ?? 0;
+            const totalPurchaseQty = summary.totalPurchaseQty ?? 0;
+            const totalSalesQty = summary.totalSalesQty ?? 0;
+            const totalRemainingQty = summary.totalRemainingQty ?? 0;
+            const totalInventoryValue = summary.totalInventoryValue ?? 0;
+
+            return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+                    <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-100 shadow-sm">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center mr-3 shrink-0">
+                                <Package className="text-emerald-700" size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-emerald-800/70 mb-0.5">Total Products</p>
+                                <h4 className="text-xl font-bold text-emerald-900">{totalProducts}</h4>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100 shadow-sm">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center mr-3 shrink-0">
+                                <ShoppingCart className="text-blue-700" size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-blue-800/70 mb-0.5">Total Purchase Qty</p>
+                                <h4 className="text-xl font-bold text-blue-900">{totalPurchaseQty.toLocaleString('en-IN')}</h4>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border-indigo-100 shadow-sm">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center mr-3 shrink-0">
+                                <TrendingUp className="text-indigo-700" size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-indigo-800/70 mb-0.5">Total Sales Qty</p>
+                                <h4 className="text-xl font-bold text-indigo-900">{totalSalesQty.toLocaleString('en-IN')}</h4>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-100 shadow-sm">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center mr-3 shrink-0">
+                                <Activity className="text-amber-700" size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-amber-800/70 mb-0.5">Total Remaining Qty</p>
+                                <h4 className="text-xl font-bold text-amber-900">{totalRemainingQty.toLocaleString('en-IN')}</h4>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-100 shadow-sm col-span-1 sm:col-span-2 lg:col-span-1">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center mr-3 shrink-0">
+                                <DollarSign className="text-purple-700" size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-purple-800/70 mb-0.5">Total Inventory Value</p>
+                                <h4 className="text-xl font-bold text-purple-900">{formatCurrencyWithDecimals(totalInventoryValue)}</h4>
                             </div>
                         </CardContent>
                     </Card>
@@ -787,29 +916,92 @@ const ReportDashboard = () => {
         const purchase = trading.netPurchase ?? trading.purchase ?? profitLossData?.purchase ?? 0;
         const directExpenses = trading.directExpenses ?? profitLossData?.directExpenses ?? 0;
         const directIncome = trading.directIncome ?? profitLossData?.directIncome ?? 0;
-        const sale = trading.netSales ?? trading.sales ?? profitLossData?.sale ?? 0;
+        const sale = trading.netSales ?? trading.sales ?? profitLossData?.sales ?? 0;
         const closingStock = trading.closingStock ?? profitLossData?.closingStock ?? 0;
-        const grossProfit = trading.grossProfit ?? profitLossData?.grossProfit ?? 0;
+
+        const totalTradingExpenditure = trading.totalExpenditure ?? (openingStock + purchase + directExpenses);
+        const totalTradingIncome = trading.totalIncome ?? (sale + directIncome + closingStock);
+
+        const isGrossProfit = trading.isGrossProfit ?? (totalTradingIncome >= totalTradingExpenditure);
+        const grossProfit = isGrossProfit ? (trading.grossProfit ?? (totalTradingIncome - totalTradingExpenditure)) : 0;
+        const grossLoss = !isGrossProfit ? (trading.grossLoss ?? (totalTradingExpenditure - totalTradingIncome)) : 0;
 
         const indirectIncome = pl.indirectIncome ?? profitLossData?.indirectIncome ?? 0;
         const indirectExpenses = pl.indirectExpenses ?? profitLossData?.indirectExpenses ?? 0;
-        const netProfit = pl.netProfit ?? profitLossData?.netProfit ?? 0;
-        const netLoss = pl.netLoss ?? profitLossData?.netLoss ?? 0;
 
-        const totalExpenditure = profitLossData?.totalExpenditure ?? (openingStock + purchase + directExpenses);
-        const totalRevenue = profitLossData?.totalRevenue ?? (directIncome + sale + closingStock);
+        const totalExpenditure = profitLossData?.expenditure?.totalExpenditure ?? profitLossData?.totalExpenditure ?? (totalTradingExpenditure + indirectExpenses);
+        const totalIncome = profitLossData?.income?.totalIncome ?? profitLossData?.totalRevenue ?? (totalTradingIncome + indirectIncome);
 
-        const isProfit = netProfit >= netLoss;
+        const isNetProfit = pl.isNetProfit ?? (totalIncome >= totalExpenditure);
+        const netProfit = isNetProfit ? (pl.netProfit ?? (totalIncome - totalExpenditure)) : 0;
+        const netLoss = !isNetProfit ? (pl.netLoss ?? (totalExpenditure - totalIncome)) : 0;
 
         return (
             <Card className="mb-8 border border-gray-100 shadow-xl overflow-hidden rounded-[24px]">
                 <CardHeader title="Trading & Profit & Loss Account" />
                 <CardContent className="p-0 md:p-8 bg-white">
-                    <div className="text-center my-6 flex flex-col items-center justify-center">
-                        <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight flex items-center gap-3">
-                            Profit and Loss
-                        </h2>
+                    {/* Period Filter Bar */}
+                    <div className="bg-gray-50/80 p-4 md:p-6 rounded-[16px] border border-gray-200/60 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900">Profit & Loss Financial Statement</h3>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                Period: {plFromDate || 'Beginning'} to {plToDate || 'Current Date'}
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-semibold text-gray-600">From:</label>
+                                <input
+                                    type="date"
+                                    value={plFromDate}
+                                    onChange={(e) => setPlFromDate(e.target.value)}
+                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-semibold text-gray-600">To:</label>
+                                <input
+                                    type="date"
+                                    value={plToDate}
+                                    onChange={(e) => setPlToDate(e.target.value)}
+                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                />
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => {
+                                        setPlFromDate('2026-04-01');
+                                        setPlToDate('2027-03-31');
+                                    }}
+                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 transition-colors"
+                                >
+                                    FY 2026-27
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const now = new Date();
+                                        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                                        const today = now.toISOString().split('T')[0];
+                                        setPlFromDate(firstDay);
+                                        setPlToDate(today);
+                                    }}
+                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                    This Month
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setPlFromDate('');
+                                        setPlToDate('');
+                                    }}
+                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                    All Time
+                                </button>
+                            </div>
+                        </div>
                     </div>
+
                     <div className="w-full overflow-x-auto border border-gray-200/60 rounded-[16px] shadow-sm bg-gray-50/10">
                         <table className="w-full border-collapse min-w-[800px] text-sm">
                             <thead>
@@ -817,34 +1009,50 @@ const ReportDashboard = () => {
                                     <th colSpan={2} className="px-8 py-5 text-center border-r-2 border-white/20 bg-[#004f3b]">
                                         <span className="text-sm font-bold text-white uppercase tracking-widest flex items-center justify-center gap-2">
                                             <span className="w-2 h-2 rounded-full bg-white"></span>
-                                            Expenditure
+                                            EXPENDITURE
                                         </span>
                                     </th>
                                     <th colSpan={2} className="px-8 py-5 text-center bg-[#004f3b]">
                                         <span className="text-sm font-bold text-white uppercase tracking-widest flex items-center justify-center gap-2">
                                             <span className="w-2 h-2 rounded-full bg-white"></span>
-                                            Revenue
+                                            INCOME
                                         </span>
                                     </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {/* Row 1: Opening Stock & Direct Income */}
-                                <tr className="hover:bg-gray-50/30 transition-colors">
-                                    <td className="px-8 py-4 font-semibold text-gray-700">Opening Stock</td>
+                                {/* Trading Row 1: Opening Stock & Sales */}
+                                <tr className="hover:bg-emerald-50/30 transition-all duration-200 group">
+                                    <td
+                                        onClick={() => handleCardClick('STOCK', 'Opening Stock Breakdown', openingStock > 0 ? (inventoryData?.items || []) : [])}
+                                        className="px-8 py-4 font-semibold text-gray-700 hover:text-emerald-700 cursor-pointer"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Opening Stock</span>
+                                        </div>
+                                    </td>
                                     <td className="px-8 py-4 text-right text-gray-900 font-bold border-r-2 border-gray-200/80">
                                         {formatCurrency(openingStock)}
                                     </td>
-                                    <td className="px-8 py-4 font-semibold text-gray-700">Direct Income</td>
+                                    <td
+                                        onClick={() => handleCardClick('SI', 'Sales Invoices', salesInvoicesData || [])}
+                                        className="px-8 py-4 font-semibold text-gray-700 hover:text-blue-700 cursor-pointer"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Sales</span>
+                                        </div>
+                                    </td>
                                     <td className="px-8 py-4 text-right text-gray-900 font-bold">
-                                        {formatCurrency(directIncome)}
+                                        {formatCurrency(sale)}
                                     </td>
                                 </tr>
 
-                                {/* Row 2: Purchase & Sale (Interactive) */}
+                                {/* Trading Row 2: Purchase & Direct Income */}
                                 <tr className="hover:bg-emerald-50/30 transition-all duration-200 group">
                                     <td
-                                        onClick={() => handleCardClick('PI', 'Total Invoices', purchaseData)}
+                                        onClick={() => handleCardClick('PI', 'Purchase Invoices', purchaseData || [])}
                                         className="px-8 py-4 font-semibold text-gray-700 hover:text-emerald-700 cursor-pointer"
                                     >
                                         <div className="flex items-center gap-2">
@@ -856,95 +1064,179 @@ const ReportDashboard = () => {
                                         {formatCurrency(purchase)}
                                     </td>
                                     <td
-                                        onClick={() => handleCardClick('SI', 'Total Invoices', salesInvoicesData)}
+                                        onClick={() => handleCardClick('INCOME', 'Direct Income Breakdown', profitLossData?.breakdown?.directIncome || [])}
                                         className="px-8 py-4 font-semibold text-gray-700 hover:text-blue-700 cursor-pointer"
                                     >
                                         <div className="flex items-center gap-2">
                                             <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
-                                            <span className="group-hover:translate-x-0.5 transition-transform">Sale</span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Direct Income</span>
                                         </div>
                                     </td>
                                     <td className="px-8 py-4 text-right text-gray-900 font-bold">
-                                        {formatCurrency(sale)}
+                                        {formatCurrency(directIncome)}
                                     </td>
                                 </tr>
 
-                                {/* Row 3: Direct Expenses & Closing Stock */}
-                                <tr className="hover:bg-gray-50/30 transition-colors">
-                                    <td className="px-8 py-4 font-semibold text-gray-700">Direct Expenses</td>
+                                {/* Trading Row 3: Direct Expenses & Closing Stock */}
+                                <tr className="hover:bg-emerald-50/30 transition-all duration-200 group">
+                                    <td
+                                        onClick={() => handleCardClick('EXPENSE', 'Direct Expenses Breakdown', profitLossData?.breakdown?.directExpenses || [])}
+                                        className="px-8 py-4 font-semibold text-gray-700 hover:text-emerald-700 cursor-pointer"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Direct Expenses</span>
+                                        </div>
+                                    </td>
                                     <td className="px-8 py-4 text-right text-gray-900 font-bold border-r-2 border-gray-200/80">
                                         {formatCurrency(directExpenses)}
                                     </td>
-                                    <td className="px-8 py-4 font-semibold text-gray-700">Closing Stock</td>
+                                    <td
+                                        onClick={() => handleCardClick('STOCK', 'Closing Stock Breakdown', closingStock > 0 ? (inventoryData?.items || []) : [])}
+                                        className="px-8 py-4 font-semibold text-gray-700 hover:text-emerald-700 cursor-pointer"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Closing Stock</span>
+                                        </div>
+                                    </td>
                                     <td className="px-8 py-4 text-right text-gray-900 font-bold">
                                         {formatCurrency(closingStock)}
                                     </td>
                                 </tr>
 
-                                {/* Row 4: Empty & Indirect Income */}
-                                <tr className="hover:bg-gray-50/30 transition-colors">
-                                    <td className="px-8 py-4 border-r-2 border-gray-200/80"></td>
-                                    <td className="px-8 py-4 border-r-2 border-gray-200/80"></td>
-                                    <td className="px-8 py-4 font-semibold text-gray-700">Indirect Income</td>
+                                {/* Trading Totals Header */}
+                                <tr className="bg-gray-100/90 font-bold border-t-2 border-b-2 border-gray-300">
+                                    <td className="px-8 py-3.5 text-gray-800 font-extrabold text-xs uppercase tracking-wider">Trading Expenditure Total</td>
+                                    <td className="px-8 py-3.5 text-right text-gray-950 font-black border-r-2 border-gray-200/80 text-sm">
+                                        {formatCurrency(totalTradingExpenditure)}
+                                    </td>
+                                    <td className="px-8 py-3.5 text-gray-800 font-extrabold text-xs uppercase tracking-wider">Trading Income Total</td>
+                                    <td className="px-8 py-3.5 text-right text-gray-950 font-black text-sm">
+                                        {formatCurrency(totalTradingIncome)}
+                                    </td>
+                                </tr>
+
+                                {/* Gross Profit / Gross Loss Row */}
+                                <tr className={`transition-colors border-l-4 ${isGrossProfit ? 'bg-emerald-50/40 border-emerald-500' : 'bg-rose-50/40 border-rose-500'}`}>
+                                    {isGrossProfit ? (
+                                        <>
+                                            <td className="px-8 py-4 font-bold text-emerald-900">
+                                                <div className="flex items-center gap-2">
+                                                    <TrendingUp size={16} className="text-emerald-600" />
+                                                    Gross Profit
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-4 text-right font-black text-emerald-950 border-r-2 border-gray-200/80 text-base">
+                                                {formatCurrency(grossProfit)}
+                                            </td>
+                                            <td className="px-8 py-4"></td>
+                                            <td className="px-8 py-4"></td>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <td className="px-8 py-4 border-r-2 border-gray-200/80"></td>
+                                            <td className="px-8 py-4 border-r-2 border-gray-200/80"></td>
+                                            <td className="px-8 py-4 font-bold text-rose-900">
+                                                <div className="flex items-center gap-2">
+                                                    <Activity size={16} className="text-rose-600" />
+                                                    Gross Loss
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-4 text-right font-black text-rose-950 text-base">
+                                                {formatCurrency(grossLoss)}
+                                            </td>
+                                        </>
+                                    )}
+                                </tr>
+
+                                {/* Indirect Expenses & Indirect Income */}
+                                <tr className="hover:bg-emerald-50/30 transition-all duration-200 group">
+                                    <td
+                                        onClick={() => handleCardClick('EXPENSE', 'Indirect Expenses Breakdown', profitLossData?.breakdown?.indirectExpenses || [])}
+                                        className="px-8 py-4 font-semibold text-gray-700 hover:text-emerald-700 cursor-pointer"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Indirect Expenses</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-4 text-right text-gray-900 font-bold border-r-2 border-gray-200/80">
+                                        {formatCurrency(indirectExpenses)}
+                                    </td>
+                                    <td
+                                        onClick={() => handleCardClick('INCOME', 'Indirect Income Breakdown', profitLossData?.breakdown?.indirectIncome || [])}
+                                        className="px-8 py-4 font-semibold text-gray-700 hover:text-blue-700 cursor-pointer"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Indirect Income</span>
+                                        </div>
+                                    </td>
                                     <td className="px-8 py-4 text-right text-gray-900 font-bold">
                                         {formatCurrency(indirectIncome)}
                                     </td>
                                 </tr>
 
-                                {/* Row 5: Total (Subtotal of Trading part) */}
-                                <tr className="bg-gray-50/80 font-bold border-t-2 border-b-2 border-gray-300 shadow-sm">
-                                    <td className="px-8 py-4.5 text-gray-800 font-extrabold text-sm uppercase tracking-wider">Total</td>
-                                    <td className="px-8 py-4.5 text-right text-gray-950 font-black border-r-2 border-gray-200/80 text-base">
+                                {/* Overall Totals Row */}
+                                <tr className="bg-gray-100 font-bold border-t-2 border-b-2 border-gray-300">
+                                    <td className="px-8 py-4 text-gray-900 font-black text-xs uppercase tracking-wider">Total Expenditure</td>
+                                    <td className="px-8 py-4 text-right text-gray-950 font-black border-r-2 border-gray-200/80 text-base">
                                         {formatCurrency(totalExpenditure)}
                                     </td>
-                                    <td className="px-8 py-4.5 text-gray-800 font-extrabold text-sm uppercase tracking-wider">Total</td>
-                                    <td className="px-8 py-4.5 text-right text-gray-950 font-black text-base">
-                                        {formatCurrency(totalRevenue)}
+                                    <td className="px-8 py-4 text-gray-900 font-black text-xs uppercase tracking-wider">Total Income</td>
+                                    <td className="px-8 py-4 text-right text-gray-950 font-black text-base">
+                                        {formatCurrency(totalIncome)}
                                     </td>
                                 </tr>
 
-                                {/* Row 6: Gross Profit */}
-                                <tr className="bg-amber-50/30 hover:bg-amber-50/40 transition-colors border-l-4 border-amber-500/80">
-                                    <td className="px-8 py-4 font-bold text-amber-900">
-                                        <div className="flex items-center gap-2">
-                                            <TrendingUp size={16} className="text-amber-600" />
-                                            Gross Profit
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-4 text-right font-extrabold text-amber-955 border-r-2 border-gray-200/80">
-                                        {formatCurrency(grossProfit)}
-                                    </td>
-                                    <td className="px-8 py-4"></td>
-                                    <td className="px-8 py-4"></td>
-                                </tr>
-
-                                {/* Row 7: Indirect Expenses */}
-                                <tr className="hover:bg-gray-50/30 transition-colors">
-                                    <td className="px-8 py-4 font-semibold text-gray-700">Indirect Expenses</td>
-                                    <td className="px-8 py-4 text-right text-gray-900 font-bold border-r-2 border-gray-200/80">
-                                        {formatCurrency(indirectExpenses)}
-                                    </td>
-                                    <td className="px-8 py-4"></td>
-                                    <td className="px-8 py-4"></td>
-                                </tr>
-
-                                {/* Row 8: Net Profit / Loss */}
-                                <tr className={`transition-all border-l-4 ${isProfit ? 'bg-emerald-50/40 hover:bg-emerald-50/50 border-emerald-500/80' : 'bg-rose-50/40 hover:bg-rose-50/50 border-rose-500/80'}`}>
-                                    <td className={`px-8 py-5 font-black text-base ${isProfit ? 'text-emerald-900' : 'text-rose-900'}`}>
-                                        <div className="flex items-center gap-2">
-                                            <Scale size={18} className={isProfit ? 'text-emerald-600' : 'text-rose-600'} />
-                                            {isProfit ? 'Net Profit' : 'Net Loss'}
-                                        </div>
-                                    </td>
-                                    <td className={`px-8 py-5 text-right font-black border-r-2 border-gray-200/80 text-base ${isProfit ? 'text-emerald-950 bg-emerald-50/20' : 'text-rose-950 bg-rose-50/20'}`}>
-                                        {formatCurrency(netProfit)}
-                                    </td>
-                                    <td className="px-8 py-5"></td>
-                                    <td className="px-8 py-5"></td>
+                                {/* Net Profit / Net Loss Row */}
+                                <tr className={`transition-all border-l-4 ${isNetProfit ? 'bg-emerald-100/60 hover:bg-emerald-100/80 border-emerald-600' : 'bg-rose-100/60 hover:bg-rose-100/80 border-rose-600'}`}>
+                                    {isNetProfit ? (
+                                        <>
+                                            <td className="px-8 py-5 font-black text-base text-emerald-955">
+                                                <div className="flex items-center gap-2">
+                                                    <Scale size={18} className="text-emerald-700" />
+                                                    Net Profit
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-5 text-right font-black text-emerald-955 border-r-2 border-gray-200/80 text-lg">
+                                                {formatCurrency(netProfit)}
+                                            </td>
+                                            <td className="px-8 py-5"></td>
+                                            <td className="px-8 py-5"></td>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <td className="px-8 py-5 border-r-2 border-gray-200/80"></td>
+                                            <td className="px-8 py-5 border-r-2 border-gray-200/80"></td>
+                                            <td className="px-8 py-5 font-black text-base text-rose-955">
+                                                <div className="flex items-center gap-2">
+                                                    <Scale size={18} className="text-rose-700" />
+                                                    Net Loss
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-5 text-right font-black text-rose-955 text-lg">
+                                                {formatCurrency(netLoss)}
+                                            </td>
+                                        </>
+                                    )}
                                 </tr>
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Interactive Report Detail Table for Profit & Loss */}
+                    {detailView && (
+                        <div className="report-table-element w-full animate-in fade-in slide-in-from-top-4 duration-500 mt-6 mb-4" id="status-section-PI">
+                            <ReportTable
+                                type={detailView.type}
+                                status={detailView.status}
+                                data={detailView.data}
+                                onClose={() => setDetailView(null)}
+                            />
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         );
@@ -977,6 +1269,13 @@ const ReportDashboard = () => {
                 </div>
             );
         }
+        if (activeTab === 'INVENTORY') {
+            return (
+                <div className="mb-2 animate-in fade-in duration-300">
+                    {renderInventoryTable()}
+                </div>
+            );
+        }
         if (activeTab === 'PROFIT_LOSS') {
             if (plLoading) {
                 return (
@@ -992,6 +1291,156 @@ const ReportDashboard = () => {
             );
         }
         return null;
+    };
+
+    const handleSort = (field) => {
+        if (invSortBy === field) {
+            setInvSortOrder(invSortOrder === 'asc' ? 'desc' : 'asc');
+        } else {
+            setInvSortBy(field);
+            setInvSortOrder('asc');
+        }
+    };
+
+    const renderInventoryTable = () => {
+        const items = inventoryData?.data || [];
+        const meta = inventoryData?.meta || { total: 0, page: 1, limit: 10, totalPages: 1 };
+
+        return (
+            <Card className="mb-8 border border-gray-100 shadow-xl overflow-hidden rounded-[24px]">
+                <CardHeader
+                    title="Product Inventory Report"
+                    action={
+                        <div className="relative flex items-center">
+                            <Search className="absolute left-3 text-gray-400" size={16} />
+                            <input
+                                type="text"
+                                placeholder="Search Product Name..."
+                                value={invSearch}
+                                onChange={(e) => {
+                                    setInvSearch(e.target.value);
+                                    setInvPage(1);
+                                }}
+                                className="pl-9 pr-4 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 w-48 sm:w-64 transition-all"
+                            />
+                        </div>
+                    }
+                />
+                <CardContent className="p-0 bg-white">
+                    {invLoading ? (
+                        <div className="flex justify-center items-center py-20">
+                            <Loader />
+                        </div>
+                    ) : invError ? (
+                        <div className="text-red-500 text-center py-12 text-sm">{invError}</div>
+                    ) : items.length === 0 ? (
+                        <div className="text-center py-16 text-gray-400">
+                            <Package size={48} className="mx-auto mb-3 opacity-40" />
+                            <p className="text-sm font-medium">No inventory data available</p>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="w-full overflow-x-auto">
+                                <table className="w-full border-collapse text-sm">
+                                    <thead>
+                                        <tr className="bg-gray-50/80 border-b border-gray-200 text-gray-700 text-xs uppercase tracking-wider font-semibold">
+                                            <th className="px-6 py-4 text-left cursor-pointer hover:text-emerald-700 select-none" onClick={() => handleSort('productName')}>
+                                                <div className="flex items-center gap-1.5">
+                                                    Product Name
+                                                    <ArrowUpDown size={13} className="opacity-60" />
+                                                </div>
+                                            </th>
+                                            <th className="px-6 py-4 text-right cursor-pointer hover:text-emerald-700 select-none" onClick={() => handleSort('purchaseQty')}>
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    Purchase Qty (X)
+                                                    <ArrowUpDown size={13} className="opacity-60" />
+                                                </div>
+                                            </th>
+                                            <th className="px-6 py-4 text-right cursor-pointer hover:text-emerald-700 select-none" onClick={() => handleSort('salesQty')}>
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    Sales Qty (Y)
+                                                    <ArrowUpDown size={13} className="opacity-60" />
+                                                </div>
+                                            </th>
+                                            <th className="px-6 py-4 text-right cursor-pointer hover:text-emerald-700 select-none" onClick={() => handleSort('remainingQty')}>
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    Remaining Qty (X-Y)
+                                                    <ArrowUpDown size={13} className="opacity-60" />
+                                                </div>
+                                            </th>
+                                            <th className="px-6 py-4 text-right cursor-pointer hover:text-emerald-700 select-none" onClick={() => handleSort('avgPurchasingAmount')}>
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    Avg. Purchasing Amount
+                                                    <ArrowUpDown size={13} className="opacity-60" />
+                                                </div>
+                                            </th>
+                                            <th className="px-6 py-4 text-right cursor-pointer hover:text-emerald-700 select-none" onClick={() => handleSort('totalAmount')}>
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    Total Amount
+                                                    <ArrowUpDown size={13} className="opacity-60" />
+                                                </div>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {items.map((row, idx) => (
+                                            <tr key={row.productId || idx} className="hover:bg-emerald-50/20 transition-colors">
+                                                <td className="px-6 py-4 font-semibold text-gray-900">
+                                                    <div>
+                                                        <span>{row.productName}</span>
+                                                        {row.productCode && (
+                                                            <span className="ml-2 text-xs text-gray-400 font-normal">({row.productCode})</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-right text-gray-700 font-medium">
+                                                    {row.purchaseQty}
+                                                </td>
+                                                <td className="px-6 py-4 text-right text-gray-700 font-medium">
+                                                    {row.salesQty}
+                                                </td>
+                                                <td className="px-6 py-4 text-right font-bold text-amber-700">
+                                                    {row.remainingQty}
+                                                </td>
+                                                <td className="px-6 py-4 text-right text-gray-800 font-medium">
+                                                    {formatCurrencyWithDecimals(row.avgPurchasingAmount)}
+                                                </td>
+                                                <td className="px-6 py-4 text-right font-bold text-emerald-800">
+                                                    {formatCurrencyWithDecimals(row.totalAmount)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Pagination Controls */}
+                            <div className="flex items-center justify-end px-6 py-4 border-t border-gray-100 text-xs text-gray-500 bg-gray-50/50 gap-3">
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        disabled={meta.page <= 1}
+                                        onClick={() => setInvPage(p => Math.max(1, p - 1))}
+                                        className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                                    >
+                                        <ChevronLeft size={16} />
+                                    </button>
+                                    <span className="font-medium text-gray-700 px-2">
+                                        Page {meta.page} of {meta.totalPages}
+                                    </span>
+                                    <button
+                                        disabled={meta.page >= meta.totalPages}
+                                        onClick={() => setInvPage(p => Math.min(meta.totalPages, p + 1))}
+                                        className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                                    >
+                                        <ChevronRight size={16} />
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </CardContent>
+            </Card>
+        );
     };
 
     const renderGraphs = () => {
@@ -1145,7 +1594,7 @@ const ReportDashboard = () => {
                     />
                 </div>
             )}
-            {renderGraphs()}
+            {activeTab !== 'INVENTORY' && renderGraphs()}
         </div>
     );
 };

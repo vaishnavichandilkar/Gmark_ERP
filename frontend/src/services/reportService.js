@@ -33,6 +33,10 @@ const reportService = {
     getProfitLoss: async (params) => {
         const response = await axiosInstance.get('/reports/profit-loss', { params });
         return response.data;
+    },
+    getInventoryReport: async (params) => {
+        const response = await axiosInstance.get('/reports/inventory', { params });
+        return response.data;
     }
 };
 

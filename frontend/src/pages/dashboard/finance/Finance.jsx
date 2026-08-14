@@ -202,7 +202,7 @@ const Finance = () => {
 
                 const defaultGroups = [
                     'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock', 
-                    'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock', 
+                    'Direct Income', 'Indirect Income', 'Sale', 'Closing Stock', 
                     'Liabilities', 'Assets', 'Capital Account', 'Current Assets', 
                     'Current Liabilities', 'Duties & Taxes', 'Loans (Liability)', 'Sundry Creditors', 'Sundry Debtors'
                 ];
@@ -218,7 +218,7 @@ const Finance = () => {
                 console.error('Error fetching groups:', err);
                 const defaultGroups = [
                     'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock', 
-                    'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock', 
+                    'Direct Income', 'Indirect Income', 'Sale', 'Closing Stock', 
                     'Liabilities', 'Assets', 'Capital Account', 'Current Assets', 
                     'Current Liabilities', 'Duties & Taxes', 'Loans (Liability)', 'Sundry Creditors', 'Sundry Debtors'
                 ].sort().map(name => ({ name, level: 1 }));
@@ -843,7 +843,7 @@ const Finance = () => {
 
         const masterSequence = [
             'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock', 
-            'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock', 
+            'Direct Income', 'Indirect Income', 'Sale', 'Closing Stock', 
             'Liabilities', 'Assets',
             'Non-Current Liabilities', 'Current Liabilities',
             'Long Term Borrowings', 'Other Long Term Liabilities', 'Long Term Provisions',
@@ -1729,7 +1729,7 @@ const Finance = () => {
                                         if (!searchQuery && (!selectedGroup || selectedGroup === 'ALL')) {
                                             const rootGroups = [
                                                 'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock', 
-                                                'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock', 
+                                                'Direct Income', 'Indirect Income', 'Sale', 'Closing Stock', 
                                                 'Liabilities', 'Assets'
                                             ];
 
@@ -1799,7 +1799,7 @@ const Finance = () => {
 
                                         const masterSequence = [
                                             'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock', 
-                                            'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock', 
+                                            'Direct Income', 'Indirect Income', 'Sale', 'Closing Stock', 
                                             'Liabilities', 'Assets',
                                             'Non-Current Liabilities', 'Current Liabilities',
                                             'Long Term Borrowings', 'Other Long Term Liabilities', 'Long Term Provisions',
