@@ -8,6 +8,7 @@ import {
   POReportQueryDto,
   TrendQueryDto,
   ProfitLossQueryDto,
+  InventoryQueryDto,
 } from './dto/reports.dto';
 
 @ApiTags('Reports')
@@ -16,6 +17,13 @@ import {
 @ApiBearerAuth()
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
+
+  @Get('inventory')
+  @RequirePermission('reports_view')
+  @ApiOperation({ summary: 'Get Product Inventory report' })
+  async getInventory(@Query() query: InventoryQueryDto, @Request() req) {
+    return this.reportsService.getInventoryReport(req.user.userId, query);
+  }
 
   @Get('profit-loss')
   @RequirePermission('reports_view')

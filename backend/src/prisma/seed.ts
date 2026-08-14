@@ -161,8 +161,8 @@ async function main() {
         "Indirect Expense",
         "Purchase",
         "Opening Stock",
-        "Direct Sale",
-        "Indirect Sale",
+        "Direct Income",
+        "Indirect Income",
         "Sale",
         "Closing Stock"
     ];

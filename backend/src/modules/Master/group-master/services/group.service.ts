@@ -281,7 +281,7 @@ export class GroupMasterService {
         if (uniquePredefinedNames.length === 0) {
             uniquePredefinedNames = [
                 'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock',
-                'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock',
+                'Direct Income', 'Indirect Income', 'Sale', 'Closing Stock',
                 'Liabilities', 'Assets', 'Non-Current Liabilities', 'Current Liabilities',
                 'Non-Current Assets', 'Current Assets', 'Fixed Assets', 'Customers',
                 'Suppliers', 'Bank & Cash'

@@ -738,39 +738,59 @@ export class SalesInvoiceService {
         .filter((id): id is number => id !== null && id !== undefined)
     ));
 
+    const customerNames = Array.from(new Set(
+      data
+        .map(inv => inv.customerName)
+        .filter((name): name is string => Boolean(name && String(name).trim() !== ''))
+    ));
+
     let customerMap = new Map<number, any>();
-    if (customerIds.length > 0) {
+    let customerNameMap = new Map<string, any>();
+
+    const orConditions: any[] = [];
+    if (customerIds.length > 0) orConditions.push({ id: { in: customerIds } });
+    if (customerNames.length > 0) orConditions.push({ accountName: { in: customerNames } });
+
+    if (orConditions.length > 0) {
       const customers = await this.prisma.accountMaster.findMany({
-        where: { id: { in: customerIds } }
+        where: {
+          userId: query.userId,
+          OR: orConditions,
+        }
       });
       for (const c of customers) {
         customerMap.set(c.id, c);
+        if (c.accountName) customerNameMap.set(c.accountName.toLowerCase().trim(), c);
       }
     }
 
     const mappedData = data.map((invoice) => {
       let updatedAddress = invoice.address;
-      if (invoice.customerId) {
-        const customer = customerMap.get(invoice.customerId);
-        if (customer) {
-          const parts = [
-            customer.addressLine1,
-            customer.addressLine2,
-            customer.area,
-            customer.subDistrict,
-            customer.district,
-            customer.state
-          ].filter(p => p && String(p).trim() !== '');
-          let formatted = parts.join(', ');
-          if (customer.pincode && String(customer.pincode).trim() !== '') {
-            formatted += ` - ${customer.pincode}`;
-          }
-          updatedAddress = formatted || invoice.address;
+      let custType = (invoice as any).customerType;
+      const customer = (invoice.customerId ? customerMap.get(invoice.customerId) : null) ||
+                       (invoice.customerName ? customerNameMap.get(invoice.customerName.toLowerCase().trim()) : null);
+
+      if (customer) {
+        custType = custType || customer.customerType;
+        const parts = [
+          customer.addressLine1,
+          customer.addressLine2,
+          customer.area,
+          customer.subDistrict,
+          customer.district,
+          customer.state
+        ].filter(p => p && String(p).trim() !== '');
+        let formatted = parts.join(', ');
+        if (customer.pincode && String(customer.pincode).trim() !== '') {
+          formatted += ` - ${customer.pincode}`;
         }
+        updatedAddress = formatted || invoice.address;
       }
+
       return {
         ...invoice,
-        address: updatedAddress
+        address: updatedAddress,
+        customerType: custType || '-',
       };
     });
 

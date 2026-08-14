@@ -185,6 +185,10 @@ export class ProfitLossQueryDto {
 }
 
 export interface TradingProfitLossResponseDto {
+  period?: {
+    fromDate?: string | null;
+    toDate?: string | null;
+  };
   trading: {
     openingStock: number;
     purchase: number;
@@ -196,14 +200,109 @@ export interface TradingProfitLossResponseDto {
     salesReturn: number;
     netSales: number;
     closingStock: number;
+    totalExpenditure: number;
+    totalIncome: number;
     grossProfit: number;
     grossLoss: number;
+    isGrossProfit: boolean;
   };
   profitLoss: {
     indirectIncome: number;
     indirectExpenses: number;
     netProfit: number;
     netLoss: number;
+    isNetProfit: boolean;
+  };
+  expenditure?: {
+    openingStock: number;
+    purchase: number;
+    directExpenses: number;
+    indirectExpenses: number;
+    totalExpenditure: number;
+  };
+  income?: {
+    sales: number;
+    directIncome: number;
+    closingStock: number;
+    indirectIncome: number;
+    totalIncome: number;
+  };
+  breakdown?: {
+    directExpenses: any[];
+    directIncome: any[];
+    indirectExpenses: any[];
+    indirectIncome: any[];
+  };
+  openingStock?: number;
+  purchase?: number;
+  purchaseReturn?: number;
+  netPurchase?: number;
+  directExpenses?: number;
+  directIncome?: number;
+  sales?: number;
+  salesReturn?: number;
+  netSales?: number;
+  closingStock?: number;
+  totalExpenditure?: number;
+  totalRevenue?: number;
+  grossProfit?: number;
+  grossLoss?: number;
+  indirectIncome?: number;
+  indirectExpenses?: number;
+  netProfit?: number;
+  netLoss?: number;
+}
+
+export class InventoryQueryDto extends PaginatedQueryDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dateTo?: string;
+
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @IsOptional()
+  @IsString()
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface InventoryReportItemDto {
+  productId: number | string;
+  productName: string;
+  productCode?: string;
+  purchaseQty: number;
+  salesQty: number;
+  remainingQty: number;
+  avgPurchasingAmount: number;
+  totalAmount: number;
+}
+
+export interface InventoryReportSummaryDto {
+  totalProducts: number;
+  totalPurchaseQty: number;
+  totalSalesQty: number;
+  totalRemainingQty: number;
+  totalInventoryValue: number;
+}
+
+export interface InventoryReportResponseDto {
+  data: InventoryReportItemDto[];
+  summary: InventoryReportSummaryDto;
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
   };
 }
+
 

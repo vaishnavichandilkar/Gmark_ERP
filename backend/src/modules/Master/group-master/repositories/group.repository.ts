@@ -8,6 +8,24 @@ export class GroupMasterRepository {
     constructor(private readonly prisma: PrismaService) { }
 
     async findAllGroups(userId: number) {
+        // Migration: Rename legacy 'Direct Sale' -> 'Direct Income' and 'Indirect Sale' -> 'Indirect Income'
+        await this.prisma.group.updateMany({
+            where: { group_name: 'Direct Sale' },
+            data: { group_name: 'Direct Income' }
+        });
+        await this.prisma.group.updateMany({
+            where: { group_name: 'Indirect Sale' },
+            data: { group_name: 'Indirect Income' }
+        });
+        await this.prisma.subGroup.updateMany({
+            where: { subgroup_name: 'Direct Sale' },
+            data: { subgroup_name: 'Direct Income' }
+        });
+        await this.prisma.subGroup.updateMany({
+            where: { subgroup_name: 'Indirect Sale' },
+            data: { subgroup_name: 'Indirect Income' }
+        });
+
         // Run bidirectional synchronization before loading the tree
         await syncBankCashAccounts(this.prisma, userId);
 

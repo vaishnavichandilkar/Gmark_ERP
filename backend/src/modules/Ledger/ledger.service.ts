@@ -168,7 +168,7 @@ export class LedgerService {
 
     const shadowGroupNames = new Set([
       'direct expense', 'indirect expense', 'purchase', 'opening stock', 
-      'direct sale', 'indirect sale', 'sale', 'closing stock', 
+      'direct income', 'indirect income', 'sale', 'closing stock', 
       'liabilities', 'assets', 'non-current liabilities', 'current liabilities', 
       'non-current assets', 'current assets', 'long term borrowings', 
       'other long term liabilities', 'long term provisions', 'short term borrowings', 
@@ -260,7 +260,7 @@ export class LedgerService {
 
     const masterSequence = [
       'Direct Expense', 'Indirect Expense', 'Purchase', 'Opening Stock', 
-      'Direct Sale', 'Indirect Sale', 'Sale', 'Closing Stock', 
+      'Direct Income', 'Indirect Income', 'Sale', 'Closing Stock', 
       'Liabilities', 'Assets', 'SUNDRY_DEBTORS', 'SUNDRY_CREDITORS', 'Bank & Cash'
     ];
 

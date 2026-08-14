@@ -15,6 +15,10 @@ import {
   ProfitLossQueryDto,
   TradingProfitLossResponseDto,
   StockValuationMethod,
+  InventoryQueryDto,
+  InventoryReportResponseDto,
+  InventoryReportItemDto,
+  InventoryReportSummaryDto,
 } from './dto/reports.dto';
 import { Prisma } from '@prisma/client';
 
@@ -442,6 +446,11 @@ export class ReportsService {
       });
     };
 
+    const directExpensesBreakdown: any[] = [];
+    const directIncomeBreakdown: any[] = [];
+    const indirectExpensesBreakdown: any[] = [];
+    const indirectIncomeBreakdown: any[] = [];
+
     accounts.forEach((account) => {
       const groups = account.groupName || [];
       const tx = txMap[account.id] || { Dr: 0, Cr: 0 };
@@ -476,25 +485,73 @@ export class ReportsService {
       if (matchGroup(groups, ['direct expense', 'direct expenses', 'manufacturing', 'freight', 'carriage inward', 'expense'])) {
         const activity = Math.abs(tx.Dr - tx.Cr);
         const bal = getDebitBal();
-        directExpenses += Math.max(bal, activity);
+        const amt = Math.max(bal, activity);
+        directExpenses += amt;
+        if (amt > 0) {
+          directExpensesBreakdown.push({
+            id: account.id,
+            accountName: account.accountName,
+            groupName: groups,
+            totalAmount: amt,
+            taxableAmount: amt,
+            taxAmount: 0,
+            status: 'COMPLETED',
+          });
+        }
       }
 
       if (matchGroup(groups, ['direct income', 'direct incomes', 'direct sale', 'direct revenue'])) {
         const activity = Math.abs(tx.Cr - tx.Dr);
         const bal = getCreditBal();
-        directIncome += Math.max(bal, activity);
+        const amt = Math.max(bal, activity);
+        directIncome += amt;
+        if (amt > 0) {
+          directIncomeBreakdown.push({
+            id: account.id,
+            accountName: account.accountName,
+            groupName: groups,
+            totalAmount: amt,
+            taxableAmount: amt,
+            taxAmount: 0,
+            status: 'COMPLETED',
+          });
+        }
       }
 
       if (matchGroup(groups, ['indirect income', 'indirect incomes', 'other income'])) {
         const activity = Math.abs(tx.Cr - tx.Dr);
         const bal = getCreditBal();
-        indirectIncome += Math.max(bal, activity);
+        const amt = Math.max(bal, activity);
+        indirectIncome += amt;
+        if (amt > 0) {
+          indirectIncomeBreakdown.push({
+            id: account.id,
+            accountName: account.accountName,
+            groupName: groups,
+            totalAmount: amt,
+            taxableAmount: amt,
+            taxAmount: 0,
+            status: 'COMPLETED',
+          });
+        }
       }
 
       if (matchGroup(groups, ['indirect expense', 'indirect expenses', 'administrative', 'selling expense', 'operating expense'])) {
         const activity = Math.abs(tx.Dr - tx.Cr);
         const bal = getDebitBal();
-        indirectExpenses += Math.max(bal, activity);
+        const amt = Math.max(bal, activity);
+        indirectExpenses += amt;
+        if (amt > 0) {
+          indirectExpensesBreakdown.push({
+            id: account.id,
+            accountName: account.accountName,
+            groupName: groups,
+            totalAmount: amt,
+            taxableAmount: amt,
+            taxAmount: 0,
+            status: 'COMPLETED',
+          });
+        }
       }
 
       if (matchGroup(groups, ['opening stock'])) {
@@ -529,7 +586,14 @@ export class ReportsService {
       }
     }
 
-    const [piAgg, siAgg] = await Promise.all([
+    const pieWhereInput: Prisma.PurchaseInvoiceExpenseWhereInput = {
+      purchaseInvoice: piWhereInput,
+    };
+    const sieWhereInput: Prisma.SalesInvoiceExpenseWhereInput = {
+      salesInvoice: siWhereInput,
+    };
+
+    const [piAgg, siAgg, piExpenses, siExpenses] = await Promise.all([
       this.prisma.purchaseInvoice.aggregate({
         where: piWhereInput,
         _sum: { taxableAmount: true },
@@ -538,7 +602,89 @@ export class ReportsService {
         where: siWhereInput,
         _sum: { taxableAmount: true },
       }),
+      this.prisma.purchaseInvoiceExpense.findMany({
+        where: pieWhereInput,
+        include: {
+          purchaseInvoice: {
+            select: {
+              supplierInvoiceNumber: true,
+              supplierName: true,
+              bookingDate: true,
+            },
+          },
+        },
+      }),
+      this.prisma.salesInvoiceExpense.findMany({
+        where: sieWhereInput,
+        include: {
+          salesInvoice: {
+            select: {
+              invoiceNumber: true,
+              customerName: true,
+              bookingDate: true,
+            },
+          },
+        },
+      }),
     ]);
+
+    piExpenses.forEach((exp) => {
+      const amt = Number(exp.amount || 0);
+      if (amt <= 0) return;
+
+      const groupName = exp.groupName || 'Direct Expense';
+      const record = {
+        id: exp.id,
+        accountName: groupName,
+        supplierName: exp.purchaseInvoice?.supplierName || 'Purchase Expense',
+        supplierInvoiceNumber: exp.purchaseInvoice?.supplierInvoiceNumber || '-',
+        bookingDate: exp.purchaseInvoice?.bookingDate,
+        totalAmount: amt,
+        taxableAmount: amt,
+        taxAmount: Number(exp.taxAmount || 0),
+        status: 'COMPLETED',
+      };
+
+      if (matchGroup([groupName], ['indirect expense', 'indirect expenses', 'indirect', 'administrative', 'selling expense', 'operating expense'])) {
+        indirectExpenses += amt;
+        indirectExpensesBreakdown.push(record);
+      } else {
+        directExpenses += amt;
+        directExpensesBreakdown.push(record);
+      }
+    });
+
+    siExpenses.forEach((exp) => {
+      const amt = Number(exp.amount || 0);
+      if (amt <= 0) return;
+
+      const groupName = exp.groupName || 'Direct Expense';
+      const record = {
+        id: exp.id,
+        accountName: groupName,
+        supplierName: exp.salesInvoice?.customerName || 'Sales Expense/Income',
+        supplierInvoiceNumber: exp.salesInvoice?.invoiceNumber || '-',
+        bookingDate: exp.salesInvoice?.bookingDate,
+        totalAmount: amt,
+        taxableAmount: amt,
+        taxAmount: Number(exp.taxAmount || 0),
+        status: 'COMPLETED',
+      };
+
+      if (matchGroup([groupName], ['direct income', 'direct incomes', 'income'])) {
+        directIncome += amt;
+        directIncomeBreakdown.push(record);
+      } else if (matchGroup([groupName], ['indirect income', 'indirect incomes', 'other income'])) {
+        indirectIncome += amt;
+        indirectIncomeBreakdown.push(record);
+      } else if (matchGroup([groupName], ['indirect expense', 'indirect expenses'])) {
+        indirectExpenses += amt;
+        indirectExpensesBreakdown.push(record);
+      } else {
+        directExpenses += amt;
+        directExpensesBreakdown.push(record);
+      }
+    });
 
     const invoicePurchases = piAgg._sum.taxableAmount ? Number(piAgg._sum.taxableAmount) : 0;
     const invoiceSales = siAgg._sum.taxableAmount ? Number(siAgg._sum.taxableAmount) : 0;
@@ -548,8 +694,15 @@ export class ReportsService {
 
     // Calculate dynamic stock valuation
     const valuationMethod = query.valuationMethod || 'Weighted Average';
-    const computedOpeningStock = await this.calculateStockValuation(userId, fromDateObj, valuationMethod);
-    const computedClosingStock = await this.calculateStockValuation(userId, toDateObj || new Date(), valuationMethod);
+    const computedOpeningStock = fromDateObj
+      ? await this.calculateStockValuation(userId, fromDateObj, valuationMethod, true)
+      : 0;
+    const computedClosingStock = await this.calculateStockValuation(
+      userId,
+      toDateObj || new Date(),
+      valuationMethod,
+      false,
+    );
 
     const openingStock = computedOpeningStock > 0 ? computedOpeningStock : Math.max(0, ledgerOpeningStock);
     const closingStock = computedClosingStock > 0 ? computedClosingStock : Math.max(0, ledgerClosingStock);
@@ -564,11 +717,16 @@ export class ReportsService {
     const rawIndirectIncome = Number(Math.max(0, indirectIncome).toFixed(2));
     const rawIndirectExpenses = Number(Math.max(0, indirectExpenses).toFixed(2));
 
-    const grossProfitCalc = (netSales + rawClosingStock + rawDirectIncome) - (rawOpeningStock + netPurchase + rawDirectExpenses);
+    const totalTradingExpenditure = Number((rawOpeningStock + netPurchase + rawDirectExpenses).toFixed(2));
+    const totalTradingIncome = Number((netSales + rawDirectIncome + rawClosingStock).toFixed(2));
+
+    const grossProfitCalc = totalTradingIncome - totalTradingExpenditure;
 
     let grossProfit = 0;
     let grossLoss = 0;
-    if (grossProfitCalc >= 0) {
+    const isGrossProfit = grossProfitCalc >= 0;
+
+    if (isGrossProfit) {
       grossProfit = Number(grossProfitCalc.toFixed(2));
       grossLoss = 0;
     } else {
@@ -576,13 +734,13 @@ export class ReportsService {
       grossLoss = Number(Math.abs(grossProfitCalc).toFixed(2));
     }
 
-    const income = grossProfit + rawIndirectIncome;
-    const expense = grossLoss + rawIndirectExpenses;
-    const netProfitCalc = income - expense;
+    const netProfitCalc = (grossProfit - grossLoss) + rawIndirectIncome - rawIndirectExpenses;
 
     let netProfit = 0;
     let netLoss = 0;
-    if (netProfitCalc >= 0) {
+    const isNetProfit = netProfitCalc >= 0;
+
+    if (isNetProfit) {
       netProfit = Number(netProfitCalc.toFixed(2));
       netLoss = 0;
     } else {
@@ -590,7 +748,14 @@ export class ReportsService {
       netLoss = Number(Math.abs(netProfitCalc).toFixed(2));
     }
 
+    const totalExpenditure = Number((totalTradingExpenditure + rawIndirectExpenses).toFixed(2));
+    const totalIncome = Number((totalTradingIncome + rawIndirectIncome).toFixed(2));
+
     return {
+      period: {
+        fromDate: fromDateObj ? fromDateObj.toISOString().split('T')[0] : null,
+        toDate: toDateObj ? toDateObj.toISOString().split('T')[0] : null,
+      },
       trading: {
         openingStock: rawOpeningStock,
         purchase: Number(Math.max(0, purchase).toFixed(2)),
@@ -602,26 +767,73 @@ export class ReportsService {
         salesReturn: Number(Math.max(0, salesReturn).toFixed(2)),
         netSales,
         closingStock: rawClosingStock,
+        totalExpenditure: totalTradingExpenditure,
+        totalIncome: totalTradingIncome,
         grossProfit,
         grossLoss,
+        isGrossProfit,
       },
       profitLoss: {
         indirectIncome: rawIndirectIncome,
         indirectExpenses: rawIndirectExpenses,
         netProfit,
         netLoss,
+        isNetProfit,
       },
+      expenditure: {
+        openingStock: rawOpeningStock,
+        purchase: netPurchase,
+        directExpenses: rawDirectExpenses,
+        indirectExpenses: rawIndirectExpenses,
+        totalExpenditure,
+      },
+      income: {
+        sales: netSales,
+        directIncome: rawDirectIncome,
+        closingStock: rawClosingStock,
+        indirectIncome: rawIndirectIncome,
+        totalIncome,
+      },
+      breakdown: {
+        directExpenses: directExpensesBreakdown,
+        directIncome: directIncomeBreakdown,
+        indirectExpenses: indirectExpensesBreakdown,
+        indirectIncome: indirectIncomeBreakdown,
+      },
+      openingStock: rawOpeningStock,
+      purchase: netPurchase,
+      purchaseReturn: Number(Math.max(0, purchaseReturn).toFixed(2)),
+      netPurchase,
+      directExpenses: rawDirectExpenses,
+      directIncome: rawDirectIncome,
+      sales: netSales,
+      salesReturn: Number(Math.max(0, salesReturn).toFixed(2)),
+      netSales,
+      closingStock: rawClosingStock,
+      totalExpenditure,
+      totalRevenue: totalIncome,
+      grossProfit,
+      grossLoss,
+      indirectIncome: rawIndirectIncome,
+      indirectExpenses: rawIndirectExpenses,
+      netProfit,
+      netLoss,
     };
   }
 
-  private async calculateStockValuation(userId: number, cutoffDate?: Date, method: string = 'Weighted Average'): Promise<number> {
+  private async calculateStockValuation(
+    userId: number,
+    cutoffDate?: Date,
+    method: string = 'Weighted Average',
+    isStrictlyBefore: boolean = false,
+  ): Promise<number> {
     try {
       const piWhere: Prisma.PurchaseInvoiceWhereInput = {
         userId,
         status: { in: ['GENERATED', 'COMPLETED'] as any },
       };
       if (cutoffDate) {
-        piWhere.bookingDate = { lte: cutoffDate };
+        piWhere.bookingDate = isStrictlyBefore ? { lt: cutoffDate } : { lte: cutoffDate };
       }
 
       const purchaseItems = await this.prisma.purchaseInvoiceItem.findMany({
@@ -645,7 +857,7 @@ export class ReportsService {
         status: { in: ['GENERATED', 'COMPLETED'] as any },
       };
       if (cutoffDate) {
-        siWhere.bookingDate = { lte: cutoffDate };
+        siWhere.bookingDate = isStrictlyBefore ? { lt: cutoffDate } : { lte: cutoffDate };
       }
 
       const salesItems = await this.prisma.salesInvoiceItem.findMany({
@@ -728,4 +940,214 @@ export class ReportsService {
       return 0;
     }
   }
+
+  async getInventoryReport(
+    userId: number,
+    query: InventoryQueryDto,
+  ): Promise<InventoryReportResponseDto> {
+    const { search, dateFrom, dateTo, page = 1, limit = 10, sortBy, sortOrder = 'asc' } = query;
+
+    // 1. Fetch user's active products
+    const userProducts = await this.prisma.product.findMany({
+      where: { created_by: userId, is_deleted: false },
+      select: {
+        id: true,
+        product_name: true,
+        product_code: true,
+      },
+    });
+
+    const productMap: Record<string, { id: number | string; name: string; code: string }> = {};
+    userProducts.forEach((p) => {
+      productMap[String(p.id)] = { id: p.id, name: p.product_name, code: p.product_code };
+      if (p.product_code) {
+        productMap[`code:${p.product_code.toLowerCase()}`] = { id: p.id, name: p.product_name, code: p.product_code };
+      }
+    });
+
+    // Build date filters for purchase & sales invoices if specified
+    const piWhere: Prisma.PurchaseInvoiceWhereInput = {
+      userId,
+      status: { in: ['GENERATED', 'COMPLETED'] as any },
+    };
+    const siWhere: Prisma.SalesInvoiceWhereInput = {
+      userId,
+      status: { in: ['GENERATED', 'COMPLETED'] as any },
+    };
+
+    if (dateFrom || dateTo) {
+      piWhere.bookingDate = {};
+      siWhere.bookingDate = {};
+      if (dateFrom) {
+        piWhere.bookingDate.gte = new Date(dateFrom);
+        siWhere.bookingDate.gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        piWhere.bookingDate.lte = new Date(dateTo);
+        siWhere.bookingDate.lte = new Date(dateTo);
+      }
+    }
+
+    // 2. Fetch purchase items and sales items
+    const [purchaseItems, salesItems] = await Promise.all([
+      this.prisma.purchaseInvoiceItem.findMany({
+        where: { purchaseInvoice: piWhere },
+        select: {
+          productId: true,
+          productCode: true,
+          productName: true,
+          quantity: true,
+          rate: true,
+          beforeTaxAmount: true,
+          amount: true,
+        },
+      }),
+      this.prisma.salesInvoiceItem.findMany({
+        where: { salesInvoice: siWhere },
+        select: {
+          productId: true,
+          productCode: true,
+          productName: true,
+          quantity: true,
+        },
+      }),
+    ]);
+
+    const inventoryMap: Record<
+      string,
+      {
+        productId: number | string;
+        productName: string;
+        productCode: string;
+        purchaseQty: number;
+        totalPurchaseValue: number;
+        salesQty: number;
+      }
+    > = {};
+
+    const getOrCreateEntry = (
+      pId: number | null | undefined,
+      pCode: string | null | undefined,
+      pName: string | null | undefined,
+    ) => {
+      let key = pId ? String(pId) : '';
+      let matchedInfo = pId ? productMap[String(pId)] : null;
+
+      if (!matchedInfo && pCode) {
+        matchedInfo = productMap[`code:${pCode.toLowerCase()}`];
+      }
+
+      if (matchedInfo) {
+        key = String(matchedInfo.id);
+      } else if (!key) {
+        key = pCode ? `code:${pCode}` : (pName || 'unknown');
+      }
+
+      if (!inventoryMap[key]) {
+        inventoryMap[key] = {
+          productId: matchedInfo ? matchedInfo.id : (pId || key),
+          productName: matchedInfo ? matchedInfo.name : (pName || pCode || 'Unknown Product'),
+          productCode: matchedInfo ? matchedInfo.code : (pCode || ''),
+          purchaseQty: 0,
+          totalPurchaseValue: 0,
+          salesQty: 0,
+        };
+      }
+      return inventoryMap[key];
+    };
+
+    userProducts.forEach((p) => {
+      getOrCreateEntry(p.id, p.product_code, p.product_name);
+    });
+
+    purchaseItems.forEach((pi) => {
+      const entry = getOrCreateEntry(pi.productId, pi.productCode, pi.productName);
+      const qty = Number(pi.quantity || 0);
+      const rate = Number(pi.rate || 0);
+      const value = pi.beforeTaxAmount || pi.amount || (qty * rate);
+
+      entry.purchaseQty += qty;
+      entry.totalPurchaseValue += Number(value || 0);
+    });
+
+    salesItems.forEach((si) => {
+      const entry = getOrCreateEntry(si.productId, si.productCode, si.productName);
+      const qty = Number(si.quantity || 0);
+      entry.salesQty += qty;
+    });
+
+    let items: InventoryReportItemDto[] = Object.values(inventoryMap).map((item) => {
+      const purchaseQty = Number(item.purchaseQty.toFixed(4));
+      const salesQty = Number(item.salesQty.toFixed(4));
+      const remainingQty = Math.max(0, Number((purchaseQty - salesQty).toFixed(4)));
+
+      const avgPurchasingAmount = purchaseQty > 0
+        ? Number((item.totalPurchaseValue / purchaseQty).toFixed(4))
+        : 0;
+
+      const totalAmount = Number((remainingQty * avgPurchasingAmount).toFixed(2));
+
+      return {
+        productId: item.productId,
+        productName: item.productName,
+        productCode: item.productCode,
+        purchaseQty: Number(purchaseQty.toFixed(2)),
+        salesQty: Number(salesQty.toFixed(2)),
+        remainingQty: Number(remainingQty.toFixed(2)),
+        avgPurchasingAmount: Number(avgPurchasingAmount.toFixed(2)),
+        totalAmount: Number(totalAmount.toFixed(2)),
+      };
+    });
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      items = items.filter(
+        (i) => i.productName.toLowerCase().includes(q) || (i.productCode && i.productCode.toLowerCase().includes(q)),
+      );
+    }
+
+    const totalProducts = items.length;
+    const totalPurchaseQty = Number(items.reduce((sum, i) => sum + i.purchaseQty, 0).toFixed(2));
+    const totalSalesQty = Number(items.reduce((sum, i) => sum + i.salesQty, 0).toFixed(2));
+    const totalRemainingQty = Number((totalPurchaseQty - totalSalesQty).toFixed(2));
+    const totalInventoryValue = Number(items.reduce((sum, i) => sum + i.totalAmount, 0).toFixed(2));
+
+    const summary: InventoryReportSummaryDto = {
+      totalProducts,
+      totalPurchaseQty,
+      totalSalesQty,
+      totalRemainingQty: Math.max(0, totalRemainingQty),
+      totalInventoryValue,
+    };
+
+    if (sortBy) {
+      items.sort((a, b) => {
+        let valA = a[sortBy as keyof InventoryReportItemDto];
+        let valB = b[sortBy as keyof InventoryReportItemDto];
+        if (typeof valA === 'string') {
+          return sortOrder === 'asc'
+            ? (valA as string).localeCompare(valB as string)
+            : (valB as string).localeCompare(valA as string);
+        }
+        valA = valA || 0;
+        valB = valB || 0;
+        return sortOrder === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
+      });
+    }
+
+    const skip = (page - 1) * limit;
+    const paginatedItems = items.slice(skip, skip + limit);
+
+    return {
+      data: paginatedItems,
+      summary,
+      meta: {
+        total: totalProducts,
+        page,
+        limit,
+        totalPages: Math.ceil(totalProducts / limit) || 1,
+      },
+    };
+  }
 }
+

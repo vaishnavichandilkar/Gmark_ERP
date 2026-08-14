@@ -54,6 +54,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     async get(key: string): Promise<string | null> {
         try {
+            if (!this.client || this.client.status !== 'ready') return null;
             return await this.client.get(key);
         } catch {
             return null;
@@ -62,21 +63,23 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
         try {
+            if (!this.client || this.client.status !== 'ready') return;
             if (ttlSeconds) {
                 await this.client.set(key, value, 'EX', ttlSeconds);
             } else {
                 await this.client.set(key, value);
             }
         } catch (e) {
-            console.error(`Failed to set key ${key} in Redis`, e);
+            // Silently ignore cache failures if Redis connection is down
         }
     }
 
     async del(key: string): Promise<void> {
         try {
+            if (!this.client || this.client.status !== 'ready') return;
             await this.client.del(key);
         } catch (e) {
-            console.error(`Failed to delete key ${key} from Redis`, e);
+            // Silently ignore cache failures if Redis connection is down
         }
     }
 
