@@ -718,7 +718,7 @@ export class ReportsService {
     const rawIndirectExpenses = Number(Math.max(0, indirectExpenses).toFixed(2));
 
     const totalTradingExpenditure = Number((rawOpeningStock + netPurchase + rawDirectExpenses).toFixed(2));
-    const totalTradingIncome = Number((netSales + rawDirectIncome + rawClosingStock).toFixed(2));
+    const totalTradingIncome = Number((netSales + rawDirectIncome + rawClosingStock + rawIndirectIncome).toFixed(2));
 
     const grossProfitCalc = totalTradingIncome - totalTradingExpenditure;
 
@@ -734,7 +734,7 @@ export class ReportsService {
       grossLoss = Number(Math.abs(grossProfitCalc).toFixed(2));
     }
 
-    const netProfitCalc = (grossProfit - grossLoss) + rawIndirectIncome - rawIndirectExpenses;
+    const netProfitCalc = (grossProfit - grossLoss) - rawIndirectExpenses;
 
     let netProfit = 0;
     let netLoss = 0;
@@ -749,7 +749,7 @@ export class ReportsService {
     }
 
     const totalExpenditure = Number((totalTradingExpenditure + rawIndirectExpenses).toFixed(2));
-    const totalIncome = Number((totalTradingIncome + rawIndirectIncome).toFixed(2));
+    const totalIncome = totalTradingIncome;
 
     return {
       period: {

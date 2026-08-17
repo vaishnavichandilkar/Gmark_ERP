@@ -154,44 +154,44 @@ const SalesOrder = () => {
 
 
   // Logic: Fetch Data
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const params = {
-          page: currentPage,
-          limit: itemsPerPage,
-          search: searchQuery.trim(),
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage,
+        search: searchQuery.trim(),
+      };
+
+      const statusFilter = appliedFilters.status;
+      if (statusFilter !== "All") {
+        const statusMap = {
+          "Pending": "pending",
+          "Completed": "completed",
+          "Deleted": "deleted",
+          "Expiring Soon": "expiring",
+          "Expired": "expired"
         };
-
-        const statusFilter = appliedFilters.status;
-        if (statusFilter !== "All") {
-          const statusMap = {
-            "Pending": "pending",
-            "Completed": "completed",
-            "Deleted": "deleted",
-            "Expiring Soon": "expiring",
-            "Expired": "expired"
-          };
-          params.filter = statusMap[statusFilter];
-        }
-
-        const response = await salesOrderService.getSalesOrders(params);
-
-        // Handle response based on backend structure
-        const data = Array.isArray(response) ? response : (response.data || []);
-        setSalesOrders(data);
-        setTotalItemsCount(response.meta?.total || data.length);
-      } catch (error) {
-        console.error("Error fetching sales orders:", error);
-        toast.error(t('common:failed_to_load'));
-        setSalesOrders([]);
-        setTotalItemsCount(0);
-      } finally {
-        setIsLoading(false);
+        params.filter = statusMap[statusFilter];
       }
-    };
 
+      const response = await salesOrderService.getSalesOrders(params);
+
+      // Handle response based on backend structure
+      const data = Array.isArray(response) ? response : (response.data || []);
+      setSalesOrders(data);
+      setTotalItemsCount(response.meta?.total || data.length);
+    } catch (error) {
+      console.error("Error fetching sales orders:", error);
+      toast.error(t('common:failed_to_load'));
+      setSalesOrders([]);
+      setTotalItemsCount(0);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, [currentPage, itemsPerPage, searchQuery, appliedFilters, isRefreshing]);
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, X, ArrowLeft, ArrowRight, FileText, MoreVertical, Eye, Printer, Trash2, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Search, X, ArrowLeft, ArrowRight, FileText, MoreVertical, Eye, Printer, Trash2, RefreshCw, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Layers } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../../constants/routes';
 import toast from 'react-hot-toast';
@@ -12,6 +12,16 @@ const ReportTable = ({ data, type, status, onClose }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [activeDropdown, setActiveDropdown] = useState(null);
+    const [selectedEntity, setSelectedEntity] = useState(null);
+    const [expandedRows, setExpandedRows] = useState({});
+
+    // Reset drill-down entity and expand state when type, status, or raw data changes
+    React.useEffect(() => {
+        setSelectedEntity(null);
+        setExpandedRows({});
+        setSearchQuery('');
+        setCurrentPage(1);
+    }, [type, status, data]);
 
     // Handle click outside for dropdown
     React.useEffect(() => {
@@ -25,8 +35,6 @@ const ReportTable = ({ data, type, status, onClose }) => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
-
-
 
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat('en-IN', {
@@ -72,8 +80,83 @@ const ReportTable = ({ data, type, status, onClose }) => {
         return 0;
     };
 
+    const isEntityGroupable = ['PI', 'SI', 'PO', 'SO', 'GRN', 'CHALLAN'].includes(type);
+    const isSupplierType = ['PI', 'PO', 'GRN'].includes(type);
+
+    // Level 1: Grouped Summary Data by Supplier or Customer
+    const groupedSummary = useMemo(() => {
+        if (!isEntityGroupable) return null;
+
+        const groups = {};
+        (data || []).forEach(item => {
+            const name = isSupplierType
+                ? (item.supplierName || item.vendorName || item.supplier_name || 'Unknown Supplier')
+                : (item.customerName || item.customer_name || item.customer?.customerName || 'Unknown Customer');
+
+            if (!groups[name]) {
+                groups[name] = {
+                    name,
+                    invoiceCount: 0,
+                    taxableAmount: 0,
+                    taxAmount: 0,
+                    grandTotal: 0,
+                    items: []
+                };
+            }
+
+            const taxAmt = calcTaxAmount(item, item.taxAmount);
+            const gross = Number(item.grandTotal ?? item.totalAmount ?? 0);
+            let taxable = Number(item.taxableAmount ?? item.taxable_amount ?? item.subTotal ?? 0);
+            if (!taxable && gross > 0) {
+                taxable = Math.max(0, gross - taxAmt);
+            }
+
+            groups[name].invoiceCount += 1;
+            groups[name].taxableAmount += taxable;
+            groups[name].taxAmount += taxAmt;
+            groups[name].grandTotal += gross;
+            groups[name].items.push(item);
+        });
+
+        return Object.values(groups);
+    }, [data, type, isEntityGroupable, isSupplierType]);
+
+    const toggleRowExpand = (name) => {
+        setExpandedRows(prev => ({
+            ...prev,
+            [name]: !prev[name]
+        }));
+    };
+
+    const isAllExpanded = useMemo(() => {
+        if (!groupedSummary || groupedSummary.length === 0) return false;
+        return groupedSummary.every(item => expandedRows[item.name]);
+    }, [groupedSummary, expandedRows]);
+
+    const toggleExpandAll = () => {
+        if (isAllExpanded) {
+            setExpandedRows({});
+        } else {
+            const next = {};
+            (groupedSummary || []).forEach(item => {
+                next[item.name] = true;
+            });
+            setExpandedRows(next);
+        }
+    };
+
+    // Summary Columns for Level 1: Clean Supplier / Customer breakdown
+    const summaryColumns = useMemo(() => {
+        return [
+            { header: isSupplierType ? 'Supplier Name' : 'Customer Name', key: 'name' },
+            { header: 'Basic Amount (Without Tax)', key: 'taxableAmount', render: (val) => formatCurrency(val) },
+            { header: 'Total Invoices Created', key: 'invoiceCount', render: (val) => `${val} Invoices` },
+        ];
+    }, [isSupplierType]);
+
+    const isSummaryView = isEntityGroupable && !selectedEntity && (groupedSummary && groupedSummary.length > 1);
+
     const renderStatus = (val, item) => {
-        // Priority: Deleted -> Expired -> Expiring Soon -> Completed -> Pending
         if (['PO', 'SO'].includes(type) && item) {
             if (item.status === 'DELETED') return 'DELETED';
             
@@ -235,6 +318,8 @@ const ReportTable = ({ data, type, status, onClose }) => {
         }
     }, [type, status]);
 
+    const activeColumns = isSummaryView ? summaryColumns : columns;
+
     const renderActionMenu = (item, rowIdx) => {
         const id = item.id || rowIdx;
         const itemStatus = (item.status || "").toLowerCase();
@@ -388,8 +473,25 @@ const ReportTable = ({ data, type, status, onClose }) => {
         );
     };
 
+    // Filter display data based on summary mode vs detail mode
+    const rawDisplayData = useMemo(() => {
+        if (isSummaryView) {
+            return groupedSummary || [];
+        }
+        let list = data || [];
+        if (isEntityGroupable && selectedEntity) {
+            list = list.filter(item => {
+                const name = isSupplierType
+                    ? (item.supplierName || item.vendorName || item.supplier_name || 'Unknown Supplier')
+                    : (item.customerName || item.customer_name || item.customer?.customerName || 'Unknown Customer');
+                return name === selectedEntity;
+            });
+        }
+        return list;
+    }, [isSummaryView, groupedSummary, data, isEntityGroupable, selectedEntity, isSupplierType]);
+
     const filteredData = useMemo(() => {
-        let result = data || [];
+        let result = rawDisplayData;
 
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
@@ -401,25 +503,34 @@ const ReportTable = ({ data, type, status, onClose }) => {
         }
 
         return result;
-    }, [data, searchQuery]);
+    }, [rawDisplayData, searchQuery]);
 
     const columnTotals = useMemo(() => {
         const totals = {
             totalAmount: 0,
             grandTotal: 0,
             taxableAmount: 0,
-            taxAmount: 0
+            taxAmount: 0,
+            invoiceCount: 0
         };
 
         filteredData.forEach(item => {
-            totals.totalAmount += (Number(item.totalAmount) || Number(item.grandTotal) || 0);
-            totals.grandTotal += (Number(item.grandTotal) || Number(item.totalAmount) || 0);
-            totals.taxableAmount += (Number(item.taxableAmount) || 0);
-            totals.taxAmount += calcTaxAmount(item, item.taxAmount);
+            if (isSummaryView) {
+                totals.invoiceCount += Number(item.invoiceCount) || 0;
+                totals.taxableAmount += Number(item.taxableAmount) || 0;
+                totals.taxAmount += Number(item.taxAmount) || 0;
+                totals.grandTotal += Number(item.grandTotal) || 0;
+                totals.totalAmount += Number(item.grandTotal) || 0;
+            } else {
+                totals.totalAmount += (Number(item.totalAmount) || Number(item.grandTotal) || 0);
+                totals.grandTotal += (Number(item.grandTotal) || Number(item.totalAmount) || 0);
+                totals.taxableAmount += (Number(item.taxableAmount) || 0);
+                totals.taxAmount += calcTaxAmount(item, item.taxAmount);
+            }
         });
 
         return totals;
-    }, [filteredData]);
+    }, [filteredData, isSummaryView]);
 
     const totalPages = Math.ceil(filteredData.length / itemsPerPage);
     const currentItems = filteredData.slice(
@@ -435,13 +546,42 @@ const ReportTable = ({ data, type, status, onClose }) => {
             {/* Table Header */}
             <div className="p-4 md:px-8 md:py-6 border-b border-gray-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="w-full">
-                    <h2 className="text-[18px] md:text-[20px] font-bold text-[#004f3b] flex items-center gap-3">
-                        <span className="text-[#004f3b] bg-emerald-50 p-2 rounded-lg shrink-0">
-                            <FileText size={20} />
-                        </span>
-                        <span className="truncate">{status} {type} Records</span>
-                    </h2>
-                    <p className="text-[13px] md:text-[14px] text-gray-500 mt-1">Showing {filteredData.length} records</p>
+                    {selectedEntity && (
+                        <button
+                            onClick={() => { setSelectedEntity(null); setSearchQuery(''); setCurrentPage(1); }}
+                            className="flex items-center gap-2 px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-[#004f3b] font-bold rounded-xl text-xs transition-colors mb-3.5 border border-emerald-200/60 shadow-xs"
+                        >
+                            <ArrowLeft size={16} />
+                            Back to {isSupplierType ? 'Suppliers Summary' : 'Customers Summary'}
+                        </button>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <h2 className="text-[18px] md:text-[20px] font-bold text-[#004f3b] flex items-center gap-3">
+                            <span className="text-[#004f3b] bg-emerald-50 p-2 rounded-lg shrink-0">
+                                <FileText size={20} />
+                            </span>
+                            <span className="truncate">
+                                {selectedEntity
+                                    ? `${selectedEntity} - ${type} Invoices`
+                                    : `${status || ''} ${type} ${isSummaryView ? (isSupplierType ? 'Supplier Breakdown' : 'Customer Breakdown') : 'Records'}`
+                                }
+                            </span>
+                        </h2>
+
+                        {isSummaryView && groupedSummary && groupedSummary.length > 0 && (
+                            <button
+                                onClick={toggleExpandAll}
+                                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-[#004f3b] font-extrabold rounded-xl text-xs transition-colors flex items-center gap-1.5 border border-emerald-200/60 shadow-2xs"
+                            >
+                                <Layers size={14} />
+                                {isAllExpanded ? 'Collapse All' : 'Expand All'}
+                            </button>
+                        )}
+                    </div>
+
+                    <p className="text-[13px] md:text-[14px] text-gray-500 mt-1">
+                        Showing {filteredData.length} {isSummaryView ? (isSupplierType ? 'suppliers' : 'customers') : 'records'}
+                    </p>
                 </div>
 
                 <div className="flex items-center gap-3 w-full md:w-auto">
@@ -478,7 +618,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     <table className="w-full border-collapse text-left">
                         <thead>
                             <tr className="bg-[#004f3b] sticky top-0 z-20">
-                                {columns.map((col, idx) => (
+                                {activeColumns.map((col, idx) => (
                                     <th key={idx} className="px-8 py-4 text-[13px] font-bold text-white uppercase tracking-wider whitespace-nowrap bg-[#004f3b] sticky top-0">
                                         {col.header}
                                     </th>
@@ -487,41 +627,73 @@ const ReportTable = ({ data, type, status, onClose }) => {
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {currentItems.length > 0 ? (
-                                currentItems.map((item, rowIdx) => (
-                                    <tr key={rowIdx} className="hover:bg-gray-50/50 transition-colors group">
-                                        {columns.map((col, colIdx) => (
-                                            <td key={colIdx} className={`px-8 py-4 text-[14px] text-gray-600 font-medium ${col.isAction ? 'relative' : ''}`}>
-                                                {col.isAction
-                                                    ? renderActionMenu(item, rowIdx)
-                                                    : (col.key === 'status' ? renderStatus(item[col.key], item) : (col.render ? col.render(item[col.key], item) : (item[col.key] || '-')))
-                                                }
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))
+                                currentItems.map((item, rowIdx) => {
+                                    const isExpanded = isSummaryView && !!expandedRows[item.name];
+                                    return (
+                                        <React.Fragment key={rowIdx}>
+                                            <tr
+                                                onClick={() => {
+                                                    if (isSummaryView) {
+                                                        setSelectedEntity(item.name);
+                                                        setSearchQuery('');
+                                                        setCurrentPage(1);
+                                                    }
+                                                }}
+                                                className={`hover:bg-emerald-50/30 transition-colors group ${isSummaryView ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-emerald-50/40 font-bold border-l-4 border-emerald-600' : ''}`}
+                                            >
+                                                {activeColumns.map((col, colIdx) => (
+                                                    <td key={colIdx} className={`px-8 py-4 text-[14px] text-gray-700 font-semibold ${col.isAction ? 'relative' : ''}`}>
+                                                        {col.key === 'name' && isSummaryView ? (
+                                                            <div className="flex items-center gap-2.5">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); toggleRowExpand(item.name); }}
+                                                                    className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-emerald-100 hover:text-emerald-800'}`}
+                                                                >
+                                                                    {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                                                </button>
+                                                                <span className="font-bold text-gray-900">{item.name}</span>
+                                                            </div>
+                                                        ) : (col.key === 'invoiceCount' && isSummaryView) ? (
+                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100/80 text-emerald-900 rounded-full font-extrabold text-xs">
+                                                                <FileText size={13} />
+                                                                {item.invoiceCount} Invoices Created
+                                                            </span>
+                                                        ) : (col.isAction
+                                                            ? (col.render ? col.render(item[col.key], item) : renderActionMenu(item, rowIdx))
+                                                            : (col.key === 'status' ? renderStatus(item[col.key], item) : (col.render ? col.render(item[col.key], item) : (item[col.key] || '-')))
+                                                        )}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        </React.Fragment>
+                                    );
+                                })
                             ) : (
                                 <tr>
-                                    <td colSpan={columns.length} className="px-8 py-20 text-center text-gray-400 font-medium">
+                                    <td colSpan={activeColumns.length} className="px-8 py-20 text-center text-gray-400 font-medium">
                                         No matching records found.
                                     </td>
                                 </tr>
                             )}
                             {/* Buffer for dropdown visibility */}
-                            {currentItems.length > 0 && currentItems.length < 4 && (
+                            {!isSummaryView && currentItems.length > 0 && currentItems.length < 4 && (
                                 <tr>
-                                    <td colSpan={columns.length} className="h-40 border-none"></td>
+                                    <td colSpan={activeColumns.length} className="h-40 border-none"></td>
                                 </tr>
                             )}
                         </tbody>
                         {filteredData.length > 0 && (
                             <tfoot className="border-t-2 border-gray-300 bg-gray-50/50 font-bold">
                                 <tr>
-                                    {columns.map((col, colIdx) => {
+                                    {activeColumns.map((col, colIdx) => {
                                         const isNumeric = ['totalAmount', 'grandTotal', 'taxableAmount', 'taxAmount'].includes(col.key);
+                                        const isCount = col.key === 'invoiceCount';
                                         return (
                                             <td key={colIdx} className="px-8 py-4 text-[14px] text-gray-900 font-extrabold whitespace-nowrap">
                                                 {colIdx === 0 ? (
-                                                    <span>Total</span>
+                                                    <span>Total ({filteredData.length} {isSummaryView ? (isSupplierType ? 'Suppliers' : 'Customers') : 'Records'})</span>
+                                                ) : isCount ? (
+                                                    <span>{columnTotals.invoiceCount} Invoices</span>
                                                 ) : isNumeric ? (
                                                     formatCurrency(columnTotals[col.key])
                                                 ) : (

@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { fetchReportsStart } from '../reportSlice';
 import Card, { CardContent, CardHeader } from '../../../components/common/Card';
-import { FileText, ShoppingCart, TrendingUp, DollarSign, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent, Package, Search, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FileText, ShoppingCart, TrendingUp, DollarSign, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent, Package, Search, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus } from 'lucide-react';
 import Loader from '../../../components/common/Loader';
 import ReportTable from '../components/ReportTable';
 import reportService from '../../../services/reportService';
@@ -24,6 +24,50 @@ const ReportDashboard = () => {
     const [plLoading, setPlLoading] = useState(false);
     const [plFromDate, setPlFromDate] = useState('2026-04-01');
     const [plToDate, setPlToDate] = useState('2027-03-31');
+
+    const [isPurchaseExpanded, setIsPurchaseExpanded] = useState(false);
+    const [isSalesExpanded, setIsSalesExpanded] = useState(false);
+
+    const supplierBreakdown = useMemo(() => {
+        const groups = {};
+        (purchaseData || []).forEach(item => {
+            if (item.status === 'DELETED') return;
+            const name = item.supplierName || item.vendorName || item.supplier_name || 'Unknown Supplier';
+            if (!groups[name]) {
+                groups[name] = { name, basicAmount: 0, count: 0, items: [] };
+            }
+            const gross = Number(item.grandTotal ?? item.totalAmount ?? 0);
+            const tax = Number(item.taxAmount || 0);
+            let taxable = Number(item.taxableAmount ?? item.taxable_amount ?? item.subTotal ?? 0);
+            if (!taxable && gross > 0) {
+                taxable = Math.max(0, gross - tax);
+            }
+            groups[name].basicAmount += taxable;
+            groups[name].count += 1;
+            groups[name].items.push(item);
+        });
+        return Object.values(groups);
+    }, [purchaseData]);
+
+    const customerBreakdown = useMemo(() => {
+        const groups = {};
+        (salesInvoicesData || []).filter(s => s.status === 'GENERATED' || s.status === 'INVOICE_GENERATED').forEach(item => {
+            const name = item.customerName || item.customer_name || item.customer?.customerName || 'Unknown Customer';
+            if (!groups[name]) {
+                groups[name] = { name, basicAmount: 0, count: 0, items: [] };
+            }
+            const gross = Number(item.grandTotal ?? item.totalAmount ?? 0);
+            const tax = Number(item.taxAmount || 0);
+            let taxable = Number(item.taxableAmount ?? item.taxable_amount ?? item.subTotal ?? 0);
+            if (!taxable && gross > 0) {
+                taxable = Math.max(0, gross - tax);
+            }
+            groups[name].basicAmount += taxable;
+            groups[name].count += 1;
+            groups[name].items.push(item);
+        });
+        return Object.values(groups);
+    }, [salesInvoicesData]);
 
     // Inventory report state
     const [inventoryData, setInventoryData] = useState(null);
@@ -778,52 +822,28 @@ const ReportDashboard = () => {
                         const Icon = stat.icon;
                         const isSelected = detailView?.type === type && detailView?.status === stat.label;
                         return (
-                            <React.Fragment key={idx}>
-                                <div
-                                    onClick={() => handleCardClick(type, stat.label, rawData)}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    className={`status-card-element relative group flex items-center gap-3 px-4 py-3 bg-white rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer ${stat.border} ${isSelected ? 'ring-2 ring-emerald-500 border-transparent shadow-emerald-100' : ''}`}
-                                >
-                                    <div className={`flex items-center justify-center p-2.5 rounded-full transition-colors duration-300 ${stat.bg} ${stat.color} group-hover:bg-white ${isSelected ? 'bg-emerald-500 text-white' : ''}`}>
-                                        <Icon size={18} strokeWidth={2.5} />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <p className="text-[22px] font-bold text-gray-900 leading-none mb-1">{stat.count}</p>
-                                        <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide leading-none mb-1">{stat.label}</p>
-                                        {stat.amount !== undefined && (
-                                            <p className="text-[11.5px] font-bold text-emerald-700 leading-none">{formatCurrency(stat.amount)}</p>
-                                        )}
-                                    </div>
-                                    {isSelected && (
-                                        <div className="absolute -bottom-[11px] left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-b-[1.5px] border-r-[1.5px] border-emerald-500 transform rotate-45 z-10 rounded-sm"></div>
+                            <div
+                                key={idx}
+                                onClick={() => handleCardClick(type, stat.label, rawData)}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className={`status-card-element relative group flex items-center gap-3 px-4 py-3 bg-white rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer ${stat.border} ${isSelected ? 'ring-2 ring-emerald-500 border-transparent shadow-emerald-100' : ''}`}
+                            >
+                                <div className={`flex items-center justify-center p-2.5 rounded-full transition-colors duration-300 ${stat.bg} ${stat.color} group-hover:bg-white ${isSelected ? 'bg-emerald-500 text-white' : ''}`}>
+                                    <Icon size={18} strokeWidth={2.5} />
+                                </div>
+                                <div className="flex flex-col">
+                                    <p className="text-[22px] font-bold text-gray-900 leading-none mb-1">{stat.count}</p>
+                                    <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide leading-none mb-1">{stat.label}</p>
+                                    {stat.amount !== undefined && (
+                                        <p className="text-[11.5px] font-bold text-emerald-700 leading-none">{formatCurrency(stat.amount)}</p>
                                     )}
                                 </div>
-                                {isSelected && (
-                                    <div className="report-table-element col-span-2 md:col-span-3 lg:hidden w-full animate-in fade-in slide-in-from-top-4 duration-500 mt-5 mb-4" id={`report-detail-table-${type}`}>
-                                        <ReportTable
-                                            type={detailView.type}
-                                            status={detailView.status}
-                                            data={detailView.data}
-                                            onClose={() => setDetailView(null)}
-                                        />
-                                    </div>
-                                )}
-                            </React.Fragment>
+                            </div>
                         );
                     })}
-                </div>
-                {detailView?.type === type && (
-                    <div className="report-table-element hidden lg:block w-full animate-in fade-in slide-in-from-top-4 duration-500 mt-5 mb-4" id={`report-detail-table-desktop-${type}`}>
-                        <ReportTable
-                            type={detailView.type}
-                            status={detailView.status}
-                            data={detailView.data}
-                            onClose={() => setDetailView(null)}
-                        />
-                    </div>
-                )}
             </div>
-        );
+        </div>
+    );
     };
 
     const renderGrnChallanCards = (title, statuses, type, rawData) => {
@@ -860,50 +880,26 @@ const ReportDashboard = () => {
                         const Icon = stat.icon;
                         const isSelected = detailView?.type === type && detailView?.status === stat.label;
                         return (
-                            <React.Fragment key={idx}>
-                                <div
-                                    onClick={() => handleCardClick(type, stat.label, rawData)}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    className={`status-card-element relative group flex items-center gap-3 px-4 py-3 bg-white rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer ${stat.border} ${isSelected ? 'ring-2 ring-emerald-500 border-transparent shadow-emerald-100' : ''}`}
-                                >
-                                    <div className={`flex items-center justify-center p-2.5 rounded-full transition-colors duration-300 ${stat.bg} ${stat.color} group-hover:bg-white ${isSelected ? 'bg-emerald-500 text-white' : ''}`}>
-                                        <Icon size={18} strokeWidth={2.5} />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <p className="text-[22px] font-bold text-gray-900 leading-none mb-1">{stat.count}</p>
-                                        <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide leading-none mb-1">{stat.label}</p>
-                                        {stat.amount !== undefined && (
-                                            <p className="text-[11.5px] font-bold text-emerald-700 leading-none">{formatCurrency(stat.amount)}</p>
-                                        )}
-                                    </div>
-                                    {isSelected && (
-                                        <div className="absolute -bottom-[11px] left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-b-[1.5px] border-r-[1.5px] border-emerald-500 transform rotate-45 z-10 rounded-sm"></div>
+                            <div
+                                key={idx}
+                                onClick={() => handleCardClick(type, stat.label, rawData)}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className={`status-card-element relative group flex items-center gap-3 px-4 py-3 bg-white rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer ${stat.border} ${isSelected ? 'ring-2 ring-emerald-500 border-transparent shadow-emerald-100' : ''}`}
+                            >
+                                <div className={`flex items-center justify-center p-2.5 rounded-full transition-colors duration-300 ${stat.bg} ${stat.color} group-hover:bg-white ${isSelected ? 'bg-emerald-500 text-white' : ''}`}>
+                                    <Icon size={18} strokeWidth={2.5} />
+                                </div>
+                                <div className="flex flex-col">
+                                    <p className="text-[22px] font-bold text-gray-900 leading-none mb-1">{stat.count}</p>
+                                    <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide leading-none mb-1">{stat.label}</p>
+                                    {stat.amount !== undefined && (
+                                        <p className="text-[11.5px] font-bold text-emerald-700 leading-none">{formatCurrency(stat.amount)}</p>
                                     )}
                                 </div>
-                                {isSelected && (
-                                    <div className="report-table-element col-span-2 md:col-span-3 lg:hidden w-full animate-in fade-in slide-in-from-top-4 duration-500 mt-5 mb-4" id={`report-detail-table-${type}`}>
-                                        <ReportTable
-                                            type={detailView.type}
-                                            status={detailView.status}
-                                            data={detailView.data}
-                                            onClose={() => setDetailView(null)}
-                                        />
-                                    </div>
-                                )}
-                            </React.Fragment>
+                            </div>
                         );
                     })}
                 </div>
-                {detailView?.type === type && (
-                    <div className="hidden lg:block w-full animate-in fade-in slide-in-from-top-4 duration-500 mt-2 mb-2" id={`report-detail-table-desktop-${type}`}>
-                        <ReportTable
-                            type={detailView.type}
-                            status={detailView.status}
-                            data={detailView.data}
-                            onClose={() => setDetailView(null)}
-                        />
-                    </div>
-                )}
             </div>
         );
     };
@@ -918,23 +914,28 @@ const ReportDashboard = () => {
         const directIncome = trading.directIncome ?? profitLossData?.directIncome ?? 0;
         const sale = trading.netSales ?? trading.sales ?? profitLossData?.sales ?? 0;
         const closingStock = trading.closingStock ?? profitLossData?.closingStock ?? 0;
+        const indirectIncome = pl.indirectIncome ?? profitLossData?.indirectIncome ?? 0;
+        const indirectExpenses = pl.indirectExpenses ?? profitLossData?.indirectExpenses ?? 0;
 
+        // (B) Total Exp. = Opening balance + Purchase + Direct expenses
         const totalTradingExpenditure = trading.totalExpenditure ?? (openingStock + purchase + directExpenses);
-        const totalTradingIncome = trading.totalIncome ?? (sale + directIncome + closingStock);
+        
+        // (A) Total Income = Sale + Direct Income + Closing Stock + Indirect Income
+        const totalTradingIncome = trading.totalIncome ?? (sale + directIncome + closingStock + indirectIncome);
 
+        // Gross Profit (C) = A - B
         const isGrossProfit = trading.isGrossProfit ?? (totalTradingIncome >= totalTradingExpenditure);
         const grossProfit = isGrossProfit ? (trading.grossProfit ?? (totalTradingIncome - totalTradingExpenditure)) : 0;
         const grossLoss = !isGrossProfit ? (trading.grossLoss ?? (totalTradingExpenditure - totalTradingIncome)) : 0;
 
-        const indirectIncome = pl.indirectIncome ?? profitLossData?.indirectIncome ?? 0;
-        const indirectExpenses = pl.indirectExpenses ?? profitLossData?.indirectExpenses ?? 0;
+        // Net Profit = C - D (Gross Profit - Indirect Expenses)
+        const netProfitVal = grossProfit - grossLoss - indirectExpenses;
+        const isNetProfit = netProfitVal >= 0;
+        const netProfit = isNetProfit ? netProfitVal : 0;
+        const netLoss = !isNetProfit ? Math.abs(netProfitVal) : 0;
 
-        const totalExpenditure = profitLossData?.expenditure?.totalExpenditure ?? profitLossData?.totalExpenditure ?? (totalTradingExpenditure + indirectExpenses);
-        const totalIncome = profitLossData?.income?.totalIncome ?? profitLossData?.totalRevenue ?? (totalTradingIncome + indirectIncome);
-
-        const isNetProfit = pl.isNetProfit ?? (totalIncome >= totalExpenditure);
-        const netProfit = isNetProfit ? (pl.netProfit ?? (totalIncome - totalExpenditure)) : 0;
-        const netLoss = !isNetProfit ? (pl.netLoss ?? (totalExpenditure - totalIncome)) : 0;
+        const totalExpenditure = totalTradingExpenditure + indirectExpenses;
+        const totalIncome = totalTradingIncome;
 
         return (
             <Card className="mb-8 border border-gray-100 shadow-xl overflow-hidden rounded-[24px]">
@@ -1021,7 +1022,7 @@ const ReportDashboard = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {/* Trading Row 1: Opening Stock & Sales */}
+                                {/* Row 1: Opening Stock & Sales */}
                                 <tr className="hover:bg-emerald-50/30 transition-all duration-200 group">
                                     <td
                                         onClick={() => handleCardClick('STOCK', 'Opening Stock Breakdown', openingStock > 0 ? (inventoryData?.items || []) : [])}
@@ -1036,12 +1037,21 @@ const ReportDashboard = () => {
                                         {formatCurrency(openingStock)}
                                     </td>
                                     <td
-                                        onClick={() => handleCardClick('SI', 'Sales Invoices', salesInvoicesData || [])}
+                                        onClick={() => setIsSalesExpanded(prev => !prev)}
                                         className="px-8 py-4 font-semibold text-gray-700 hover:text-blue-700 cursor-pointer"
                                     >
                                         <div className="flex items-center gap-2">
-                                            <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
-                                            <span className="group-hover:translate-x-0.5 transition-transform">Sales</span>
+                                            <span className="flex items-center justify-center w-4 h-4 rounded bg-blue-100 text-blue-700 font-black text-xs shrink-0 shadow-2xs">
+                                                {isSalesExpanded ? <Minus size={11} strokeWidth={3} /> : <Plus size={11} strokeWidth={3} />}
+                                            </span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform flex items-center gap-1.5 font-bold">
+                                                Sales
+                                            </span>
+                                            {customerBreakdown.length > 0 && (
+                                                <span className="text-[11px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full">
+                                                    {customerBreakdown.length} Customers
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-8 py-4 text-right text-gray-900 font-bold">
@@ -1049,15 +1059,44 @@ const ReportDashboard = () => {
                                     </td>
                                 </tr>
 
-                                {/* Trading Row 2: Purchase & Direct Income */}
+                                {/* Customer Sub-rows under Sales */}
+                                {isSalesExpanded && customerBreakdown.map((cust, cIdx) => (
+                                    <tr key={`cust-${cIdx}`} className="bg-blue-50/20 text-xs hover:bg-blue-100/30 transition-colors">
+                                        <td colSpan={2} className="border-r-2 border-gray-200/80"></td>
+                                        <td
+                                            onClick={() => handleCardClick('SI', `${cust.name} - Sales Invoices`, cust.items)}
+                                            className="pl-12 py-2.5 font-semibold text-gray-700 hover:text-blue-700 cursor-pointer"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span className="flex h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                <span className="font-bold text-gray-900">{cust.name}</span>
+                                                <span className="text-[11px] font-medium text-gray-500">({cust.count} Invoices)</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-2.5 text-right font-bold text-blue-955">
+                                            {formatCurrency(cust.basicAmount)}
+                                        </td>
+                                    </tr>
+                                ))}
+
+                                {/* Row 2: Purchase & Direct Income */}
                                 <tr className="hover:bg-emerald-50/30 transition-all duration-200 group">
                                     <td
-                                        onClick={() => handleCardClick('PI', 'Purchase Invoices', purchaseData || [])}
+                                        onClick={() => setIsPurchaseExpanded(prev => !prev)}
                                         className="px-8 py-4 font-semibold text-gray-700 hover:text-emerald-700 cursor-pointer"
                                     >
                                         <div className="flex items-center gap-2">
-                                            <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                                            <span className="group-hover:translate-x-0.5 transition-transform">Purchase</span>
+                                            <span className="flex items-center justify-center w-4 h-4 rounded bg-emerald-100 text-emerald-700 font-black text-xs shrink-0 shadow-2xs">
+                                                {isPurchaseExpanded ? <Minus size={11} strokeWidth={3} /> : <Plus size={11} strokeWidth={3} />}
+                                            </span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform flex items-center gap-1.5 font-bold">
+                                                Purchase
+                                            </span>
+                                            {supplierBreakdown.length > 0 && (
+                                                <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                                    {supplierBreakdown.length} Suppliers
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-8 py-4 text-right text-gray-900 font-bold border-r-2 border-gray-200/80">
@@ -1077,7 +1116,27 @@ const ReportDashboard = () => {
                                     </td>
                                 </tr>
 
-                                {/* Trading Row 3: Direct Expenses & Closing Stock */}
+                                {/* Supplier Sub-rows under Purchase */}
+                                {isPurchaseExpanded && supplierBreakdown.map((supp, sIdx) => (
+                                    <tr key={`supp-${sIdx}`} className="bg-emerald-50/20 text-xs hover:bg-emerald-100/30 transition-colors">
+                                        <td
+                                            onClick={() => handleCardClick('PI', `${supp.name} - Purchase Invoices`, supp.items)}
+                                            className="pl-12 py-2.5 font-semibold text-gray-700 hover:text-emerald-700 cursor-pointer"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                                <span className="font-bold text-gray-900">{supp.name}</span>
+                                                <span className="text-[11px] font-medium text-gray-500">({supp.count} Invoices)</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-2.5 text-right font-bold text-emerald-955 border-r-2 border-gray-200/80">
+                                            {formatCurrency(supp.basicAmount)}
+                                        </td>
+                                        <td colSpan={2}></td>
+                                    </tr>
+                                ))}
+
+                                {/* Row 3: Direct Expenses & Closing Stock */}
                                 <tr className="hover:bg-emerald-50/30 transition-all duration-200 group">
                                     <td
                                         onClick={() => handleCardClick('EXPENSE', 'Direct Expenses Breakdown', profitLossData?.breakdown?.directExpenses || [])}
@@ -1105,13 +1164,30 @@ const ReportDashboard = () => {
                                     </td>
                                 </tr>
 
-                                {/* Trading Totals Header */}
+                                {/* Row 4: Indirect Income on Income side */}
+                                <tr className="hover:bg-emerald-50/30 transition-all duration-200 group">
+                                    <td className="px-8 py-4 border-r-2 border-gray-200/80" colSpan={2}></td>
+                                    <td
+                                        onClick={() => handleCardClick('INCOME', 'Indirect Income Breakdown', profitLossData?.breakdown?.indirectIncome || [])}
+                                        className="px-8 py-4 font-semibold text-gray-700 hover:text-blue-700 cursor-pointer"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Indirect Income</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-4 text-right text-gray-900 font-bold">
+                                        {formatCurrency(indirectIncome)}
+                                    </td>
+                                </tr>
+
+                                {/* Totals Header: Total Expenditure vs Total Income */}
                                 <tr className="bg-gray-100/90 font-bold border-t-2 border-b-2 border-gray-300">
-                                    <td className="px-8 py-3.5 text-gray-800 font-extrabold text-xs uppercase tracking-wider">Trading Expenditure Total</td>
+                                    <td className="px-8 py-3.5 text-gray-800 font-extrabold text-xs uppercase tracking-wider">Total Expenditure</td>
                                     <td className="px-8 py-3.5 text-right text-gray-950 font-black border-r-2 border-gray-200/80 text-sm">
                                         {formatCurrency(totalTradingExpenditure)}
                                     </td>
-                                    <td className="px-8 py-3.5 text-gray-800 font-extrabold text-xs uppercase tracking-wider">Trading Income Total</td>
+                                    <td className="px-8 py-3.5 text-gray-800 font-extrabold text-xs uppercase tracking-wider">Total Income</td>
                                     <td className="px-8 py-3.5 text-right text-gray-950 font-black text-sm">
                                         {formatCurrency(totalTradingIncome)}
                                     </td>
@@ -1127,10 +1203,10 @@ const ReportDashboard = () => {
                                                     Gross Profit
                                                 </div>
                                             </td>
-                                            <td className="px-8 py-4 text-right font-black text-emerald-950 border-r-2 border-gray-200/80 text-base">
+                                            <td className="px-8 py-4 text-right font-black text-emerald-955 border-r-2 border-gray-200/80 text-base">
                                                 {formatCurrency(grossProfit)}
                                             </td>
-                                            <td className="px-8 py-4"></td>
+                                            <td className="px-8 py-4 border-r-2 border-gray-200/80"></td>
                                             <td className="px-8 py-4"></td>
                                         </>
                                     ) : (
@@ -1143,14 +1219,14 @@ const ReportDashboard = () => {
                                                     Gross Loss
                                                 </div>
                                             </td>
-                                            <td className="px-8 py-4 text-right font-black text-rose-950 text-base">
+                                            <td className="px-8 py-4 text-right font-black text-rose-955 text-base">
                                                 {formatCurrency(grossLoss)}
                                             </td>
                                         </>
                                     )}
                                 </tr>
 
-                                {/* Indirect Expenses & Indirect Income */}
+                                {/* Indirect Expenses Row */}
                                 <tr className="hover:bg-emerald-50/30 transition-all duration-200 group">
                                     <td
                                         onClick={() => handleCardClick('EXPENSE', 'Indirect Expenses Breakdown', profitLossData?.breakdown?.indirectExpenses || [])}
@@ -1164,30 +1240,8 @@ const ReportDashboard = () => {
                                     <td className="px-8 py-4 text-right text-gray-900 font-bold border-r-2 border-gray-200/80">
                                         {formatCurrency(indirectExpenses)}
                                     </td>
-                                    <td
-                                        onClick={() => handleCardClick('INCOME', 'Indirect Income Breakdown', profitLossData?.breakdown?.indirectIncome || [])}
-                                        className="px-8 py-4 font-semibold text-gray-700 hover:text-blue-700 cursor-pointer"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
-                                            <span className="group-hover:translate-x-0.5 transition-transform">Indirect Income</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-4 text-right text-gray-900 font-bold">
-                                        {formatCurrency(indirectIncome)}
-                                    </td>
-                                </tr>
-
-                                {/* Overall Totals Row */}
-                                <tr className="bg-gray-100 font-bold border-t-2 border-b-2 border-gray-300">
-                                    <td className="px-8 py-4 text-gray-900 font-black text-xs uppercase tracking-wider">Total Expenditure</td>
-                                    <td className="px-8 py-4 text-right text-gray-950 font-black border-r-2 border-gray-200/80 text-base">
-                                        {formatCurrency(totalExpenditure)}
-                                    </td>
-                                    <td className="px-8 py-4 text-gray-900 font-black text-xs uppercase tracking-wider">Total Income</td>
-                                    <td className="px-8 py-4 text-right text-gray-950 font-black text-base">
-                                        {formatCurrency(totalIncome)}
-                                    </td>
+                                    <td className="px-8 py-4 border-r-2 border-gray-200/80"></td>
+                                    <td className="px-8 py-4"></td>
                                 </tr>
 
                                 {/* Net Profit / Net Loss Row */}
@@ -1545,6 +1599,31 @@ const ReportDashboard = () => {
         );
     };
 
+    if (detailView) {
+        return (
+            <div className="flex flex-col w-full max-w-[1400px] mx-auto pb-10 px-4 sm:px-6 lg:px-8 pt-4 animate-in fade-in duration-300">
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                    <button
+                        onClick={() => setDetailView(null)}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-[#004f3b] text-white font-bold rounded-xl text-sm hover:bg-[#00382a] transition-all shadow-md"
+                    >
+                        <ChevronLeft size={20} />
+                        Back to Report Dashboard
+                    </button>
+                    <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                        Full Detailed View
+                    </span>
+                </div>
+                <ReportTable
+                    type={detailView.type}
+                    status={detailView.status}
+                    data={detailView.data}
+                    onClose={() => setDetailView(null)}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col w-full max-w-[1400px] mx-auto pb-10 px-4 sm:px-6 lg:px-8">
             {/* Header */}
@@ -1584,16 +1663,6 @@ const ReportDashboard = () => {
 
             {renderSummaryCards()}
             {renderSelectedStatusCards()}
-            {detailView && (detailView.type === 'PI' || detailView.type === 'SI') && activeTab === 'ALL' && (
-                <div className="report-table-element w-full animate-in fade-in slide-in-from-top-4 duration-500 mb-8 animate-in" id="report-detail-table-global">
-                    <ReportTable
-                        type={detailView.type}
-                        status={detailView.status}
-                        data={detailView.data}
-                        onClose={() => setDetailView(null)}
-                    />
-                </div>
-            )}
             {activeTab !== 'INVENTORY' && renderGraphs()}
         </div>
     );
