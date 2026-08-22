@@ -137,7 +137,7 @@ export class JournalVoucherService {
       }
 
       // 4. Record Accounting Transactions
-      // Debit Bank/Cash Account
+      // Credit Bank/Cash Account (Outflow)
       if (totalAmount > 0) {
         await this.transactionService.recordTransaction({
           accountId: createDto.bankCashLedgerId,
@@ -146,11 +146,11 @@ export class JournalVoucherService {
           invoiceNumber: voucherNumber,
           transactionType: TransactionType.Journal,
           amount: totalAmount,
-          entryType: BalanceType.Dr,
+          entryType: BalanceType.Cr,
         }, tx);
       }
 
-      // Credit Ledger Accounts
+      // Debit Ledger Accounts (Inflow/Expense)
       for (const item of createDto.items) {
         const account = await tx.accountMaster.findFirst({ where: { id: item.accountId, userId } });
         if (!account) {
@@ -165,7 +165,7 @@ export class JournalVoucherService {
             invoiceNumber: voucherNumber,
             transactionType: TransactionType.Journal,
             amount: item.amount,
-            entryType: BalanceType.Cr,
+            entryType: BalanceType.Dr,
           }, tx);
         }
       }
@@ -381,7 +381,7 @@ export class JournalVoucherService {
         }
       }
 
-      // Record new transactions
+      // Record new transactions (Credit Bank/Cash, Debit Target Account)
       if (totalAmount > 0) {
         await this.transactionService.recordTransaction({
           accountId: updateDto.bankCashLedgerId,
@@ -390,7 +390,7 @@ export class JournalVoucherService {
           invoiceNumber: existing.voucherNumber,
           transactionType: TransactionType.Journal,
           amount: totalAmount,
-          entryType: BalanceType.Dr,
+          entryType: BalanceType.Cr,
         }, tx);
       }
 
@@ -408,7 +408,7 @@ export class JournalVoucherService {
             invoiceNumber: existing.voucherNumber,
             transactionType: TransactionType.Journal,
             amount: item.amount,
-            entryType: BalanceType.Cr,
+            entryType: BalanceType.Dr,
           }, tx);
         }
       }

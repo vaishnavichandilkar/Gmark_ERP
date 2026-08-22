@@ -4,8 +4,10 @@ import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString
 
 export enum POStatus {
   PENDING = 'PENDING',
+  PARTIAL_GRN = 'PARTIAL_GRN',
   GRN_COMPLETED = 'GRN_COMPLETED',
   INVOICE_COMPLETED = 'INVOICE_COMPLETED',
+  INVOICE_GENERATED = 'INVOICE_GENERATED',
   DELETED = 'DELETED',
 }
 

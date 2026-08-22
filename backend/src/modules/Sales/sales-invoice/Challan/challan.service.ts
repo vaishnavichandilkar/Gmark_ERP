@@ -40,42 +40,49 @@ export class ChallanService {
     const challanDate = new Date(dto.challanDate || new Date());
     const today = new Date();
     today.setHours(23, 59, 59, 999);
+    const challanOnlyDate = new Date(challanDate);
+    challanOnlyDate.setHours(0, 0, 0, 0);
 
     if (dto.soId) {
       const so = await this.prisma.salesOrder.findUnique({ where: { id: Number(dto.soId) } });
       const soDate = so ? new Date(so.soCreationDate) : null;
       if (soDate) {
         soDate.setHours(0, 0, 0, 0);
-        const challanOnlyDate = new Date(challanDate);
-        challanOnlyDate.setHours(0, 0, 0, 0);
-        
-        if (challanOnlyDate < soDate || challanDate > today) {
+        if (challanOnlyDate < soDate || challanOnlyDate > today) {
           throw new BadRequestException('Challan Date must be between SO Date and Current Date.');
         }
-      } else if (challanDate > today) {
+      } else if (challanOnlyDate > today) {
         throw new BadRequestException('Challan Date must be between SO Date and Current Date.');
       }
     } else {
       const now = new Date();
       const fyStart = new Date(now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear(), 3, 1);
       fyStart.setHours(0, 0, 0, 0);
-      const challanOnlyDate = new Date(challanDate);
-      challanOnlyDate.setHours(0, 0, 0, 0);
 
-      if (challanOnlyDate < fyStart || challanDate > today) {
+      if (challanOnlyDate < fyStart || challanOnlyDate > today) {
         throw new BadRequestException('Challan Date must be within current financial year.');
       }
     }
 
     const company = await this.prisma.shopDetail.findUnique({ where: { userId } });
-    const customer = await this.prisma.accountMaster.findFirst({
-      where: { userId, accountName: { equals: dto.customerName, mode: 'insensitive' } }
-    });
+    
+    let customer = null;
+    if (dto.customerId) {
+      customer = await this.prisma.accountMaster.findFirst({
+        where: { id: Number(dto.customerId), userId }
+      });
+    }
+    if (!customer && dto.customerName) {
+      const matchedNames = await this._getMatchedCustomerNames(dto.customerName, userId);
+      customer = await this.prisma.accountMaster.findFirst({
+        where: { userId, accountName: { in: matchedNames } }
+      });
+    }
 
     if (!company) throw new BadRequestException('Company detail not found');
-    if (!customer) throw new BadRequestException(`Customer '${dto.customerName}' not found`);
+    if (!customer) throw new BadRequestException(`Customer '${dto.customerName || dto.customerId}' not found`);
 
-    if (customer.status !== 'ACTIVE' || customer.customerStatus !== 'ACTIVE') {
+    if (customer.status === 'INACTIVE' || customer.customerStatus === 'INACTIVE') {
       throw new BadRequestException('Customer is inactive. New sales transactions are not allowed.');
     }
 
@@ -511,15 +518,35 @@ export class ChallanService {
     const limit = Math.max(1, Number(query.limit) || 10);
     const skip = (page - 1) * limit;
 
-    const [data, total] = await Promise.all([
+    const [data, total, allMatching] = await Promise.all([
       this.prisma.salesChallan.findMany({
-        where, 
+        where,
         include: { items: true, expenses: true },
         orderBy: { createdAt: 'desc' },
-        skip, take: limit
+        skip,
+        take: limit,
       }),
-      this.prisma.salesChallan.count({ where })
+      this.prisma.salesChallan.count({ where }),
+      this.prisma.salesChallan.findMany({
+        where,
+        select: {
+          grandTotal: true,
+          items: { select: { beforeTaxAmount: true, taxAmount: true } }
+        }
+      })
     ]);
+
+    let grandTaxable = 0;
+    let grandTax = 0;
+    let grandTotalSum = 0;
+    for (const ch of allMatching) {
+      const taxable = ch.items?.reduce((sum, i) => sum + (Number(i.beforeTaxAmount) || 0), 0) || 0;
+      const tax = ch.items?.reduce((sum, i) => sum + (Number(i.taxAmount) || 0), 0) || 0;
+      const gross = Number(ch.grandTotal || (taxable + tax));
+      grandTaxable += taxable;
+      grandTax += tax;
+      grandTotalSum += gross;
+    }
 
     const invoices = await this.prisma.salesInvoice.findMany({
       where: { userId: query.userId, status: { not: 'DELETED' } },
@@ -535,7 +562,18 @@ export class ChallanService {
       return { ...challan, isInvoiced: isLinked };
     });
 
-    return { data: mappedData, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      data: mappedData,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        grandTaxable,
+        grandTax,
+        grandTotal: grandTotalSum
+      }
+    };
   }
 
   async findOne(id: number, userId: number) {
@@ -665,7 +703,7 @@ export class ChallanService {
 
 
   async exportChallans(format: string, query: { search?: string, userId: number }) {
-    const challansData = await this.findAll(query);
+    const challansData = await this.findAll({ search: query.search, userId: query.userId, page: 1, limit: 100000 });
     const challans = challansData.data;
 
     const now = new Date();
@@ -680,41 +718,50 @@ export class ChallanService {
       const worksheet = workbook.addWorksheet('Sales Challans');
       worksheet.views = [{ state: 'frozen', ySplit: 5 }];
       worksheet.columns = [
-        { header: 'Challan No', key: 'challanNumber', width: 15 },
-        { header: 'Customer Name', key: 'customerName', width: 30 },
-        { header: 'Date', key: 'challanDate', width: 15 },
-        { header: 'Booking Date', key: 'bookingDate', width: 15 },
-        { header: 'SO No', key: 'soNumber', width: 15 },
-        { header: 'Taxable Amt', key: 'taxableAmount', width: 15 },
-        { header: 'Grand Total', key: 'grandTotal', width: 15 },
-        { header: 'Status', key: 'status', width: 12 },
+        { header: 'SR NO', key: 'srNo', width: 8 },
+        { header: 'CHALLAN NUMBER', key: 'challanNumber', width: 22 },
+        { header: 'CUSTOMER NAME', key: 'customerName', width: 28 },
+        { header: 'CHALLAN DATE', key: 'challanDate', width: 18 },
+        { header: 'BOOKING DATE', key: 'bookingDate', width: 16 },
+        { header: 'SO NO', key: 'soNumber', width: 16 },
+        { header: 'GST NUMBER', key: 'gstNumber', width: 18 },
+        { header: 'CREDIT DAYS', key: 'creditDays', width: 14 },
+        { header: 'TAXABLE AMOUNT', key: 'taxableAmount', width: 18 },
+        { header: 'TAX AMOUNT', key: 'taxAmount', width: 16 },
+        { header: 'TOTAL AMOUNT', key: 'grandTotal', width: 18 },
+        { header: 'STATUS', key: 'status', width: 14 },
       ];
 
-      challans.forEach(ch => {
+      challans.forEach((ch, idx) => {
+        const totalTax = (Number(ch.cgstAmount || 0) + Number(ch.sgstAmount || 0) + Number(ch.igstAmount || 0));
         worksheet.addRow({
-          challanNumber: ch.challanNumber,
-          customerName: ch.customerName,
+          srNo: idx + 1,
+          challanNumber: ch.challanNumber || '-',
+          customerName: ch.customerName || '-',
           challanDate: formatDate(ch.challanDate),
           bookingDate: formatDate(ch.bookingDate),
           soNumber: ch.soNumber || '-',
-          taxableAmount: ch.taxableAmount,
-          grandTotal: ch.grandTotal,
-          status: ch.status,
+          gstNumber: ch.gstNumber || '-',
+          creditDays: ch.creditDays || 0,
+          taxableAmount: ch.taxableAmount || 0,
+          taxAmount: totalTax,
+          grandTotal: ch.grandTotal || 0,
+          status: ch.status || 'GENERATED',
         });
       });
 
       worksheet.spliceRows(1, 0, [], [], [], []);
-      worksheet.mergeCells('A1:H1');
+      worksheet.mergeCells('A1:L1');
       worksheet.getCell('A1').value = 'ERP';
       worksheet.getCell('A1').font = { size: 18, bold: true };
       worksheet.getCell('A1').alignment = { horizontal: 'center' };
 
-      worksheet.mergeCells('A2:H2');
+      worksheet.mergeCells('A2:L2');
       worksheet.getCell('A2').value = 'Sales Challan Report';
       worksheet.getCell('A2').font = { size: 14 };
       worksheet.getCell('A2').alignment = { horizontal: 'center' };
 
-      worksheet.mergeCells('A3:H3');
+      worksheet.mergeCells('A3:L3');
       worksheet.getCell('A3').value = `Exported on: ${timestamp}`;
       worksheet.getCell('A3').alignment = { horizontal: 'right' };
 
@@ -730,51 +777,57 @@ export class ChallanService {
       };
     } else {
       return new Promise<any>((resolve) => {
-        const doc = new PDFDocument({ margin: 20, size: 'A4', layout: 'landscape' });
+        const doc = new PDFDocument({ margin: 15, size: 'A4', layout: 'landscape' });
         const buffers: Buffer[] = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', () => resolve({ buffer: Buffer.concat(buffers), filename: `sales_challans_${Date.now()}.pdf`, mimetype: 'application/pdf' }));
 
-        doc.fontSize(18).font('Helvetica-Bold').text('ERP', { align: 'center' });
-        doc.fontSize(14).font('Helvetica').text('Sales Challan Report', { align: 'center' });
+        doc.fontSize(16).font('Helvetica-Bold').text('ERP', { align: 'center' });
+        doc.fontSize(12).font('Helvetica').text('Sales Challan Report', { align: 'center' });
+        doc.moveDown(0.3);
+        doc.fontSize(9).text(`Exported on: ${timestamp}`, { align: 'right' });
         doc.moveDown(0.5);
-        doc.fontSize(10).text(`Exported on: ${timestamp}`, { align: 'right' });
-        doc.moveDown();
 
-        const tableTop = 100;
-        const colX = [20, 100, 250, 340, 420, 500, 580, 660];
-        const headers = ['Challan No', 'Customer Name', 'Challan Date', 'Book Date', 'SO No', 'Taxable', 'Total', 'Status'];
+        const tableTop = 85;
+        const colX = [15, 45, 120, 205, 275, 335, 395, 460, 505, 565, 625, 690];
+        const headers = ['SR', 'Challan No', 'Customer Name', 'Challan Dt', 'Book Date', 'SO No', 'GST No', 'Credit', 'Taxable', 'Tax', 'Total', 'Status'];
 
-        doc.rect(15, tableTop - 5, 780, 20).fill('#4472C4');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+        doc.rect(10, tableTop - 5, 820, 20).fill('#4472C4');
+        doc.fontSize(7).font('Helvetica-Bold').fillColor('#FFFFFF');
         headers.forEach((h, i) => doc.text(h, colX[i], tableTop));
 
         let y = tableTop + 20;
         doc.fillColor('#000000').font('Helvetica');
 
         challans.forEach((ch, index) => {
-          if (y > 500) {
-            doc.addPage({ margin: 20, size: 'A4', layout: 'landscape' });
-            y = 40;
-            doc.rect(15, y - 5, 780, 20).fill('#4472C4');
-            doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+          if (y > 540) {
+            doc.addPage({ margin: 15, size: 'A4', layout: 'landscape' });
+            y = 35;
+            doc.rect(10, y - 5, 820, 20).fill('#4472C4');
+            doc.fontSize(7).font('Helvetica-Bold').fillColor('#FFFFFF');
             headers.forEach((h, i) => doc.text(h, colX[i], y));
             y += 20;
             doc.fillColor('#000000').font('Helvetica');
           }
 
-          if (index % 2 === 1) doc.rect(15, y - 3, 780, 15).fill('#F2F2F2').fillColor('#000000');
+          if (index % 2 === 1) doc.rect(10, y - 3, 820, 15).fill('#F2F2F2').fillColor('#000000');
 
-          doc.fontSize(7);
-          doc.text(ch.challanNumber, colX[0], y);
-          doc.text(ch.customerName.substring(0, 30), colX[1], y);
-          doc.text(formatDate(ch.challanDate), colX[2], y);
-          doc.text(formatDate(ch.bookingDate), colX[3], y);
-          doc.text(ch.soNumber || '-', colX[4], y);
-          doc.text(ch.taxableAmount.toFixed(2), colX[5], y);
-          doc.text(ch.grandTotal.toFixed(2), colX[6], y);
-          doc.text(ch.status, colX[7], y);
-          y += 20;
+          const totalTax = (Number(ch.cgstAmount || 0) + Number(ch.sgstAmount || 0) + Number(ch.igstAmount || 0));
+
+          doc.fontSize(6);
+          doc.text(String(index + 1), colX[0], y);
+          doc.text((ch.challanNumber || '-').substring(0, 14), colX[1], y, { width: 70 });
+          doc.text((ch.customerName || '-').substring(0, 18), colX[2], y, { width: 80 });
+          doc.text(formatDate(ch.challanDate), colX[3], y);
+          doc.text(formatDate(ch.bookingDate), colX[4], y);
+          doc.text((ch.soNumber || '-').substring(0, 10), colX[5], y);
+          doc.text((ch.gstNumber || '-').substring(0, 12), colX[6], y);
+          doc.text(String(ch.creditDays || 0), colX[7], y);
+          doc.text(Number(ch.taxableAmount || 0).toFixed(2), colX[8], y);
+          doc.text(totalTax.toFixed(2), colX[9], y);
+          doc.text(Number(ch.grandTotal || 0).toFixed(2), colX[10], y);
+          doc.text(ch.status || 'GENERATED', colX[11], y);
+          y += 18;
         });
 
         doc.end();
@@ -814,6 +867,23 @@ export class ChallanService {
 
 
 
+    for (let i = 2; i <= 1000; i++) {
+      const cellRef = `B${i}`;
+      const cell = worksheet.getCell(cellRef);
+      cell.numFmt = '@';
+      cell.dataValidation = {
+        type: 'custom',
+        allowBlank: true,
+        formulae: [`OR(ISBLANK(${cellRef}), ${cellRef}="", AND(ISNUMBER(VALUE(LEFT(${cellRef},2))), ISNUMBER(VALUE(MID(${cellRef},4,2))), ISNUMBER(VALUE(RIGHT(${cellRef},4))), VALUE(MID(${cellRef},4,2))>=1, VALUE(MID(${cellRef},4,2))<=12, VALUE(LEFT(${cellRef},2))>=1, VALUE(LEFT(${cellRef},2))<=DAY(DATE(VALUE(RIGHT(${cellRef},4)), VALUE(MID(${cellRef},4,2))+1, 0))))`],
+        showInputMessage: true,
+        promptTitle: 'Date Format Required',
+        prompt: 'Please enter date in DD/MM/YYYY format (e.g. 20/08/2026).',
+        showErrorMessage: true,
+        errorTitle: 'Invalid Date Format',
+        error: 'Date must be entered in valid DD/MM/YYYY format (e.g. 20/08/2026). Month must be between 01 and 12.'
+      };
+    }
+
     worksheet.columns = headers.map((h, i) => {
       let width = Math.max(25, h.length + 6);
       if (i === 3) width = 30; // Customer Name
@@ -831,6 +901,9 @@ export class ChallanService {
     await worksheet.protect('', {
       selectLockedCells: true,
       selectUnlockedCells: true,
+      formatCells: true,
+      formatColumns: true,
+      formatRows: true,
       insertRows: true,
       deleteRows: true,
       sort: true,
@@ -920,6 +993,12 @@ export class ChallanService {
       const colIdx = colMap[key];
       if (!colIdx) return defaultVal;
       const cell = row.getCell(colIdx);
+      if (cell.text && typeof cell.text === 'string' && cell.text.trim()) {
+        const textVal = cell.text.trim();
+        if (/^\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{4}$/.test(textVal)) {
+          return textVal;
+        }
+      }
       let val = cell.value;
       if (val && typeof val === 'object' && 'result' in val) {
         val = (val as any).result;
@@ -1006,6 +1085,14 @@ export class ChallanService {
     for (const [challanNumber, rows] of groupMap.entries()) {
       const groupErrors: string[] = [];
       const firstRow = rows[0];
+
+      const dateConsistencyErrors = this.importValidator.validateGroupDateConsistency(
+        rows,
+        'Challan Number',
+        challanNumber,
+        [{ key: 'challanDateStr', label: 'Challan Date' }]
+      );
+      groupErrors.push(...dateConsistencyErrors);
 
       // 1. Challan Number uniqueness check
       const docNoValidation = this.importValidator.validateDocumentNumber(
@@ -1097,6 +1184,18 @@ export class ChallanService {
           if (!soItem) {
             groupErrors.push(`Product '${prod.product_name}' is not part of Sales Order '${referencedSo.soNumber}'.`);
           } else {
+            if (Math.abs(Number(soItem.rate) - rate) > 0.001) {
+              groupErrors.push(
+                `Rate for product '${prod.product_name}' (${rate}) does not match the rate in Sales Order '${referencedSo.soNumber}' (${soItem.rate}). Rate change is not allowed when linked to an SO.`
+              );
+            }
+            const soItemDiscPct = Number(soItem.discountPercent || (soItem.quantity * soItem.rate > 0 ? (Number(soItem.discountAmount) / (soItem.quantity * soItem.rate)) * 100 : 0));
+            const hasImpDisc = Boolean((row.discountPercentStr && row.discountPercentStr.trim() !== '') || (row.discountAmountStr && row.discountAmountStr.trim() !== ''));
+            if (hasImpDisc && Math.abs(discountPct - soItemDiscPct) > 0.01) {
+              groupErrors.push(
+                `Discount for product '${prod.product_name}' (${discountPct}%) does not match the discount in Sales Order '${referencedSo.soNumber}' (${soItemDiscPct.toFixed(2)}%). Discount change is not allowed when linked to an SO.`
+              );
+            }
             totalSoQty = soItem.quantity;
             let alreadyDelivered = 0;
             for (const prevChallan of referencedSo.challans || []) {

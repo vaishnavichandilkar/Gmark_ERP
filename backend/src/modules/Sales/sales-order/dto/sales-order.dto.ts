@@ -5,8 +5,10 @@ import { CustomerType } from '@prisma/client';
 
 export enum SOStatus {
     PENDING = 'PENDING',
+    PARTIAL_CHALLAN = 'PARTIAL_CHALLAN',
     CHALLAN_COMPLETED = 'CHALLAN_COMPLETED',
     INVOICE_COMPLETED = 'INVOICE_COMPLETED',
+    INVOICE_GENERATED = 'INVOICE_GENERATED',
     DELETED = 'DELETED',
 }
 

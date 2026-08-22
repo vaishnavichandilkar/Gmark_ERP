@@ -721,7 +721,7 @@ export class SalesInvoiceService {
     const limit = Math.max(1, Number(query.limit) || 10);
     const skip = (page - 1) * limit;
 
-    const [data, total] = await Promise.all([
+    const [data, total, allMatching] = await Promise.all([
       this.prisma.salesInvoice.findMany({
         where,
         include: { items: true, expenses: true },
@@ -729,8 +729,28 @@ export class SalesInvoiceService {
         skip,
         take: limit,
       }),
-      this.prisma.salesInvoice.count({ where })
+      this.prisma.salesInvoice.count({ where }),
+      this.prisma.salesInvoice.findMany({
+        where,
+        select: {
+          taxableAmount: true,
+          grandTotal: true,
+          items: { select: { beforeTaxAmount: true, taxAmount: true } }
+        }
+      })
     ]);
+
+    let grandTaxable = 0;
+    let grandTax = 0;
+    let grandTotalSum = 0;
+    for (const inv of allMatching) {
+      const taxable = Number(inv.taxableAmount || (inv.items?.reduce((sum, i) => sum + Number(i.beforeTaxAmount || 0), 0) || 0));
+      const gross = Number(inv.grandTotal || 0);
+      const tax = gross - taxable;
+      grandTaxable += taxable;
+      grandTax += tax;
+      grandTotalSum += gross;
+    }
 
     const customerIds = Array.from(new Set(
       data
@@ -794,7 +814,18 @@ export class SalesInvoiceService {
       };
     });
 
-    return { data: mappedData, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      data: mappedData,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        grandTaxable,
+        grandTax,
+        grandTotal: grandTotalSum
+      }
+    };
   }
 
   async findOne(id: number, userId: number) {
@@ -1204,7 +1235,7 @@ export class SalesInvoiceService {
 
 
   async exportSalesInvoices(format: string, query: { search?: string, userId: number }) {
-    const invoicesData = await this.findAll(query);
+    const invoicesData = await this.findAll({ search: query.search, userId: query.userId, page: 1, limit: 100000 });
     const invoices = invoicesData.data;
 
     const now = new Date();
@@ -1219,44 +1250,51 @@ export class SalesInvoiceService {
       const worksheet = workbook.addWorksheet('Sales Invoices');
       worksheet.views = [{ state: 'frozen', ySplit: 5 }];
       worksheet.columns = [
-        { header: 'Inv No', key: 'invoiceNumber', width: 15 },
-        { header: 'Customer Name', key: 'customerName', width: 30 },
-        { header: 'Cust. Inv No', key: 'customerInvoiceNumber', width: 20 },
-        { header: 'Cust. Inv Date', key: 'customerInvoiceDate', width: 15 },
-        { header: 'Booking Date', key: 'bookingDate', width: 15 },
-        { header: 'SO No', key: 'soNumber', width: 15 },
-        { header: 'Taxable Amt', key: 'taxableAmount', width: 15 },
-        { header: 'Grand Total', key: 'grandTotal', width: 15 },
-        { header: 'Status', key: 'status', width: 12 },
+        { header: 'SR NO', key: 'srNo', width: 8 },
+        { header: 'INVOICE NUMBER', key: 'invoiceNumber', width: 22 },
+        { header: 'CUSTOMER NAME', key: 'customerName', width: 28 },
+        { header: 'INVOICE DATE', key: 'customerInvoiceDate', width: 18 },
+        { header: 'BOOKING DATE', key: 'bookingDate', width: 16 },
+        { header: 'SO NO', key: 'soNumber', width: 16 },
+        { header: 'GST NUMBER', key: 'gstNumber', width: 18 },
+        { header: 'CREDIT DAYS', key: 'creditDays', width: 14 },
+        { header: 'TAXABLE AMOUNT', key: 'taxableAmount', width: 18 },
+        { header: 'TAX AMOUNT', key: 'taxAmount', width: 16 },
+        { header: 'TOTAL AMOUNT', key: 'grandTotal', width: 18 },
+        { header: 'STATUS', key: 'status', width: 14 },
       ];
 
-      invoices.forEach(inv => {
+      invoices.forEach((inv, idx) => {
+        const totalTax = (Number(inv.cgstAmount || 0) + Number(inv.sgstAmount || 0) + Number(inv.igstAmount || 0));
         worksheet.addRow({
-          invoiceNumber: inv.invoiceNumber,
-          customerName: inv.customerName,
-          customerInvoiceNumber: inv.customerInvoiceNumber,
-          customerInvoiceDate: formatDate(inv.customerInvoiceDate),
+          srNo: idx + 1,
+          invoiceNumber: inv.invoiceNumber || inv.customerInvoiceNumber || '-',
+          customerName: inv.customerName || '-',
+          customerInvoiceDate: formatDate(inv.customerInvoiceDate || inv.invoiceDate),
           bookingDate: formatDate(inv.bookingDate),
           soNumber: inv.soNumber || '-',
-          taxableAmount: inv.taxableAmount,
-          grandTotal: inv.grandTotal,
-          status: inv.status,
+          gstNumber: inv.gstNumber || '-',
+          creditDays: inv.creditDays || 0,
+          taxableAmount: inv.taxableAmount || 0,
+          taxAmount: totalTax,
+          grandTotal: inv.grandTotal || 0,
+          status: inv.status || 'GENERATED',
         });
       });
 
       // Styling and Headers
       worksheet.spliceRows(1, 0, [], [], [], []);
-      worksheet.mergeCells('A1:I1');
+      worksheet.mergeCells('A1:L1');
       worksheet.getCell('A1').value = 'ERP';
       worksheet.getCell('A1').font = { size: 18, bold: true };
       worksheet.getCell('A1').alignment = { horizontal: 'center' };
 
-      worksheet.mergeCells('A2:I2');
+      worksheet.mergeCells('A2:L2');
       worksheet.getCell('A2').value = 'Sales Invoice Report';
       worksheet.getCell('A2').font = { size: 14 };
       worksheet.getCell('A2').alignment = { horizontal: 'center' };
 
-      worksheet.mergeCells('A3:I3');
+      worksheet.mergeCells('A3:L3');
       worksheet.getCell('A3').value = `Exported on: ${timestamp}`;
       worksheet.getCell('A3').alignment = { horizontal: 'right' };
 
@@ -1272,52 +1310,57 @@ export class SalesInvoiceService {
       };
     } else {
       return new Promise<any>((resolve) => {
-        const doc = new PDFDocument({ margin: 20, size: 'A4', layout: 'landscape' });
+        const doc = new PDFDocument({ margin: 15, size: 'A4', layout: 'landscape' });
         const buffers: Buffer[] = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', () => resolve({ buffer: Buffer.concat(buffers), filename: `sales_invoices_${Date.now()}.pdf`, mimetype: 'application/pdf' }));
 
-        doc.fontSize(18).font('Helvetica-Bold').text('ERP', { align: 'center' });
-        doc.fontSize(14).font('Helvetica').text('Sales Invoice Report', { align: 'center' });
+        doc.fontSize(16).font('Helvetica-Bold').text('ERP', { align: 'center' });
+        doc.fontSize(12).font('Helvetica').text('Sales Invoice Report', { align: 'center' });
+        doc.moveDown(0.3);
+        doc.fontSize(9).text(`Exported on: ${timestamp}`, { align: 'right' });
         doc.moveDown(0.5);
-        doc.fontSize(10).text(`Exported on: ${timestamp}`, { align: 'right' });
-        doc.moveDown();
 
-        const tableTop = 100;
-        const colX = [20, 100, 250, 340, 420, 500, 570, 640, 710];
-        const headers = ['Inv No', 'Customer Name', 'Cust. Inv No', 'Cust. Date', 'Book Date', 'SO No', 'Taxable', 'Total', 'Status'];
+        const tableTop = 85;
+        const colX = [15, 45, 120, 205, 275, 335, 395, 460, 505, 565, 625, 690];
+        const headers = ['SR', 'Inv Number', 'Customer Name', 'Inv Date', 'Book Date', 'SO No', 'GST No', 'Credit', 'Taxable', 'Tax', 'Total', 'Status'];
 
-        doc.rect(15, tableTop - 5, 780, 20).fill('#4472C4');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+        doc.rect(10, tableTop - 5, 820, 20).fill('#4472C4');
+        doc.fontSize(7).font('Helvetica-Bold').fillColor('#FFFFFF');
         headers.forEach((h, i) => doc.text(h, colX[i], tableTop));
 
         let y = tableTop + 20;
         doc.fillColor('#000000').font('Helvetica');
 
         invoices.forEach((inv, index) => {
-          if (y > 500) {
-            doc.addPage({ margin: 20, size: 'A4', layout: 'landscape' });
-            y = 40;
-            doc.rect(15, y - 5, 780, 20).fill('#4472C4');
-            doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+          if (y > 540) {
+            doc.addPage({ margin: 15, size: 'A4', layout: 'landscape' });
+            y = 35;
+            doc.rect(10, y - 5, 820, 20).fill('#4472C4');
+            doc.fontSize(7).font('Helvetica-Bold').fillColor('#FFFFFF');
             headers.forEach((h, i) => doc.text(h, colX[i], y));
             y += 20;
             doc.fillColor('#000000').font('Helvetica');
           }
 
-          if (index % 2 === 1) doc.rect(15, y - 3, 780, 15).fill('#F2F2F2').fillColor('#000000');
+          if (index % 2 === 1) doc.rect(10, y - 3, 820, 15).fill('#F2F2F2').fillColor('#000000');
 
-          doc.fontSize(7);
-          doc.text(inv.invoiceNumber, colX[0], y);
-          doc.text(inv.customerName.substring(0, 30), colX[1], y);
-          doc.text(inv.customerInvoiceNumber, colX[2], y);
-          doc.text(formatDate(inv.customerInvoiceDate), colX[3], y);
+          const totalTax = (Number(inv.cgstAmount || 0) + Number(inv.sgstAmount || 0) + Number(inv.igstAmount || 0));
+
+          doc.fontSize(6);
+          doc.text(String(index + 1), colX[0], y);
+          doc.text((inv.invoiceNumber || inv.customerInvoiceNumber || '-').substring(0, 14), colX[1], y, { width: 70 });
+          doc.text((inv.customerName || '-').substring(0, 18), colX[2], y, { width: 80 });
+          doc.text(formatDate(inv.customerInvoiceDate || inv.invoiceDate), colX[3], y);
           doc.text(formatDate(inv.bookingDate), colX[4], y);
-          doc.text(inv.soNumber || '-', colX[5], y);
-          doc.text(inv.taxableAmount.toFixed(2), colX[6], y);
-          doc.text(inv.grandTotal.toFixed(2), colX[7], y);
-          doc.text(inv.status, colX[8], y);
-          y += 20;
+          doc.text((inv.soNumber || '-').substring(0, 10), colX[5], y);
+          doc.text((inv.gstNumber || '-').substring(0, 12), colX[6], y);
+          doc.text(String(inv.creditDays || 0), colX[7], y);
+          doc.text(Number(inv.taxableAmount || 0).toFixed(2), colX[8], y);
+          doc.text(totalTax.toFixed(2), colX[9], y);
+          doc.text(Number(inv.grandTotal || 0).toFixed(2), colX[10], y);
+          doc.text(inv.status || 'GENERATED', colX[11], y);
+          y += 18;
         });
 
         doc.end();
@@ -1358,6 +1401,23 @@ export class SalesInvoiceService {
 
 
 
+    for (let i = 2; i <= 1000; i++) {
+      const cellRef = `B${i}`;
+      const cell = worksheet.getCell(cellRef);
+      cell.numFmt = '@';
+      cell.dataValidation = {
+        type: 'custom',
+        allowBlank: true,
+        formulae: [`OR(ISBLANK(${cellRef}), ${cellRef}="", AND(ISNUMBER(VALUE(LEFT(${cellRef},2))), ISNUMBER(VALUE(MID(${cellRef},4,2))), ISNUMBER(VALUE(RIGHT(${cellRef},4))), VALUE(MID(${cellRef},4,2))>=1, VALUE(MID(${cellRef},4,2))<=12, VALUE(LEFT(${cellRef},2))>=1, VALUE(LEFT(${cellRef},2))<=DAY(DATE(VALUE(RIGHT(${cellRef},4)), VALUE(MID(${cellRef},4,2))+1, 0))))`],
+        showInputMessage: true,
+        promptTitle: 'Date Format Required',
+        prompt: 'Please enter date in DD/MM/YYYY format (e.g. 20/08/2026).',
+        showErrorMessage: true,
+        errorTitle: 'Invalid Date Format',
+        error: 'Date must be entered in valid DD/MM/YYYY format (e.g. 20/08/2026). Month must be between 01 and 12.'
+      };
+    }
+
     worksheet.columns = headers.map((h, i) => {
       let width = Math.max(25, h.length + 6);
       if (i === 2) width = 30; // Customer Name
@@ -1375,6 +1435,9 @@ export class SalesInvoiceService {
     await worksheet.protect('', {
       selectLockedCells: true,
       selectUnlockedCells: true,
+      formatCells: true,
+      formatColumns: true,
+      formatRows: true,
       insertRows: true,
       deleteRows: true,
       sort: true,
@@ -1465,6 +1528,12 @@ export class SalesInvoiceService {
       const colIdx = colMap[key];
       if (!colIdx) return defaultVal;
       const cell = row.getCell(colIdx);
+      if (cell.text && typeof cell.text === 'string' && cell.text.trim()) {
+        const textVal = cell.text.trim();
+        if (/^\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{4}$/.test(textVal)) {
+          return textVal;
+        }
+      }
       let val = cell.value;
       if (val && typeof val === 'object' && 'result' in val) {
         val = (val as any).result;
@@ -1578,6 +1647,14 @@ export class SalesInvoiceService {
       const groupErrors: string[] = [];
       const firstRow = rows[0];
 
+      const dateConsistencyErrors = this.importValidator.validateGroupDateConsistency(
+        rows,
+        'Invoice Number',
+        invoiceNumber,
+        [{ key: 'invoiceDateStr', label: 'Invoice Date' }]
+      );
+      groupErrors.push(...dateConsistencyErrors);
+
       // 1. Invoice Number uniqueness check
       const docNoValidation = this.importValidator.validateDocumentNumber(
         'Sales Invoice',
@@ -1675,6 +1752,18 @@ export class SalesInvoiceService {
           if (!soItem) {
             groupErrors.push(`Product '${prod.product_name}' is not part of Sales Order '${referencedSo.soNumber}'.`);
           } else {
+            if (Math.abs(Number(soItem.rate) - rate) > 0.001) {
+              groupErrors.push(
+                `Rate for product '${prod.product_name}' (${rate}) does not match the rate in Sales Order '${referencedSo.soNumber}' (${soItem.rate}). Rate change is not allowed when linked to an SO.`
+              );
+            }
+            const soItemDiscPct = Number(soItem.discountPercent || (soItem.quantity * soItem.rate > 0 ? (Number(soItem.discountAmount) / (soItem.quantity * soItem.rate)) * 100 : 0));
+            const hasImpDisc = Boolean((row.discountPercentStr && row.discountPercentStr.trim() !== '') || (row.discountAmountStr && row.discountAmountStr.trim() !== ''));
+            if (hasImpDisc && Math.abs(discountPct - soItemDiscPct) > 0.01) {
+              groupErrors.push(
+                `Discount for product '${prod.product_name}' (${discountPct}%) does not match the discount in Sales Order '${referencedSo.soNumber}' (${soItemDiscPct.toFixed(2)}%). Discount change is not allowed when linked to an SO.`
+              );
+            }
             let alreadyInvoiced = 0;
             for (const prevSI of referencedSo.salesInvoices || []) {
               for (const prevItem of prevSI.items || []) {
@@ -1706,6 +1795,18 @@ export class SalesInvoiceService {
           if (!chItem) {
             groupErrors.push(`Product '${prod.product_name}' is not part of Challan '${referencedChallan.challanNumber}'.`);
           } else {
+            if (Math.abs(Number(chItem.rate) - rate) > 0.001) {
+              groupErrors.push(
+                `Rate for product '${prod.product_name}' (${rate}) does not match the rate in Delivery Challan '${referencedChallan.challanNumber}' (${chItem.rate}). Rate change is not allowed when linked to a Delivery Challan.`
+              );
+            }
+            const chItemDiscPct = Number(chItem.discountPercent || (chItem.challanQty * chItem.rate > 0 ? (Number(chItem.discountAmount) / (chItem.challanQty * chItem.rate)) * 100 : 0));
+            const hasImpDisc = Boolean((row.discountPercentStr && row.discountPercentStr.trim() !== '') || (row.discountAmountStr && row.discountAmountStr.trim() !== ''));
+            if (hasImpDisc && Math.abs(discountPct - chItemDiscPct) > 0.01) {
+              groupErrors.push(
+                `Discount for product '${prod.product_name}' (${discountPct}%) does not match the discount in Delivery Challan '${referencedChallan.challanNumber}' (${chItemDiscPct.toFixed(2)}%). Discount change is not allowed when linked to a Delivery Challan.`
+              );
+            }
             const key = `${referencedChallan.challanNumber.toLowerCase().trim()}_${prod.product_code.toLowerCase().trim()}`;
             const alreadyInvoicedCh = challanInvoicedQtyMap.get(key) || 0;
             const totalChQty = Number(chItem.challanQty || 0);
@@ -1892,23 +1993,37 @@ export class SalesInvoiceService {
   }
 
   private async syncLedgerTransactions(invoice: any, userId: number, tx: any) {
+    const invNo = invoice.customerInvoiceNumber || invoice.invoiceNumber;
+    if (!invNo) return;
+
     // 1. Delete all existing transactions for this sales invoice
     await tx.transaction.deleteMany({
       where: {
         userId,
-        invoiceNumber: invoice.customerInvoiceNumber || invoice.invoiceNumber,
+        invoiceNumber: invNo,
         transactionType: TransactionType.Sales,
       }
     });
 
-    // 2. Debit Customer (if customerId exists)
-    if (invoice.customerId) {
+    let custId = invoice.customerId;
+    if (!custId && invoice.customerName) {
+      const cust = await tx.accountMaster.findFirst({
+        where: {
+          userId,
+          accountName: { equals: invoice.customerName, mode: 'insensitive' },
+        },
+      });
+      if (cust) custId = cust.id;
+    }
+
+    // 2. Debit Customer (if customerId or matched customer account exists)
+    if (custId) {
       await tx.transaction.create({
         data: {
-          accountId: invoice.customerId,
+          accountId: custId,
           userId,
-          bookingDate: new Date(invoice.bookingDate),
-          invoiceNumber: invoice.customerInvoiceNumber || invoice.invoiceNumber,
+          bookingDate: new Date(invoice.bookingDate || invoice.invoiceDate || Date.now()),
+          invoiceNumber: invNo,
           transactionType: TransactionType.Sales,
           amount: invoice.grandTotal,
           entryType: BalanceType.Dr,

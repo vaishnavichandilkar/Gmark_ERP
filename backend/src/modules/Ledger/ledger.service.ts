@@ -9,105 +9,257 @@ export class LedgerService {
   constructor(private prisma: PrismaService) {}
 
   async getCreditorsSummary(query: LedgerQueryDto, userId: number) {
+    const startDate = query.startDate ? new Date(query.startDate) : undefined;
+    const endDate = query.endDate ? new Date(query.endDate) : undefined;
+
     const accounts = await this.prisma.accountMaster.findMany({
       where: {
         userId,
         OR: [
           { accountType: AccountType.Creditor },
-          { groupName: { has: 'SUNDRY_CREDITORS' } },
-          { supplierCode: { not: null } }
+          { accountType: AccountType.SUPPLIER },
+          { supplierCode: { not: null } },
+          { groupName: { hasSome: ['SUNDRY_CREDITORS', 'Sundry Creditors', 'Suppliers', 'Supplier', 'SUNDRY CREDITORS', 'Creditor', 'Creditors'] } },
         ],
         accountName: query.search ? { contains: query.search, mode: 'insensitive' } : undefined,
       },
       include: {
         transactions: {
           where: {
-            bookingDate: {
-              gte: query.startDate ? new Date(query.startDate) : undefined,
-              lte: query.endDate ? new Date(query.endDate) : undefined,
-            },
             transactionType: { in: [TransactionType.Purchase, TransactionType.Payment, TransactionType.Journal] },
           },
         },
       },
+      orderBy: {
+        accountName: 'asc',
+      },
     });
 
-    const results = await Promise.all(
-      accounts.map(async (account) => {
-        const validTransactions = await this.filterTransactions(account.transactions, true, false);
-        const openingBalance = account.supplierBalanceType === BalanceType.Dr ? -Number(account.supplierOpeningBalance || 0) : Number(account.supplierOpeningBalance || 0);
-        const debit = validTransactions
-          .filter((t) => t.entryType === BalanceType.Dr)
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-        const credit = validTransactions
-          .filter((t) => t.entryType === BalanceType.Cr)
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-        const closingBalance = openingBalance + credit - debit;
+    const shadowNames = new Set(['customers', 'customer', 'suppliers', 'supplier', 'sundry debtors', 'sundry creditors', 'sundry_debtors', 'sundry_creditors']);
+    const realAccounts = accounts.filter(a => !shadowNames.has(a.accountName.trim().toLowerCase()));
 
-        return {
-          id: account.id,
-          accountName: account.accountName,
-          accountType: account.accountType,
-          openingBalance,
-          debit,
-          credit,
-          closingBalance,
-        };
-      })
+    // 1. Batch sync missing purchase invoice transactions if any exist
+    const purchInvoices = await this.prisma.purchaseInvoice.findMany({
+      where: {
+        userId,
+        status: { not: 'DELETED' },
+      },
+    });
+
+    const accountMapByName = new Map<string, number>();
+    realAccounts.forEach(a => accountMapByName.set(a.accountName.trim().toLowerCase(), a.id));
+
+    const existingTxSet = new Set(
+      realAccounts.flatMap(a => a.transactions.map(t => `${t.accountId}_${t.invoiceNumber}`))
     );
 
-    return results.filter(acc => acc.debit !== 0 || acc.credit !== 0 || acc.openingBalance !== 0);
+    const missingTxs: any[] = [];
+    for (const inv of purchInvoices) {
+      const invNo = inv.supplierInvoiceNumber || inv.invoiceNumber;
+      let suppId = inv.supplierId;
+      if (!suppId && inv.supplierName) {
+        suppId = accountMapByName.get(inv.supplierName.trim().toLowerCase());
+      }
+      if (suppId && invNo && !existingTxSet.has(`${suppId}_${invNo}`)) {
+        missingTxs.push({
+          accountId: suppId,
+          userId,
+          bookingDate: new Date(inv.bookingDate || inv.invoiceDate),
+          invoiceNumber: invNo,
+          transactionType: TransactionType.Purchase,
+          amount: inv.grandTotal,
+          entryType: BalanceType.Cr,
+        });
+      }
+    }
+
+    if (missingTxs.length > 0) {
+      await this.prisma.transaction.createMany({
+        data: missingTxs,
+        skipDuplicates: true,
+      });
+      // Re-fetch transactions for these accounts
+      const allTx = await this.prisma.transaction.findMany({
+        where: {
+          userId,
+          accountId: { in: accounts.map(a => a.id) },
+          transactionType: { in: [TransactionType.Purchase, TransactionType.Payment, TransactionType.Journal] },
+        },
+      });
+      const txByAccount = new Map<number, any[]>();
+      for (const t of allTx) {
+        if (!txByAccount.has(t.accountId)) txByAccount.set(t.accountId, []);
+        txByAccount.get(t.accountId)!.push(t);
+      }
+      for (const acc of accounts) {
+        acc.transactions = txByAccount.get(acc.id) || [];
+      }
+    }
+
+    // 2. Calculate opening balance (including prior transactions) and period debit/credit
+    const results = realAccounts.map((account) => {
+      const initialOpBal = account.supplierBalanceType === BalanceType.Dr 
+        ? -Number(account.supplierOpeningBalance || 0) 
+        : Number(account.supplierOpeningBalance || 0);
+
+      let priorCredit = 0;
+      let priorDebit = 0;
+      let periodCredit = 0;
+      let periodDebit = 0;
+
+      for (const t of account.transactions) {
+        const tDate = new Date(t.bookingDate);
+        if (startDate && tDate < startDate) {
+          if (t.entryType === BalanceType.Cr) priorCredit += Number(t.amount);
+          if (t.entryType === BalanceType.Dr) priorDebit += Number(t.amount);
+        } else if (!endDate || tDate <= endDate) {
+          if (t.entryType === BalanceType.Cr) periodCredit += Number(t.amount);
+          if (t.entryType === BalanceType.Dr) periodDebit += Number(t.amount);
+        }
+      }
+
+      const openingBalance = initialOpBal + priorCredit - priorDebit;
+      const closingBalance = openingBalance + periodCredit - periodDebit;
+
+      return {
+        id: account.id,
+        accountName: account.accountName,
+        accountType: account.accountType,
+        openingBalance,
+        debit: periodDebit,
+        credit: periodCredit,
+        closingBalance,
+      };
+    });
+
+    return results;
   }
 
   async getDebtorsSummary(query: LedgerQueryDto, userId: number) {
+    const startDate = query.startDate ? new Date(query.startDate) : undefined;
+    const endDate = query.endDate ? new Date(query.endDate) : undefined;
+
     const accounts = await this.prisma.accountMaster.findMany({
       where: {
         userId,
         OR: [
           { accountType: AccountType.Debtor },
-          { groupName: { has: 'SUNDRY_DEBTORS' } },
-          { customerCode: { not: null } }
+          { accountType: AccountType.CUSTOMER },
+          { customerCode: { not: null } },
+          { groupName: { hasSome: ['SUNDRY_DEBTORS', 'Sundry Debtors', 'Customers', 'Customer', 'SUNDRY DEBTORS', 'Debtor', 'Debtors'] } },
         ],
         accountName: query.search ? { contains: query.search, mode: 'insensitive' } : undefined,
       },
       include: {
         transactions: {
           where: {
-            bookingDate: {
-              gte: query.startDate ? new Date(query.startDate) : undefined,
-              lte: query.endDate ? new Date(query.endDate) : undefined,
-            },
             transactionType: { in: [TransactionType.Sales, TransactionType.Receipt, TransactionType.Journal] },
           },
         },
       },
+      orderBy: {
+        accountName: 'asc',
+      },
     });
 
-    const results = await Promise.all(
-      accounts.map(async (account) => {
-        const validTransactions = await this.filterTransactions(account.transactions, false, false);
-        const openingBalance = account.customerBalanceType === BalanceType.Cr ? -Number(account.customerOpeningBalance || 0) : Number(account.customerOpeningBalance || 0);
-        const debit = validTransactions
-          .filter((t) => t.entryType === BalanceType.Dr)
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-        const credit = validTransactions
-          .filter((t) => t.entryType === BalanceType.Cr)
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-        const closingBalance = openingBalance + debit - credit;
+    const shadowNames = new Set(['customers', 'customer', 'suppliers', 'supplier', 'sundry debtors', 'sundry creditors', 'sundry_debtors', 'sundry_creditors']);
+    const realAccounts = accounts.filter(a => !shadowNames.has(a.accountName.trim().toLowerCase()));
 
-        return {
-          id: account.id,
-          accountName: account.accountName,
-          accountType: account.accountType,
-          openingBalance,
-          debit,
-          credit,
-          closingBalance,
-        };
-      })
+    // 1. Batch sync missing sales invoice transactions if any exist
+    const salesInvoices = await this.prisma.salesInvoice.findMany({
+      where: {
+        userId,
+        status: { not: 'DELETED' },
+      },
+    });
+
+    const accountMapByName = new Map<string, number>();
+    realAccounts.forEach(a => accountMapByName.set(a.accountName.trim().toLowerCase(), a.id));
+
+    const existingTxSet = new Set(
+      realAccounts.flatMap(a => a.transactions.map(t => `${t.accountId}_${t.invoiceNumber}`))
     );
 
-    return results.filter(acc => acc.debit !== 0 || acc.credit !== 0 || acc.openingBalance !== 0);
+    const missingTxs: any[] = [];
+    for (const inv of salesInvoices) {
+      const invNo = inv.customerInvoiceNumber || inv.invoiceNumber;
+      let custId = inv.customerId;
+      if (!custId && inv.customerName) {
+        custId = accountMapByName.get(inv.customerName.trim().toLowerCase());
+      }
+      if (custId && invNo && !existingTxSet.has(`${custId}_${invNo}`)) {
+        missingTxs.push({
+          accountId: custId,
+          userId,
+          bookingDate: new Date(inv.bookingDate || inv.invoiceDate),
+          invoiceNumber: invNo,
+          transactionType: TransactionType.Sales,
+          amount: inv.grandTotal,
+          entryType: BalanceType.Dr,
+        });
+      }
+    }
+
+    if (missingTxs.length > 0) {
+      await this.prisma.transaction.createMany({
+        data: missingTxs,
+        skipDuplicates: true,
+      });
+      // Re-fetch transactions for these accounts
+      const allTx = await this.prisma.transaction.findMany({
+        where: {
+          userId,
+          accountId: { in: accounts.map(a => a.id) },
+          transactionType: { in: [TransactionType.Sales, TransactionType.Receipt, TransactionType.Journal] },
+        },
+      });
+      const txByAccount = new Map<number, any[]>();
+      for (const t of allTx) {
+        if (!txByAccount.has(t.accountId)) txByAccount.set(t.accountId, []);
+        txByAccount.get(t.accountId)!.push(t);
+      }
+      for (const acc of accounts) {
+        acc.transactions = txByAccount.get(acc.id) || [];
+      }
+    }
+
+    // 2. Calculate opening balance (including prior transactions) and period debit/credit
+    const results = realAccounts.map((account) => {
+      const initialOpBal = account.customerBalanceType === BalanceType.Cr 
+        ? -Number(account.customerOpeningBalance || 0) 
+        : Number(account.customerOpeningBalance || 0);
+
+      let priorCredit = 0;
+      let priorDebit = 0;
+      let periodCredit = 0;
+      let periodDebit = 0;
+
+      for (const t of account.transactions) {
+        const tDate = new Date(t.bookingDate);
+        if (startDate && tDate < startDate) {
+          if (t.entryType === BalanceType.Cr) priorCredit += Number(t.amount);
+          if (t.entryType === BalanceType.Dr) priorDebit += Number(t.amount);
+        } else if (!endDate || tDate <= endDate) {
+          if (t.entryType === BalanceType.Cr) periodCredit += Number(t.amount);
+          if (t.entryType === BalanceType.Dr) periodDebit += Number(t.amount);
+        }
+      }
+
+      const openingBalance = initialOpBal + priorDebit - priorCredit;
+      const closingBalance = openingBalance + periodDebit - periodCredit;
+
+      return {
+        id: account.id,
+        accountName: account.accountName,
+        accountType: account.accountType,
+        openingBalance,
+        debit: periodDebit,
+        credit: periodCredit,
+        closingBalance,
+      };
+    });
+
+    return results;
   }
 
   async getGroupLedgersSummary(query: LedgerQueryDto, userId: number) {
@@ -195,7 +347,7 @@ export class LedgerService {
 
     const realAccounts = accounts.filter(acc => {
       const nameLower = acc.accountName.trim().toLowerCase();
-      const isShadow = acc.groupName.some(g => g.trim().toLowerCase() === nameLower) || (acc.accountType === null && shadowGroupNames.has(nameLower));
+      const isShadow = acc.accountType === null && shadowGroupNames.has(nameLower);
       return !isShadow;
     });
 
@@ -227,6 +379,19 @@ export class LedgerService {
 
       const accType = String(account.accountType || '').toUpperCase();
       const gStr = groupList.map(g => String(g).toUpperCase()).join(' ');
+
+      // Normalize group names in groupList
+      groupList = groupList.map(g => {
+        const lower = String(g).trim().toLowerCase();
+        if (lower === 'indirect expenses' || lower === 'indirect_expense' || lower === 'indirect_expenses') return 'Indirect Expense';
+        if (lower === 'direct expenses' || lower === 'direct_expense' || lower === 'direct_expenses') return 'Direct Expense';
+        if (lower === 'indirect incomes' || lower === 'indirect_income' || lower === 'indirect_incomes') return 'Indirect Income';
+        if (lower === 'direct incomes' || lower === 'direct_income' || lower === 'direct_incomes') return 'Direct Income';
+        if (lower === 'purchases') return 'Purchase';
+        if (lower === 'sales') return 'Sale';
+        return g;
+      });
+
       if (accType.includes('BANK') || accType.includes('CASH') || gStr.includes('BANK') || gStr.includes('CASH')) {
         if (!groupList.includes('Bank & Cash')) groupList.push('Bank & Cash');
         if (!groupList.includes('Current Assets')) groupList.unshift('Current Assets');
@@ -239,6 +404,18 @@ export class LedgerService {
         if (!groupList.includes('Suppliers')) groupList.push('Suppliers');
         if (!groupList.includes('Current Liabilities')) groupList.unshift('Current Liabilities');
         if (!groupList.includes('Liabilities')) groupList.unshift('Liabilities');
+      } else if (gStr.includes('INDIRECT') && gStr.includes('EXPENSE')) {
+        if (!groupList.includes('Indirect Expense')) groupList.unshift('Indirect Expense');
+      } else if (gStr.includes('DIRECT') && gStr.includes('EXPENSE')) {
+        if (!groupList.includes('Direct Expense')) groupList.unshift('Direct Expense');
+      } else if (gStr.includes('PURCHASE')) {
+        if (!groupList.includes('Purchase')) groupList.unshift('Purchase');
+      } else if (gStr.includes('INDIRECT') && (gStr.includes('INCOME') || gStr.includes('REVENUE'))) {
+        if (!groupList.includes('Indirect Income')) groupList.unshift('Indirect Income');
+      } else if (gStr.includes('DIRECT') && (gStr.includes('INCOME') || gStr.includes('REVENUE'))) {
+        if (!groupList.includes('Direct Income')) groupList.unshift('Direct Income');
+      } else if (gStr.includes('SALE')) {
+        if (!groupList.includes('Sale')) groupList.unshift('Sale');
       }
 
       const groupNameStr = groupList.length > 0 ? groupList[groupList.length - 1] : 'General';
@@ -412,22 +589,28 @@ export class LedgerService {
     if (!account) throw new NotFoundException('Account not found');
 
     let isCreditorLedger = false;
-    if (type && (type === 'Sundry Creditors' || type === 'Sundry Debtors')) {
-      isCreditorLedger = type === 'Sundry Creditors';
+    const typeUpper = (type || '').toUpperCase();
+    if (typeUpper.includes('CREDITOR') || typeUpper.includes('SUPPLIER') || typeUpper.includes('PAYMENT')) {
+      isCreditorLedger = true;
+    } else if (typeUpper.includes('DEBTOR') || typeUpper.includes('CUSTOMER') || typeUpper.includes('RECEIPT')) {
+      isCreditorLedger = false;
     } else {
       if (account.accountType) {
-        const atUpper = account.accountType.toUpperCase();
+        const atUpper = String(account.accountType).toUpperCase();
         if (atUpper === 'CREDITOR' || atUpper === 'SUPPLIER') {
           isCreditorLedger = true;
         } else if (atUpper === 'DEBTOR' || atUpper === 'CUSTOMER') {
           isCreditorLedger = false;
         }
+      } else if (account.supplierCode) {
+        isCreditorLedger = true;
+      } else if (account.customerCode) {
+        isCreditorLedger = false;
       } else if (account.groupName && account.groupName.length > 0) {
-        const hasCreditorGroup = account.groupName.some(g => g.toUpperCase().includes('CREDITOR'));
-        const hasDebtorGroup = account.groupName.some(g => g.toUpperCase().includes('DEBTOR'));
-        if (hasCreditorGroup) {
+        const gStr = account.groupName.map(g => String(g).toUpperCase()).join(' ');
+        if (gStr.includes('CREDITOR') || gStr.includes('SUPPLIER')) {
           isCreditorLedger = true;
-        } else if (hasDebtorGroup) {
+        } else if (gStr.includes('DEBTOR') || gStr.includes('CUSTOMER')) {
           isCreditorLedger = false;
         }
       }
@@ -447,6 +630,81 @@ export class LedgerService {
       : isCreditorLedger
         ? [TransactionType.Purchase, TransactionType.Payment, TransactionType.Journal]
         : [TransactionType.Sales, TransactionType.Receipt, TransactionType.Journal];
+
+    // Auto-sync missing transactions for generated/completed purchase or sales invoices
+    if (isCreditorLedger) {
+      const purchInvoices = await this.prisma.purchaseInvoice.findMany({
+        where: {
+          supplierId: accountId,
+          userId,
+          status: { in: ['GENERATED', 'COMPLETED'] as any },
+        },
+      });
+
+      for (const inv of purchInvoices) {
+        const invNum = inv.supplierInvoiceNumber || inv.invoiceNumber;
+        if (!invNum) continue;
+
+        const existingTx = await this.prisma.transaction.findFirst({
+          where: {
+            accountId,
+            userId,
+            invoiceNumber: invNum,
+            transactionType: TransactionType.Purchase,
+          },
+        });
+
+        if (!existingTx) {
+          await this.prisma.transaction.create({
+            data: {
+              accountId,
+              userId,
+              bookingDate: new Date(inv.bookingDate || inv.createdAt),
+              invoiceNumber: invNum,
+              transactionType: TransactionType.Purchase,
+              amount: inv.grandTotal,
+              entryType: BalanceType.Cr,
+            },
+          });
+        }
+      }
+    } else if (!isBankOrCash) {
+      const salesInvoices = await this.prisma.salesInvoice.findMany({
+        where: {
+          customerId: accountId,
+          userId,
+          status: { in: ['GENERATED', 'COMPLETED'] as any },
+        },
+      });
+
+      for (const inv of salesInvoices) {
+        const invNum = inv.customerInvoiceNumber || inv.invoiceNumber;
+        if (!invNum) continue;
+
+        const existingTx = await this.prisma.transaction.findFirst({
+          where: {
+            accountId,
+            userId,
+            invoiceNumber: invNum,
+            transactionType: TransactionType.Sales,
+          },
+        });
+
+        if (!existingTx) {
+          await this.prisma.transaction.create({
+            data: {
+              accountId,
+              userId,
+              bookingDate: new Date(inv.bookingDate || inv.createdAt),
+              invoiceNumber: invNum,
+              transactionType: TransactionType.Sales,
+              amount: inv.grandTotal,
+              entryType: BalanceType.Dr,
+            },
+          });
+        }
+      }
+    }
 
     let baseOpeningBalance = 0;
     if (isBankOrCash) {
@@ -501,17 +759,29 @@ export class LedgerService {
         : (balType === BalanceType.Cr ? -bal : bal);
     }
 
-
-
     let effectiveOpeningBalance = baseOpeningBalance;
 
-    if (startDate) {
+    const parseDate = (d?: string) => {
+      if (!d) return undefined;
+      const str = String(d).trim();
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) {
+        const [day, month, year] = str.split('/');
+        return new Date(`${year}-${month}-${day}`);
+      }
+      const parsed = new Date(str);
+      return isNaN(parsed.getTime()) ? undefined : parsed;
+    };
+
+    const startDateObj = parseDate(startDate);
+    const endDateObj = parseDate(endDate);
+
+    if (startDateObj) {
       // Calculate balance before startDate
       let transactionsBefore = await this.prisma.transaction.findMany({
         where: {
           accountId,
           userId,
-          bookingDate: { lt: new Date(startDate) },
+          bookingDate: { lt: startDateObj },
           transactionType: { in: allowedTypes },
           amount: { gt: 0 },
         },
@@ -538,8 +808,8 @@ export class LedgerService {
         accountId,
         userId,
         bookingDate: {
-          gte: startDate ? new Date(startDate) : undefined,
-          lte: endDate ? new Date(endDate) : undefined,
+          gte: startDateObj || undefined,
+          lte: endDateObj || undefined,
         },
         transactionType: { in: allowedTypes },
         amount: { gt: 0 },

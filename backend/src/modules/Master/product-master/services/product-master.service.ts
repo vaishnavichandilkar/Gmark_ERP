@@ -6,6 +6,7 @@ import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { HsnMasterService } from '../../hsn-master/hsn-master.service';
 import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
+import { ImportValidationService } from '../../../../common/services/import-validation.service';
 
 interface GetProductsQuery {
     page?: number;
@@ -21,7 +22,8 @@ export class ProductMasterService {
     constructor(
         private readonly repository: ProductMasterRepository,
         private readonly hsnService: HsnMasterService,
-        private readonly prisma: PrismaService
+        private readonly prisma: PrismaService,
+        private readonly importValidator: ImportValidationService,
     ) { }
 
     private mapProductCategories(prod: any): any {
@@ -245,24 +247,54 @@ export class ProductMasterService {
         throw new BadRequestException('Format is required. Please use xlsx or pdf.');
     }
 
-    async generateProductCode(userId: number, type?: ProductType): Promise<string> {
+    async generateProductCode(
+        userId: number,
+        type?: ProductType,
+        dbClient?: Prisma.TransactionClient,
+        usedCodes?: Set<string>
+    ): Promise<string> {
         const prefix = type === ProductType.SERVICES ? 'SV' : 'PD';
         const defaultCode = type === ProductType.SERVICES ? 'SV00001' : 'PD00001';
         const padLength = 5;
 
-        const lastCode = await this.repository.getLastProductCode(userId, prefix);
-        if (!lastCode) {
-            return defaultCode;
+        const prismaClient = dbClient || this.prisma;
+
+        const lastProduct = await prismaClient.product.findFirst({
+            where: {
+                created_by: userId,
+                product_code: { startsWith: prefix }
+            },
+            orderBy: { id: 'desc' },
+            select: { product_code: true }
+        });
+
+        let lastCode = lastProduct?.product_code || null;
+        let nextNumeric = 1;
+
+        if (lastCode) {
+            const match = lastCode.match(/\d+/);
+            if (match) {
+                nextNumeric = parseInt(match[0], 10) + 1;
+            }
         }
 
-        const match = lastCode.match(/\d+/);
-        if (!match) {
-            return defaultCode;
+        let candidateCode = `${prefix}${nextNumeric.toString().padStart(padLength, '0')}`;
+
+        while (usedCodes && usedCodes.has(candidateCode.toUpperCase())) {
+            nextNumeric++;
+            candidateCode = `${prefix}${nextNumeric.toString().padStart(padLength, '0')}`;
         }
 
-        const numericPart = parseInt(match[0], 10);
-        const nextNumeric = numericPart + 1;
-        return `${prefix}${nextNumeric.toString().padStart(padLength, '0')}`;
+        while (await prismaClient.product.findFirst({ where: { created_by: userId, product_code: candidateCode } })) {
+            nextNumeric++;
+            candidateCode = `${prefix}${nextNumeric.toString().padStart(padLength, '0')}`;
+        }
+
+        if (usedCodes) {
+            usedCodes.add(candidateCode.toUpperCase());
+        }
+
+        return candidateCode;
     }
 
     async generateCodeForUser(userId: number, type?: ProductType) {
@@ -534,7 +566,10 @@ export class ProductMasterService {
         const worksheet = workbook.addWorksheet('Sample Data');
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-        const headers = ['Type*', 'Product Name*', 'UOM*', 'Category*', 'Sub Category*', 'Sub Sub Category', 'HSN/SAC Code*', 'Tax Rate (%)*', 'Product Description', 'Status'];
+        const headers = [
+            'Type*', 'Product Name*', 'UOM*', 'Category*',
+            'Sub Category*', 'Sub Sub Category', 'HSN/SAC Code*', 'Description'
+        ];
         const headerRow = worksheet.getRow(1);
         headerRow.height = 28;
         headers.forEach((h, idx) => {
@@ -565,22 +600,6 @@ export class ProductMasterService {
                 promptTitle: 'Select Type',
                 prompt: 'Choose one of:\nGOODS,\nSERVICES'
             };
-            worksheet.getCell(`J${i}`).dataValidation = {
-                type: 'list',
-                allowBlank: true,
-                formulae: ['"ACTIVE,INACTIVE"'],
-                showInputMessage: true,
-                promptTitle: 'Select Status',
-                prompt: 'Choose one of:\nACTIVE,\nINACTIVE'
-            };
-            worksheet.getCell(`H${i}`).dataValidation = {
-                type: 'list',
-                allowBlank: true,
-                formulae: ['"0%,5%,12%,18%,28%"'],
-                showInputMessage: true,
-                promptTitle: 'Select Tax Rate',
-                prompt: 'Choose one of:\n0%,\n5%,\n12%,\n18%,\n28%'
-            };
             worksheet.getCell(`G${i}`).numFmt = '@';
         }
 
@@ -596,6 +615,9 @@ export class ProductMasterService {
         await worksheet.protect('', {
             selectLockedCells: true,
             selectUnlockedCells: true,
+            formatCells: true,
+            formatColumns: true,
+            formatRows: true,
             insertRows: true,
             deleteRows: true,
             sort: true,
@@ -624,582 +646,388 @@ export class ProductMasterService {
             throw new BadRequestException('No data found to import');
         }
 
-        let imported = 0;
-        let failed = 0;
-        let duplicates = 0;
-        const errors: string[] = [];
-        const prisma = (this.repository as any).prisma;
+        const headers = [
+            'Type*', 'Product Name*', 'UOM*', 'Category*',
+            'Sub Category*', 'Sub Sub Category', 'HSN/SAC Code*', 'Description'
+        ];
 
-        let headerRowIndex = -1;
-        const colMap: Record<string, number> = {};
+        // 1. Pre-load Master Data for this User to optimize validation performance
+        const [uomList, categoryList, hsnMasterList, legacyHsnList, existingProducts] = await Promise.all([
+            this.prisma.unitMaster.findMany({ where: { user_id: userId, status: 'ACTIVE' } }),
+            this.prisma.category.findMany({
+                where: { user_id: userId, status: 'ACTIVE' },
+                include: { parent: { include: { parent: true } } }
+            }),
+            this.prisma.hsnMaster.findMany({ where: { createdBy: userId, isActive: true } }),
+            this.prisma.hsn.findMany({ where: { active: true } }),
+            this.prisma.product.findMany({
+                where: { created_by: userId, is_deleted: false },
+                select: { product_name: true }
+            })
+        ]);
+
+        // Build UOM lookup map (case-insensitive name or gst_uom)
+        const uomMap = new Map<string, number>();
+        uomList.forEach(u => {
+            uomMap.set(u.unit_name.toLowerCase().trim(), u.id);
+            if (u.gst_uom) uomMap.set(u.gst_uom.toLowerCase().trim(), u.id);
+            if (u.full_name_of_measurement) uomMap.set(u.full_name_of_measurement.toLowerCase().trim(), u.id);
+        });
+
+        // Build Category Hierarchy tree
+        const level1Map = new Map<string, any>();
+        categoryList.filter(c => !c.parent_id).forEach(c => {
+            level1Map.set(c.name.toLowerCase().trim(), c);
+        });
+
+        const level2Categories = categoryList.filter(c => c.parent_id && !c.parent?.parent_id);
+        const level3Categories = categoryList.filter(c => c.parent_id && c.parent?.parent_id);
+
+        // Build HSN Lookup Map: HsnMaster takes precedence over legacy Hsn
+        const hsnMap = new Map<string, { code: string; type: 'HSN' | 'SAC'; taxRate: number; description: string; hsnMasterId: string | null }>();
+        legacyHsnList.forEach(h => {
+            const codeKey = h.hsnCode.toLowerCase().trim();
+            const rate = h.rate ? Number(h.rate) : 0;
+            const hType = (h.type && h.type.toUpperCase() === 'SAC') ? 'SAC' : 'HSN';
+            hsnMap.set(codeKey, {
+                code: h.hsnCode,
+                type: hType,
+                taxRate: rate,
+                description: h.description || '',
+                hsnMasterId: null
+            });
+        });
+        hsnMasterList.forEach(h => {
+            const codeKey = h.code.toLowerCase().trim();
+            const hType = (h.type && String(h.type).toUpperCase() === 'SAC') ? 'SAC' : 'HSN';
+            hsnMap.set(codeKey, {
+                code: h.code,
+                type: hType,
+                taxRate: Number(h.taxRate),
+                description: h.description || '',
+                hsnMasterId: h.id
+            });
+        });
+
+        // Build Existing DB Products set for duplicate checking
+        const dbProductNames = new Set<string>(
+            existingProducts.map(p => p.product_name.toLowerCase().trim())
+        );
+
+        // Track in-file duplicates
+        const fileProductNames = new Set<string>();
+
+        // Dynamic Header Mapping
+        let headerRowIndex = 1;
+        const colMap: Record<string, number> = {
+            type: 1, prodName: 2, uom: 3, category: 4,
+            subCategory: 5, subSubCategory: 6, hsn: 7, taxRate: 8, description: 9
+        };
 
         for (let r = 1; r <= Math.min(rowCount, 10); r++) {
             const row = worksheet.getRow(r);
             let foundHeaders = false;
             row.eachCell((cell, colNumber) => {
                 const val = String(cell.value || '').trim().toLowerCase();
-                if (val.includes('prod code') || val.includes('product code')) colMap['prodCode'] = colNumber;
                 if (val.includes('product name') || val.includes('service name')) { colMap['prodName'] = colNumber; foundHeaders = true; }
-                if (val.includes('uom')) colMap['uom'] = colNumber;
-                if (val.includes('type') || val.includes('product type')) colMap['productType'] = colNumber;
-                if (val.includes('category')) colMap['category'] = colNumber;
-                if (val.includes('sub category')) colMap['subCategory'] = colNumber;
-                if (val.includes('sub sub category') || val.includes('sub-sub category') || val.includes('sub-subcategory')) colMap['subSubCategory'] = colNumber;
-                if (val.includes('hsn') || val.includes('sac')) colMap['hsn'] = colNumber;
-                if (val.includes('tax rate') || val.includes('tax %') || val.includes('taxrate') || val.includes('taxpercent') || val.includes('tax percent')) colMap['taxRate'] = colNumber;
-                if (val.includes('product description') || val.includes('description') || val.includes('service description')) colMap['description'] = colNumber;
-                if (val === 'status') colMap['status'] = colNumber;
+                else if (val.includes('type') || val.includes('product type')) colMap['type'] = colNumber;
+                else if (val.includes('uom') || val.includes('unit')) colMap['uom'] = colNumber;
+                else if (val.includes('sub sub category') || val.includes('sub-sub category') || val.includes('sub-subcategory')) colMap['subSubCategory'] = colNumber;
+                else if (val.includes('sub category') || val.includes('sub-category') || val.includes('subcategory')) colMap['subCategory'] = colNumber;
+                else if (val.includes('category')) colMap['category'] = colNumber;
+                else if (val.includes('hsn') || val.includes('sac')) colMap['hsn'] = colNumber;
+                else if (val.includes('tax rate') || val.includes('tax %')) colMap['taxRate'] = colNumber;
+                else if (val.includes('description')) colMap['description'] = colNumber;
             });
-
             if (foundHeaders) {
                 headerRowIndex = r;
                 break;
             }
         }
 
-        if (headerRowIndex === -1) {
-            throw new BadRequestException('Could not find Product Name or Service Name column in the provided Excel file.');
-        }
-
-        const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
+        const getVal = (row: ExcelJS.Row, key: string, defaultVal: string = '') => {
             const colIdx = colMap[key];
             if (!colIdx) return defaultVal;
             const cell = row.getCell(colIdx);
             const textValue = cell.text;
             if (textValue !== undefined && textValue !== null && textValue !== '') {
-                return textValue;
+                return String(textValue).trim();
             }
-            return cell.value !== undefined && cell.value !== null ? cell.value : defaultVal;
+            return cell.value !== undefined && cell.value !== null ? String(cell.value).trim() : defaultVal;
         };
+
+        const validRows: Array<{
+            rowNum: number;
+            data: {
+                prodName: string;
+                typeUpper: ProductType;
+                uomId: number;
+                categoryId: string;
+                hsnCode: string;
+                taxRate: number;
+                description: string;
+                hsnMasterId: string | null;
+            };
+            originalValues: any[];
+        }> = [];
+
+        const failedRows: Array<{ rowNum: number; values: any[]; error: string }> = [];
 
         for (let i = headerRowIndex + 1; i <= rowCount; i++) {
             const row = worksheet.getRow(i);
 
-            const prodCode = String(getVal(row, 'prodCode')).trim();
-            const prodName = String(getVal(row, 'prodName')).trim();
-            const description = String(getVal(row, 'description')).trim();
+            const rawValues = [
+                getVal(row, 'type'),
+                getVal(row, 'prodName'),
+                getVal(row, 'uom'),
+                getVal(row, 'category'),
+                getVal(row, 'subCategory'),
+                getVal(row, 'subSubCategory'),
+                getVal(row, 'hsn'),
+                getVal(row, 'taxRate'),
+                getVal(row, 'description')
+            ];
 
-            if (!prodName || prodName === '-') continue;
+            const typeRaw = rawValues[0];
+            const prodName = rawValues[1];
+            const uomRaw = rawValues[2];
+            const catRaw = rawValues[3];
+            const subCatRaw = rawValues[4];
+            const subSubCatRaw = rawValues[5];
+            const hsnRaw = rawValues[6];
 
-            try {
-                let uomName = String(getVal(row, 'uom')).trim();
-                let uom = uomName && uomName !== '-' ? await prisma.unitMaster.findFirst({ where: { user_id: userId, unit_name: uomName } }) : null;
-                if (!uom && uomName && uomName !== '-') {
-                    let gstUom = 'OTH';
-                    const nameLower = uomName.toLowerCase();
-                    if (nameLower.includes('weight') || nameLower.includes('kilogram') || nameLower === 'kg' || nameLower === 'kgs') gstUom = 'KGS';
-                    else if (nameLower.includes('number') || nameLower.includes('nos') || nameLower === 'unit' || nameLower === 'pc' || nameLower === 'pcs') gstUom = 'NOS';
-                    else if (nameLower.includes('gram')) gstUom = 'GMS';
-                    else if (nameLower.includes('liter') || nameLower.includes('litre')) gstUom = 'LTR';
-                    else if (nameLower.includes('meter') || nameLower.includes('metre')) gstUom = 'MTR';
-                    else if (nameLower.includes('packet') || nameLower.includes('pkt')) gstUom = 'PAC';
-                    else if (nameLower.includes('box')) gstUom = 'BOX';
+            // Skip completely empty rows
+            if (!typeRaw && !prodName && !uomRaw && !catRaw && !subCatRaw && !subSubCatRaw && !hsnRaw) {
+                continue;
+            }
 
-                    uom = await prisma.unitMaster.findFirst({ where: { user_id: userId, gst_uom: gstUom } });
-                    if (!uom) {
-                        uom = await prisma.unitMaster.create({
-                            data: {
-                                user_id: userId,
-                                unit_name: uomName,
-                                gst_uom: gstUom,
-                                full_name_of_measurement: uomName,
-                                source: 'USER'
-                            }
-                        });
-                    }
-                }
-                if (!uom) uom = await prisma.unitMaster.findFirst({ where: { user_id: userId } });
-                if (!uom) {
-                    uom = await prisma.unitMaster.create({
-                        data: { user_id: userId, unit_name: 'NOS', gst_uom: 'NOS', full_name_of_measurement: 'Numbers', source: 'SYSTEM' }
-                    });
-                }
-                let uom_id: number = uom.id;
+            // STEP 2: Validate mandatory fields
+            if (!typeRaw) {
+                failedRows.push({ rowNum: i, values: rawValues, error: 'Type is required.' });
+                continue;
+            }
+            if (!prodName) {
+                failedRows.push({ rowNum: i, values: rawValues, error: 'Product Name is required.' });
+                continue;
+            }
+            if (!uomRaw) {
+                failedRows.push({ rowNum: i, values: rawValues, error: 'UOM is required.' });
+                continue;
+            }
+            if (!catRaw) {
+                failedRows.push({ rowNum: i, values: rawValues, error: 'Category is required.' });
+                continue;
+            }
+            if (!subCatRaw) {
+                failedRows.push({ rowNum: i, values: rawValues, error: 'Sub Category is required.' });
+                continue;
+            }
+            if (!hsnRaw) {
+                failedRows.push({ rowNum: i, values: rawValues, error: 'HSN/SAC Code is required.' });
+                continue;
+            }
 
-                const productTypeRaw = String(getVal(row, 'productType')).trim().toUpperCase();
-                let productType: ProductType = productTypeRaw === 'SERVICES' ? ProductType.SERVICES : ProductType.GOODS;
+            const normalizedProdName = prodName.toLowerCase();
 
-                // Normalize names: strip whitespaces, convert '-', 'null', 'undefined' to empty string
-                const cleanName = (val: any): string => {
-                    const s = String(val || '').trim();
-                    return (!s || s === '-' || s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined') ? '' : s;
-                };
-
-                const mName = cleanName(getVal(row, 'category'));
-                const sName = cleanName(getVal(row, 'subCategory'));
-                const ssName = cleanName(getVal(row, 'subSubCategory'));
-
-                let category_id: string;
-
-                if (!mName && !sName && !ssName) {
-                    // Fallback to "General" at Level 1
-                    let generalCat = await prisma.category.findFirst({
-                        where: {
-                            user_id: userId,
-                            name: { equals: 'General', mode: 'insensitive' },
-                            parent_id: null
-                        }
-                    });
-                    if (!generalCat) {
-                        generalCat = await prisma.category.create({
-                            data: { user_id: userId, name: 'General', status: MasterStatus.ACTIVE }
-                        });
-                    }
-                    category_id = generalCat.id;
-                } else if (!mName) {
-                    // Main category name is empty, but Sub or Sub-Sub category name is not.
-                    // We must try to locate their parents from the database.
-                    let resolvedSubSub: any = null;
-                    let resolvedSub: any = null;
-
-                    if (ssName) {
-                        // Search for a Level 3 category in the database
-                        resolvedSubSub = await prisma.category.findFirst({
-                            where: {
-                                name: { equals: ssName, mode: 'insensitive' },
-                                user_id: userId,
-                                parent: {
-                                    parent_id: { not: null },
-                                    parent: {
-                                        parent_id: null
-                                    }
-                                }
-                            },
-                            include: {
-                                parent: {
-                                    include: {
-                                        parent: true
-                                    }
-                                }
-                            }
-                        });
-                    }
-
-                    if (resolvedSubSub) {
-                        category_id = resolvedSubSub.id;
-                    } else {
-                        // If not resolved by Sub-Sub Category, look for Sub Category at Level 2
-                        if (sName) {
-                            resolvedSub = await prisma.category.findFirst({
-                                where: {
-                                    name: { equals: sName, mode: 'insensitive' },
-                                    user_id: userId,
-                                    parent: {
-                                        parent_id: null
-                                    }
-                                },
-                                include: {
-                                    parent: true
-                                }
-                            });
-                        }
-
-                        if (resolvedSub) {
-                            if (ssName) {
-                                // Create Level 3 under this resolved Sub Category
-                                let newSubSub = await prisma.category.findFirst({
-                                    where: {
-                                        name: { equals: ssName, mode: 'insensitive' },
-                                        parent_id: resolvedSub.id,
-                                        user_id: userId
-                                    }
-                                });
-                                if (!newSubSub) {
-                                    newSubSub = await prisma.category.create({
-                                        data: {
-                                            user_id: userId,
-                                            parent_id: resolvedSub.id,
-                                            name: ssName,
-                                            status: MasterStatus.ACTIVE
-                                        }
-                                    });
-                                }
-                                category_id = newSubSub.id;
-                            } else {
-                                category_id = resolvedSub.id;
-                            }
-                        } else {
-                            // Both lookup attempts failed. Fallback to creating under "General" Main Category.
-                            let generalCat = await prisma.category.findFirst({
-                                where: {
-                                    user_id: userId,
-                                    name: { equals: 'General', mode: 'insensitive' },
-                                    parent_id: null
-                                }
-                            });
-                            if (!generalCat) {
-                                generalCat = await prisma.category.create({
-                                    data: { user_id: userId, name: 'General', status: MasterStatus.ACTIVE }
-                                });
-                            }
-
-                            if (sName) {
-                                // Create Sub Category under "General"
-                                let newSub = await prisma.category.findFirst({
-                                    where: {
-                                        name: { equals: sName, mode: 'insensitive' },
-                                        parent_id: generalCat.id,
-                                        user_id: userId
-                                    }
-                                });
-                                if (!newSub) {
-                                    newSub = await prisma.category.create({
-                                        data: {
-                                            user_id: userId,
-                                            parent_id: generalCat.id,
-                                            name: sName,
-                                            status: MasterStatus.ACTIVE
-                                        }
-                                    });
-                                }
-
-                                if (ssName) {
-                                    // Create Sub-Sub Category under the new Sub Category
-                                    let newSubSub = await prisma.category.findFirst({
-                                        where: {
-                                            name: { equals: ssName, mode: 'insensitive' },
-                                            parent_id: newSub.id,
-                                            user_id: userId
-                                        }
-                                    });
-                                    if (!newSubSub) {
-                                        newSubSub = await prisma.category.create({
-                                            data: {
-                                                user_id: userId,
-                                                parent_id: newSub.id,
-                                                name: ssName,
-                                                status: MasterStatus.ACTIVE
-                                            }
-                                        });
-                                    }
-                                    category_id = newSubSub.id;
-                                } else {
-                                    category_id = newSub.id;
-                                }
-                            } else {
-                                // Only ssName was provided, no sName. Create a "General" subcategory to hold it.
-                                let genSub = await prisma.category.findFirst({
-                                    where: {
-                                        name: { equals: 'General', mode: 'insensitive' },
-                                        parent_id: generalCat.id,
-                                        user_id: userId
-                                    }
-                                });
-                                if (!genSub) {
-                                    genSub = await prisma.category.create({
-                                        data: {
-                                            user_id: userId,
-                                            parent_id: generalCat.id,
-                                            name: 'General',
-                                            status: MasterStatus.ACTIVE
-                                        }
-                                    });
-                                }
-
-                                let newSubSub = await prisma.category.findFirst({
-                                    where: {
-                                        name: { equals: ssName, mode: 'insensitive' },
-                                        parent_id: genSub.id,
-                                        user_id: userId
-                                    }
-                                });
-                                if (!newSubSub) {
-                                    newSubSub = await prisma.category.create({
-                                        data: {
-                                            user_id: userId,
-                                            parent_id: genSub.id,
-                                            name: ssName,
-                                            status: MasterStatus.ACTIVE
-                                        }
-                                    });
-                                }
-                                category_id = newSubSub.id;
-                            }
-                        }
-                    }
-                } else {
-                    // Main category name is present
-                    let mainCat = await prisma.category.findFirst({
-                        where: {
-                            name: { equals: mName, mode: 'insensitive' },
-                            parent_id: null,
-                            user_id: userId
-                        }
-                    });
-                    if (!mainCat) {
-                        mainCat = await prisma.category.create({
-                            data: {
-                                user_id: userId,
-                                name: mName,
-                                status: MasterStatus.ACTIVE
-                            }
-                        });
-                    }
-
-                    if (sName) {
-                        // Sub category name is present
-                        let subCat = await prisma.category.findFirst({
-                            where: {
-                                name: { equals: sName, mode: 'insensitive' },
-                                parent_id: mainCat.id,
-                                user_id: userId
-                            }
-                        });
-                        if (!subCat) {
-                            subCat = await prisma.category.create({
-                                data: {
-                                    user_id: userId,
-                                    parent_id: mainCat.id,
-                                    name: sName,
-                                    status: MasterStatus.ACTIVE
-                                }
-                            });
-                        }
-
-                        if (ssName) {
-                            // Sub-sub category name is present
-                            let subSubCat = await prisma.category.findFirst({
-                                where: {
-                                    name: { equals: ssName, mode: 'insensitive' },
-                                    parent_id: subCat.id,
-                                    user_id: userId
-                                }
-                            });
-                            if (!subSubCat) {
-                                subSubCat = await prisma.category.create({
-                                    data: {
-                                        user_id: userId,
-                                        parent_id: subCat.id,
-                                        name: ssName,
-                                        status: MasterStatus.ACTIVE
-                                    }
-                                });
-                            }
-                            category_id = subSubCat.id;
-                        } else {
-                            category_id = subCat.id;
-                        }
-                    } else {
-                        // Sub category name is empty, but Main Category name is present.
-                        if (ssName) {
-                            // If Sub-sub category is present, try to find it under any subcategory of this Main Category.
-                            const existingSubSub = await prisma.category.findFirst({
-                                where: {
-                                    name: { equals: ssName, mode: 'insensitive' },
-                                    user_id: userId,
-                                    parent: {
-                                        parent_id: mainCat.id
-                                    }
-                                }
-                            });
-                            if (existingSubSub) {
-                                category_id = existingSubSub.id;
-                            } else {
-                                // Create a default Sub Category under this Main Category, and put ssName under it.
-                                let genSub = await prisma.category.findFirst({
-                                    where: {
-                                        name: { equals: 'General', mode: 'insensitive' },
-                                        parent_id: mainCat.id,
-                                        user_id: userId
-                                    }
-                                });
-                                if (!genSub) {
-                                    genSub = await prisma.category.create({
-                                        data: {
-                                            user_id: userId,
-                                            parent_id: mainCat.id,
-                                            name: 'General',
-                                            status: MasterStatus.ACTIVE
-                                        }
-                                    });
-                                }
-
-                                let newSubSub = await prisma.category.findFirst({
-                                    where: {
-                                        name: { equals: ssName, mode: 'insensitive' },
-                                        parent_id: genSub.id,
-                                        user_id: userId
-                                    }
-                                });
-                                if (!newSubSub) {
-                                    newSubSub = await prisma.category.create({
-                                        data: {
-                                            user_id: userId,
-                                            parent_id: genSub.id,
-                                            name: ssName,
-                                            status: MasterStatus.ACTIVE
-                                        }
-                                    });
-                                }
-                                category_id = newSubSub.id;
-                            }
-                        } else {
-                            // Both sub and sub-sub are empty.
-                            category_id = mainCat.id;
-                        }
-                    }
-                }
-
-
-                let hsnCode = String(getVal(row, 'hsn')).trim();
-
-                let hsnMasterId = '';
-                let taxRateValue = 0;
-                let hsnDescValue = '';
-
-                if (hsnCode && hsnCode !== '-') {
-                    const codeVariations = [hsnCode];
-                    if (/^\d+$/.test(hsnCode)) {
-                        if (hsnCode.length % 2 !== 0) {
-                            codeVariations.push('0' + hsnCode);
-                        }
-                        if (hsnCode.length < 6) {
-                            codeVariations.push(hsnCode.padStart(6, '0'));
-                        }
-                        if (hsnCode.length < 8) {
-                            codeVariations.push(hsnCode.padStart(8, '0'));
-                        }
-                    }
-                    const uniqueVariations = Array.from(new Set(codeVariations));
-
-                    let hsnMaster = null;
-                    for (const codeVar of uniqueVariations) {
-                        hsnMaster = await prisma.hsnMaster.findFirst({
-                            where: { code: codeVar, createdBy: userId }
-                        });
-                        if (hsnMaster) {
-                            hsnCode = codeVar;
-                            break;
-                        }
-                    }
-
-                    if (!hsnMaster) {
-                        let excelTaxRate: number | null = null;
-                        const taxRateStr = String(getVal(row, 'taxRate')).trim();
-                        if (taxRateStr && taxRateStr !== '-') {
-                            const parsedTax = parseFloat(taxRateStr.replace(/[^0-9.]/g, ''));
-                            if ([0, 5, 12, 18, 28].includes(parsedTax)) {
-                                excelTaxRate = parsedTax;
-                            } else {
-                                throw new BadRequestException(`Invalid Tax Rate '${taxRateStr}' in Excel. Must be one of: 0%, 5%, 12%, 18%, 28%`);
-                            }
-                        }
-
-                        // Fallback: search in legacy hsn table or use Excel tax rate to auto-create
-                        for (const codeVar of uniqueVariations) {
-                            const legacyHsn = await prisma.hsn.findUnique({
-                                where: { hsnCode: codeVar },
-                                include: { taxDetails: true }
-                            });
-                            if (legacyHsn || excelTaxRate !== null) {
-                                hsnCode = codeVar;
-                                let taxRate = 18; // default fallback
-                                if (excelTaxRate !== null) {
-                                    taxRate = excelTaxRate;
-                                } else if (legacyHsn?.taxDetails && legacyHsn.taxDetails.length > 0) {
-                                    const parsedTax = parseFloat(legacyHsn.taxDetails[0].rateOfTax || '18');
-                                    if ([0, 5, 12, 18, 28].includes(parsedTax)) {
-                                        taxRate = parsedTax;
-                                    }
-                                }
-                                const description = legacyHsn?.description || legacyHsn?.taxDetails?.[0]?.description || 'Auto-created from Excel import';
-                                const type = (legacyHsn?.type && legacyHsn.type.toUpperCase() === 'SAC') ? 'SAC' : (productType === ProductType.SERVICES ? 'SAC' : 'HSN');
-                                hsnMaster = await prisma.hsnMaster.create({
-                                    data: {
-                                        type,
-                                        code: hsnCode,
-                                        taxRate: new Prisma.Decimal(taxRate),
-                                        description: description.substring(0, 200),
-                                        isActive: true,
-                                        createdBy: userId,
-                                        updatedBy: userId
-                                    }
-                                });
-                                break;
-                            }
-                        }
-                    }
-
-                    if (!hsnMaster) {
-                        throw new BadRequestException(`${productType === ProductType.SERVICES ? 'SAC' : 'HSN'} Code (${hsnCode}) does not exist in HSN Master. Please add it to the HSN Master first.`);
-                    }
-                    if (productType === ProductType.SERVICES && hsnMaster.type !== 'SAC') {
-                        throw new BadRequestException('Please select a valid SAC Code for Services.');
-                    }
-                    if (productType === ProductType.GOODS && hsnMaster.type !== 'HSN') {
-                        throw new BadRequestException('Please select a valid HSN Code for Goods.');
-                    }
-                    hsnMasterId = hsnMaster.id;
-                    taxRateValue = parseFloat(String(hsnMaster.taxRate));
-                    hsnDescValue = hsnMaster.description || '';
-                } else {
-                    throw new BadRequestException(`${productType === ProductType.SERVICES ? 'SAC' : 'HSN'} Code is required`);
-                }
-
-                const statusStr = String(getVal(row, 'status')).trim().toUpperCase();
-                const status = statusStr === 'INACTIVE' ? MasterStatus.INACTIVE : MasterStatus.ACTIVE;
-
-                let codeToUse = prodCode;
-                if (!codeToUse || codeToUse === '-') {
-                    codeToUse = await this.generateProductCode(userId, productType);
-                }
-
-                const existing = await prisma.product.findFirst({
-                    where: {
-                        created_by: userId,
-                        OR: [
-                            { product_code: { equals: codeToUse, mode: 'insensitive' } },
-                            { product_name: { equals: prodName, mode: 'insensitive' } }
-                        ]
-                    },
+            // STEP 3: Duplicate Check - In Uploaded Excel File
+            if (fileProductNames.has(normalizedProdName)) {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: 'Duplicate product found in uploaded Excel file. Product cannot be imported more than once.'
                 });
+                continue;
+            }
 
-                if (existing) {
-                    duplicates++;
+            // STEP 4: Duplicate Check - Against Product Master DB
+            if (dbProductNames.has(normalizedProdName)) {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: 'Product already exists in Product Master. Duplicate product cannot be imported.'
+                });
+                continue;
+            }
+
+            // Record as seen in file for subsequent row duplicate checking
+            fileProductNames.add(normalizedProdName);
+
+            // STEP 5: Validate Type
+            const typeUpper = typeRaw.toUpperCase();
+            if (typeUpper !== 'GOODS' && typeUpper !== 'SERVICES') {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: 'Invalid Type. Allowed values are GOODS or SERVICES.'
+                });
+                continue;
+            }
+
+            // STEP 6: Validate UOM exists in UOM Master
+            const uomId = uomMap.get(uomRaw.toLowerCase());
+            if (!uomId) {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: `UOM "${uomRaw}" does not exist in UOM Master. Please create the UOM first.`
+                });
+                continue;
+            }
+
+            // STEP 7: Validate Category exists in Category Master
+            const categoryObj = level1Map.get(catRaw.toLowerCase());
+            if (!categoryObj) {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: `Category "${catRaw}" does not exist in Category Master. Please create the Category first.`
+                });
+                continue;
+            }
+
+            // STEP 8 & 9: Validate Sub Category exists and belongs to selected Category
+            const matchingSubCats = level2Categories.filter(
+                sc => sc.name.toLowerCase().trim() === subCatRaw.toLowerCase()
+            );
+
+            if (matchingSubCats.length === 0) {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: `Sub Category "${subCatRaw}" does not exist in Category Master. Please create the Sub Category first.`
+                });
+                continue;
+            }
+
+            const validSubCat = matchingSubCats.find(sc => sc.parent_id === categoryObj.id);
+            if (!validSubCat) {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: `Sub Category "${subCatRaw}" does not belong to the selected Category "${catRaw}".`
+                });
+                continue;
+            }
+
+            // STEP 10, 11 & 12: Validate Sub Sub Category (if provided)
+            let targetCategoryId = validSubCat.id;
+
+            if (subSubCatRaw) {
+                const matchingSubSubCats = level3Categories.filter(
+                    ssc => ssc.name.toLowerCase().trim() === subSubCatRaw.toLowerCase()
+                );
+
+                if (matchingSubSubCats.length === 0) {
+                    failedRows.push({
+                        rowNum: i,
+                        values: rawValues,
+                        error: `Sub Sub Category "${subSubCatRaw}" does not exist in Category Master. Please create the Sub Sub Category first.`
+                    });
                     continue;
                 }
 
-                await this.repository.createProduct({
-                    product_name: prodName,
-                    product_code: codeToUse,
-                    uom_id,
-                    product_type: productType,
-                    category_id,
-                    hsnMasterId,
-                    hsn_code: hsnCode,
-                    tax_rate: taxRateValue,
-                    hsn_description: hsnDescValue,
-                    description: (description && description !== '-') ? description : '',
-                    status,
-                    created_by: userId,
-                });
-                imported++;
+                const validSubSubCat = matchingSubSubCats.find(ssc => ssc.parent_id === validSubCat.id);
+                if (!validSubSubCat) {
+                    failedRows.push({
+                        rowNum: i,
+                        values: rawValues,
+                        error: `Sub Sub Category "${subSubCatRaw}" does not belong to the selected Sub Category "${subCatRaw}".`
+                    });
+                    continue;
+                }
 
-            } catch (error) {
-                failed++;
-                errors.push(`Row ${i} (${prodName}): ${error.message}`);
+                targetCategoryId = validSubSubCat.id;
             }
+
+            // STEP 13: Validate HSN/SAC Code exists in HSN Master
+            const hsnObj = hsnMap.get(hsnRaw.toLowerCase());
+            if (!hsnObj) {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: `HSN/SAC Code "${hsnRaw}" does not exist in HSN Master. Please create the HSN/SAC Code first.`
+                });
+                continue;
+            }
+
+            // STEP 13b: Validate Type vs HSN/SAC Master type compatibility
+            if (typeUpper === 'GOODS' && hsnObj.type === 'SAC') {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: `Code "${hsnRaw}" is a SAC Code. Goods must use an HSN Code.`
+                });
+                continue;
+            }
+
+            if (typeUpper === 'SERVICES' && hsnObj.type === 'HSN') {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: `Code "${hsnRaw}" is an HSN Code. Services must use a SAC Code.`
+                });
+                continue;
+            }
+
+            // STEP 14, 15 & 16: Derive Tax Rate and Description from HSN Master (overriding Excel)
+            const derivedTaxRate = hsnObj.taxRate;
+            const derivedDescription = hsnObj.description;
+
+            validRows.push({
+                rowNum: i,
+                data: {
+                    prodName,
+                    typeUpper: typeUpper as ProductType,
+                    uomId,
+                    categoryId: targetCategoryId,
+                    hsnCode: hsnObj.code,
+                    taxRate: derivedTaxRate,
+                    description: derivedDescription,
+                    hsnMasterId: hsnObj.hsnMasterId,
+                },
+                originalValues: rawValues
+            });
         }
 
-        if (imported === 0 && failed > 0) {
-            throw new BadRequestException(`Import failed: ${errors[0]}`);
+        // STEP 20: Transaction Safety - Insert all valid products in a database transaction
+        const successRows: any[] = [];
+
+        if (validRows.length > 0) {
+            const usedCodes = new Set<string>();
+            await this.prisma.$transaction(async (tx) => {
+                for (const validItem of validRows) {
+                    const product_code = await this.generateProductCode(userId, validItem.data.typeUpper, tx, usedCodes);
+
+                    await tx.product.create({
+                        data: {
+                            product_name: validItem.data.prodName,
+                            product_code,
+                            product_type: validItem.data.typeUpper,
+                            uom_id: validItem.data.uomId,
+                            category_id: validItem.data.categoryId,
+                            hsn_code: validItem.data.hsnCode,
+                            tax_rate: validItem.data.taxRate,
+                            description: validItem.data.description,
+                            hsn_description: validItem.data.description,
+                            hsnMasterId: validItem.data.hsnMasterId,
+                            created_by: userId,
+                            status: MasterStatus.ACTIVE
+                        }
+                    });
+
+                    // Format values for success Excel report (including authoritative derived description)
+                    const updatedValues = [...validItem.originalValues];
+                    updatedValues[7] = validItem.data.description;
+
+                    successRows.push({
+                        rowNum: validItem.rowNum,
+                        originalRowValues: [null, ...updatedValues]
+                    });
+                }
+            });
         }
 
-        if (imported === 0 && duplicates > 0 && failed === 0) {
-            return {
-                success: true,
-                message: `No new products/services imported. ${duplicates} duplicate rows were skipped.`,
-            };
-        }
-
-        if (imported === 0 && failed === 0) {
-            throw new BadRequestException('No data found to import');
-        }
-
-        return {
-            success: true,
-            message: `Successfully imported ${imported} products/services. ${duplicates} duplicate rows were skipped.${failed > 0 ? ' ' + failed + ' failed.' : ''}`,
-            errors: failed > 0 ? errors : undefined,
-        };
+        // Return standardized summary response with base64 Success & Error Excel reports
+        return this.importValidator.buildResponseSummary(headers, successRows, failedRows);
     }
 }

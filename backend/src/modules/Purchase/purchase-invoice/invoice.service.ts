@@ -655,7 +655,7 @@ export class PurchaseInvoiceService {
     const limit = Math.max(1, Number(query?.limit) || 10);
     const skip = (page - 1) * limit;
 
-    const [data, total] = await Promise.all([
+    const [data, total, allMatching] = await Promise.all([
       this.prisma.purchaseInvoice.findMany({
         where,
         include: { items: true, expenses: true },
@@ -663,8 +663,28 @@ export class PurchaseInvoiceService {
         skip,
         take: limit,
       }),
-      this.prisma.purchaseInvoice.count({ where })
+      this.prisma.purchaseInvoice.count({ where }),
+      this.prisma.purchaseInvoice.findMany({
+        where,
+        select: {
+          taxableAmount: true,
+          grandTotal: true,
+          items: { select: { beforeTaxAmount: true, taxAmount: true } }
+        }
+      })
     ]);
+
+    let grandTaxable = 0;
+    let grandTax = 0;
+    let grandTotalSum = 0;
+    for (const inv of allMatching) {
+      const taxable = Number(inv.taxableAmount || (inv.items?.reduce((sum, i) => sum + Number(i.beforeTaxAmount || 0), 0) || 0));
+      const gross = Number(inv.grandTotal || 0);
+      const tax = gross - taxable;
+      grandTaxable += taxable;
+      grandTax += tax;
+      grandTotalSum += gross;
+    }
 
     return {
       data,
@@ -672,7 +692,10 @@ export class PurchaseInvoiceService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / limit),
+        grandTaxable,
+        grandTax,
+        grandTotal: grandTotalSum
       }
     };
   }
@@ -1015,47 +1038,52 @@ export class PurchaseInvoiceService {
       const worksheet = workbook.addWorksheet('Purchase Invoices');
       worksheet.views = [{ state: 'frozen', ySplit: 5 }];
       worksheet.columns = [
-        { header: 'Inv No', key: 'invoiceNumber', width: 15 },
-        { header: 'Supplier Name', key: 'supplierName', width: 30 },
-        { header: 'Supp. Inv No', key: 'supplierInvoiceNumber', width: 20 },
-        { header: 'Supp. Inv Date', key: 'supplierInvoiceDate', width: 15 },
-        { header: 'Booking Date', key: 'bookingDate', width: 15 },
-        { header: 'PO No', key: 'poNumber', width: 15 },
-        { header: 'Taxable Amt', key: 'taxableAmount', width: 15 },
-        { header: 'Tax Amt', key: 'taxAmt', width: 15 },
-        { header: 'Grand Total', key: 'grandTotal', width: 15 },
-        { header: 'Status', key: 'status', width: 12 },
+        { header: 'SR NO', key: 'srNo', width: 8 },
+        { header: 'SUPPLIER INVOICE NUMBER', key: 'supplierInvoiceNumber', width: 25 },
+        { header: 'SUPPLIER NAME', key: 'supplierName', width: 28 },
+        { header: 'SUPPLIER INVOICE DATE', key: 'supplierInvoiceDate', width: 22 },
+        { header: 'BOOKING DATE', key: 'bookingDate', width: 16 },
+        { header: 'PO NO', key: 'poNumber', width: 16 },
+        { header: 'GST NUMBER', key: 'gstNumber', width: 18 },
+        { header: 'CREDIT DAYS', key: 'creditDays', width: 14 },
+        { header: 'TAXABLE AMOUNT', key: 'taxableAmount', width: 18 },
+        { header: 'TAX AMOUNT', key: 'taxAmt', width: 16 },
+        { header: 'TOTAL AMOUNT', key: 'grandTotal', width: 18 },
+        { header: 'STATUS', key: 'status', width: 14 },
       ];
 
-      invoices.forEach(inv => {
+      invoices.forEach((inv, idx) => {
+        const totalTax = (Number(inv.cgstAmount || 0) + Number(inv.sgstAmount || 0) + Number(inv.igstAmount || 0));
         worksheet.addRow({
-          invoiceNumber: inv.invoiceNumber,
-          supplierName: inv.supplierName,
-          supplierInvoiceNumber: inv.supplierInvoiceNumber,
+          srNo: idx + 1,
+          supplierInvoiceNumber: inv.supplierInvoiceNumber || inv.invoiceNumber || '-',
+          supplierName: inv.supplierName || '-',
           supplierInvoiceDate: formatDate(inv.supplierInvoiceDate),
           bookingDate: formatDate(inv.bookingDate),
           poNumber: inv.poNumber || '-',
+          gstNumber: inv.gstNumber || '-',
+          creditDays: inv.creditDays || 0,
           taxableAmount: inv.taxableAmount,
-          taxAmt: inv.cgstAmount + inv.sgstAmount,
+          taxAmt: totalTax,
           grandTotal: inv.grandTotal,
           status: inv.status,
         });
       });
 
       worksheet.spliceRows(1, 0, [], [], [], []);
-      worksheet.mergeCells('A1:J1');
+      worksheet.mergeCells('A1:L1');
       const titleCell = worksheet.getCell('A1');
       titleCell.value = 'ERP';
       titleCell.font = { size: 18, bold: true };
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-      worksheet.mergeCells('A2:J2');
+      worksheet.mergeCells('A2:L2');
       const subtitleCell = worksheet.getCell('A2');
       subtitleCell.value = 'Purchase Invoice Report';
       subtitleCell.font = { size: 14 };
       subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-      worksheet.mergeCells('A3:J3');
+      worksheet.mergeCells('A3:L3');
       const timestampCell = worksheet.getCell('A3');
       timestampCell.value = `Exported on: ${timestamp}`;
       timestampCell.font = { size: 10 };
@@ -1079,55 +1107,59 @@ export class PurchaseInvoiceService {
       };
     } else {
       return new Promise<any>((resolve) => {
-        const doc = new PDFDocument({ margin: 20, size: 'A4', layout: 'landscape' });
+        const doc = new PDFDocument({ margin: 15, size: 'A4', layout: 'landscape' });
         const buffers: Buffer[] = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', () => resolve({ buffer: Buffer.concat(buffers), filename: `purchase_invoices_${Date.now()}.pdf`, mimetype: 'application/pdf' }));
 
-        doc.fontSize(18).font('Helvetica-Bold').text('ERP', { align: 'center' });
-        doc.fontSize(14).font('Helvetica').text('Purchase Invoice Report', { align: 'center' });
+        doc.fontSize(16).font('Helvetica-Bold').text('ERP', { align: 'center' });
+        doc.fontSize(12).font('Helvetica').text('Purchase Invoice Report', { align: 'center' });
+        doc.moveDown(0.3);
+        doc.fontSize(9).text(`Exported on: ${timestamp}`, { align: 'right' });
         doc.moveDown(0.5);
-        doc.fontSize(10).text(`Exported on: ${timestamp}`, { align: 'right' });
-        doc.moveDown();
 
-        const tableTop = 100;
-        const colX = [20, 100, 250, 340, 420, 500, 570, 640, 710, 770];
-        const headers = ['Inv No', 'Supplier Name', 'Supp. Inv No', 'Supp. Date', 'Book Date', 'PO No', 'Taxable', 'Tax', 'Total', 'Status'];
+        const tableTop = 85;
+        const colX = [15, 45, 120, 205, 275, 335, 395, 460, 505, 565, 625, 690];
+        const headers = ['SR', 'Supp Inv No', 'Supplier Name', 'Inv Date', 'Book Date', 'PO No', 'GST No', 'Credit', 'Taxable', 'Tax', 'Total', 'Status'];
 
-        doc.rect(15, tableTop - 5, 805, 20).fill('#4472C4');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+        doc.rect(10, tableTop - 5, 820, 20).fill('#4472C4');
+        doc.fontSize(7).font('Helvetica-Bold').fillColor('#FFFFFF');
         headers.forEach((h, i) => doc.text(h, colX[i], tableTop));
 
         let y = tableTop + 20;
         doc.fillColor('#000000').font('Helvetica');
 
         invoices.forEach((inv, index) => {
-          if (y > 550) {
-            doc.addPage({ margin: 20, size: 'A4', layout: 'landscape' });
-            y = 40;
-            doc.rect(15, y - 5, 805, 20).fill('#4472C4');
-            doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+          if (y > 540) {
+            doc.addPage({ margin: 15, size: 'A4', layout: 'landscape' });
+            y = 35;
+            doc.rect(10, y - 5, 820, 20).fill('#4472C4');
+            doc.fontSize(7).font('Helvetica-Bold').fillColor('#FFFFFF');
             headers.forEach((h, i) => doc.text(h, colX[i], y));
             y += 20;
             doc.fillColor('#000000').font('Helvetica');
           }
 
           if (index % 2 === 1) {
-            doc.rect(15, y - 3, 805, 15).fill('#F2F2F2').fillColor('#000000');
+            doc.rect(10, y - 3, 820, 15).fill('#F2F2F2').fillColor('#000000');
           }
 
-          doc.fontSize(7);
-          doc.text(inv.invoiceNumber, colX[0], y);
-          doc.text(inv.supplierName.substring(0, 30), colX[1], y, { width: 140 });
-          doc.text(inv.supplierInvoiceNumber, colX[2], y);
+          const totalTax = (Number(inv.cgstAmount || 0) + Number(inv.sgstAmount || 0) + Number(inv.igstAmount || 0));
+
+          doc.fontSize(6);
+          doc.text(String(index + 1), colX[0], y);
+          doc.text((inv.supplierInvoiceNumber || inv.invoiceNumber || '-').substring(0, 14), colX[1], y, { width: 70 });
+          doc.text((inv.supplierName || '-').substring(0, 18), colX[2], y, { width: 80 });
           doc.text(formatDate(inv.supplierInvoiceDate), colX[3], y);
           doc.text(formatDate(inv.bookingDate), colX[4], y);
-          doc.text(inv.poNumber || '-', colX[5], y);
-          doc.text(inv.taxableAmount.toFixed(2), colX[6], y);
-          doc.text((inv.cgstAmount + inv.sgstAmount).toFixed(2), colX[7], y);
-          doc.text(inv.grandTotal.toFixed(2), colX[8], y);
-          doc.text(inv.status, colX[9], y);
-          y += 20;
+          doc.text((inv.poNumber || '-').substring(0, 10), colX[5], y);
+          doc.text((inv.gstNumber || '-').substring(0, 12), colX[6], y);
+          doc.text(String(inv.creditDays || 0), colX[7], y);
+          doc.text(Number(inv.taxableAmount || 0).toFixed(2), colX[8], y);
+          doc.text(totalTax.toFixed(2), colX[9], y);
+          doc.text(Number(inv.grandTotal || 0).toFixed(2), colX[10], y);
+          doc.text(inv.status || 'GENERATED', colX[11], y);
+          y += 18;
         });
 
         doc.end();
@@ -1307,6 +1339,17 @@ export class PurchaseInvoiceService {
       const groupErrors: string[] = [];
       const firstRow = rows[0];
 
+      const dateConsistencyErrors = this.importValidator.validateGroupDateConsistency(
+        rows,
+        'Purchase Invoice',
+        invoiceNo,
+        [
+          { key: 'invoiceDateStr', label: 'Invoice Date' },
+          { key: 'bookingDateStr', label: 'Booking Date' },
+        ]
+      );
+      groupErrors.push(...dateConsistencyErrors);
+
       // 1. Invoice Number uniqueness check
       const docNoValidation = this.importValidator.validateDocumentNumber(
         'Purchase Invoice',
@@ -1414,6 +1457,18 @@ export class PurchaseInvoiceService {
           if (!poItem) {
             groupErrors.push(`Product '${prod.product_name}' is not part of Purchase Order '${referencedPo.poNumber}'.`);
           } else {
+            if (Math.abs(Number(poItem.rate) - rate) > 0.001) {
+              groupErrors.push(
+                `Rate for product '${prod.product_name}' (${rate}) does not match the rate in Purchase Order '${referencedPo.poNumber}' (${poItem.rate}). Rate change is not allowed when linked to a PO.`
+              );
+            }
+            const poItemDiscPct = Number(poItem.discountPercent || (poItem.quantity * poItem.rate > 0 ? (Number(poItem.discountAmount) / (poItem.quantity * poItem.rate)) * 100 : 0));
+            const hasImpDisc = Boolean((row.discountPercentStr && row.discountPercentStr.trim() !== '') || (row.discountAmountStr && row.discountAmountStr.trim() !== ''));
+            if (hasImpDisc && Math.abs(discountPct - poItemDiscPct) > 0.01) {
+              groupErrors.push(
+                `Discount for product '${prod.product_name}' (${discountPct}%) does not match the discount in Purchase Order '${referencedPo.poNumber}' (${poItemDiscPct.toFixed(2)}%). Discount change is not allowed when linked to a PO.`
+              );
+            }
             let alreadyInvoiced = 0;
             for (const prevPI of referencedPo.purchaseInvoices || []) {
               for (const prevItem of prevPI.items || []) {
@@ -1445,6 +1500,18 @@ export class PurchaseInvoiceService {
           if (!grnItem) {
             groupErrors.push(`Product '${prod.product_name}' is not part of GRN '${referencedGrn.challanNumber}'.`);
           } else {
+            if (Math.abs(Number(grnItem.rate) - rate) > 0.001) {
+              groupErrors.push(
+                `Rate for product '${prod.product_name}' (${rate}) does not match the rate in GRN '${referencedGrn.challanNumber}' (${grnItem.rate}). Rate change is not allowed when linked to a GRN.`
+              );
+            }
+            const grnItemDiscPct = Number(grnItem.discountPercent || (grnItem.receivedQty * grnItem.rate > 0 ? (Number(grnItem.discountAmount) / (grnItem.receivedQty * grnItem.rate)) * 100 : 0));
+            const hasImpDisc = Boolean((row.discountPercentStr && row.discountPercentStr.trim() !== '') || (row.discountAmountStr && row.discountAmountStr.trim() !== ''));
+            if (hasImpDisc && Math.abs(discountPct - grnItemDiscPct) > 0.01) {
+              groupErrors.push(
+                `Discount for product '${prod.product_name}' (${discountPct}%) does not match the discount in GRN '${referencedGrn.challanNumber}' (${grnItemDiscPct.toFixed(2)}%). Discount change is not allowed when linked to a GRN.`
+              );
+            }
             let alreadyInvoicedForGrn = 0;
             for (const prevPI of allPIs) {
               if (prevPI.challanNumber && prevPI.challanNumber.toLowerCase().includes(referencedGrn.challanNumber.toLowerCase())) {
@@ -1693,23 +1760,37 @@ export class PurchaseInvoiceService {
   }
 
   private async syncLedgerTransactions(invoice: any, userId: number, tx: any) {
+    const invNo = invoice.supplierInvoiceNumber || invoice.invoiceNumber;
+    if (!invNo) return;
+
     // 1. Delete all existing transactions for this purchase invoice
     await tx.transaction.deleteMany({
       where: {
         userId,
-        invoiceNumber: invoice.supplierInvoiceNumber || invoice.invoiceNumber,
+        invoiceNumber: invNo,
         transactionType: TransactionType.Purchase,
       }
     });
 
-    // 2. Credit Supplier (if supplierId exists)
-    if (invoice.supplierId) {
+    let suppId = invoice.supplierId;
+    if (!suppId && invoice.supplierName) {
+      const supp = await tx.accountMaster.findFirst({
+        where: {
+          userId,
+          accountName: { equals: invoice.supplierName, mode: 'insensitive' },
+        },
+      });
+      if (supp) suppId = supp.id;
+    }
+
+    // 2. Credit Supplier (if supplierId or matched supplier account exists)
+    if (suppId) {
       await tx.transaction.create({
         data: {
-          accountId: invoice.supplierId,
+          accountId: suppId,
           userId,
-          bookingDate: new Date(invoice.bookingDate),
-          invoiceNumber: invoice.supplierInvoiceNumber || invoice.invoiceNumber,
+          bookingDate: new Date(invoice.bookingDate || invoice.invoiceDate || Date.now()),
+          invoiceNumber: invNo,
           transactionType: TransactionType.Purchase,
           amount: invoice.grandTotal,
           entryType: BalanceType.Cr,

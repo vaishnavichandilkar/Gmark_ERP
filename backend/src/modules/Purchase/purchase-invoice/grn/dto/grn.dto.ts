@@ -92,6 +92,12 @@ export class GrnAccountSummaryDto {
 
 export class CreateGrnDto {
   @ApiPropertyOptional()
+  grnNumber?: string;
+
+  @ApiPropertyOptional()
+  grnNo?: string;
+
+  @ApiPropertyOptional()
   supplierId?: string;
 
   @ApiProperty()

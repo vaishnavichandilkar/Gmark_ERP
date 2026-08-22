@@ -871,29 +871,33 @@ export class SalesOrderService {
             worksheet.views = [{ state: 'frozen', ySplit: 4 }];
 
             worksheet.columns = [
-                { header: 'SO No', key: 'soNumber', width: 15 },
-                { header: 'Customer Name', key: 'customerName', width: 30 },
-                { header: 'Creation Date', key: 'soCreationDate', width: 18 },
-                { header: 'Expiry Date', key: 'expiryDate', width: 18 },
-                { header: 'Amount', key: 'totalAmount', width: 15 },
-                { header: 'GST Number', key: 'gstNumber', width: 22 },
-                { header: 'Credit Days', key: 'creditDays', width: 12 },
-                { header: 'Tax Amount', key: 'taxAmount', width: 15 },
-                { header: 'Total Amount', key: 'grandTotal', width: 15 },
-                { header: 'Status', key: 'derivedStatus', width: 18 },
+                { header: 'SR NO', key: 'srNo', width: 8 },
+                { header: 'SO NO', key: 'soNumber', width: 16 },
+                { header: 'CUSTOMER NAME', key: 'customerName', width: 28 },
+                { header: 'SO CREATION DATE', key: 'soCreationDate', width: 18 },
+                { header: 'EXPIRY DATE', key: 'expiryDate', width: 16 },
+                { header: 'GST NUMBER', key: 'gstNumber', width: 18 },
+                { header: 'CREDIT DAYS', key: 'creditDays', width: 14 },
+                { header: 'TAXABLE AMOUNT', key: 'taxableAmount', width: 18 },
+                { header: 'TAX AMOUNT', key: 'taxAmount', width: 16 },
+                { header: 'TOTAL AMOUNT', key: 'grandTotal', width: 18 },
+                { header: 'STATUS', key: 'derivedStatus', width: 18 },
             ];
 
-            orders.forEach((order) => {
+            orders.forEach((order, idx) => {
+                const taxable = Number(order.totalAmount || 0);
+                const gross = Number(order.grandTotal || (taxable + Number(order.taxAmount || 0)));
                 worksheet.addRow({
+                    srNo: idx + 1,
                     soNumber: order.soNumber,
                     customerName: order.customerName,
                     soCreationDate: formatDate(order.soCreationDate),
                     expiryDate: formatDate(order.expiryDate),
-                    totalAmount: Number(order.totalAmount || 0).toFixed(2),
                     gstNumber: order.gstNumber || '-',
                     creditDays: order.creditDays || 0,
+                    taxableAmount: taxable.toFixed(2),
                     taxAmount: Number(order.taxAmount || 0).toFixed(2),
-                    grandTotal: Number(order.grandTotal || 0).toFixed(2),
+                    grandTotal: gross.toFixed(2),
                     derivedStatus: getDerivedStatus(order),
                 });
             });
@@ -904,12 +908,12 @@ export class SalesOrderService {
                 []
             );
 
-            worksheet.mergeCells('A1:J1');
+            worksheet.mergeCells('A1:K1');
             const titleCell = worksheet.getCell('A1');
             titleCell.font = { size: 16, bold: true, color: { argb: 'FF073318' } };
             titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-            worksheet.mergeCells('A2:J2');
+            worksheet.mergeCells('A2:K2');
             const timeCell = worksheet.getCell('A2');
             timeCell.font = { size: 10, italic: true, color: { argb: 'FF666666' } };
             timeCell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -949,7 +953,7 @@ export class SalesOrderService {
 
         if (format === 'pdf') {
             return new Promise<any>((resolve) => {
-                const doc = new PDFDocument({ margin: 20, size: 'A4', layout: 'landscape' });
+                const doc = new PDFDocument({ margin: 15, size: 'A4', layout: 'landscape' });
                 const buffers: Buffer[] = [];
                 doc.on('data', buffers.push.bind(buffers));
                 doc.on('end', () => {
@@ -960,50 +964,53 @@ export class SalesOrderService {
                     });
                 });
 
-                doc.fillColor('#073318').fontSize(20).font('Helvetica-Bold').text('Sales Orders Report', { align: 'center' });
+                doc.fillColor('#073318').fontSize(18).font('Helvetica-Bold').text('Sales Orders Report', { align: 'center' });
+                doc.moveDown(0.3);
+                doc.fillColor('#666666').fontSize(9).font('Helvetica').text(`Exported on: ${timestamp}`, { align: 'right' });
                 doc.moveDown(0.5);
-                doc.fillColor('#666666').fontSize(10).font('Helvetica').text(`Exported on: ${timestamp}`, { align: 'right' });
-                doc.moveDown();
 
-                const tableTop = 80;
-                const colX = [20, 80, 220, 290, 360, 420, 520, 580, 650, 720];
-                const colW = [60, 140, 70, 70, 60, 100, 60, 70, 70, 70];
-                const headers = ['SO No', 'Customer Name', 'Cr. Date', 'Exp. Date', 'Amount', 'GST Number', 'Cr. Days', 'Tax Amt', 'Total Amt', 'Status'];
+                const tableTop = 85;
+                const colX = [15, 45, 120, 210, 275, 335, 400, 450, 515, 575, 645];
+                const headers = ['SR', 'SO Number', 'Customer Name', 'Cr Date', 'Exp Date', 'GST No', 'Credit', 'Taxable', 'Tax', 'Total', 'Status'];
 
-                doc.rect(20, tableTop - 5, 780, 25).fill('#073318');
+                doc.rect(10, tableTop - 5, 820, 20).fill('#073318');
 
-                doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold');
+                doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold');
                 headers.forEach((h, i) => {
-                    doc.text(h, colX[i] + 2, tableTop + 5, { width: colW[i], align: 'left' });
+                    doc.text(h, colX[i], tableTop);
                 });
 
-                doc.fillColor('#000000').font('Helvetica').fontSize(8);
-                let y = tableTop + 25;
+                doc.fillColor('#000000').font('Helvetica').fontSize(6);
+                let y = tableTop + 20;
 
                 orders.forEach((order, index) => {
-                    if (y > 520) {
-                        doc.addPage({ layout: 'landscape', margin: 20 });
-                        y = 40;
-                        doc.rect(20, y - 5, 780, 25).fill('#073318');
-                        doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold');
-                        headers.forEach((h, i) => doc.text(h, colX[i] + 2, y + 5));
-                        doc.fillColor('#000000').font('Helvetica').fontSize(8);
-                        y += 25;
+                    if (y > 540) {
+                        doc.addPage({ layout: 'landscape', margin: 15 });
+                        y = 35;
+                        doc.rect(10, y - 5, 820, 20).fill('#073318');
+                        doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold');
+                        headers.forEach((h, i) => doc.text(h, colX[i], y));
+                        doc.fillColor('#000000').font('Helvetica').fontSize(6);
+                        y += 20;
                     }
 
                     if (index % 2 === 1) {
-                        doc.save().fillColor('#F9FAFB').rect(20, y - 2, 780, 18).fill().restore();
+                        doc.save().fillColor('#F9FAFB').rect(10, y - 2, 820, 16).fill().restore();
                     }
 
-                    doc.text(order.soNumber, colX[0] + 2, y + 2);
-                    doc.text(order.customerName.substring(0, 30), colX[1] + 2, y + 2);
-                    doc.text(formatDate(order.soCreationDate), colX[2] + 2, y + 2);
-                    doc.text(formatDate(order.expiryDate), colX[3] + 2, y + 2);
-                    doc.text(Number(order.totalAmount || 0).toFixed(2), colX[4] + 2, y + 2);
-                    doc.text(order.gstNumber || '-', colX[5] + 2, y + 2);
-                    doc.text((order.creditDays || 0).toString(), colX[6] + 2, y + 2);
-                    doc.text(Number(order.taxAmount || 0).toFixed(2), colX[7] + 2, y + 2);
-                    doc.text(Number(order.grandTotal || 0).toFixed(2), colX[8] + 2, y + 2);
+                    const taxable = Number(order.totalAmount || 0);
+                    const gross = Number(order.grandTotal || (taxable + Number(order.taxAmount || 0)));
+
+                    doc.text(String(index + 1), colX[0], y);
+                    doc.text(order.soNumber, colX[1], y, { width: 70 });
+                    doc.text((order.customerName || '-').substring(0, 18), colX[2], y, { width: 85 });
+                    doc.text(formatDate(order.soCreationDate), colX[3], y);
+                    doc.text(formatDate(order.expiryDate), colX[4], y);
+                    doc.text((order.gstNumber || '-').substring(0, 12), colX[5], y);
+                    doc.text(String(order.creditDays || 0), colX[6], y);
+                    doc.text(taxable.toFixed(2), colX[7], y);
+                    doc.text(Number(order.taxAmount || 0).toFixed(2), colX[8], y);
+                    doc.text(gross.toFixed(2), colX[9], y);
 
                     const status = getDerivedStatus(order);
                     if (status === 'EXPIRED' || status === 'DELETED') doc.fillColor('#DC2626');
@@ -1011,10 +1018,8 @@ export class SalesOrderService {
                     else if (status === 'EXPIRING SOON') doc.fillColor('#D97706');
                     else doc.fillColor('#EA580C');
 
-                    doc.font('Helvetica-Bold').text(status, colX[9] + 2, y + 2);
+                    doc.font('Helvetica-Bold').text(status, colX[10], y);
                     doc.fillColor('#000000').font('Helvetica');
-
-                    doc.moveTo(20, y + 15).lineTo(800, y + 15).strokeColor('#F3F4F6').lineWidth(0.5).stroke();
 
                     y += 18;
                 });
@@ -1060,7 +1065,8 @@ export class SalesOrderService {
 
 
 
-    for (let i = 2; i <= 200; i++) {
+    const dateColLetters = ['B', 'C', 'F', 'G'];
+    for (let i = 2; i <= 1000; i++) {
       worksheet.getCell(`E${i}`).dataValidation = {
         type: 'list',
         allowBlank: true,
@@ -1069,6 +1075,23 @@ export class SalesOrderService {
         promptTitle: 'Customer PO Type',
         prompt: 'Choose one of: Verbal, Written'
       };
+
+      dateColLetters.forEach((colLetter) => {
+        const cellRef = `${colLetter}${i}`;
+        const cell = worksheet.getCell(cellRef);
+        cell.numFmt = '@';
+        cell.dataValidation = {
+          type: 'custom',
+          allowBlank: true,
+          formulae: [`OR(ISBLANK(${cellRef}), ${cellRef}="", AND(ISNUMBER(VALUE(LEFT(${cellRef},2))), ISNUMBER(VALUE(MID(${cellRef},4,2))), ISNUMBER(VALUE(RIGHT(${cellRef},4))), VALUE(MID(${cellRef},4,2))>=1, VALUE(MID(${cellRef},4,2))<=12, VALUE(LEFT(${cellRef},2))>=1, VALUE(LEFT(${cellRef},2))<=DAY(DATE(VALUE(RIGHT(${cellRef},4)), VALUE(MID(${cellRef},4,2))+1, 0))))`],
+          showInputMessage: true,
+          promptTitle: 'Date Format Required',
+          prompt: 'Please enter date in DD/MM/YYYY format (e.g. 20/08/2026).',
+          showErrorMessage: true,
+          errorTitle: 'Invalid Date Format',
+          error: 'Date must be entered in valid DD/MM/YYYY format (e.g. 20/08/2026). Month must be between 01 and 12.'
+        };
+      });
     }
 
     worksheet.columns = headers.map((h, i) => {
@@ -1088,6 +1111,9 @@ export class SalesOrderService {
     await worksheet.protect('', {
       selectLockedCells: true,
       selectUnlockedCells: true,
+      formatCells: true,
+      formatColumns: true,
+      formatRows: true,
       insertRows: true,
       deleteRows: true,
       sort: true,
@@ -1189,6 +1215,12 @@ export class SalesOrderService {
       const colIdx = colMap[key];
       if (!colIdx) return defaultVal;
       const cell = row.getCell(colIdx);
+      if (cell.text && typeof cell.text === 'string' && cell.text.trim()) {
+        const textVal = cell.text.trim();
+        if (/^\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{4}$/.test(textVal)) {
+          return textVal;
+        }
+      }
       let val = cell.value;
       if (val && typeof val === 'object' && 'result' in val) {
         val = val.result;
@@ -1294,6 +1326,19 @@ export class SalesOrderService {
       const groupErrors: string[] = [];
       const firstRow = rows[0];
 
+      const dateConsistencyErrors = this.importValidator.validateGroupDateConsistency(
+        rows,
+        'SO Number',
+        soNumber,
+        [
+          { key: 'soDateStr', label: 'SO Date' },
+          { key: 'expiryDateStr', label: 'SO Expiry Date' },
+          { key: 'poDateStr', label: 'Customer PO Date' },
+          { key: 'poExpiryDateStr', label: 'Customer PO Expiry Date' },
+        ]
+      );
+      groupErrors.push(...dateConsistencyErrors);
+
       // Check duplicate SO Number
       if (dbSoNumbers.has(soNumber.toLowerCase())) {
         groupErrors.push(`Record already exists.`);
@@ -1328,21 +1373,65 @@ export class SalesOrderService {
       let poAmtExcl = 0;
       let poAmtIncl = 0;
 
-      const resolvedPoNumber = firstRow.poNumber || firstRow.soNumber;
+      const rawPoNo = firstRow.poNumber ? firstRow.poNumber.trim() : '';
+      const resolvedPoNumber = (rawPoNo && rawPoNo.toLowerCase() !== 'verbal' && rawPoNo !== firstRow.soNumber?.trim()) ? rawPoNo : 'verbal';
 
-      if (custType === 'written') {
-        if (!resolvedPoNumber) groupErrors.push(`PO Number is required for Written Customer Type.`);
-        poDate = parseDDMMYYYY(firstRow.poDateStr);
-        poExpiryDate = parseDDMMYYYY(firstRow.poExpiryDateStr);
-        if (!poDate) groupErrors.push(`PO Date is required and must be in DD/MM/YYYY format.`);
-        if (!poExpiryDate) groupErrors.push(`PO Expiry Date is required and must be in DD/MM/YYYY format.`);
+      if (custType === 'verbal') {
+        const hasPoDate = Boolean(firstRow.poDateStr && firstRow.poDateStr.trim());
+        const hasPoExpiryDate = Boolean(firstRow.poExpiryDateStr && firstRow.poExpiryDateStr.trim());
+        const hasPoAmtExcl = Boolean(firstRow.poAmtExclTaxStr && firstRow.poAmtExclTaxStr.trim());
+        const hasPoAmtIncl = Boolean(firstRow.poAmtInclTaxStr && firstRow.poAmtInclTaxStr.trim());
+
+        if (hasPoDate || hasPoExpiryDate || hasPoAmtExcl || hasPoAmtIncl) {
+          groupErrors.push(`When Customer PO Type is Verbal, PO Date, PO Expiry Date, PO Amount (Excluding Tax), and PO Amount (Including Tax) must be left blank.`);
+        }
+      } else if (custType === 'written') {
+        if (!rawPoNo || rawPoNo.toLowerCase() === 'verbal') {
+          groupErrors.push(`PO Number is required for Written Customer PO Type.`);
+        }
+
+        if (!firstRow.poDateStr || !firstRow.poDateStr.trim()) {
+          groupErrors.push(`PO Date (DD/MM/YYYY) is required for Written Customer PO Type.`);
+        } else {
+          poDate = parseDDMMYYYY(firstRow.poDateStr);
+          if (!poDate) {
+            groupErrors.push(`PO Date must be in valid DD/MM/YYYY format.`);
+          }
+        }
+
+        if (!firstRow.poExpiryDateStr || !firstRow.poExpiryDateStr.trim()) {
+          groupErrors.push(`PO Expiry Date (DD/MM/YYYY) is required for Written Customer PO Type.`);
+        } else {
+          poExpiryDate = parseDDMMYYYY(firstRow.poExpiryDateStr);
+          if (!poExpiryDate) {
+            groupErrors.push(`PO Expiry Date must be in valid DD/MM/YYYY format.`);
+          }
+        }
+
         if (poDate && poExpiryDate && poExpiryDate < poDate) {
           groupErrors.push(`PO Expiry Date must be greater than or equal to PO Date.`);
         }
-        poAmtExcl = parseFloat(firstRow.poAmtExclTaxStr || '0');
-        poAmtIncl = parseFloat(firstRow.poAmtInclTaxStr || '0');
-        if (isNaN(poAmtExcl) || poAmtExcl <= 0) groupErrors.push(`PO Amount (Excluding Tax) is required and must be positive.`);
-        if (isNaN(poAmtIncl) || poAmtIncl <= 0) groupErrors.push(`PO Amount (Including Tax) is required and must be positive.`);
+
+        const rawExcl = firstRow.poAmtExclTaxStr ? firstRow.poAmtExclTaxStr.trim() : '';
+        const rawIncl = firstRow.poAmtInclTaxStr ? firstRow.poAmtInclTaxStr.trim() : '';
+
+        if (!rawExcl) {
+          groupErrors.push(`PO Amount (Excluding Tax) is required for Written Customer PO Type.`);
+        } else {
+          poAmtExcl = parseFloat(rawExcl);
+          if (isNaN(poAmtExcl) || poAmtExcl <= 0) {
+            groupErrors.push(`PO Amount (Excluding Tax) must be a positive number.`);
+          }
+        }
+
+        if (!rawIncl) {
+          groupErrors.push(`PO Amount (Including Tax) is required for Written Customer PO Type.`);
+        } else {
+          poAmtIncl = parseFloat(rawIncl);
+          if (isNaN(poAmtIncl) || poAmtIncl <= 0) {
+            groupErrors.push(`PO Amount (Including Tax) must be a positive number.`);
+          }
+        }
       }
 
       // Check items

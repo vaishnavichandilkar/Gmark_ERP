@@ -285,12 +285,65 @@ export class ImportValidationService {
       return { valid: false, error: `${fieldName} is required and must be in DD/MM/YYYY format.` };
     }
 
+    const str = String(dateVal).trim();
+
+    // Specific check for DD/MM/YYYY text strings to give detailed feedback
+    const dmyMatch = /^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/.exec(str);
+    if (dmyMatch) {
+      const day = parseInt(dmyMatch[1], 10);
+      const month = parseInt(dmyMatch[2], 10);
+      const year = parseInt(dmyMatch[3], 10);
+
+      if (month < 1 || month > 12) {
+        return { valid: false, error: `Invalid ${fieldName} '${str}'. Month '${dmyMatch[2]}' must be between 01 and 12 (DD/MM/YYYY).` };
+      }
+
+      const daysInMonth = new Date(year, month, 0).getDate();
+      if (day < 1 || day > daysInMonth) {
+        return { valid: false, error: `Invalid ${fieldName} '${str}'. Day '${dmyMatch[1]}' is invalid for month ${month} (max ${daysInMonth} days).` };
+      }
+    }
+
     const parsed = parseDDMMYYYY(dateVal);
     if (!parsed || isNaN(parsed.getTime())) {
-      return { valid: false, error: `Invalid ${fieldName} format. Please use DD/MM/YYYY.` };
+      return { valid: false, error: `Invalid ${fieldName} format '${str}'. Please use DD/MM/YYYY (e.g. 20/08/2026).` };
     }
 
     return { valid: true, date: parsed };
+  }
+
+  /**
+   * Validates that all rows for a grouped document (same PO, GRN, SO, Invoice, Challan)
+   * have identical dates. If different dates are specified for the same document number, returns error.
+   */
+  validateGroupDateConsistency(
+    rows: any[],
+    docTypeLabel: string,
+    docNumber: string,
+    dateFields: { key: string; label: string }[]
+  ): string[] {
+    const errors: string[] = [];
+    if (!rows || rows.length <= 1) return errors;
+
+    const firstRow = rows[0];
+
+    for (const field of dateFields) {
+      const firstVal = firstRow[field.key] ? String(firstRow[field.key]).trim() : '';
+      if (!firstVal) continue;
+
+      for (let i = 1; i < rows.length; i++) {
+        const currRow = rows[i];
+        const currVal = currRow[field.key] ? String(currRow[field.key]).trim() : '';
+
+        if (currVal && currVal !== firstVal) {
+          errors.push(
+            `Row ${currRow.rowNum}: Conflicting ${field.label} '${currVal}' for ${docTypeLabel} '${docNumber}'. Does not match Row ${firstRow.rowNum} ${field.label} '${firstVal}'. All items for the same ${docTypeLabel} must have the exact same date.`
+          );
+        }
+      }
+    }
+
+    return errors;
   }
 
   /**
@@ -339,6 +392,21 @@ export class ImportValidationService {
   ): CustomerTypeValidationResult {
     const custTypeStr = String(customerTypeFromMaster || '').trim().toLowerCase();
     const isWritten = custTypeStr === 'written';
+    const isVerbal = custTypeStr === 'verbal';
+
+    if (isVerbal) {
+      const hasDate = Boolean(poFields.poDateStr && poFields.poDateStr.trim());
+      const hasExpDate = Boolean(poFields.poExpiryDateStr && poFields.poExpiryDateStr.trim());
+      const hasAmtExcl = Boolean(poFields.poAmtExclTaxStr && poFields.poAmtExclTaxStr.trim());
+      const hasAmtIncl = Boolean(poFields.poAmtInclTaxStr && poFields.poAmtInclTaxStr.trim());
+
+      if (hasDate || hasExpDate || hasAmtExcl || hasAmtIncl) {
+        return {
+          valid: false,
+          error: 'When Customer PO Type is Verbal, PO Date, PO Expiry Date, PO Amount (Excl. Tax), and PO Amount (Incl. Tax) must be left blank.',
+        };
+      }
+    }
 
     if (isWritten) {
       const hasDate = Boolean(poFields.poDateStr && poFields.poDateStr.trim());
@@ -349,7 +417,7 @@ export class ImportValidationService {
       if (!hasDate || !hasExpDate || !hasAmtExcl || !hasAmtIncl) {
         return {
           valid: false,
-          error: 'Customer Type is Written, so Customer PO Date, Customer PO Expiry Date, Customer PO Amount (Excl. Tax), and Customer PO Amount (Incl. Tax) are required.',
+          error: 'When Customer PO Type is Written, PO Date, PO Expiry Date, PO Amount (Excl. Tax), and PO Amount (Incl. Tax) are required.',
         };
       }
     }

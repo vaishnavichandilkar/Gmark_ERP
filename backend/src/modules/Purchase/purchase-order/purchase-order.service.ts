@@ -346,6 +346,12 @@ export class PurchaseOrderService {
       const colIdx = colMap[key];
       if (!colIdx) return defaultVal;
       const cell = row.getCell(colIdx);
+      if (cell.text && typeof cell.text === 'string' && cell.text.trim()) {
+        const textVal = cell.text.trim();
+        if (/^\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{4}$/.test(textVal)) {
+          return textVal;
+        }
+      }
       let val = cell.value;
       if (val && typeof val === 'object' && 'result' in val) {
         val = (val as any).result;
@@ -416,6 +422,17 @@ export class PurchaseOrderService {
     for (const [poNumber, rows] of groupMap.entries()) {
       const groupErrors: string[] = [];
       const firstRow = rows[0];
+
+      const dateConsistencyErrors = this.importValidator.validateGroupDateConsistency(
+        rows,
+        'PO Number',
+        poNumber,
+        [
+          { key: 'poDateStr', label: 'PO Date' },
+          { key: 'expiryDateStr', label: 'PO Expiry Date' },
+        ]
+      );
+      groupErrors.push(...dateConsistencyErrors);
 
       const docNoValidation = this.importValidator.validateDocumentNumber(
         'PO',
@@ -619,38 +636,49 @@ export class PurchaseOrderService {
       const ws = workbook.addWorksheet('Purchase Orders');
       ws.views = [{ state: 'frozen', ySplit: 5 }];
       ws.columns = [
-        { header: 'PO Number', key: 'poNumber', width: 15 },
-        { header: 'Supplier', key: 'supplierName', width: 30 },
-        { header: 'PO Date', key: 'poCreationDate', width: 15 },
-        { header: 'Expiry Date', key: 'expiryDate', width: 15 },
-        { header: 'Credit Days', key: 'creditDays', width: 12 },
-        { header: 'Status', key: 'status', width: 18 },
+        { header: 'SR NO', key: 'srNo', width: 8 },
+        { header: 'PO NUMBER', key: 'poNumber', width: 18 },
+        { header: 'SUPPLIER NAME', key: 'supplierName', width: 28 },
+        { header: 'PO CREATION DATE', key: 'poCreationDate', width: 18 },
+        { header: 'EXPIRY DATE', key: 'expiryDate', width: 16 },
+        { header: 'GST NO', key: 'gstNumber', width: 18 },
+        { header: 'CREDIT DAYS', key: 'creditDays', width: 14 },
+        { header: 'TAXABLE AMOUNT', key: 'taxableAmount', width: 18 },
+        { header: 'TAX AMOUNT', key: 'taxAmount', width: 16 },
+        { header: 'TOTAL AMOUNT', key: 'totalAmount', width: 18 },
+        { header: 'STATUS', key: 'status', width: 18 },
       ];
 
-      pos.forEach((po) => {
+      pos.forEach((po, idx) => {
+        const taxableAmount = (po as any).taxableAmount ?? ((po as any).beforeTaxAmount ?? (po.items?.reduce((sum, i) => sum + (Number(i.beforeTaxAmount) || 0), 0) || ((po.totalAmount || 0) - (po.taxAmount || 0))));
         ws.addRow({
+          srNo: idx + 1,
           poNumber: po.poNumber,
           supplierName: po.supplierName,
           poCreationDate: formatDate(po.poCreationDate),
           expiryDate: formatDate(po.expiryDate),
-          creditDays: po.creditDays,
+          gstNumber: po.gstNumber || '-',
+          creditDays: po.creditDays || 0,
+          taxableAmount: (taxableAmount || 0).toFixed(2),
+          taxAmount: (po.taxAmount || 0).toFixed(2),
+          totalAmount: (po.totalAmount || 0).toFixed(2),
           status: po.status,
         });
       });
 
       ws.spliceRows(1, 0, [], [], [], []);
-      ws.mergeCells('A1:F1');
+      ws.mergeCells('A1:K1');
       const titleCell = ws.getCell('A1');
       titleCell.value = 'ERP';
       titleCell.font = { size: 18, bold: true };
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-      ws.mergeCells('A2:F2');
+      ws.mergeCells('A2:K2');
       ws.getCell('A2').value = 'Purchase Orders Report';
       ws.getCell('A2').font = { size: 14 };
       ws.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
 
-      ws.mergeCells('A3:F3');
+      ws.mergeCells('A3:K3');
       ws.getCell('A3').value = `Exported on: ${timestamp}`;
       ws.getCell('A3').font = { size: 10 };
       ws.getCell('A3').alignment = { horizontal: 'right' };
@@ -665,45 +693,59 @@ export class PurchaseOrderService {
       return { buffer, filename: `purchase_orders_${Date.now()}.xlsx`, mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
     } else {
       return new Promise<any>((resolve) => {
-        const doc = new PDFDocument({ margin: 20, size: 'A4', layout: 'landscape' });
+        const doc = new PDFDocument({ margin: 15, size: 'A4', layout: 'landscape' });
         const buffers: Buffer[] = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', () =>
           resolve({ buffer: Buffer.concat(buffers), filename: `purchase_orders_${Date.now()}.pdf`, mimetype: 'application/pdf' }),
         );
 
-        doc.fontSize(18).font('Helvetica-Bold').text('ERP', { align: 'center' });
-        doc.fontSize(14).font('Helvetica').text('Purchase Orders Report', { align: 'center' });
+        doc.fontSize(16).font('Helvetica-Bold').text('ERP', { align: 'center' });
+        doc.fontSize(12).font('Helvetica').text('Purchase Orders Report', { align: 'center' });
+        doc.moveDown(0.3);
+        doc.fontSize(9).text(`Exported on: ${timestamp}`, { align: 'right' });
         doc.moveDown(0.5);
-        doc.fontSize(10).text(`Exported on: ${timestamp}`, { align: 'right' });
-        doc.moveDown();
 
-        const tableTop = 100;
-        const colX = [20, 120, 280, 380, 480, 560];
-        const headers = ['PO Number', 'Supplier', 'PO Date', 'Expiry Date', 'Credit Days', 'Status'];
+        const tableTop = 85;
+        const colX = [15, 45, 120, 210, 275, 335, 400, 450, 515, 575, 645];
+        const headers = ['SR', 'PO Number', 'Supplier', 'PO Date', 'Expiry Date', 'GST No', 'Credit', 'Taxable', 'Tax', 'Total', 'Status'];
 
-        doc.rect(15, tableTop - 5, 760, 20).fill('#4472C4');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+        doc.rect(10, tableTop - 5, 820, 20).fill('#4472C4');
+        doc.fontSize(7).font('Helvetica-Bold').fillColor('#FFFFFF');
         headers.forEach((h, i) => doc.text(h, colX[i], tableTop));
 
         let y = tableTop + 20;
         doc.fillColor('#000000').font('Helvetica');
         pos.forEach((po, idx) => {
-          if (y > 550) {
-            doc.addPage({ margin: 20, size: 'A4', layout: 'landscape' });
-            y = 40;
+          if (y > 540) {
+            doc.addPage({ margin: 15, size: 'A4', layout: 'landscape' });
+            y = 35;
+            doc.rect(10, y - 5, 820, 20).fill('#4472C4');
+            doc.fontSize(7).font('Helvetica-Bold').fillColor('#FFFFFF');
+            headers.forEach((h, i) => doc.text(h, colX[i], y));
+            y += 20;
+            doc.fillColor('#000000').font('Helvetica');
           }
+
           if (idx % 2 === 1) {
-            doc.rect(15, y - 3, 760, 15).fill('#F2F2F2').fillColor('#000000');
+            doc.rect(10, y - 3, 820, 15).fill('#F2F2F2').fillColor('#000000');
           }
-          doc.fontSize(7);
-          doc.text(po.poNumber, colX[0], y);
-          doc.text(po.supplierName.substring(0, 30), colX[1], y, { width: 150 });
-          doc.text(formatDate(po.poCreationDate), colX[2], y);
-          doc.text(formatDate(po.expiryDate), colX[3], y);
-          doc.text(String(po.creditDays), colX[4], y);
-          doc.text(po.status, colX[5], y);
-          y += 20;
+
+          const taxableAmount = (po as any).taxableAmount ?? ((po as any).beforeTaxAmount ?? (po.items?.reduce((sum, i) => sum + (Number(i.beforeTaxAmount) || 0), 0) || ((po.totalAmount || 0) - (po.taxAmount || 0))));
+
+          doc.fontSize(6);
+          doc.text(String(idx + 1), colX[0], y);
+          doc.text(po.poNumber, colX[1], y, { width: 70 });
+          doc.text((po.supplierName || '-').substring(0, 18), colX[2], y, { width: 85 });
+          doc.text(formatDate(po.poCreationDate), colX[3], y);
+          doc.text(formatDate(po.expiryDate), colX[4], y);
+          doc.text((po.gstNumber || '-').substring(0, 12), colX[5], y);
+          doc.text(String(po.creditDays || 0), colX[6], y);
+          doc.text((taxableAmount || 0).toFixed(2), colX[7], y);
+          doc.text((po.taxAmount || 0).toFixed(2), colX[8], y);
+          doc.text((po.totalAmount || 0).toFixed(2), colX[9], y);
+          doc.text(po.status || '-', colX[10], y);
+          y += 18;
         });
 
         doc.end();

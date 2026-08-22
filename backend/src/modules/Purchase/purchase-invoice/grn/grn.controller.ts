@@ -18,6 +18,13 @@ export class GrnController {
     private readonly piService: PurchaseInvoiceService
   ) { }
 
+  @Get('next-number')
+  @ApiOperation({ summary: 'Get next auto-generated GRN number' })
+  async getNextNumber(@Request() req) {
+    const grnNumber = await this.grnService.generateGrnNumber(req.user.id);
+    return { grnNumber };
+  }
+
   @Get('suppliers')
   @ApiOperation({ summary: 'Get list of suppliers for GRN' })
   async getSuppliers(@Request() req) {

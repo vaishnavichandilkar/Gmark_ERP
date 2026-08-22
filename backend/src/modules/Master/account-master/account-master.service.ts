@@ -2076,6 +2076,12 @@ export class AccountMasterService {
       throw new BadRequestException('Could not find Account Name column in the file. Please ensure headers are present.');
     }
 
+    const headerRow = worksheet.getRow(headerRowIndex);
+    const originalHeaders: string[] = [];
+    headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      originalHeaders[colNumber - 1] = String(cell.value || '').trim();
+    });
+
     const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
       const colIdx = colMap[key];
       if (!colIdx) return defaultVal;
@@ -2114,7 +2120,11 @@ export class AccountMasterService {
       }
     }
 
-    // Pass 2: Process and import rows, skipping internal and external database duplicates
+    const successRows: Array<{ rowNum: number; values: any[] }> = [];
+    const failedRows: Array<{ rowNum: number; values: any[]; error: string }> = [];
+    const rowErrors: Array<{ row: number; error: string }> = [];
+
+    // Pass 2: Process and import rows, recording detailed errors for failed rows
     for (let i = headerRowIndex + 1; i <= rowCount; i++) {
       const row = worksheet.getRow(i);
 
@@ -2122,9 +2132,18 @@ export class AccountMasterService {
       const rawAccountName = (val !== undefined && val !== null ? String(val).trim() : '');
       if (!rawAccountName || rawAccountName === '-' || rawAccountName === 'null' || rawAccountName === 'undefined') continue; // Skip empty rows
 
+      const rowValues: any[] = [];
+      const colCount = Math.max(originalHeaders.length, row.cellCount || 0);
+      for (let c = 1; c <= colCount; c++) {
+        const cellVal = row.getCell(c).value;
+        rowValues.push(cellVal !== undefined && cellVal !== null ? String(cellVal).trim() : '');
+      }
+
       // Check if this accountName is duplicated within the Excel sheet itself
       if ((nameFrequency.get(rawAccountName.toUpperCase()) || 0) > 1) {
-        duplicates++;
+        const err = `Duplicate account name "${rawAccountName}" found in Excel file`;
+        failedRows.push({ rowNum: i, values: rowValues, error: err });
+        rowErrors.push({ row: i, error: err });
         continue;
       }
 
@@ -2132,7 +2151,9 @@ export class AccountMasterService {
       const rawPanNoForCheck = (panValForCheck !== undefined && panValForCheck !== null ? String(panValForCheck).trim() : '');
       if (rawPanNoForCheck && rawPanNoForCheck !== '-' && rawPanNoForCheck !== 'null' && rawPanNoForCheck !== 'undefined') {
         if ((panFrequency.get(rawPanNoForCheck.toUpperCase()) || 0) > 1) {
-          duplicates++;
+          const err = `Duplicate PAN number "${rawPanNoForCheck}" found in Excel file`;
+          failedRows.push({ rowNum: i, values: rowValues, error: err });
+          rowErrors.push({ row: i, error: err });
           continue;
         }
       }
@@ -2236,7 +2257,9 @@ export class AccountMasterService {
         });
 
         if (existingName) {
-          duplicates++;
+          const err = `Account name "${accountName}" already exists in database`;
+          failedRows.push({ rowNum: i, values: rowValues, error: err });
+          rowErrors.push({ row: i, error: err });
           continue;
         }
 
@@ -2250,43 +2273,80 @@ export class AccountMasterService {
             }
           });
           if (existingPan) {
-            duplicates++;
+            const err = `PAN number "${panNo}" already exists in database`;
+            failedRows.push({ rowNum: i, values: rowValues, error: err });
+            rowErrors.push({ row: i, error: err });
             continue;
           }
         }
 
         await this.create(dto, userId, null, true);
-        imported++;
+        successRows.push({ rowNum: i, values: rowValues });
 
       } catch (error) {
-        failed++;
-        errors.push(`Row ${i} (${rawAccountName}): ${error.message}`);
+        const err = error.message || 'Validation failed';
+        failedRows.push({ rowNum: i, values: rowValues, error: err });
+        rowErrors.push({ row: i, error: err });
       }
     }
 
-    if (imported === 0 && failed > 0) {
-      throw new BadRequestException(`Import failed: ${errors[0]}`);
+    let errorFileBase64: string | undefined = undefined;
+    if (failedRows.length > 0) {
+      const failedWb = new ExcelJS.Workbook();
+      const failedWs = failedWb.addWorksheet('Error Report');
+      const exportHeaders = originalHeaders.length > 0 ? originalHeaders : ['Account Name', 'Group Name', 'GST NO', 'PAN NO'];
+      failedWs.addRow([...exportHeaders, 'Error Description']);
+      failedWs.getRow(1).font = { bold: true };
+      failedWs.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+      
+      failedRows.forEach(r => {
+        const rowVals = [...r.values];
+        while (rowVals.length < exportHeaders.length) rowVals.push('');
+        rowVals[exportHeaders.length] = r.error;
+        failedWs.addRow(rowVals);
+      });
+      const failedBuffer = await failedWb.xlsx.writeBuffer();
+      errorFileBase64 = Buffer.from(failedBuffer).toString('base64');
     }
 
-    if (imported === 0 && duplicates > 0 && failed === 0) {
-      return {
-        success: true,
-        message: `No new accounts imported. ${duplicates} duplicate rows were skipped.`,
-      };
-    }
+    let successFileBase64: string | undefined = undefined;
+    if (successRows.length > 0) {
+      const successWb = new ExcelJS.Workbook();
+      const successWs = successWb.addWorksheet('Success Report');
+      const exportHeaders = originalHeaders.length > 0 ? originalHeaders : ['Account Name', 'Group Name', 'GST NO', 'PAN NO'];
+      successWs.addRow([...exportHeaders, 'Status']);
+      successWs.getRow(1).font = { bold: true };
+      successWs.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
 
-    if (imported === 0 && failed === 0) {
-      throw new BadRequestException('No data found to import');
-    }
+      successRows.forEach(r => {
+        const rowVals = [...r.values];
+        while (rowVals.length < exportHeaders.length) rowVals.push('');
+        rowVals[exportHeaders.length] = 'Imported Successfully';
+        successWs.addRow(rowVals);
+      });
+      const successBuffer = await successWb.xlsx.writeBuffer();
+      successFileBase64 = Buffer.from(successBuffer).toString('base64');
 
-    if (imported > 0) {
       await this.groupMasterService.syncUserGroupBalances(userId);
     }
 
+    const totalCount = successRows.length + failedRows.length;
     return {
-      success: true,
-      message: `Successfully imported ${imported} accounts. ${duplicates} duplicate rows were skipped.${failed > 0 ? ' ' + failed + ' failed.' : ''}`,
-      errors: failed > 0 ? errors : undefined,
+      success: failedRows.length === 0,
+      message: failedRows.length === 0
+        ? `Successfully imported all ${successRows.length} account(s)!`
+        : `Import completed: ${successRows.length} successful, ${failedRows.length} failed.`,
+      summary: {
+        totalRows: totalCount,
+        successful: successRows.length,
+        failed: failedRows.length
+      },
+      totalRows: totalCount,
+      successful: successRows.length,
+      failed: failedRows.length,
+      errors: rowErrors,
+      errorFile: errorFileBase64,
+      successFile: successFileBase64
     };
   }
 

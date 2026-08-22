@@ -5,12 +5,14 @@ import { CreateCategoryDto, CreateSubCategoryDto, CreateSubSubCategoryDto, Toggl
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
+import { ImportValidationService } from '../../../../common/services/import-validation.service';
 
 @Injectable()
 export class CategoryMasterService {
     constructor(
         private repository: CategoryMasterRepository,
-        private prisma: PrismaService
+        private prisma: PrismaService,
+        private importValidator: ImportValidationService,
     ) { }
 
     async calculateLevel(category: any): Promise<number> {
@@ -376,12 +378,7 @@ export class CategoryMasterService {
             throw new BadRequestException('No data found to import');
         }
 
-        let importedCategories = 0;
-        let importedSubCategories = 0;
-        let importedSubSubCategories = 0;
-        let duplicates = 0;
-        let failed = 0;
-        const errors: string[] = [];
+        const headers = ['Category Name*', 'Sub Category', 'Sub Sub Category'];
 
         let headerRowIndex = -1;
         const colMap: Record<string, number> = {};
@@ -392,8 +389,8 @@ export class CategoryMasterService {
             row.eachCell((cell, colNumber) => {
                 const val = String(cell.value || '').trim().toLowerCase().replace(/[*]/g, '');
                 if (val === 'category' || val === 'category name') { colMap['categoryName'] = colNumber; foundHeaders = true; }
-                if (val === 'sub category' || val === 'sub category name') colMap['subCategoryName'] = colNumber;
-                if (val === 'sub sub category' || val === 'sub sub category name') colMap['subSubCategoryName'] = colNumber;
+                if (val === 'sub category' || val === 'sub category name' || val === 'sub-category') colMap['subCategoryName'] = colNumber;
+                if (val === 'sub sub category' || val === 'sub sub category name' || val === 'sub-sub category') colMap['subSubCategoryName'] = colNumber;
             });
 
             if (foundHeaders) {
@@ -403,7 +400,7 @@ export class CategoryMasterService {
         }
 
         if (headerRowIndex === -1) {
-            throw new BadRequestException('Could not find Category name column in the provided Excel file.');
+            throw new BadRequestException('Could not find Category Name column in the provided Excel file.');
         }
 
         const getValStr = (row: ExcelJS.Row, key: string): string => {
@@ -418,17 +415,29 @@ export class CategoryMasterService {
         let currentCategoryId: string | null = null;
         let currentSubCategoryId: string | null = null;
 
+        const successRows: any[] = [];
+        const failedRows: Array<{ rowNum: number; values: any[]; error: string }> = [];
+        const createdCategoryKeys = new Set<string>();
+
         for (let i = headerRowIndex + 1; i <= rowCount; i++) {
             const row = worksheet.getRow(i);
             const rawCategoryName = getValStr(row, 'categoryName');
             const rawSubCategoryName = getValStr(row, 'subCategoryName');
             const rawSubSubCategoryName = getValStr(row, 'subSubCategoryName');
 
+            const rawValues = [rawCategoryName, rawSubCategoryName, rawSubSubCategoryName];
+
             if (!rawCategoryName && !rawSubCategoryName && !rawSubSubCategoryName) continue;
             if (rawCategoryName === '-' && rawSubCategoryName === '-' && rawSubSubCategoryName === '-') continue;
 
             try {
+                let createdAnything = false;
+                let catKey = '';
+                let subCatKey = '';
+                let subSubCatKey = '';
+
                 if (rawCategoryName) {
+                    catKey = `CAT:${rawCategoryName.toLowerCase().trim()}`;
                     let category = await this.repository.findCategoryByName(rawCategoryName, userId);
                     if (!category) {
                         category = await this.repository.createCategory({
@@ -436,9 +445,7 @@ export class CategoryMasterService {
                             user_id: userId,
                             status: MasterStatus.ACTIVE,
                         });
-                        importedCategories++;
-                    } else {
-                        duplicates++;
+                        createdAnything = true;
                     }
                     currentCategoryId = category.id;
                     currentSubCategoryId = null; // reset subcategory context
@@ -446,8 +453,9 @@ export class CategoryMasterService {
 
                 if (rawSubCategoryName) {
                     if (!currentCategoryId) {
-                        throw new BadRequestException('Sub category found without a parent category preceding it');
+                        throw new BadRequestException('Sub category found without a parent Category Name preceding it in column A');
                     }
+                    subCatKey = `SUB:${currentCategoryId}:${rawSubCategoryName.toLowerCase().trim()}`;
                     let subCategory = await this.repository.findSubCategoryByName(rawSubCategoryName, currentCategoryId, userId);
                     if (!subCategory) {
                         subCategory = await this.repository.createSubCategory({
@@ -456,17 +464,16 @@ export class CategoryMasterService {
                             user_id: userId,
                             status: MasterStatus.ACTIVE,
                         });
-                        importedSubCategories++;
-                    } else {
-                        duplicates++;
+                        createdAnything = true;
                     }
                     currentSubCategoryId = subCategory.id;
                 }
 
                 if (rawSubSubCategoryName) {
                     if (!currentSubCategoryId) {
-                        throw new BadRequestException('Sub sub category found without a parent sub category preceding it');
+                        throw new BadRequestException('Sub sub category found without a parent Sub Category preceding it');
                     }
+                    subSubCatKey = `SUBSUB:${currentSubCategoryId}:${rawSubSubCategoryName.toLowerCase().trim()}`;
                     const existingSubSub = await this.repository.findSubSubCategoryByName(rawSubSubCategoryName, currentSubCategoryId, userId);
                     if (!existingSubSub) {
                         await this.repository.createSubSubCategory({
@@ -475,39 +482,35 @@ export class CategoryMasterService {
                             user_id: userId,
                             status: MasterStatus.ACTIVE,
                         });
-                        importedSubSubCategories++;
-                    } else {
-                        duplicates++;
+                        createdAnything = true;
                     }
                 }
-            } catch (error) {
-                failed++;
-                errors.push(`Row ${i} (${[rawCategoryName, rawSubCategoryName, rawSubSubCategoryName].filter(Boolean).join(' > ')}): ${error.message}`);
+
+                const fullHierarchyKey = [catKey, subCatKey, subSubCatKey].filter(Boolean).join('||');
+
+                if (!createdAnything || createdCategoryKeys.has(fullHierarchyKey)) {
+                    failedRows.push({
+                        rowNum: i,
+                        values: rawValues,
+                        error: `Category "${[rawCategoryName, rawSubCategoryName, rawSubSubCategoryName].filter(Boolean).join(' > ')}" already exists in Category Master. Duplicate record skipped.`
+                    });
+                } else {
+                    createdCategoryKeys.add(fullHierarchyKey);
+                    successRows.push({
+                        rowNum: i,
+                        originalRowValues: [null, ...rawValues]
+                    });
+                }
+            } catch (error: any) {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: error.message || 'Validation/Save failed'
+                });
             }
         }
 
-        const totalImported = importedCategories + importedSubCategories + importedSubSubCategories;
-
-        if (totalImported === 0 && failed > 0) {
-            throw new BadRequestException(`Import failed: ${errors[0]}`);
-        }
-
-        if (totalImported === 0 && duplicates > 0 && failed === 0) {
-            return {
-                success: true,
-                message: `No new categories imported. ${duplicates} duplicate records found in file were skipped.`,
-            };
-        }
-
-        if (totalImported === 0 && failed === 0) {
-            throw new BadRequestException('No data found to import');
-        }
-
-        return {
-            success: true,
-            message: `Imported ${importedCategories} categories, ${importedSubCategories} sub-categories, and ${importedSubSubCategories} sub-sub-categories.${duplicates > 0 ? ` ${duplicates} duplicate records were skipped.` : ''}${failed > 0 ? ` ${failed} rows failed.` : ''}`,
-            errors: failed > 0 ? errors : undefined,
-        };
+        return this.importValidator.buildResponseSummary(headers, successRows, failedRows);
     }
 
     async promoteSubCategory(id: string, userId: number) {
@@ -717,6 +720,9 @@ export class CategoryMasterService {
         await worksheet.protect('', {
             selectLockedCells: true,
             selectUnlockedCells: true,
+            formatCells: true,
+            formatColumns: true,
+            formatRows: true,
             insertRows: true,
             deleteRows: true,
             sort: true,

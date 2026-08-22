@@ -607,6 +607,7 @@ model PurchaseInvoiceItem {
 
 model Grn {
   id                Int            @id @default(autoincrement())
+  grnNumber         String?
   supplierName      String
   creditDays        Int
   address           String
@@ -940,6 +941,7 @@ enum ProductType {
 
 enum POStatus {
   PENDING
+  PARTIAL_GRN
   GRN_COMPLETED
   INVOICE_COMPLETED
   INVOICE_GENERATED
@@ -972,6 +974,7 @@ enum SalesChallanStatus {
 
 enum SOStatus {
   PENDING
+  PARTIAL_CHALLAN
   CHALLAN_COMPLETED
   INVOICE_COMPLETED
   INVOICE_GENERATED

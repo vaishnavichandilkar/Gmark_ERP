@@ -46,6 +46,8 @@ export interface ParsedGRNItem extends BaseParsedItem {
   grnNo: string;
   grnDate: string;
   poNo?: string;
+  challanNumber?: string;
+  supplierChallanDate?: string;
   supplierName: string;
 }
 
@@ -157,20 +159,56 @@ export async function protectHeaderRow(ws: ExcelJS.Worksheet, headersCount: numb
   for (let r = 2; r <= maxDataRows; r++) {
     const row = ws.getRow(r);
     for (let c = 1; c <= headersCount; c++) {
-      const cell = row.getCell(c);
-      cell.protection = { locked: false };
+      row.getCell(c).protection = { locked: false };
     }
   }
 
-  // Protect worksheet
+  // Protect worksheet to keep Row 1 locked while allowing full editing of data rows
   await ws.protect('', {
     selectLockedCells: true,
     selectUnlockedCells: true,
+    formatCells: true,
+    formatColumns: true,
+    formatRows: true,
     insertRows: true,
     deleteRows: true,
     sort: true,
     autoFilter: true,
   });
+}
+
+export function applyDateValidationToColumns(ws: ExcelJS.Worksheet, dateColIndexes: number[], maxRows: number = 1000) {
+  const getColLetter = (colIdx: number) => {
+    let letter = '';
+    let curr = colIdx;
+    while (curr > 0) {
+      const temp = (curr - 1) % 26;
+      letter = String.fromCharCode(65 + temp) + letter;
+      curr = Math.floor((curr - temp - 1) / 26);
+    }
+    return letter;
+  };
+
+  for (let r = 2; r <= maxRows; r++) {
+    const row = ws.getRow(r);
+    dateColIndexes.forEach((colIdx) => {
+      const colLetter = getColLetter(colIdx);
+      const cellRef = `${colLetter}${r}`;
+      const cell = row.getCell(colIdx);
+      cell.numFmt = '@';
+      cell.dataValidation = {
+        type: 'custom',
+        allowBlank: true,
+        formulae: [`OR(ISBLANK(${cellRef}), ${cellRef}="", AND(ISNUMBER(VALUE(LEFT(${cellRef},2))), ISNUMBER(VALUE(MID(${cellRef},4,2))), ISNUMBER(VALUE(RIGHT(${cellRef},4))), VALUE(MID(${cellRef},4,2))>=1, VALUE(MID(${cellRef},4,2))<=12, VALUE(LEFT(${cellRef},2))>=1, VALUE(LEFT(${cellRef},2))<=DAY(DATE(VALUE(RIGHT(${cellRef},4)), VALUE(MID(${cellRef},4,2))+1, 0))))`],
+        showInputMessage: true,
+        promptTitle: 'Date Format Required',
+        prompt: 'Please enter date in DD/MM/YYYY format (e.g. 20/08/2026).',
+        showErrorMessage: true,
+        errorTitle: 'Invalid Date Format',
+        error: 'Date must be entered in valid DD/MM/YYYY format (e.g. 20/08/2026). Month must be between 01 and 12.'
+      };
+    });
+  }
 }
 
 // ============================================================================
@@ -197,6 +235,20 @@ export async function generatePISampleExcel(): Promise<Buffer> {
   ];
 
   styleHeaderRow(ws, headers);
+  ws.addRow([
+    'INV-0001',
+    '22/08/2026',
+    '22/08/2026',
+    'Sample Supplier',
+    '',
+    '',
+    'Sample Product',
+    10,
+    100,
+    0,
+    0,
+  ]);
+  applyDateValidationToColumns(ws, [2, 3]);
   ws.columns = headers.map((h) => ({ width: Math.max(25, h.length + 6) }));
   await protectHeaderRow(ws, headers.length);
 
@@ -221,6 +273,18 @@ export async function generatePOSampleExcel(): Promise<Buffer> {
   ];
 
   styleHeaderRow(ws, headers);
+  ws.addRow([
+    'PO-0001',
+    '22/08/2026',
+    '22/09/2026',
+    'Sample Supplier',
+    'Sample Product',
+    10,
+    100,
+    0,
+    0,
+  ]);
+  applyDateValidationToColumns(ws, [2, 3]);
   ws.columns = headers.map((h) => ({ width: Math.max(25, h.length + 6) }));
   await protectHeaderRow(ws, headers.length);
 
@@ -236,6 +300,8 @@ export async function generateGRNSampleExcel(): Promise<Buffer> {
     'GRN No*',
     'GRN Date* (DD/MM/YYYY)',
     'PO NO',
+    'Supplier Challan Number',
+    'Supplier Challan Date (DD/MM/YYYY)',
     'Supplier Name*',
     'Product Name*',
     'Qty*',
@@ -245,6 +311,20 @@ export async function generateGRNSampleExcel(): Promise<Buffer> {
   ];
 
   styleHeaderRow(ws, headers);
+  ws.addRow([
+    'GRN-0001',
+    '22/08/2026',
+    '',
+    'CH-1001',
+    '22/08/2026',
+    'Sample Supplier',
+    'Sample Product',
+    10,
+    100,
+    0,
+    0,
+  ]);
+  applyDateValidationToColumns(ws, [2, 5]);
   ws.columns = headers.map((h) => ({ width: Math.max(25, h.length + 6) }));
   await protectHeaderRow(ws, headers.length);
 
@@ -425,12 +505,22 @@ export function validateAndParseRow(
       errors.push({ row_number: rowNum, column_name: 'PO NO', error_reason: `Referenced PO NO '${poNo}' does not exist` });
     }
 
+    const challanNumber = String(getVal(['Supplier Challan Number', 'Supplier Challan No', 'Challan Number', 'ChallanNo']) || '').trim() || undefined;
+
+    const rawChallanDate = getVal(['Supplier Challan Date', 'Challan Date']);
+    const supplierChallanDate = rawChallanDate ? formatDateStr(rawChallanDate) : undefined;
+    if (rawChallanDate && !isValidDate(supplierChallanDate)) {
+      errors.push({ row_number: rowNum, column_name: 'Supplier Challan Date', error_reason: 'Supplier Challan Date must be in DD/MM/YYYY format' });
+    }
+
     if (errors.length > 0) return { valid: false, errors };
 
     const parsed: ParsedGRNItem = {
       grnNo,
       grnDate,
       poNo,
+      challanNumber,
+      supplierChallanDate,
       supplierName,
       productName,
       qty,

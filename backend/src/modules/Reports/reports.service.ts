@@ -333,18 +333,48 @@ export class ReportsService {
     let fromDateObj: Date | undefined;
     let toDateObj: Date | undefined;
 
-    if (fromDateStr) {
-      fromDateObj = new Date(fromDateStr);
-      if (isNaN(fromDateObj.getTime())) {
-        throw new BadRequestException('Invalid fromDate parameter');
+    const parseDateParam = (dStr: string, isEndOfDay: boolean): Date => {
+      let date: Date;
+      if (dStr.includes('/')) {
+        const parts = dStr.split('/');
+        if (parts.length === 3) {
+          const day = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10) - 1;
+          const year = parseInt(parts[2], 10);
+          date = new Date(Date.UTC(year, month, day));
+        } else {
+          date = new Date(dStr);
+        }
+      } else if (dStr.includes('-')) {
+        const parts = dStr.split('-');
+        if (parts.length === 3 && parts[0].length === 4) {
+          const year = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10) - 1;
+          const day = parseInt(parts[2], 10);
+          date = new Date(Date.UTC(year, month, day));
+        } else {
+          date = new Date(dStr);
+        }
+      } else {
+        date = new Date(dStr);
       }
+      if (isNaN(date.getTime())) {
+        throw new BadRequestException(`Invalid date parameter: ${dStr}`);
+      }
+      if (isEndOfDay) {
+        date.setUTCHours(23, 59, 59, 999);
+      } else {
+        date.setUTCHours(0, 0, 0, 0);
+      }
+      return date;
+    };
+
+    if (fromDateStr) {
+      fromDateObj = parseDateParam(fromDateStr, false);
     }
 
     if (toDateStr) {
-      toDateObj = new Date(toDateStr);
-      if (isNaN(toDateObj.getTime())) {
-        throw new BadRequestException('Invalid toDate parameter');
-      }
+      toDateObj = parseDateParam(toDateStr, true);
     }
 
     if (fromDateObj && toDateObj && fromDateObj > toDateObj) {
@@ -451,11 +481,14 @@ export class ReportsService {
     const indirectExpensesBreakdown: any[] = [];
     const indirectIncomeBreakdown: any[] = [];
 
+    const hasDateFilter = Boolean(fromDateObj || toDateObj);
+
     accounts.forEach((account) => {
       const groups = account.groupName || [];
       const tx = txMap[account.id] || { Dr: 0, Cr: 0 };
 
-      const opBal = Number(account.supplierOpeningBalance || account.customerOpeningBalance || 0);
+      // Vendor/Customer opening balance is a Balance Sheet item (Creditors/Debtors), NOT Trading P&L purchase/sales expense.
+      const opBal = matchGroup(groups, ['opening stock']) ? Number(account.supplierOpeningBalance || account.customerOpeningBalance || 0) : 0;
       const opType = account.supplierBalanceType || account.customerBalanceType || 'Dr';
 
       const getDebitBal = () => {
@@ -474,69 +507,11 @@ export class ReportsService {
         purchaseReturn += getCreditBal();
       } else if (matchGroup(groups, ['purchase', 'purchase accounts'], ['return'])) {
         purchase += getDebitBal();
-      }
-
-      if (matchGroup(groups, ['sales return', 'sales returns', 'sale return'])) {
-        salesReturn += getDebitBal();
+      } else if (matchGroup(groups, ['sales return', 'sales returns', 'sale return'])) {
+        salesReturn += getCreditBal();
       } else if (matchGroup(groups, ['sale', 'sales', 'sales accounts'], ['return'])) {
         sales += getCreditBal();
-      }
-
-      if (matchGroup(groups, ['direct expense', 'direct expenses', 'manufacturing', 'freight', 'carriage inward', 'expense'])) {
-        const activity = Math.abs(tx.Dr - tx.Cr);
-        const bal = getDebitBal();
-        const amt = Math.max(bal, activity);
-        directExpenses += amt;
-        if (amt > 0) {
-          directExpensesBreakdown.push({
-            id: account.id,
-            accountName: account.accountName,
-            groupName: groups,
-            totalAmount: amt,
-            taxableAmount: amt,
-            taxAmount: 0,
-            status: 'COMPLETED',
-          });
-        }
-      }
-
-      if (matchGroup(groups, ['direct income', 'direct incomes', 'direct sale', 'direct revenue'])) {
-        const activity = Math.abs(tx.Cr - tx.Dr);
-        const bal = getCreditBal();
-        const amt = Math.max(bal, activity);
-        directIncome += amt;
-        if (amt > 0) {
-          directIncomeBreakdown.push({
-            id: account.id,
-            accountName: account.accountName,
-            groupName: groups,
-            totalAmount: amt,
-            taxableAmount: amt,
-            taxAmount: 0,
-            status: 'COMPLETED',
-          });
-        }
-      }
-
-      if (matchGroup(groups, ['indirect income', 'indirect incomes', 'other income'])) {
-        const activity = Math.abs(tx.Cr - tx.Dr);
-        const bal = getCreditBal();
-        const amt = Math.max(bal, activity);
-        indirectIncome += amt;
-        if (amt > 0) {
-          indirectIncomeBreakdown.push({
-            id: account.id,
-            accountName: account.accountName,
-            groupName: groups,
-            totalAmount: amt,
-            taxableAmount: amt,
-            taxAmount: 0,
-            status: 'COMPLETED',
-          });
-        }
-      }
-
-      if (matchGroup(groups, ['indirect expense', 'indirect expenses', 'administrative', 'selling expense', 'operating expense'])) {
+      } else if (matchGroup(groups, ['indirect expense', 'indirect expenses', 'indirect', 'administrative', 'selling expense', 'operating expense'])) {
         const activity = Math.abs(tx.Dr - tx.Cr);
         const bal = getDebitBal();
         const amt = Math.max(bal, activity);
@@ -552,13 +527,57 @@ export class ReportsService {
             status: 'COMPLETED',
           });
         }
-      }
-
-      if (matchGroup(groups, ['opening stock'])) {
+      } else if (matchGroup(groups, ['direct expense', 'direct expenses', 'manufacturing', 'freight', 'carriage inward', 'expense'], ['indirect'])) {
+        const activity = Math.abs(tx.Dr - tx.Cr);
+        const bal = getDebitBal();
+        const amt = Math.max(bal, activity);
+        directExpenses += amt;
+        if (amt > 0) {
+          directExpensesBreakdown.push({
+            id: account.id,
+            accountName: account.accountName,
+            groupName: groups,
+            totalAmount: amt,
+            taxableAmount: amt,
+            taxAmount: 0,
+            status: 'COMPLETED',
+          });
+        }
+      } else if (matchGroup(groups, ['indirect income', 'indirect incomes', 'other income', 'indirect'])) {
+        const activity = Math.abs(tx.Cr - tx.Dr);
+        const bal = getCreditBal();
+        const amt = Math.max(bal, activity);
+        indirectIncome += amt;
+        if (amt > 0) {
+          indirectIncomeBreakdown.push({
+            id: account.id,
+            accountName: account.accountName,
+            groupName: groups,
+            totalAmount: amt,
+            taxableAmount: amt,
+            taxAmount: 0,
+            status: 'COMPLETED',
+          });
+        }
+      } else if (matchGroup(groups, ['direct income', 'direct incomes', 'direct sale', 'direct revenue', 'income'], ['indirect'])) {
+        const activity = Math.abs(tx.Cr - tx.Dr);
+        const bal = getCreditBal();
+        const amt = Math.max(bal, activity);
+        directIncome += amt;
+        if (amt > 0) {
+          directIncomeBreakdown.push({
+            id: account.id,
+            accountName: account.accountName,
+            groupName: groups,
+            totalAmount: amt,
+            taxableAmount: amt,
+            taxAmount: 0,
+            status: 'COMPLETED',
+          });
+        }
+      } else if (matchGroup(groups, ['opening stock'])) {
         ledgerOpeningStock += getDebitBal();
-      }
-
-      if (matchGroup(groups, ['closing stock'])) {
+      } else if (matchGroup(groups, ['closing stock'])) {
         ledgerClosingStock += getCreditBal();
       }
     });
@@ -648,7 +667,7 @@ export class ReportsService {
       if (matchGroup([groupName], ['indirect expense', 'indirect expenses', 'indirect', 'administrative', 'selling expense', 'operating expense'])) {
         indirectExpenses += amt;
         indirectExpensesBreakdown.push(record);
-      } else {
+      } else if (matchGroup([groupName], ['direct expense', 'direct expenses', 'manufacturing', 'freight', 'carriage inward', 'expense', 'direct'], ['indirect'])) {
         directExpenses += amt;
         directExpensesBreakdown.push(record);
       }
@@ -671,16 +690,16 @@ export class ReportsService {
         status: 'COMPLETED',
       };
 
-      if (matchGroup([groupName], ['direct income', 'direct incomes', 'income'])) {
-        directIncome += amt;
-        directIncomeBreakdown.push(record);
-      } else if (matchGroup([groupName], ['indirect income', 'indirect incomes', 'other income'])) {
+      if (matchGroup([groupName], ['indirect income', 'indirect incomes', 'other income', 'indirect'])) {
         indirectIncome += amt;
         indirectIncomeBreakdown.push(record);
-      } else if (matchGroup([groupName], ['indirect expense', 'indirect expenses'])) {
+      } else if (matchGroup([groupName], ['direct income', 'direct incomes', 'direct sale', 'direct revenue', 'income'], ['indirect'])) {
+        directIncome += amt;
+        directIncomeBreakdown.push(record);
+      } else if (matchGroup([groupName], ['indirect expense', 'indirect expenses', 'administrative', 'selling expense', 'operating expense'])) {
         indirectExpenses += amt;
         indirectExpensesBreakdown.push(record);
-      } else {
+      } else if (matchGroup([groupName], ['direct expense', 'direct expenses', 'manufacturing', 'freight', 'carriage inward', 'expense'], ['indirect'])) {
         directExpenses += amt;
         directExpensesBreakdown.push(record);
       }
@@ -689,8 +708,8 @@ export class ReportsService {
     const invoicePurchases = piAgg._sum.taxableAmount ? Number(piAgg._sum.taxableAmount) : 0;
     const invoiceSales = siAgg._sum.taxableAmount ? Number(siAgg._sum.taxableAmount) : 0;
 
-    if (invoicePurchases > purchase) purchase = invoicePurchases;
-    if (invoiceSales > sales) sales = invoiceSales;
+    purchase = invoicePurchases > 0 ? invoicePurchases : purchase;
+    sales = invoiceSales > 0 ? invoiceSales : sales;
 
     // Calculate dynamic stock valuation
     const valuationMethod = query.valuationMethod || 'Weighted Average';
@@ -975,17 +994,9 @@ export class ReportsService {
       status: { in: ['GENERATED', 'COMPLETED'] as any },
     };
 
-    if (dateFrom || dateTo) {
-      piWhere.bookingDate = {};
-      siWhere.bookingDate = {};
-      if (dateFrom) {
-        piWhere.bookingDate.gte = new Date(dateFrom);
-        siWhere.bookingDate.gte = new Date(dateFrom);
-      }
-      if (dateTo) {
-        piWhere.bookingDate.lte = new Date(dateTo);
-        siWhere.bookingDate.lte = new Date(dateTo);
-      }
+    if (dateTo) {
+      piWhere.bookingDate = { lte: new Date(dateTo) };
+      siWhere.bookingDate = { lte: new Date(dateTo) };
     }
 
     // 2. Fetch purchase items and sales items

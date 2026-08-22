@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit } from '@nestjs/common';
 import { isValidGst, determinePurchaseGst } from '../../../../common/utils/gst.helper';
 import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
 import { CreateGrnDto, UpdateGrnDto } from './dto/grn.dto';
@@ -11,12 +11,84 @@ import { generateGRNSampleExcel } from '../../../../common/utils/procurement-bul
 import { ImportValidationService } from '../../../../common/services/import-validation.service';
 
 @Injectable()
-export class GrnService {
+export class GrnService implements OnModuleInit {
   constructor(
     private prisma: PrismaService,
     private poService: PurchaseOrderService,
     private importValidator: ImportValidationService
   ) { }
+
+  async onModuleInit() {
+    await this.backfillGrnNumbers();
+  }
+
+  private async backfillGrnNumbers(userId?: number) {
+    try {
+      const unnumberedGrns = await this.prisma.grn.findMany({
+        where: {
+          grnNumber: null,
+          ...(userId ? { userId } : {})
+        },
+        orderBy: { id: 'asc' }
+      });
+
+      if (unnumberedGrns.length > 0) {
+        // Group by userId if running globally
+        const userMap = new Map<number, typeof unnumberedGrns>();
+        unnumberedGrns.forEach(g => {
+          const list = userMap.get(g.userId) || [];
+          list.push(g);
+          userMap.set(g.userId, list);
+        });
+
+        for (const [uId, grns] of userMap.entries()) {
+          const existingGrns = await this.prisma.grn.findMany({
+            where: { userId: uId, grnNumber: { not: null } },
+            select: { grnNumber: true }
+          });
+          const existingNumbers = new Set(existingGrns.map(g => g.grnNumber));
+
+          let counter = 1;
+          for (const g of grns) {
+            let candidate = `GRN-${String(counter).padStart(4, '0')}`;
+            while (existingNumbers.has(candidate)) {
+              counter++;
+              candidate = `GRN-${String(counter).padStart(4, '0')}`;
+            }
+            await this.prisma.grn.update({
+              where: { id: g.id },
+              data: { grnNumber: candidate }
+            });
+            existingNumbers.add(candidate);
+            counter++;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error backfilling GRN numbers:', e);
+    }
+  }
+
+  async generateGrnNumber(userId: number): Promise<string> {
+    await this.backfillGrnNumbers(userId);
+
+    const count = await this.prisma.grn.count({
+      where: { userId }
+    });
+    let nextNum = count + 1;
+    let formattedNumber = `GRN-${String(nextNum).padStart(4, '0')}`;
+    let existing = await this.prisma.grn.findFirst({
+      where: { grnNumber: formattedNumber, userId }
+    });
+    while (existing) {
+      nextNum++;
+      formattedNumber = `GRN-${String(nextNum).padStart(4, '0')}`;
+      existing = await this.prisma.grn.findFirst({
+        where: { grnNumber: formattedNumber, userId }
+      });
+    }
+    return formattedNumber;
+  }
 
   private async calculateGrnTotals(dto: CreateGrnDto, userId: number, existingId?: number) {
     const bookingDate = new Date(); // Enforced (Condition 1 & 2)
@@ -25,7 +97,10 @@ export class GrnService {
     today.setHours(23, 59, 59, 999);
 
     if (dto.poId) {
-      const po = await this.prisma.purchaseOrder.findFirst({ where: { id: Number(dto.poId), userId } });
+      const po = await this.prisma.purchaseOrder.findFirst({
+        where: { id: Number(dto.poId), userId },
+        include: { items: true }
+      });
       if (!po) {
         throw new BadRequestException('Purchase Order not found or unauthorized');
       }
@@ -36,6 +111,19 @@ export class GrnService {
       
       if (grnOnlyDate < poDate || grnDate > today) {
         throw new BadRequestException('Supplier Challan Date must be between PO Date and Current Date.');
+      }
+
+      for (const item of dto.items) {
+        const poItem = po.items.find(
+          (i: any) =>
+            (item.productCode && i.productCode && i.productCode.toLowerCase().trim() === item.productCode.toLowerCase().trim()) ||
+            (item.productName && i.productName && i.productName.toLowerCase().trim() === item.productName.toLowerCase().trim())
+        );
+        if (poItem && Math.abs(Number(poItem.rate) - Number(item.rate)) > 0.001) {
+          throw new BadRequestException(
+            `Rate for product '${item.productName}' (${item.rate}) does not match Purchase Order '${po.poNumber}' rate (${poItem.rate}). Rate cannot be changed when linked to a PO.`
+          );
+        }
       }
     } else {
       const now = new Date();
@@ -138,8 +226,8 @@ export class GrnService {
 
     const itemsToCreate = [];
     for (const item of dto.items) {
-      if (item.quantity <= 0 || item.rate <= 0) {
-        throw new BadRequestException(`Quantity and Rate must be positive for product ${item.productName}`);
+      if (item.quantity < 0 || item.rate < 0) {
+        throw new BadRequestException(`Quantity and Rate cannot be negative for product ${item.productName}`);
       }
 
       const receivedPoQty = receivedMap.get(item.productCode) || 0;
@@ -316,12 +404,14 @@ export class GrnService {
   async create(createDto: CreateGrnDto, userId: number, uploadedFilePath?: string) {
     console.log('Creating GRN for Supplier:', createDto.supplierName, 'PO:', createDto.poNumber, 'User:', userId);
     try {
+      const grnNumber = createDto.grnNumber || createDto.grnNo || await this.generateGrnNumber(userId);
       const totals = await this.calculateGrnTotals(createDto, userId);
       console.log('GRN Calculated Totals:', JSON.stringify(totals, null, 2));
 
       return await this.prisma.$transaction(async (tx) => {
         const grn = await tx.grn.create({
           data: {
+            grnNumber,
             grnDate: createDto.grnDate ? new Date(createDto.grnDate) : new Date(),
             bookingDate: totals.bookingDate,
             supplierName: createDto.supplierName,
@@ -501,6 +591,8 @@ export class GrnService {
       where.OR = [
         { supplierName: { contains: query.search, mode: 'insensitive' } },
         { challanNumber: { contains: query.search, mode: 'insensitive' } },
+        { grnNumber: { contains: query.search, mode: 'insensitive' } },
+        { poNumber: { contains: query.search, mode: 'insensitive' } },
       ];
     }
 
@@ -508,7 +600,7 @@ export class GrnService {
     const limit = Math.max(1, Number(query.limit) || 10);
     const skip = (page - 1) * limit;
 
-    const [data, total] = await Promise.all([
+    const [data, total, allMatching] = await Promise.all([
       this.prisma.grn.findMany({
         where,
         include: { items: true, expenses: true },
@@ -516,8 +608,27 @@ export class GrnService {
         skip,
         take: limit,
       }),
-      this.prisma.grn.count({ where })
+      this.prisma.grn.count({ where }),
+      this.prisma.grn.findMany({
+        where,
+        select: {
+          grandTotal: true,
+          items: { select: { beforeTaxAmount: true, taxAmount: true } }
+        }
+      })
     ]);
+
+    let grandTaxable = 0;
+    let grandTax = 0;
+    let grandTotalSum = 0;
+    for (const g of allMatching) {
+      const taxable = g.items?.reduce((sum, i) => sum + (Number(i.beforeTaxAmount) || 0), 0) || 0;
+      const tax = g.items?.reduce((sum, i) => sum + (Number(i.taxAmount) || 0), 0) || 0;
+      const gross = Number(g.grandTotal || (taxable + tax));
+      grandTaxable += taxable;
+      grandTax += tax;
+      grandTotalSum += gross;
+    }
 
     const invoices = await this.prisma.purchaseInvoice.findMany({
       where: { userId: query.userId, status: { not: 'DELETED' } },
@@ -530,7 +641,8 @@ export class GrnService {
         const challanIds = inv.challanNumber.split(',').map(idx => idx.trim());
         return challanIds.includes(grn.id.toString()) || challanIds.includes(grn.challanNumber);
       });
-      return { ...grn, isInvoiced: isLinked };
+      const formattedGrnNo = grn.grnNumber || `GRN-${String(grn.id).padStart(4, '0')}`;
+      return { ...grn, grnNumber: formattedGrnNo, grnNo: formattedGrnNo, isInvoiced: isLinked };
     });
 
     return {
@@ -539,7 +651,10 @@ export class GrnService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / limit),
+        grandTaxable,
+        grandTax,
+        grandTotal: grandTotalSum
       }
     };
   }
@@ -673,7 +788,7 @@ export class GrnService {
   }
 
   async exportGrns(format: string, query: { search?: string, userId: number }) {
-    const grns = await this.findAll(query);
+    const grns = await this.findAll({ search: query.search, userId: query.userId, page: 1, limit: 100000 });
 
     const now = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
@@ -693,43 +808,58 @@ export class GrnService {
       const worksheet = workbook.addWorksheet('GRNs');
       worksheet.views = [{ state: 'frozen', ySplit: 5 }];
       worksheet.columns = [
-        { header: 'Supplier Name', key: 'supplierName', width: 30 },
-        { header: 'Supplier Challan No', key: 'challanNumber', width: 22 },
-        { header: 'Booking Date', key: 'bookingDate', width: 15 },
-        { header: 'PO No', key: 'poNumber', width: 15 },
-        { header: 'Total Qty', key: 'totalQuantity', width: 12 },
-        { header: 'Taxable Amt', key: 'taxableAmount', width: 15 },
-        { header: 'Grand Total', key: 'grandTotal', width: 15 },
-        { header: 'Status', key: 'status', width: 12 },
+        { header: 'SR NO', key: 'srNo', width: 8 },
+        { header: 'GRN NO', key: 'grnNo', width: 16 },
+        { header: 'SUPPLIER CHALLAN NUMBER', key: 'challanNumber', width: 25 },
+        { header: 'SUPPLIER NAME', key: 'supplierName', width: 28 },
+        { header: 'SUPPLIER CHALLAN DATE', key: 'challanDate', width: 22 },
+        { header: 'BOOKING DATE', key: 'bookingDate', width: 16 },
+        { header: 'PO NO', key: 'poNumber', width: 16 },
+        { header: 'GST NUMBER', key: 'gstNumber', width: 18 },
+        { header: 'CREDIT DAYS', key: 'creditDays', width: 14 },
+        { header: 'TAXABLE AMOUNT', key: 'taxableAmount', width: 18 },
+        { header: 'TAX AMOUNT', key: 'taxAmount', width: 16 },
+        { header: 'TOTAL AMOUNT', key: 'grandTotal', width: 18 },
+        { header: 'STATUS', key: 'status', width: 14 },
       ];
 
-      grns.data.forEach(g => {
+      grns.data.forEach((g, idx) => {
+        const taxable = g.items?.reduce((sum, i) => sum + (Number(i.beforeTaxAmount) || 0), 0) || Number(g.taxableAmount) || 0;
+        const tax = g.items?.reduce((sum, i) => sum + (Number(i.taxAmount) || 0), 0) || (Number(g.cgstAmount || 0) + Number(g.sgstAmount || 0) + Number(g.igstAmount || 0)) || 0;
+        const gross = Number(g.grandTotal || (taxable + tax));
+        const statusLabel = g.status === 'DELETED' ? 'Deleted' : (g.isInvoiced ? 'Invoiced' : 'Generated');
+
         worksheet.addRow({
-          supplierName: g.supplierName,
+          srNo: idx + 1,
+          grnNo: g.grnNumber || g.grnNo || `GRN-${String(g.id).padStart(4, '0')}`,
           challanNumber: g.challanNumber || '-',
+          supplierName: g.supplierName || '-',
+          challanDate: formatDate(g.grnDate),
           bookingDate: formatDate(g.bookingDate),
           poNumber: g.poNumber || '-',
-          totalQuantity: g.totalQuantity,
-          taxableAmount: g.taxableAmount,
-          grandTotal: g.grandTotal,
-          status: g.status === 'DELETED' ? 'Deleted' : 'Generated',
+          gstNumber: g.gstNumber || '-',
+          creditDays: g.creditDays || 0,
+          taxableAmount: taxable,
+          taxAmount: tax,
+          grandTotal: gross,
+          status: statusLabel,
         });
       });
 
       worksheet.spliceRows(1, 0, [], [], [], []);
-      worksheet.mergeCells('A1:H1');
+      worksheet.mergeCells('A1:M1');
       const titleCell = worksheet.getCell('A1');
       titleCell.value = 'ERP';
       titleCell.font = { size: 18, bold: true };
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-      worksheet.mergeCells('A2:H2');
+      worksheet.mergeCells('A2:M2');
       const subtitleCell = worksheet.getCell('A2');
       subtitleCell.value = 'Goods Receipt Note Report';
       subtitleCell.font = { size: 14 };
       subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-      worksheet.mergeCells('A3:H3');
+      worksheet.mergeCells('A3:M3');
       const timestampCell = worksheet.getCell('A3');
       timestampCell.value = `Exported on: ${timestamp}`;
       timestampCell.font = { size: 10 };
@@ -753,53 +883,63 @@ export class GrnService {
       };
     } else {
       return new Promise<any>((resolve) => {
-        const doc = new PDFDocument({ margin: 20, size: 'A4', layout: 'landscape' });
+        const doc = new PDFDocument({ margin: 15, size: 'A4', layout: 'landscape' });
         const buffers: Buffer[] = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', () => resolve({ buffer: Buffer.concat(buffers), filename: `grns_${Date.now()}.pdf`, mimetype: 'application/pdf' }));
 
-        doc.fontSize(18).font('Helvetica-Bold').text('ERP', { align: 'center' });
-        doc.fontSize(14).font('Helvetica').text('Goods Receipt Note Report', { align: 'center' });
+        doc.fontSize(16).font('Helvetica-Bold').text('ERP', { align: 'center' });
+        doc.fontSize(12).font('Helvetica').text('Goods Receipt Note Report', { align: 'center' });
+        doc.moveDown(0.3);
+        doc.fontSize(9).text(`Exported on: ${timestamp}`, { align: 'right' });
         doc.moveDown(0.5);
-        doc.fontSize(10).text(`Exported on: ${timestamp}`, { align: 'right' });
-        doc.moveDown();
 
-        const tableTop = 100;
-        const colX = [20, 170, 280, 360, 440, 520, 590, 660];
-        const headers = ['Supplier Name', 'Challan No', 'Book Date', 'PO No', 'Total Qty', 'Taxable', 'Total', 'Status'];
+        const tableTop = 85;
+        const colX = [15, 45, 110, 175, 260, 320, 375, 430, 490, 530, 585, 640, 700];
+        const headers = ['SR', 'GRN NO', 'Challan No', 'Supplier Name', 'Challan Dt', 'Book Dt', 'PO No', 'GST No', 'Credit', 'Taxable', 'Tax', 'Total', 'Status'];
 
-        doc.rect(15, tableTop - 5, 735, 20).fill('#4472C4');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+        doc.rect(10, tableTop - 5, 820, 20).fill('#4472C4');
+        doc.fontSize(7).font('Helvetica-Bold').fillColor('#FFFFFF');
         headers.forEach((h, i) => doc.text(h, colX[i], tableTop));
 
         let y = tableTop + 20;
         doc.fillColor('#000000').font('Helvetica');
 
         grns.data.forEach((g, index) => {
-          if (y > 550) {
-            doc.addPage({ margin: 20, size: 'A4', layout: 'landscape' });
-            y = 40;
-            doc.rect(15, y - 5, 735, 20).fill('#4472C4');
-            doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+          if (y > 540) {
+            doc.addPage({ margin: 15, size: 'A4', layout: 'landscape' });
+            y = 35;
+            doc.rect(10, y - 5, 820, 20).fill('#4472C4');
+            doc.fontSize(7).font('Helvetica-Bold').fillColor('#FFFFFF');
             headers.forEach((h, i) => doc.text(h, colX[i], y));
             y += 20;
             doc.fillColor('#000000').font('Helvetica');
           }
 
           if (index % 2 === 1) {
-            doc.rect(15, y - 3, 735, 15).fill('#F2F2F2').fillColor('#000000');
+            doc.rect(10, y - 3, 820, 15).fill('#F2F2F2').fillColor('#000000');
           }
 
-          doc.fontSize(7);
-          doc.text(g.supplierName.substring(0, 30), colX[0], y, { width: 140 });
-          doc.text(g.challanNumber || '-', colX[1], y);
-          doc.text(formatDate(g.bookingDate), colX[2], y);
-          doc.text(g.poNumber || '-', colX[3], y);
-          doc.text(String(g.totalQuantity), colX[4], y);
-          doc.text(g.taxableAmount.toFixed(2), colX[5], y);
-          doc.text(g.grandTotal.toFixed(2), colX[6], y);
-          doc.text(g.status === 'DELETED' ? 'Deleted' : 'Generated', colX[7], y);
-          y += 20;
+          const taxable = g.items?.reduce((sum, i) => sum + (Number(i.beforeTaxAmount) || 0), 0) || Number(g.taxableAmount) || 0;
+          const tax = g.items?.reduce((sum, i) => sum + (Number(i.taxAmount) || 0), 0) || (Number(g.cgstAmount || 0) + Number(g.sgstAmount || 0) + Number(g.igstAmount || 0)) || 0;
+          const gross = Number(g.grandTotal || (taxable + tax));
+          const statusLabel = g.status === 'DELETED' ? 'Deleted' : (g.isInvoiced ? 'Invoiced' : 'Generated');
+
+          doc.fontSize(6);
+          doc.text(String(index + 1), colX[0], y);
+          doc.text(g.grnNumber || g.grnNo || `GRN-${String(g.id).padStart(4, '0')}`, colX[1], y, { width: 60 });
+          doc.text((g.challanNumber || '-').substring(0, 12), colX[2], y, { width: 60 });
+          doc.text((g.supplierName || '-').substring(0, 18), colX[3], y, { width: 80 });
+          doc.text(formatDate(g.grnDate), colX[4], y);
+          doc.text(formatDate(g.bookingDate), colX[5], y);
+          doc.text((g.poNumber || '-').substring(0, 10), colX[6], y);
+          doc.text((g.gstNumber || '-').substring(0, 12), colX[7], y);
+          doc.text(String(g.creditDays || 0), colX[8], y);
+          doc.text(taxable.toFixed(2), colX[9], y);
+          doc.text(tax.toFixed(2), colX[10], y);
+          doc.text(gross.toFixed(2), colX[11], y);
+          doc.text(statusLabel, colX[12], y);
+          y += 18;
         });
 
         doc.end();
@@ -863,7 +1003,15 @@ export class GrnService {
       let found = false;
       row.eachCell((cell, colNumber) => {
         const val = String(cell.value || '').trim().toLowerCase();
-        if (val.includes('grn no') || val.includes('grn number') || val.includes('challan number')) { colMap['grnNo'] = colNumber; found = true; }
+        if ((val.includes('grn no') || val.includes('grn number') || val.includes('grn')) && !val.includes('supplier challan') && !val.includes('date')) {
+          colMap['grnNo'] = colNumber;
+          found = true;
+        } else if (!colMap['grnNo'] && val.includes('challan number') && !val.includes('supplier challan')) {
+          colMap['grnNo'] = colNumber;
+          found = true;
+        }
+        if (val.includes('supplier challan number') || val.includes('supplier challan no')) colMap['supplierChallanNo'] = colNumber;
+        if (val.includes('supplier challan date')) colMap['supplierChallanDate'] = colNumber;
         if (val.includes('grn date') || val.includes('booking date')) colMap['grnDate'] = colNumber;
         if (val.includes('po no') || val.includes('po number')) colMap['poNo'] = colNumber;
         if (val.includes('supplier name') || val.includes('supplier')) colMap['supplierName'] = colNumber;
@@ -914,6 +1062,12 @@ export class GrnService {
       const colIdx = colMap[key];
       if (!colIdx) return defaultVal;
       const cell = row.getCell(colIdx);
+      if (cell.text && typeof cell.text === 'string' && cell.text.trim()) {
+        const textVal = cell.text.trim();
+        if (/^\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{4}$/.test(textVal)) {
+          return textVal;
+        }
+      }
       let val = cell.value;
       if (val && typeof val === 'object' && 'result' in val) {
         val = (val as any).result;
@@ -964,6 +1118,8 @@ export class GrnService {
         originalRowValues: row.values,
         grnNo,
         grnDateStr: getVal(row, 'grnDate'),
+        challanNumber: getVal(row, 'supplierChallanNo'),
+        supplierChallanDate: getVal(row, 'supplierChallanDate'),
         poNo: getVal(row, 'poNo'),
         supplierName: getVal(row, 'supplierName'),
         productName: getVal(row, 'productName'),
@@ -981,7 +1137,7 @@ export class GrnService {
     }
 
     if (groupMap.size === 0) {
-      throw new BadRequestException('Invalid template format');
+      throw new BadRequestException('No valid data rows found in the uploaded file to import.');
     }
 
     const successRows: any[] = [];
@@ -994,6 +1150,17 @@ export class GrnService {
     for (const [grnNo, rows] of groupMap.entries()) {
       const groupErrors: string[] = [];
       const firstRow = rows[0];
+
+      const dateConsistencyErrors = this.importValidator.validateGroupDateConsistency(
+        rows,
+        'GRN No',
+        grnNo,
+        [
+          { key: 'grnDateStr', label: 'GRN Date' },
+          { key: 'supplierChallanDateStr', label: 'Supplier Challan Date' },
+        ]
+      );
+      groupErrors.push(...dateConsistencyErrors);
 
       // 1. GRN Number uniqueness check
       const docNoValidation = this.importValidator.validateDocumentNumber(
@@ -1085,6 +1252,18 @@ export class GrnService {
           if (!poItem) {
             groupErrors.push(`Product '${prod.product_name}' is not part of Purchase Order '${referencedPo.poNumber}'.`);
           } else {
+            if (Math.abs(Number(poItem.rate) - rate) > 0.001) {
+              groupErrors.push(
+                `Rate for product '${prod.product_name}' (${rate}) does not match the rate in Purchase Order '${referencedPo.poNumber}' (${poItem.rate}). Rate change is not allowed when linked to a PO.`
+              );
+            }
+            const poItemDiscPct = Number(poItem.discountPercent || (poItem.quantity * poItem.rate > 0 ? (Number(poItem.discountAmount) / (poItem.quantity * poItem.rate)) * 100 : 0));
+            const hasImpDisc = Boolean((row.discountPercentStr && row.discountPercentStr.trim() !== '') || (row.discountAmountStr && row.discountAmountStr.trim() !== ''));
+            if (hasImpDisc && Math.abs(discountPct - poItemDiscPct) > 0.01) {
+              groupErrors.push(
+                `Discount for product '${prod.product_name}' (${discountPct}%) does not match the discount in Purchase Order '${referencedPo.poNumber}' (${poItemDiscPct.toFixed(2)}%). Discount change is not allowed when linked to a PO.`
+              );
+            }
             totalPoQty = poItem.quantity;
             let alreadyReceived = 0;
             for (const prevGrn of referencedPo.grn || []) {
@@ -1174,14 +1353,15 @@ export class GrnService {
           await this.prisma.$transaction(async (tx) => {
             await tx.grn.create({
               data: {
-                challanNumber: grnNo,
+                grnNumber: grnNo,
+                challanNumber: firstRow.challanNumber || '',
                 poNumber: referencedPo ? referencedPo.poNumber : (firstRow.poNo || null),
                 poId: referencedPo ? referencedPo.id : null,
                 supplierName: supplierData.name,
                 address: supplierData.address,
                 creditDays: supplierData.creditDays,
                 gstNumber: supplierData.gstNo,
-                grnDate: parsedGrnDate,
+                grnDate: firstRow.supplierChallanDate ? new Date(firstRow.supplierChallanDate) : parsedGrnDate,
                 bookingDate: parsedGrnDate,
                 taxableAmount: totalAmount,
                 cgstAmount: isInterState ? 0 : totalTaxAmount / 2,
@@ -1238,7 +1418,7 @@ export class GrnService {
     }
 
     const headers = [
-      'GRN No*', 'GRN Date*', 'PO NO', 'Supplier Name*',
+      'GRN No*', 'GRN Date*', 'PO NO', 'Supplier Challan Number', 'Supplier Challan Date', 'Supplier Name*',
       'Product Name*', 'Product Code', 'Qty*', 'Rate*', 'Discount (₹)', 'Discount (%)'
     ];
 

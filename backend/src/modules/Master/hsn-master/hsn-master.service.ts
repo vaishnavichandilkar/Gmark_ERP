@@ -5,10 +5,14 @@ import { HsnMasterType, Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { Response } from 'express';
+import { ImportValidationService } from '../../../common/services/import-validation.service';
 
 @Injectable()
 export class HsnMasterService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly importValidator: ImportValidationService,
+    ) { }
 
     // Keep compatibility for ProductMaster lookup
     async getLatestTaxByCode(code: string, userId?: number) {
@@ -574,9 +578,7 @@ export class HsnMasterService {
             throw new BadRequestException('No data found to import');
         }
 
-        let imported = 0;
-        let failed = 0;
-        const errors: string[] = [];
+        const headers = ['Type*', 'Code*', 'Tax Rate (%)*', 'Description*'];
 
         let headerRowIndex = -1;
         const colMap: Record<string, number> = {};
@@ -609,6 +611,21 @@ export class HsnMasterService {
             return cell.text ? String(cell.text).trim() : String(cell.value || '').trim();
         };
 
+        const successRows: any[] = [];
+        const failedRows: Array<{ rowNum: number; values: any[]; error: string }> = [];
+
+        // Pass 1: Scan file to detect frequency of each HSN/SAC code
+        const codeFrequency = new Map<string, number>();
+        for (let i = headerRowIndex + 1; i <= rowCount; i++) {
+            const row = worksheet.getRow(i);
+            const rawCode = getVal(row, 'code');
+            if (rawCode && rawCode !== '-') {
+                const codeKey = rawCode.trim().toLowerCase();
+                codeFrequency.set(codeKey, (codeFrequency.get(codeKey) || 0) + 1);
+            }
+        }
+
+        // Pass 2: Process rows and validate
         for (let i = headerRowIndex + 1; i <= rowCount; i++) {
             const row = worksheet.getRow(i);
 
@@ -617,9 +634,17 @@ export class HsnMasterService {
             const taxRateStr = getVal(row, 'taxRate');
             const description = getVal(row, 'description');
 
+            const rawValues = [typeStr, code, taxRateStr, description];
+
             if (!code || code === '-') continue; // Skip empty/placeholder rows
 
             try {
+                // Check if this HSN/SAC code appears more than once in the uploaded Excel file
+                const codeKey = code.trim().toLowerCase();
+                if ((codeFrequency.get(codeKey) || 0) > 1) {
+                    throw new Error(`Duplicate HSN/SAC Code "${code}" found in import file. Both duplicate rows were skipped.`);
+                }
+
                 // Business Validations
                 if (!description) {
                     throw new Error('Description is required.');
@@ -643,60 +668,50 @@ export class HsnMasterService {
                     }
                 }
 
-                if (!taxRateStr) {
+                if (!taxRateStr && taxRateStr !== '0') {
                     throw new Error('Tax Rate is required.');
                 }
 
                 const taxRate = parseFloat(taxRateStr.replace(/[^0-9.]/g, ''));
-                if (![0, 5, 12, 18, 28].includes(taxRate)) {
+                if (isNaN(taxRate) || ![0, 5, 12, 18, 28].includes(taxRate)) {
                     throw new Error('Tax Rate must be one of: 0%, 5%, 12%, 18%, 28%');
                 }
 
-                // Check for duplicates within database
+                // Check for duplicate code within database
                 const existing = await this.prisma.hsnMaster.findFirst({
                     where: { code, createdBy: userId }
                 });
 
                 if (existing) {
-                    // Update existing
-                    await this.prisma.hsnMaster.update({
-                        where: { id: existing.id },
-                        data: {
-                            type: typeStr as HsnMasterType,
-                            taxRate: new Prisma.Decimal(taxRate),
-                            description: description || '',
-                            updatedBy: userId
-                        }
-                    });
-                } else {
-                    // Create new
-                    await this.prisma.hsnMaster.create({
-                        data: {
-                            code,
-                            type: typeStr as HsnMasterType,
-                            taxRate: new Prisma.Decimal(taxRate),
-                            description: description || '',
-                            isActive: true,
-                            createdBy: userId,
-                            updatedBy: userId
-                        }
-                    });
+                    throw new Error(`HSN/SAC Code "${code}" already exists in HSN Master.`);
                 }
-                imported++;
-            } catch (error) {
-                failed++;
-                errors.push(`Row ${i} (${code || 'Unknown Code'}): ${error.message}`);
+
+                // Create new HSN Master record
+                await this.prisma.hsnMaster.create({
+                    data: {
+                        code,
+                        type: typeStr as HsnMasterType,
+                        taxRate: new Prisma.Decimal(taxRate),
+                        description: description || '',
+                        isActive: true,
+                        createdBy: userId,
+                        updatedBy: userId
+                    }
+                });
+
+                successRows.push({
+                    rowNum: i,
+                    originalRowValues: [null, ...rawValues]
+                });
+            } catch (error: any) {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: error.message || 'Validation/Save failed'
+                });
             }
         }
 
-        if (imported === 0 && failed > 0) {
-            throw new BadRequestException(`Import failed: ${errors[0]}`);
-        }
-
-        return {
-            success: true,
-            message: `Imported/Updated ${imported} records successfully. ${failed > 0 ? failed + ' rows failed.' : ''}`,
-            errors: failed > 0 ? errors : undefined
-        };
+        return this.importValidator.buildResponseSummary(headers, successRows, failedRows);
     }
 }

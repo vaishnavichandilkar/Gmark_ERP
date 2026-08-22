@@ -6,10 +6,14 @@ import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ImportValidationService } from '../../../common/services/import-validation.service';
 
 @Injectable()
 export class UnitMasterService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private readonly importValidator: ImportValidationService,
+    ) { }
 
     async getUnitLibrary(query?: { search?: string; gst_uom?: string; unit_name?: string }) {
         const where: any = {};
@@ -255,9 +259,7 @@ export class UnitMasterService {
             throw new BadRequestException('No data found to import');
         }
 
-        let importedRows = 0;
-        let failed = 0;
-        const errors: string[] = [];
+        const headers = ['Unit Name*', 'GST UOM*', 'Full Name of Measurement', 'Status'];
 
         let headerRowIndex = -1;
         const colMap: Record<string, number> = {};
@@ -286,22 +288,31 @@ export class UnitMasterService {
         const getVal = (row: ExcelJS.Row, key: string, defaultVal: any = '') => {
             const colIdx = colMap[key];
             if (!colIdx) return defaultVal;
-            return row.getCell(colIdx).value;
+            const val = row.getCell(colIdx).value;
+            return val === null || val === undefined ? defaultVal : val;
         };
+
+        const successRows: any[] = [];
+        const failedRows: Array<{ rowNum: number; values: any[]; error: string }> = [];
 
         for (let i = headerRowIndex + 1; i <= rowCount; i++) {
             const row = worksheet.getRow(i);
 
             const unitName = String(getVal(row, 'unitName')).trim();
-            if (!unitName || unitName === '-') continue;
-
             const gstUom = String(getVal(row, 'gstUom')).trim();
             const fullName = String(getVal(row, 'fullName')).trim();
             const statusStr = String(getVal(row, 'status')).trim().toUpperCase();
 
+            const rawValues = [unitName, gstUom, fullName, statusStr];
+
+            if ((!unitName || unitName === '-') && (!gstUom || gstUom === '-')) continue;
+
             if (!unitName || !gstUom) {
-                failed++;
-                errors.push(`Row ${i} missing required Unit Name or GST UOM.`);
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: 'Unit Name and GST UOM are required fields.'
+                });
                 continue;
             }
 
@@ -343,26 +354,21 @@ export class UnitMasterService {
                         }
                     });
                 }
-                importedRows++;
-            } catch (error) {
-                failed++;
-                errors.push(`Row ${i} (${unitName}): ${error.message}`);
+
+                successRows.push({
+                    rowNum: i,
+                    originalRowValues: [null, ...rawValues]
+                });
+            } catch (error: any) {
+                failedRows.push({
+                    rowNum: i,
+                    values: rawValues,
+                    error: error.message || 'Validation/Save failed'
+                });
             }
         }
 
-        if (importedRows === 0 && failed > 0) {
-            throw new BadRequestException(`Import failed: ${errors[0]}`);
-        }
-
-        if (importedRows === 0 && failed === 0) {
-            throw new BadRequestException('No data found to import');
-        }
-
-        return {
-            success: true,
-            message: `Imported ${importedRows} units. ${failed > 0 ? failed + ' rows failed.' : ''}`,
-            errors: failed > 0 ? errors : undefined,
-        };
+        return this.importValidator.buildResponseSummary(headers, successRows, failedRows);
     }
 
     async getSampleExcel() {
