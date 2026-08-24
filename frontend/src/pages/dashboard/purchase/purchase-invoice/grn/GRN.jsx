@@ -140,6 +140,7 @@ const GRN = () => {
     // Pagination State
     const [itemsPerPage, setItemsPerPage] = useState(15);
     const [currentPage, setCurrentPage] = useState(1);
+    const [metaGrandTotals, setMetaGrandTotals] = useState(null);
 
     const statusTabs = ["All", "Generated", "Deleted"];
 
@@ -161,6 +162,13 @@ const GRN = () => {
             const data = Array.isArray(response) ? response : (response.data || []);
             setGrns(data);
             setTotalItemsCount(response.meta?.total || data.length);
+            if (response.meta) {
+                setMetaGrandTotals({
+                    grandTaxable: response.meta.grandTaxable || 0,
+                    grandTax: response.meta.grandTax || 0,
+                    grandTotal: response.meta.grandTotal || 0,
+                });
+            }
         } catch (error) {
             console.error("Error fetching GRNs:", error);
             toast.error(t('modules:failed_to_load_grns'));
@@ -238,6 +246,7 @@ const GRN = () => {
             
             return {
                 ...item,
+                grnNo: item.grnNumber || item.grnNo || `GRN-${String(item.id).padStart(4, '0')}`,
                 supplierName: item.supplierName || "-",
                 challanNo: item.challanNumber || item.challanNo || "-",
                 challanDate: formatDate(item.grnDate || item.supplierChallanDate || item.challanDate || item.documentDate),
@@ -259,7 +268,8 @@ const GRN = () => {
             if (val) {
                 baseData = baseData.filter(row => {
                     let fieldVal = "";
-                    if (key === 'supplierName') fieldVal = row.supplierName || "";
+                    if (key === 'grnNo') fieldVal = row.grnNo || "";
+                    else if (key === 'supplierName') fieldVal = row.supplierName || "";
                     else if (key === 'challanNo') fieldVal = row.challanNo || "";
                     else if (key === 'challanDate') fieldVal = row.challanDate || "";
                     else if (key === 'bookingDate') fieldVal = row.bookingDate || "";
@@ -284,12 +294,14 @@ const GRN = () => {
     const handleClearFilter = () => {
         setFilterInputs(defaultFilters);
         setAppliedFilters(defaultFilters);
+        setIsFilterApplied(false);
         setIsFilterOpen(false);
         setCurrentPage(1);
     };
 
     const handleApplyFilter = () => {
         setAppliedFilters(filterInputs);
+        setIsFilterApplied(true);
         setIsFilterOpen(false);
         setCurrentPage(1);
     };
@@ -405,18 +417,20 @@ const GRN = () => {
                         <thead>
                             <tr className="bg-emerald-900 text-white font-bold text-[15px]">
                                 {[
-                                    t('modules:supplier_name'), t('modules:supplier_challan_no'), t('modules:supplier_challan_date'),
-                                    t('modules:booking_date'), t('modules:po_no'), t('modules:gst_number_col'),
-                                    t('modules:credit_days_col'), t('modules:taxable_amount_col'), t('modules:tax_amount_col'),
-                                    t('modules:gross_amount_col'), t('common:status'), t('common:action')
+                                    t('common:sr_no', 'SR NO'), t('modules:grn_no', 'GRN NO'), t('modules:supplier_challan_no', 'Challan No'), t('modules:supplier_name', 'Supplier Name'), t('modules:supplier_challan_date', 'Challan Date'),
+                                    t('modules:booking_date', 'Booking Date'), t('modules:po_no', 'PO No'), t('modules:gst_number_col', 'GST No'),
+                                    t('modules:credit_days_col', 'Credit Days'), t('modules:taxable_amount_col', 'Taxable Amount'), t('modules:tax_amount_col', 'Tax Amount'),
+                                    t('modules:total_amount_col', 'Total Amount'), t('common:status', 'Status'), t('common:action', 'Action')
                                 ].map(h => (
                                     <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
                                 ))}
                             </tr>
                             <tr className="bg-[#0b543f]">
                                 {[
-                                    { key: 'supplierName', placeholder: 'Name' },
+                                    { key: 'srNo', noSearch: true },
+                                    { key: 'grnNo', placeholder: 'GRN No' },
                                     { key: 'challanNo', placeholder: 'Challan No' },
+                                    { key: 'supplierName', placeholder: 'Name' },
                                     { key: 'challanDate', placeholder: 'Challan Date' },
                                     { key: 'bookingDate', placeholder: 'Booking Date' },
                                     { key: 'poNo', placeholder: 'PO No' },
@@ -443,11 +457,43 @@ const GRN = () => {
                             </tr>
                         </thead>
                         <tbody className={`text-[14px] text-[#111827] ${isLoading ? 'opacity-40' : 'opacity-100'}`}>
+                            {(() => {
+                                const pageTaxable = mappedGRNs.reduce((sum, r) => sum + (parseFloat(r.taxableAmount) || 0), 0);
+                                const pageTax = mappedGRNs.reduce((sum, r) => sum + (parseFloat(r.taxAmount) || 0), 0);
+                                const pageGross = mappedGRNs.reduce((sum, r) => sum + (parseFloat(r.grossAmount) || 0), 0);
+
+                                const grandTaxable = metaGrandTotals ? metaGrandTotals.grandTaxable : grns.reduce((sum, r) => sum + (parseFloat(r.taxableAmount) || 0), 0);
+                                const grandGross = metaGrandTotals ? metaGrandTotals.grandTotal : grns.reduce((sum, r) => sum + (parseFloat(r.grandTotal) || 0), 0);
+                                const grandTax = metaGrandTotals ? metaGrandTotals.grandTax : (grandGross - grandTaxable);
+
+                                return (
+                                    <>
+                                        {/* Page Total Row */}
+                                        <tr className="border-b border-[#E2E8F0] bg-gray-50/90 font-bold text-[13px] text-[#334155]">
+                                            <td colSpan="9" className="px-6 py-3.5 text-right font-extrabold text-[#111827]">Page Total</td>
+                                            <td className="px-6 py-3.5 text-left font-bold text-[#111827]">₹{pageTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td className="px-6 py-3.5 text-left font-bold text-[#111827]">₹{pageTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td className="px-6 py-3.5 text-left font-extrabold text-[#073318]">₹{pageGross.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td colSpan="2" className="px-6 py-3.5 text-center">-</td>
+                                        </tr>
+                                        {/* Grand Total Row */}
+                                        <tr className="bg-[#E6F4EA] font-extrabold text-[#064E3B] border-b border-[#A7F3D0] text-[13px]">
+                                            <td colSpan="9" className="px-6 py-3.5 text-right font-black text-emerald-950">Grand Total</td>
+                                            <td className="px-6 py-3.5 text-left font-extrabold text-emerald-900">₹{grandTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td className="px-6 py-3.5 text-left font-extrabold text-emerald-900">₹{grandTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td className="px-6 py-3.5 text-left font-black text-emerald-950">₹{grandGross.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td colSpan="2" className="px-6 py-3.5 text-center">-</td>
+                                        </tr>
+                                    </>
+                                );
+                            })()}
                             {mappedGRNs.length > 0 ? (
                                 mappedGRNs.map((row, idx) => (
                                     <tr key={row.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
-                                        <td className="px-6 py-5 font-bold">{row.supplierName}</td>
+                                        <td className="px-6 py-5 text-center font-bold text-gray-500">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
+                                        <td className="px-6 py-4 font-bold text-[#073318]">{row.grnNo}</td>
                                         <td className="px-6 py-4">{row.challanNo}</td>
+                                        <td className="px-6 py-5 font-bold">{row.supplierName}</td>
                                         <td className="px-6 py-4">{row.challanDate}</td>
                                         <td className="px-6 py-4">{row.bookingDate}</td>
                                         <td className="px-6 py-4 font-medium">{row.poNo}</td>
@@ -485,7 +531,7 @@ const GRN = () => {
                                     </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan="12" className="px-6 py-24 text-center text-gray-400 font-bold uppercase tracking-widest">{t('common:no_results_found')}</td></tr>
+                                <tr><td colSpan="14" className="px-6 py-24 text-center text-gray-400 font-bold uppercase tracking-widest">{t('common:no_results_found')}</td></tr>
                             )}
                         </tbody>
                     </table>

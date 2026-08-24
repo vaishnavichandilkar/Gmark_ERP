@@ -1340,7 +1340,7 @@ const CategoryMaster = () => {
           onImport={handleImportExcel}
           onDownloadSample={() => categoryService.downloadCategorySampleExcel()}
           sampleFileName="Category_Master_Sample.xlsx"
-          sampleHeaders={["Category Name", "Sub Category"]}
+          sampleHeaders={["Category Name*", "Sub Category", "Sub Sub Category"]}
         />
       )}
     </div>

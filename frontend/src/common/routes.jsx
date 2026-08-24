@@ -116,7 +116,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "/dashboard",
-        element: <Navigate to="/seller/dashboard" replace />,
+        element: <Navigate to="/seller/reports" replace />,
       },
       {
         element: <ProtectedRoute allowedRoles={["SELLER"]} />,
@@ -127,7 +127,7 @@ export const router = createBrowserRouter([
             children: [
               {
                 index: true,
-                element: <Navigate to="dashboard" replace />,
+                element: <Navigate to="reports" replace />,
               },
               {
                 path: "dashboard",

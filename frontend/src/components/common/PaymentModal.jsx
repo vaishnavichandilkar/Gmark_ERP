@@ -619,7 +619,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
 
                         {/* Footer Details */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-2">
+                            <div className={`space-y-2 ${['Journal', 'Contra', 'JV', 'journal', 'contra', 'jv'].includes(type) ? 'col-span-full md:col-span-2' : ''}`}>
                                 <label className="text-[13px] font-bold text-[#6B7280] tracking-wider">Narration</label>
                                 <textarea 
                                     name="narration"
@@ -629,46 +629,48 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                     className="w-full h-24 px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[14px] resize-none transition-all"
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-[13px] font-bold text-[#6B7280] tracking-wider">Payment Mode</label>
-                                <div className="relative">
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveDropdown(activeDropdown === 'paymentMode' ? null : 'paymentMode')}
-                                        className="w-full h-11 px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[15px] flex items-center justify-between transition-all"
-                                    >
-                                        <span className={formData.paymentMode ? 'text-gray-800 font-medium' : 'text-gray-400'}>
-                                            {paymentModeOptions.find(o => o.value === formData.paymentMode)?.label || 'Select Mode'}
-                                        </span>
-                                        <ChevronDown size={18} className={`text-[#6B7280] transition-transform duration-200 ${activeDropdown === 'paymentMode' ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    
-                                    <AnimatePresence>
-                                        {activeDropdown === 'paymentMode' && (
-                                            <>
-                                                <div className="fixed inset-0 z-40" onClick={() => setActiveDropdown(null)} />
-                                                <motion.div
-                                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                                    className="absolute top-12 left-0 right-0 bg-white border border-[#E5E7EB] rounded-xl shadow-xl z-50 py-2 overflow-hidden"
-                                                >
-                                                    {paymentModeOptions.map((opt) => (
-                                                        <button
-                                                            key={opt.value}
-                                                            type="button"
-                                                            onClick={() => handleSelectChange('paymentMode', opt.value)}
-                                                            className={`w-full px-4 py-2.5 text-left text-[14px] font-medium transition-colors hover:bg-gray-50 ${formData.paymentMode === opt.value ? 'text-[#073318] bg-[#073318]/5' : 'text-gray-700'}`}
-                                                        >
-                                                            {opt.label}
-                                                        </button>
-                                                    ))}
-                                                </motion.div>
-                                            </>
-                                        )}
-                                    </AnimatePresence>
+                            {!['Journal', 'Contra', 'JV', 'journal', 'contra', 'jv'].includes(type) && (
+                                <div className="space-y-2">
+                                    <label className="text-[13px] font-bold text-[#6B7280] tracking-wider">Payment Mode</label>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveDropdown(activeDropdown === 'paymentMode' ? null : 'paymentMode')}
+                                            className="w-full h-11 px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318] outline-none text-[15px] flex items-center justify-between transition-all"
+                                        >
+                                            <span className={formData.paymentMode ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+                                                {paymentModeOptions.find(o => o.value === formData.paymentMode)?.label || 'Select Mode'}
+                                            </span>
+                                            <ChevronDown size={18} className={`text-[#6B7280] transition-transform duration-200 ${activeDropdown === 'paymentMode' ? 'rotate-180' : ''}`} />
+                                        </button>
+                                        
+                                        <AnimatePresence>
+                                            {activeDropdown === 'paymentMode' && (
+                                                <>
+                                                    <div className="fixed inset-0 z-40" onClick={() => setActiveDropdown(null)} />
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                        className="absolute top-12 left-0 right-0 bg-white border border-[#E5E7EB] rounded-xl shadow-xl z-50 py-2 overflow-hidden"
+                                                    >
+                                                        {paymentModeOptions.map((opt) => (
+                                                            <button
+                                                                key={opt.value}
+                                                                type="button"
+                                                                onClick={() => handleSelectChange('paymentMode', opt.value)}
+                                                                className={`w-full px-4 py-2.5 text-left text-[14px] font-medium transition-colors hover:bg-gray-50 ${formData.paymentMode === opt.value ? 'text-[#073318] bg-[#073318]/5' : 'text-gray-700'}`}
+                                                            >
+                                                                {opt.label}
+                                                            </button>
+                                                        ))}
+                                                    </motion.div>
+                                                </>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </div>
                     )}

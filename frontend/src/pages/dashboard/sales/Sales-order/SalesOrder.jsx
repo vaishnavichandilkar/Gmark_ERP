@@ -36,6 +36,13 @@ import ScrollableTable from "../../../../components/common/ScrollableTable";
 import CustomSelect from "../../../../components/common/CustomSelect";
 import { formatDate } from '@/utils/dateUtils';
 
+const getDisplayCustomerPoNumber = (poNumber, soNumber) => {
+  if (!poNumber || poNumber.trim().toLowerCase() === 'verbal' || (soNumber && poNumber.trim() === soNumber.trim())) {
+    return 'Verbal';
+  }
+  return poNumber;
+};
+
 const DeleteConfirmModal = ({ isOpen, onCancel, onConfirm, isDeleting, t }) => {
   if (!isOpen) return null;
   return (
@@ -393,7 +400,7 @@ const SalesOrder = () => {
         "SO NO": so.soNumber,
         "CUSTOMER NAME": so.customerName,
         "CUSTOMER TYPE": so.customerType || 'Retail',
-        "CUSTOMER PO NUMBER": so.customerPoNumber || '-',
+        "CUSTOMER PO NUMBER": getDisplayCustomerPoNumber(so.customerPoNumber, so.soNumber),
         "CUSTOMER PO DATE": so.poDate ? formatDate(so.poDate) : '-',
         "CUSTOMER PO EXP. DATE": so.poExpiryDate ? formatDate(so.poExpiryDate) : '-',
         "CREATION DATE": formatDate(so.soCreationDate),
@@ -426,7 +433,7 @@ const SalesOrder = () => {
             so.soNumber || "-",
             so.customerName || "-",
             so.customerType || "Retail",
-            so.customerPoNumber || "-",
+            getDisplayCustomerPoNumber(so.customerPoNumber, so.soNumber),
             so.poDate ? formatDate(so.poDate) : "-",
             so.poExpiryDate ? formatDate(so.poExpiryDate) : "-",
             formatDate(so.soCreationDate),
@@ -531,7 +538,7 @@ const SalesOrder = () => {
         const body = filteredData.map(so => [
           so.soNumber || "-",
           so.customerName || "-",
-          so.customerPoNumber || "-",
+          getDisplayCustomerPoNumber(so.customerPoNumber, so.soNumber),
           so.poDate ? formatDate(so.poDate) : "-",
           so.poExpiryDate ? formatDate(so.poExpiryDate) : "-",
           formatDate(so.soCreationDate),
@@ -704,16 +711,17 @@ const SalesOrder = () => {
             <thead>
               <tr className="bg-emerald-900 text-white font-bold text-[15px] uppercase">
                 {[
-                  t('modules:soNo'), t('modules:customerName'), t('modules:customer_type'), t('modules:customerPoNumber'), 
+                  t('common:sr_no', 'SR NO'), t('modules:soNo'), t('modules:customerName'), t('modules:customer_type'), t('modules:customerPoNumber'), 
                   t('modules:customerPoDate'), t('modules:customerPoExpDate'), t('modules:creation_date'), t('modules:so_expiry_date', 'SO Expiry Date'), 
-                  t('modules:amount_col', 'Amount'), t('modules:gst_no'), t('modules:credit_days'), t('modules:taxAmount'), 
-                  t('modules:total_amount_col'), t('common:status'), t('common:action')
+                  t('modules:gst_no'), t('modules:credit_days'), t('modules:taxable_amount_col', 'Taxable Amount'), t('modules:tax_amount_col', 'Tax Amount'), 
+                  t('modules:total_amount_col', 'Total Amount'), t('common:status'), t('common:action')
                 ].map(h => (
                   <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap" style={{ wordSpacing: '1px' }}>{h}</th>
                 ))}
               </tr>
               <tr className="bg-[#0b543f]">
                 {[
+                  { key: 'srNo', noSearch: true },
                   { key: 'soNo', placeholder: 'SO No' },
                   { key: 'customerName', placeholder: 'Name' },
                   { key: 'customerType', placeholder: 'Type' },
@@ -722,9 +730,9 @@ const SalesOrder = () => {
                   { key: 'poExpiryDate', placeholder: 'Exp Date' },
                   { key: 'soCreationDate', placeholder: 'Created' },
                   { key: 'expiryDate', placeholder: 'SO Expiry' },
-                  { key: 'amount', placeholder: 'Amount' },
                   { key: 'gstNo', placeholder: 'GST No' },
                   { key: 'creditDays', placeholder: 'Credit' },
+                  { key: 'amount', placeholder: 'Taxable' },
                   { key: 'taxAmount', placeholder: 'Tax' },
                   { key: 'totalAmount', placeholder: 'Total' },
                   { key: 'computedStatusLabel', placeholder: 'Status' },
@@ -745,20 +753,52 @@ const SalesOrder = () => {
               </tr>
             </thead>
             <tbody className={`text-[14px] text-[#111827] ${isRefreshing ? 'opacity-40' : 'opacity-100'}`}>
+              {(() => {
+                const pageTaxable = currentItems.reduce((sum, r) => sum + (parseFloat(r.totalAmount) || 0), 0);
+                const pageTax = currentItems.reduce((sum, r) => sum + (parseFloat(r.taxAmount) || 0), 0);
+                const pageTotal = currentItems.reduce((sum, r) => sum + (parseFloat(r.grandTotal) || 0), 0);
+
+                const allData = filteredData && filteredData.length > 0 ? filteredData : salesOrders;
+                const grandTaxable = allData.reduce((sum, r) => sum + (parseFloat(r.totalAmount) || 0), 0);
+                const grandTax = allData.reduce((sum, r) => sum + (parseFloat(r.taxAmount) || 0), 0);
+                const grandTotal = allData.reduce((sum, r) => sum + (parseFloat(r.grandTotal) || 0), 0);
+
+                return (
+                  <>
+                    {/* Page Total Row */}
+                    <tr className="border-b border-[#E2E8F0] bg-gray-50/90 font-bold text-[13px] text-[#334155]">
+                      <td colSpan="11" className="px-6 py-3.5 text-right font-extrabold text-[#111827]">Page Total</td>
+                      <td className="px-6 py-3.5 text-center font-bold text-[#111827]">₹{pageTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-6 py-3.5 text-center font-bold text-[#111827]">₹{pageTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-6 py-3.5 text-left font-extrabold text-[#073318]">₹{pageTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td colSpan="2" className="px-6 py-3.5 text-center">-</td>
+                    </tr>
+                    {/* Grand Total Row */}
+                    <tr className="bg-[#E6F4EA] font-extrabold text-[#064E3B] border-b border-[#A7F3D0] text-[13px]">
+                      <td colSpan="11" className="px-6 py-3.5 text-right font-black text-emerald-950">Grand Total</td>
+                      <td className="px-6 py-3.5 text-center font-extrabold text-emerald-900">₹{grandTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-6 py-3.5 text-center font-extrabold text-emerald-900">₹{grandTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-6 py-3.5 text-left font-black text-emerald-950">₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td colSpan="2" className="px-6 py-3.5 text-center">-</td>
+                    </tr>
+                  </>
+                );
+              })()}
               {currentItems.length > 0 ? (
                 currentItems.map((so, idx) => (
                   <tr key={so.id || idx} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
+                    <td className="px-6 py-5 text-center font-bold text-gray-500">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
                     <td className="px-6 py-5 font-bold">{so.soNumber}</td>
                     <td className="px-6 py-5 font-bold capitalize lowercase">{so.customerName}</td>
                     <td className="px-6 py-5 font-bold capitalize lowercase text-[#6B7280]">{so.customerType || 'Retail'}</td>
-                    <td className="px-6 py-5 font-bold text-[#4B5563]">{so.customerPoNumber || '-'}</td>
+                    <td className="px-6 py-5 font-bold text-[#4B5563]">{getDisplayCustomerPoNumber(so.customerPoNumber, so.soNumber)}</td>
                     <td className="px-6 py-5 font-bold text-[#4B5563]">{so.poDate ? formatDate(so.poDate) : '-'}</td>
                     <td className="px-6 py-5 font-bold text-[#4B5563]">{so.poExpiryDate ? formatDate(so.poExpiryDate) : '-'}</td>
                     <td className="px-6 py-5 font-bold text-[#4B5563]">{formatDate(so.soCreationDate)}</td>
                     <td className="px-6 py-5 font-bold text-[#4B5563]">{formatDate(so.expiryDate)}</td>
-                    <td className="px-6 py-5 font-bold">{(so.totalAmount || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 font-bold text-center">{so.gstNumber || '-'}</td>
                     <td className="px-6 py-5 font-bold text-center">{so.creditDays || 0}</td>
+                    <td className="px-6 py-5 font-bold text-center">{(so.totalAmount || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 font-bold text-center">{(so.taxAmount || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 font-bold text-[#073318]">{(so.grandTotal || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 text-center">
@@ -767,7 +807,7 @@ const SalesOrder = () => {
                       </span>
                     </td>
                     <td className="px-6 py-5 text-center relative" ref={el => dropdownRefs.current[so.id] = el}>
-                      <button onClick={() => setActiveDropdown(activeDropdown === so.id ? null : so.id)} className={`p-2 rounded-lg ${activeDropdown === so.id ? 'bg-[#073318] text-white' : 'text-gray-400 hover:bg-gray-100'}`}><MoreVertical size={20} /></button>
+                      <button onClick={() => setActiveDropdown(activeDropdown === so.id ? null : so.id)} className={`p-2 rounded-lg ${activeDropdown === so.id ? 'bg-[#073318] text-white' : 'text-[#4B5563] hover:bg-gray-100'}`}><MoreVertical size={20} /></button>
                       {activeDropdown === so.id && (
                         <div className={`absolute right-full mr-2 w-max min-w-[220px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= currentItems.length - 3 ? 'bottom-0' : 'top-0'}`}>
                           {/* View Option (Always) */}
@@ -795,7 +835,7 @@ const SalesOrder = () => {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan="15" className="px-6 py-24 text-center text-gray-400 uppercase font-bold tracking-widest">{t('common:no_results_found')}</td></tr>
+                <tr><td colSpan="16" className="px-6 py-24 text-center text-gray-400 uppercase font-bold tracking-widest">{t('common:no_results_found')}</td></tr>
               )}
             </tbody>
           </table>

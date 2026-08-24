@@ -207,6 +207,20 @@ const GRNForm = ({
                     </div>
                 </div>
 
+                {/* 5.1 GRN Number (Auto Generated) */}
+                {isGRN && (
+                    <div className="space-y-2">
+                        <label className="text-[14px] font-semibold text-[#374151]">{t('modules:grn_no', 'GRN No')}</label>
+                        <input
+                            type="text"
+                            placeholder="Auto-generated (e.g. GRN-0001)"
+                            value={formData.document_number || formData.grn_number || ''}
+                            readOnly
+                            className="w-full h-[48px] bg-gray-50 border border-[#E5E7EB] rounded-[10px] px-4 text-[14px] font-bold outline-none text-gray-700 cursor-not-allowed shadow-sm"
+                        />
+                    </div>
+                )}
+
                 {/* 6. Supplier Challan/Invoice Number */}
                 <div className="space-y-2">
                     <label className="text-[14px] font-semibold text-[#374151]">{t('modules:supplier_no_label', 'Supplier {{label}} Number', { label: numLabel })} <span className="text-red-500">*</span></label>

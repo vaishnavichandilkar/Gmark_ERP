@@ -238,7 +238,7 @@ const ProductMaster = () => {
           link.parentNode.removeChild(link);
         }}
         sampleFileName="Product_Master_Sample.xlsx"
-        sampleHeaders={['Type*', 'Product Name*', 'UOM*', 'Category*', 'Sub Category*', 'Sub Sub Category', 'HSN/SAC Code*', 'Tax Rate (%)*', 'Product Description', 'Status']}
+        sampleHeaders={['Type*', 'Product Name*', 'UOM*', 'Category*', 'Sub Category*', 'Sub Sub Category', 'HSN/SAC Code*', 'Description']}
       />
 
       <button

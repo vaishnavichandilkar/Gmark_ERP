@@ -91,6 +91,7 @@ const PurchaseOrder = () => {
     expiryDate: "",
     gstNumber: "",
     creditDays: "",
+    taxableAmount: "",
     taxAmount: "",
     totalAmount: "",
     status: ""
@@ -216,6 +217,8 @@ const PurchaseOrder = () => {
       const isFullyReceived = totalPoQty > 0 && totalReceivedQty >= (totalPoQty - 0.001);
       const isFullyInvoiced = totalPoQty > 0 && totalInvoicedQty >= (totalPoQty - 0.001);
 
+      const taxableAmount = po.taxableAmount ?? (po.beforeTaxAmount ?? (po.items?.reduce((sum, i) => sum + (Number(i.beforeTaxAmount) || 0), 0) || ((po.totalAmount || 0) - (po.taxAmount || 0))));
+
       let computedStatusLabel = "Pending";
       let bgClass = "bg-orange-100 text-orange-600";
 
@@ -235,7 +238,7 @@ const PurchaseOrder = () => {
         computedStatusLabel = "Pending"; bgClass = "bg-blue-50 text-blue-600 border border-blue-100";
       }
 
-      return { ...po, computedStatusLabel, bgClass };
+      return { ...po, taxableAmount, computedStatusLabel, bgClass };
     });
 
     // Refine based on applied filter
@@ -255,6 +258,7 @@ const PurchaseOrder = () => {
           else if (key === 'expiryDate') fieldVal = formatDate(po.expiryDate) || "";
           else if (key === 'gstNumber') fieldVal = po.gstNumber || "";
           else if (key === 'creditDays') fieldVal = (po.creditDays || 0).toString();
+          else if (key === 'taxableAmount') fieldVal = (po.taxableAmount || 0).toFixed(2);
           else if (key === 'taxAmount') fieldVal = (po.taxAmount || 0).toFixed(2);
           else if (key === 'totalAmount') fieldVal = (po.totalAmount || 0).toFixed(2);
           else if (key === 'status') fieldVal = po.computedStatusLabel || "";
@@ -505,21 +509,23 @@ const PurchaseOrder = () => {
             <thead>
               <tr className="bg-emerald-900 text-white font-bold text-[15px]">
                 {[
-                  t('modules:po_no'), t('modules:supplier_name'), t('modules:creation_date'),
-                  t('modules:expiry_date'), t('modules:gst_number_col'), t('modules:credit_days_col'),
-                  t('modules:tax_amount_col'), t('modules:total_amount_col'), t('common:status'), t('common:action')
+                  t('common:sr_no', 'SR NO'), t('modules:po_no'), t('modules:supplier_name'), t('modules:creation_date'),
+                  t('modules:po_expiry_date', 'PO Expiry Date'), t('modules:gst_number_col'), t('modules:credit_days_col'),
+                  t('modules:taxable_amount_col', 'Taxable Amount'), t('modules:tax_amount_col', 'Tax Amount'), t('modules:total_amount_col', 'Total Amount'), t('common:status'), t('common:action')
                 ].map(h => (
                   <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
               <tr className="bg-[#0b543f]">
                 {[
+                  { key: 'srNo', noSearch: true },
                   { key: 'poNumber', placeholder: 'PO No' },
                   { key: 'supplierName', placeholder: 'Name' },
                   { key: 'poCreationDate', placeholder: 'Created' },
                   { key: 'expiryDate', placeholder: 'Expiry' },
                   { key: 'gstNumber', placeholder: 'GST No' },
                   { key: 'creditDays', placeholder: 'Credit' },
+                  { key: 'taxableAmount', placeholder: 'Taxable' },
                   { key: 'taxAmount', placeholder: 'Tax' },
                   { key: 'totalAmount', placeholder: 'Total' },
                   { key: 'status', placeholder: 'Status' },
@@ -540,9 +546,41 @@ const PurchaseOrder = () => {
               </tr>
             </thead>
             <tbody className={`text-[14px] text-[#111827] ${isRefreshing ? 'opacity-40' : 'opacity-100'}`}>
+              {(() => {
+                const pageTaxable = currentItems.reduce((sum, r) => sum + (parseFloat(r.taxableAmount) || 0), 0);
+                const pageTax = currentItems.reduce((sum, r) => sum + (parseFloat(r.taxAmount) || 0), 0);
+                const pageTotal = currentItems.reduce((sum, r) => sum + (parseFloat(r.totalAmount) || 0), 0);
+
+                const allData = filteredData && filteredData.length > 0 ? filteredData : purchaseOrders;
+                const grandTaxable = allData.reduce((sum, r) => sum + (parseFloat(r.taxableAmount) || 0), 0);
+                const grandTax = allData.reduce((sum, r) => sum + (parseFloat(r.taxAmount) || 0), 0);
+                const grandTotal = allData.reduce((sum, r) => sum + (parseFloat(r.totalAmount) || 0), 0);
+
+                return (
+                  <>
+                    {/* Page Total Row */}
+                    <tr className="border-b border-[#E2E8F0] bg-gray-50/90 font-bold text-[13px] text-[#334155]">
+                      <td colSpan="7" className="px-6 py-3.5 text-right font-extrabold text-[#111827]">Page Total</td>
+                      <td className="px-6 py-3.5 text-center font-bold text-[#111827]">₹{pageTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-6 py-3.5 text-center font-bold text-[#111827]">₹{pageTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-6 py-3.5 text-left font-extrabold text-[#073318]">₹{pageTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td colSpan="2" className="px-6 py-3.5 text-center">-</td>
+                    </tr>
+                    {/* Grand Total Row */}
+                    <tr className="bg-[#E6F4EA] font-extrabold text-[#064E3B] border-b border-[#A7F3D0] text-[13px]">
+                      <td colSpan="7" className="px-6 py-3.5 text-right font-black text-emerald-950">Grand Total</td>
+                      <td className="px-6 py-3.5 text-center font-extrabold text-emerald-900">₹{grandTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-6 py-3.5 text-center font-extrabold text-emerald-900">₹{grandTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-6 py-3.5 text-left font-black text-emerald-950">₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td colSpan="2" className="px-6 py-3.5 text-center">-</td>
+                    </tr>
+                  </>
+                );
+              })()}
               {currentItems.length > 0 ? (
                 currentItems.map((po, idx) => (
                   <tr key={po.id || idx} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
+                    <td className="px-6 py-5 text-center font-bold text-gray-500">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
                     <td className="px-6 py-5">{po.poNumber}</td>
                     <td className="px-6 py-5 font-bold">
                       {po.supplierName ? po.supplierName.toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) : '-'}
@@ -551,13 +589,14 @@ const PurchaseOrder = () => {
                     <td className="px-6 py-5 text-[#4B5563]">{formatDate(po.expiryDate)}</td>
                     <td className="px-6 py-5 text-center">{po.gstNumber || '-'}</td>
                     <td className="px-6 py-5 text-center">{po.creditDays || 0}</td>
+                    <td className="px-6 py-5 text-center">{(po.taxableAmount || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 text-center">{(po.taxAmount || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 text-[#073318]">{(po.totalAmount || 0).toFixed(2)}</td>
                     <td className="px-6 py-5 text-center">
                       <span className={`px-4 py-1.5 ${po.bgClass} rounded-full text-[12px] font-bold shadow-sm inline-flex min-w-[100px] justify-center`}>{t(`common:status_${po.computedStatusLabel.toLowerCase().replace(' ', '_')}`, po.computedStatusLabel)}</span>
                     </td>
                     <td className="px-6 py-5 text-center relative" ref={el => dropdownRefs.current[po.id] = el}>
-                      <button onClick={() => setActiveDropdown(activeDropdown === po.id ? null : po.id)} className={`p-2 rounded-lg ${activeDropdown === po.id ? 'bg-[#073318] text-white' : 'text-gray-400 hover:bg-gray-100'}`}><MoreVertical size={20} /></button>
+                      <button onClick={() => setActiveDropdown(activeDropdown === po.id ? null : po.id)} className={`p-2 rounded-lg ${activeDropdown === po.id ? 'bg-[#073318] text-white' : 'text-[#4B5563] hover:bg-gray-100'}`}><MoreVertical size={20} /></button>
                       {activeDropdown === po.id && (
                         <div className={`absolute right-full mr-2 w-max min-w-[200px] bg-white border border-gray-100 rounded-[14px] shadow-2xl z-[110] py-2 animate-in zoom-in-95 duration-200 text-left font-bold ${idx >= currentItems.length - 2 ? 'bottom-0' : 'top-0'}`}>
                           {/* VIEW / VIEW & EDIT */}
@@ -582,7 +621,7 @@ const PurchaseOrder = () => {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan="11" className="px-6 py-24 text-center text-gray-400 uppercase font-bold tracking-widest">{t('common:no_results_found')}</td></tr>
+                <tr><td colSpan="12" className="px-6 py-24 text-center text-gray-400 uppercase font-bold tracking-widest">{t('common:no_results_found')}</td></tr>
               )}
             </tbody>
           </table>

@@ -108,7 +108,8 @@ const AddGRN = () => {
                         supplier_id: grn.supplierId?.toString() || '',
                         supplier_name: grn.supplierName,
                         address: grn.address,
-                        document_number: grn.grnNumber,
+                        document_number: grn.grnNumber || grn.grnNo || `GRN-${String(grn.id).padStart(4, '0')}`,
+                        grn_number: grn.grnNumber || grn.grnNo || `GRN-${String(grn.id).padStart(4, '0')}`,
                         supplier_challan_number: grn.challanNumber,
                         booking_date: grn.bookingDate?.split('T')[0] || grn.grnDate?.split('T')[0],
                         document_date: grn.grnDate?.split('T')[0],
@@ -162,6 +163,23 @@ const AddGRN = () => {
                         taxRate: e.taxRate
                     })) || []);
                 } else {
+                    try {
+                        const numRes = await grnService.getNextNumber();
+                        const nextNo = numRes?.grnNumber || 'GRN-0001';
+                        setFormData(prev => ({
+                            ...prev,
+                            document_number: nextNo,
+                            grn_number: nextNo
+                        }));
+                    } catch (e) {
+                        console.error('Error fetching GRN next number', e);
+                        setFormData(prev => ({
+                            ...prev,
+                            document_number: 'GRN-0001',
+                            grn_number: 'GRN-0001'
+                        }));
+                    }
+
                     // Check for Draft Restore
                     const urlParams = new URLSearchParams(window.location.search);
                     const newCustomerId = urlParams.get('newCustomerId');
@@ -357,47 +375,28 @@ const AddGRN = () => {
                    console.error("Failed to fetch received history", e);
                 }
 
-                const remainingInPO = qty - receivedCount;
-                const effectiveQty = remainingInPO > 0 ? remainingInPO : 0;
-                const baseAmount = effectiveQty * rate;
-
-                // Recalculate discount amount based on percentage or proportionally
-                let currentDiscAmt = 0;
-                if (discPct > 0) {
-                    currentDiscAmt = parseFloat(((baseAmount * discPct) / 100).toFixed(2));
-                } else if (qty > 0 && discAmt > 0) {
-                    // Proportional scaling if only amount is provided
-                    currentDiscAmt = parseFloat(((discAmt / qty) * effectiveQty).toFixed(2));
-                }
-
-                const befTax = baseAmount - currentDiscAmt;
-                
-                const type = calculateGST(formData.gst_no || poDetails.gstNumber, formData.supplier_state);
-                let taxAmt = 0;
-                if (type.gstType !== 'NONE') {
-                    taxAmt = (befTax * taxPct) / 100;
-                }
+                const remainingInPO = Math.max(0, qty - receivedCount);
 
                 return {
                     id: Date.now() + Math.random(),
                     productId: item.productId || item.product_id,
                     productCode: item.productCode || item.product_code,
                     productName: item.productName || item.product_name,
-                    quantity: effectiveQty, 
+                    quantity: 0, 
                     rate: rate,
                     uom: item.uom,
-                    discountAmount: currentDiscAmt,
+                    discountAmount: 0,
                     discountPercent: discPct,
                     hsnCode: item.hsnCode || item.hsn_code || '',
                     taxPercent: taxPct,
-                    beforeTaxAmount: befTax,
-                    taxAmount: taxAmt,
-                    totalAmount: befTax + taxAmt,
+                    beforeTaxAmount: 0,
+                    taxAmount: 0,
+                    totalAmount: 0,
                     printDescription: item.printDescription || item.productName || item.product_name || '',
                     originalPrintDescription: item.printDescription || item.productName || item.product_name || '',
                     totalPoQty: qty,
                     receivedPoQty: receivedCount,
-                    remainingQty: 0 // Will be calc in table
+                    remainingQty: remainingInPO
                 };
             }));
             setItems(poItems);
@@ -456,11 +455,14 @@ const AddGRN = () => {
             const itemErrors = [];
             items.forEach((item, index) => {
                 if (item.productCode) {
-                    if (!item.quantity || item.quantity <= 0) {
+                    const qtyVal = item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? Number(item.quantity) : NaN;
+                    const rateVal = item.rate !== undefined && item.rate !== null && item.rate !== '' ? Number(item.rate) : NaN;
+
+                    if (isNaN(qtyVal) || qtyVal < 0) {
                         if (!itemErrors[index]) itemErrors[index] = {};
                         itemErrors[index].quantity = true;
                     }
-                    if (!item.rate || item.rate <= 0) {
+                    if (isNaN(rateVal) || rateVal < 0) {
                         if (!itemErrors[index]) itemErrors[index] = {};
                         itemErrors[index].rate = true;
                     }
@@ -551,6 +553,8 @@ const AddGRN = () => {
             const grandTotal = materialTotal + expenseTotal + taxInGrandTotal;
 
             const payload = {
+                grnNumber: formData.document_number || formData.grn_number,
+                grnNo: formData.document_number || formData.grn_number,
                 supplierId: formData.supplier_id,
                 supplierName: formData.supplier_name,
                 address: formData.address,

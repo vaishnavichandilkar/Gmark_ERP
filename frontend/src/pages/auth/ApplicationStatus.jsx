@@ -65,7 +65,7 @@ const ApplicationStatus = () => {
 
                     // If approved and already marked as seen in DB
                     if (approvalStatus === 'APPROVED' && !isFirstApprovalLogin) {
-                        navigate('/dashboard', { replace: true });
+                        navigate('/seller/reports', { replace: true });
                         return;
                     }
 
@@ -100,7 +100,7 @@ const ApplicationStatus = () => {
             await axiosInstance.post('/auth/mark-approval-seen');
 
             // Navigate only after DB success
-            navigate('/dashboard', { replace: true });
+            navigate('/seller/reports', { replace: true });
         } catch (error) {
             console.error('Failed to update approval status in DB', error);
             setIsLoading(false);

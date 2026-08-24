@@ -702,7 +702,7 @@ const POPrintPreview = () => {
                                                     <span className="font-semibold text-[11px] whitespace-nowrap">{credit_days} {t('modules:days', 'Days')}</span>
                                                 </div>
                                                 <div className="flex-1 flex items-center px-4 gap-2 border-l border-black">
-                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:expiry_date', 'Expiry Date')} :</span>
+                                                    <span className="font-black text-[11px] whitespace-nowrap">{t('modules:po_expiry_date', 'PO Expiry Date')} :</span>
                                                     <span className="font-semibold text-[11px] whitespace-nowrap">{formatDate(expiry_date)}</span>
                                                 </div>
                                             </div>

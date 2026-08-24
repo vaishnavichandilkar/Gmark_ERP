@@ -338,15 +338,15 @@ const AddChallan = () => {
                 uom: item.uom || product?.uom?.gst_uom || product?.uom?.unit_name || '',
                 hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
                 taxPercent,
-                discountAmount: currentDiscAmt,
+                discountAmount: 0,
                 discountPercent: discPct,
                 totalSoQty,
                 givenSoQty,
-                quantity: remainingQty,
-                remainingQty: 0, // Since we set quantity to remainingQty, the new remaining would be 0
-                beforeTaxAmount: parseFloat(befTax.toFixed(2)),
-                taxAmount: parseFloat(taxAmount.toFixed(2)),
-                totalAmount: parseFloat(totalAmount.toFixed(2)),
+                quantity: 0,
+                remainingQty: remainingQty,
+                beforeTaxAmount: 0,
+                taxAmount: 0,
+                totalAmount: 0,
                 printDescription: item.printDescription || item.productName || '',
                 originalPrintDescription: item.printDescription || item.productName || '',
             };
@@ -454,37 +454,42 @@ const AddChallan = () => {
 
         setIsSaving(true);
         try {
+            const parsedCustId = parseInt(formData.customerId, 10);
+            const parsedSoId = parseInt(formData.soId, 10);
+
             const payload = {
-                customerId: parseInt(formData.customerId),
+                customerId: !isNaN(parsedCustId) ? parsedCustId : undefined,
                 customerName: formData.customerName,
                 address: formData.address || '',
                 gstNumber: formData.gstNo || '',
-                creditDays: parseInt(formData.creditDays) || 0,
-                bookingDate: formData.bookingDate,
-                soId: formData.soId ? parseInt(formData.soId) : null,
+                creditDays: parseInt(formData.creditDays, 10) || 0,
+                bookingDate: formData.bookingDate || new Date().toISOString(),
+                soId: !isNaN(parsedSoId) ? parsedSoId : undefined,
                 soNumber: formData.soNumber || '',
-                // Map frontend field names → backend field names
                 challanNumber: formData.customerChallanNumber,
                 challanDate: formData.customerChallanDate,
                 items: items
                     .filter(item => item.productId)
-                    .map(item => ({
-                        productId: parseInt(item.productId),
-                        productCode: item.productCode,
-                        productName: item.productName,
-                        quantity: parseFloat(item.quantity) || 0,
-                        rate: parseFloat(item.rate) || 0,
-                        uom: item.uom || '',
-                        hsnCode: item.hsnCode || '',
-                        taxPercent: gstType.gstType !== 'NONE' ? (parseFloat(item.taxPercent) || 0) : 0,
-                        discountAmt: parseFloat(item.discountAmount) || 0,
-                        discountPercent: parseFloat(item.discountPercent) || 0,
-                        beforeTaxAmount: parseFloat(item.beforeTaxAmount) || 0,
-                        taxAmount: gstType.gstType !== 'NONE' ? (parseFloat(item.taxAmount) || 0) : 0,
-                        amount: parseFloat(item.totalAmount) || 0,
-                        totalSoQty: parseFloat(item.totalSoQty) || 0,
-                        printDescription: item.printDescription || item.productName || '',
-                    })),
+                    .map(item => {
+                        const parsedProdId = parseInt(item.productId, 10);
+                        return {
+                            productId: !isNaN(parsedProdId) ? parsedProdId : undefined,
+                            productCode: item.productCode,
+                            productName: item.productName,
+                            quantity: parseFloat(item.quantity) || 0,
+                            rate: parseFloat(item.rate) || 0,
+                            uom: item.uom || '',
+                            hsnCode: item.hsnCode || '',
+                            taxPercent: gstType.gstType !== 'NONE' ? (parseFloat(item.taxPercent) || 0) : 0,
+                            discountAmt: parseFloat(item.discountAmount) || 0,
+                            discountPercent: parseFloat(item.discountPercent) || 0,
+                            beforeTaxAmount: parseFloat(item.beforeTaxAmount) || 0,
+                            taxAmount: gstType.gstType !== 'NONE' ? (parseFloat(item.taxAmount) || 0) : 0,
+                            amount: parseFloat(item.totalAmount) || 0,
+                            totalSoQty: parseFloat(item.totalSoQty) || 0,
+                            printDescription: item.printDescription || item.productName || '',
+                        };
+                    }),
                 expenses: expenses.map(e => ({
                     groupName: e.groupName,
                     amount: parseFloat(e.amount) || 0,

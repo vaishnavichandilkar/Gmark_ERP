@@ -61,6 +61,7 @@ const SalesInvoice = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [columnFilters, setColumnFilters] = useState({
         customerName: "",
+        customerType: "",
         invoiceNo: "",
         customerInvoiceDate: "",
         grandTotal: "",
@@ -102,9 +103,9 @@ const SalesInvoice = () => {
     const [appliedFilters, setAppliedFilters] = useState(defaultFilters);
     const isFilterApplied = appliedFilters.status !== "All";
 
-    // Pagination
     const [itemsPerPage, setItemsPerPage] = useState(15);
     const [currentPage, setCurrentPage] = useState(1);
+    const [metaGrandTotals, setMetaGrandTotals] = useState(null);
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -117,6 +118,13 @@ const SalesInvoice = () => {
             const data = Array.isArray(response) ? response : (response.data || []);
             setInvoices(data);
             setTotalItemsCount(response.meta?.total || data.length);
+            if (response.meta) {
+                setMetaGrandTotals({
+                    grandTaxable: response.meta.grandTaxable || 0,
+                    grandTax: response.meta.grandTax || 0,
+                    grandTotal: response.meta.grandTotal || 0,
+                });
+            }
         } catch (error) {
             console.error("Error fetching invoices:", error);
             toast.error(t('modules:failed_to_load_invoices'));
@@ -290,6 +298,7 @@ const SalesInvoice = () => {
             return {
                 ...item,
                 customerName: item.customerName || "-",
+                customerType: item.customerType || item.customer?.customerType || item.salesOrder?.customerType || 'Retail',
                 invoiceNo: item.invoiceNumber || "-",
                 customerInvNo: item.customerInvoiceNumber || "-",
                 customerInvoiceDate: formatDate(item.customerInvoiceDate || item.invoiceDate),
@@ -311,6 +320,7 @@ const SalesInvoice = () => {
                 baseData = baseData.filter(row => {
                     let fieldVal = "";
                     if (key === 'customerName') fieldVal = row.customerName || "";
+                    else if (key === 'customerType') fieldVal = row.customerType || "";
                     else if (key === 'invoiceNo') fieldVal = row.customerInvNo || "";
                     else if (key === 'customerInvoiceDate') fieldVal = row.customerInvoiceDate || "";
                     else if (key === 'bookingDate') fieldVal = row.bookingDate || "";
@@ -335,7 +345,7 @@ const SalesInvoice = () => {
         <div className="flex flex-col w-full relative font-outfit">
             {/* Header */}
             <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between items-center">
-                <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('modules:sales_invoice_title')}</h1>
+                <h1 className="text-[28px] font-bold text-[#111827] tracking-tight">{t('modules:sales_invoice_title', 'Sales Invoice')}</h1>
                 <button
                     onClick={() => {
                         sessionStorage.removeItem('add_si_draft');
@@ -419,18 +429,20 @@ const SalesInvoice = () => {
                         <thead>
                             <tr className="bg-emerald-900 text-white font-bold text-[15px]">
                                 {[
-                                    t('modules:customerName'), t('modules:cust_inv_no'), t('modules:customer_invoice_date'),
+                                    t('common:sr_no', 'SR NO'), t('modules:cust_inv_no'), t('modules:customerName'), t('modules:customer_type'), t('modules:customer_invoice_date'),
                                     t('modules:bookingDate'), t('modules:soNo'), t('modules:gst_no'),
-                                    t('modules:taxable_amount', 'Taxable Amt'), t('modules:tax_amount', 'Tax Amt'),
-                                    t('modules:grand_total_col'), t('common:status'), t('common:action')
+                                    t('modules:taxable_amount_col', 'Taxable Amount'), t('modules:tax_amount_col', 'Tax Amount'),
+                                    t('modules:total_amount_col', 'Total Amount'), t('common:status'), t('common:action')
                                 ].map(h => (
                                     <th key={h} className="px-6 py-5 border-r border-white/10 whitespace-nowrap">{h}</th>
                                 ))}
                             </tr>
                             <tr className="bg-[#0b543f]">
                                 {[
-                                    { key: 'customerName', placeholder: 'Name' },
+                                    { key: 'srNo', noSearch: true },
                                     { key: 'invoiceNo', placeholder: 'Inv No' },
+                                    { key: 'customerName', placeholder: 'Name' },
+                                    { key: 'customerType', placeholder: 'Type' },
                                     { key: 'customerInvoiceDate', placeholder: 'Inv Date' },
                                     { key: 'bookingDate', placeholder: 'Booking Date' },
                                     { key: 'soNo', placeholder: 'SO No' },
@@ -456,11 +468,43 @@ const SalesInvoice = () => {
                             </tr>
                         </thead>
                         <tbody className={`text-[14px] text-[#111827] ${isLoading ? 'opacity-40' : 'opacity-100'}`}>
+                            {(() => {
+                                const pageTaxable = mappedInvoices.reduce((sum, r) => sum + (parseFloat(r.taxableAmount) || 0), 0);
+                                const pageTax = mappedInvoices.reduce((sum, r) => sum + (parseFloat(r.taxAmount) || 0), 0);
+                                const pageGross = mappedInvoices.reduce((sum, r) => sum + (parseFloat(r.grandTotal) || 0), 0);
+
+                                const grandTaxable = metaGrandTotals ? metaGrandTotals.grandTaxable : invoices.reduce((sum, r) => sum + (parseFloat(r.taxableAmount) || 0), 0);
+                                const grandGross = metaGrandTotals ? metaGrandTotals.grandTotal : invoices.reduce((sum, r) => sum + (parseFloat(r.grandTotal) || 0), 0);
+                                const grandTax = metaGrandTotals ? metaGrandTotals.grandTax : (grandGross - grandTaxable);
+
+                                return (
+                                    <>
+                                        {/* Page Total Row */}
+                                        <tr className="border-b border-[#E2E8F0] bg-gray-50/90 font-bold text-[13px] text-[#334155]">
+                                            <td colSpan="8" className="px-6 py-3.5 text-right font-extrabold text-[#111827]">Page Total</td>
+                                            <td className="px-6 py-3.5 text-right font-bold text-[#111827]">₹{pageTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td className="px-6 py-3.5 text-right font-bold text-[#111827]">₹{pageTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td className="px-6 py-3.5 text-right font-extrabold text-[#073318]">₹{pageGross.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td colSpan="2" className="px-6 py-3.5 text-center">-</td>
+                                        </tr>
+                                        {/* Grand Total Row */}
+                                        <tr className="bg-[#E6F4EA] font-extrabold text-[#064E3B] border-b border-[#A7F3D0] text-[13px]">
+                                            <td colSpan="8" className="px-6 py-3.5 text-right font-black text-emerald-950">Grand Total</td>
+                                            <td className="px-6 py-3.5 text-right font-extrabold text-emerald-900">₹{grandTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td className="px-6 py-3.5 text-right font-extrabold text-emerald-900">₹{grandTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td className="px-6 py-3.5 text-right font-black text-emerald-950">₹{grandGross.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td colSpan="2" className="px-6 py-3.5 text-center">-</td>
+                                        </tr>
+                                    </>
+                                );
+                            })()}
                             {mappedInvoices.length > 0 ? (
                                 mappedInvoices.map((row, idx) => (
                                     <tr key={row.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
-                                        <td className="px-6 py-5 font-bold">{row.customerName}</td>
+                                        <td className="px-6 py-5 text-center font-bold text-gray-500">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
                                         <td className="px-6 py-4 font-bold text-gray-500">{row.customerInvNo}</td>
+                                        <td className="px-6 py-5 font-bold">{row.customerName}</td>
+                                        <td className="px-6 py-5 font-bold capitalize lowercase text-[#6B7280]">{row.customerType || 'Retail'}</td>
                                         <td className="px-6 py-4">{row.customerInvoiceDate}</td>
                                         <td className="px-6 py-4">{row.bookingDate}</td>
                                         <td className="px-6 py-4 font-bold text-gray-500">{row.soNo}</td>
@@ -514,7 +558,7 @@ const SalesInvoice = () => {
                                     </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan="7" className="px-6 py-24 text-center text-gray-400 font-bold uppercase tracking-widest">{t('common:no_results_found')}</td></tr>
+                                <tr><td colSpan="13" className="px-6 py-24 text-center text-gray-400 font-bold uppercase tracking-widest">{t('common:no_results_found')}</td></tr>
                             )}
                         </tbody>
                     </table>

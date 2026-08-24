@@ -713,7 +713,7 @@ const AddPO = () => {
             const missingFields = [];
             if (newErrors.supplier_name) missingFields.push("Supplier Name");
             if (newErrors.credit_days) missingFields.push("Credit Days");
-            if (newErrors.expiry_date) missingFields.push("Expiry Date");
+            if (newErrors.expiry_date) missingFields.push("PO Expiry Date");
             if (newErrors.items) missingFields.push("At least 1 product");
             if (newErrors.itemErrors) missingFields.push("Product Quantity & Rate");
 
@@ -1014,7 +1014,7 @@ const AddPO = () => {
                         </div>
 
                         <DateInput
-                            label={t('modules:expiry_date')}
+                            label={t('modules:po_expiry_date', 'PO Expiry Date')}
                             required
                             value={formData.expiry_date}
                             minDate={formData.creation_date || toDisplayDate(new Date())}

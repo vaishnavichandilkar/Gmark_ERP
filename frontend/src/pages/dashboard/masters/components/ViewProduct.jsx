@@ -89,7 +89,7 @@ const ViewProduct = ({ initialData, onBack, onEdit }) => {
                         />
                         <InfoTableRow 
                             label1={`${data.product_type === 'SERVICES' ? t('modules:sac_code', 'SAC Code') : t('modules:hsn_code')}:`} value1={data.hsn_code} 
-                            label2={`${t('modules:tax_percent')}:`} value2={data.tax_rate ? `${data.tax_rate}%` : '-'} 
+                            label2={`${t('modules:tax_percent')}:`} value2={(data.tax_rate !== null && data.tax_rate !== undefined && data.tax_rate !== '') ? `${data.tax_rate}%` : '-'} 
                         />
                         
                         <div className="flex flex-col sm:flex-row bg-[#F9FAFB]/30">

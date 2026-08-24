@@ -118,9 +118,15 @@ const ImportModal = ({ isOpen, onClose, onImport, sampleFileName, sampleHeaders,
             }
         } catch (error) {
             console.error('Import error:', error);
-            const msg = error.response?.data?.message || error.message || 'Import failed';
-            const displayMsg = typeof msg === 'string' ? msg : Array.isArray(msg) ? msg.join(' | ') : 'Import failed';
-            toast.error(displayMsg);
+            const responseData = error.response?.data;
+            if (responseData && typeof responseData === 'object' && (responseData.errorFile || responseData.summary || responseData.errors)) {
+                setImportResult(responseData);
+                toast.error(responseData.message || 'Import completed with errors. Click "Download Error Report" below for details.');
+            } else {
+                const msg = responseData?.message || error.message || 'Import failed';
+                const displayMsg = typeof msg === 'string' ? msg : Array.isArray(msg) ? msg.join(' | ') : 'Import failed';
+                toast.error(displayMsg);
+            }
         } finally {
             setIsSubmitting(false);
         }
@@ -253,14 +259,26 @@ const ImportModal = ({ isOpen, onClose, onImport, sampleFileName, sampleHeaders,
 
                 {/* Footer */}
                 <div className="px-6 py-4 border-t border-[#F3F4F6] flex justify-center bg-gray-50 rounded-b-[16px]">
-                    <button
-                        onClick={handleSubmit}
-                        disabled={!selectedFile || isSubmitting}
-                        className="flex items-center justify-center gap-2 px-10 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
-                    >
-                        <UploadCloud size={18} />
-                        {isSubmitting ? 'Importing...' : t('common:submit', 'Submit')}
-                    </button>
+                    {importResult ? (
+                        <button
+                            type="button"
+                            onClick={handleClose}
+                            className="flex items-center justify-center gap-2 px-10 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-md"
+                        >
+                            <X size={18} />
+                            {t('common:cancel', 'Cancel')}
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={handleSubmit}
+                            disabled={!selectedFile || isSubmitting}
+                            className="flex items-center justify-center gap-2 px-10 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
+                        >
+                            <UploadCloud size={18} />
+                            {isSubmitting ? 'Importing...' : t('common:submit', 'Submit')}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

@@ -421,7 +421,7 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    value={item.quantity === 0 ? '' : item.quantity}
+                                                    value={item.quantity === 0 ? '0' : item.quantity}
                                                     onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                                                     className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
                                                 />
@@ -436,7 +436,7 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                             <input
                                                 type="number"
                                                 min="0"
-                                                value={item.quantity === 0 ? '' : item.quantity}
+                                                value={item.quantity === 0 ? '0' : item.quantity}
                                                 onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                                                 className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
                                             />

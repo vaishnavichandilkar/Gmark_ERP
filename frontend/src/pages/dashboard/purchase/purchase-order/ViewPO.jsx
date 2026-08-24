@@ -218,7 +218,7 @@ const ViewPO = () => {
                         <div className="border border-[#E5E7EB] rounded-[12px] overflow-hidden shadow-sm">
                             <InfoTableRow label1={t('modules:supplier_name') + ':'} value1={formData.supplier_name} label2={t('modules:credit_days_col') + ':'} value2={formData.credit_days} />
                             <InfoTableRow label1={t('common:address') + ':'} value1={formData.address} label2={t('modules:creation_date') + ':'} value2={formatDate(formData.creation_date)} />
-                            <InfoTableRow label1={t('modules:expiry_date') + ':'} value1={formatDate(formData.expiry_date)} label2={t('modules:gst_number_col') + ':'} value2={formData.gst_number} />
+                            <InfoTableRow label1={t('modules:po_expiry_date', 'PO Expiry Date') + ':'} value1={formatDate(formData.expiry_date)} label2={t('modules:gst_number_col') + ':'} value2={formData.gst_number} />
                         </div>
                     </div>
                 )}

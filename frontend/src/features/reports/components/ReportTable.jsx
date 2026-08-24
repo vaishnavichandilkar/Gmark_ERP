@@ -37,11 +37,10 @@ const ReportTable = ({ data, type, status, onClose }) => {
     }, [activeDropdown]);
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
+        return Number(amount || 0).toLocaleString('en-IN', {
+            minimumFractionDigits: 2,
             maximumFractionDigits: 2
-        }).format(amount || 0);
+        });
     };
 
     const calcTaxAmount = (item, val) => {

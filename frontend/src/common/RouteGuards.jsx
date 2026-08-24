@@ -37,7 +37,7 @@ export const InitialRedirect = () => {
       if (user.approvalStatus !== "APPROVED" || user.isFirstApprovalLogin) {
         return <Navigate to="/application-status" replace />;
       }
-      return <Navigate to="/seller/dashboard" replace />;
+      return <Navigate to="/seller/reports" replace />;
     }
   }
 
@@ -69,7 +69,7 @@ export const AuthGuard = () => {
         }
         return <Navigate to="/application-status" replace />;
       }
-      return <Navigate to="/seller/dashboard" replace />;
+      return <Navigate to="/seller/reports" replace />;
     }
   }
   return <Outlet />;

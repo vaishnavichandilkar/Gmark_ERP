@@ -178,7 +178,7 @@ const VerifyOTP = () => {
                                     replace: true
                                 });
                             } else {
-                                navigate('/seller/dashboard', { replace: true });
+                                navigate('/seller/reports', { replace: true });
                             }
                             return;
                         }

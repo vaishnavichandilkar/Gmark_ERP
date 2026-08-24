@@ -8,6 +8,8 @@ import CustomSelect from '../../../components/common/CustomSelect';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from "xlsx";
+import XLSXStyle from 'xlsx-js-style';
+import ExcelJS from 'exceljs';
 import ScrollableTable from "@/components/common/ScrollableTable";
 import toast from 'react-hot-toast';
 
@@ -1202,59 +1204,176 @@ const Finance = () => {
         setShowMainExportMenu(false);
     };
 
-    const handleDownloadTemplate = () => {
+    const handleDownloadTemplate = async () => {
         const isReceipt = activeSubTab === 'Receipts';
         const isPayment = activeSubTab === 'Payments';
         const isContra = activeSubTab === 'Contra';
-        const fileName = isReceipt 
-            ? 'Bank_Reconciliation_Receipt_Template.xlsx' 
-            : isPayment 
-                ? 'Bank_Reconciliation_Payment_Template.xlsx' 
-                : isContra
-                    ? 'Bank_Reconciliation_Contra_Template.xlsx'
-                    : 'Bank_Reconciliation_Journal_Template.xlsx';
-        const link = document.createElement('a');
-        link.href = `/${fileName}`;
-        link.setAttribute('download', fileName);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+
+        let headers = [];
+        let fileName = '';
+        let sheetTitle = '';
+
+        if (isReceipt || isPayment) {
+            headers = ['Date (DD/MM/YYYY)*', 'Account Name*', 'Bank/Cash Account*', 'Amount*', 'Payment Mode*', 'Narration'];
+            fileName = isReceipt ? 'Bank_Reconciliation_Receipt_Template.xlsx' : 'Bank_Reconciliation_Payment_Template.xlsx';
+            sheetTitle = isReceipt ? 'Receipts Template' : 'Payments Template';
+        } else if (isContra) {
+            headers = ['Date (DD/MM/YYYY)*', 'Bank/Cash (Receiver)*', 'Bank/Cash (Giver)*', 'Amount*', 'Narration'];
+            fileName = 'Bank_Reconciliation_Contra_Template.xlsx';
+            sheetTitle = 'Contra Template';
+        } else {
+            headers = ['Date (DD/MM/YYYY)*', 'Account (1st Party)*', 'Account (2nd Party)*', 'Amount*', 'Narration'];
+            fileName = 'Bank_Reconciliation_Journal_Template.xlsx';
+            sheetTitle = 'Journal Template';
+        }
+
+        const workbook = new ExcelJS.Workbook();
+        const ws = workbook.addWorksheet(sheetTitle);
+        ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+        const headerRow = ws.getRow(1);
+        headerRow.height = 28;
+        headers.forEach((headerText, index) => {
+            const cell = headerRow.getCell(index + 1);
+            const isRequired = headerText.includes('*');
+            cell.value = headerText;
+            cell.protection = { locked: true };
+            cell.font = {
+                bold: true,
+                color: { argb: isRequired ? 'FF9F1239' : 'FF334155' },
+                size: 11,
+                name: 'Calibri'
+            };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: isRequired ? 'FFFEE2E2' : 'FFF8FAFC' },
+            };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                bottom: { style: 'medium', color: { argb: isRequired ? 'FFFECDD3' : 'FFE2E8F0' } },
+                right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            };
+        });
+
+        // Apply custom Excel Date DataValidation formula to Column A (Date column) for rows 2 to 1000
+        for (let r = 2; r <= 1000; r++) {
+            const row = ws.getRow(r);
+            const cellRef = `A${r}`;
+            const cell = row.getCell(1);
+            cell.numFmt = '@';
+            cell.dataValidation = {
+                type: 'custom',
+                allowBlank: true,
+                formulae: [`OR(ISBLANK(${cellRef}), ${cellRef}="", AND(ISNUMBER(VALUE(LEFT(${cellRef},2))), ISNUMBER(VALUE(MID(${cellRef},4,2))), ISNUMBER(VALUE(RIGHT(${cellRef},4))), VALUE(MID(${cellRef},4,2))>=1, VALUE(MID(${cellRef},4,2))<=12, VALUE(LEFT(${cellRef},2))>=1, VALUE(LEFT(${cellRef},2))<=DAY(DATE(VALUE(RIGHT(${cellRef},4)), VALUE(MID(${cellRef},4,2))+1, 0))))`],
+                showInputMessage: true,
+                promptTitle: 'Date Format Required',
+                prompt: 'Please enter date in DD/MM/YYYY format (e.g. 20/08/2026).',
+                showErrorMessage: true,
+                errorTitle: 'Invalid Date Format',
+                error: 'Date must be entered in valid DD/MM/YYYY format (e.g. 20/08/2026). Month must be between 01 and 12.'
+            };
+            // Unlock data cells
+            for (let c = 1; c <= headers.length; c++) {
+                row.getCell(c).protection = { locked: false };
+            }
+        }
+
+        ws.columns = headers.map((h) => ({ width: Math.max(25, h.length + 5) }));
+
+        await ws.protect('', {
+            selectLockedCells: true,
+            selectUnlockedCells: true,
+            formatCells: true,
+            formatColumns: true,
+            formatRows: true,
+            insertRows: true,
+            deleteRows: true,
+            sort: true,
+            autoFilter: true,
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        toast.success(t('common:sample_downloaded', 'Sample downloaded successfully'));
     };
 
     const parseExcelDate = (dateVal) => {
+        if (!dateVal) throw new Error("Date is required");
+
         if (typeof dateVal === 'number') {
             // Excel serial date number
             const dateObj = new Date(Math.round((dateVal - 25569) * 86400 * 1000));
-            return dateObj.toISOString().split('T')[0];
+            const yyyy = dateObj.getFullYear();
+            const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const dd = String(dateObj.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
         }
         
         if (dateVal instanceof Date) {
-            return dateVal.toISOString().split('T')[0];
+            const yyyy = dateVal.getFullYear();
+            const mm = String(dateVal.getMonth() + 1).padStart(2, '0');
+            const dd = String(dateVal.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
         }
 
         const dateStr = String(dateVal).trim();
         
-        // Try YYYY-MM-DD or YYYY/MM/DD
-        const ymdMatch = dateStr.match(/^(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})$/);
-        if (ymdMatch) {
-            const [, year, month, day] = ymdMatch;
-            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-        }
-
-        // Try DD/MM/YYYY or DD-MM-YYYY
+        // Strict DD/MM/YYYY or DD-MM-YYYY matching
         const dmyMatch = dateStr.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$/);
         if (dmyMatch) {
-            const [, day, month, year] = dmyMatch;
-            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            const day = parseInt(dmyMatch[1], 10);
+            const month = parseInt(dmyMatch[2], 10);
+            const year = parseInt(dmyMatch[3], 10);
+
+            if (month < 1 || month > 12) {
+                throw new Error(`Invalid Date '${dateStr}'. Month '${dmyMatch[2]}' must be between 01 and 12.`);
+            }
+
+            const maxDays = new Date(year, month, 0).getDate();
+            if (day < 1 || day > maxDays) {
+                throw new Error(`Invalid Date '${dateStr}'. Day '${dmyMatch[1]}' is invalid for month ${month}/${year}.`);
+            }
+
+            const yyyy = String(year);
+            const mm = String(month).padStart(2, '0');
+            const dd = String(day).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
         }
 
-        // Try standard parsing
-        const d = new Date(dateStr);
-        if (!isNaN(d.getTime())) {
-            return d.toISOString().split('T')[0];
+        // YYYY-MM-DD or YYYY/MM/DD
+        const ymdMatch = dateStr.match(/^(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})$/);
+        if (ymdMatch) {
+            const year = parseInt(ymdMatch[1], 10);
+            const month = parseInt(ymdMatch[2], 10);
+            const day = parseInt(ymdMatch[3], 10);
+
+            if (month < 1 || month > 12) {
+                throw new Error(`Invalid Date '${dateStr}'. Month '${ymdMatch[2]}' must be between 01 and 12.`);
+            }
+            const maxDays = new Date(year, month, 0).getDate();
+            if (day < 1 || day > maxDays) {
+                throw new Error(`Invalid Date '${dateStr}'. Day '${ymdMatch[3]}' is invalid for month ${month}/${year}.`);
+            }
+
+            const yyyy = String(year);
+            const mm = String(month).padStart(2, '0');
+            const dd = String(day).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
         }
 
-        throw new Error("Invalid date format");
+        throw new Error(`Invalid Date '${dateStr}'. Date must follow DD/MM/YYYY format.`);
     };
 
     const handleSubmitImport = async () => {
@@ -1305,17 +1424,27 @@ const Finance = () => {
                 for (let i = 0; i < json.length; i++) {
                     const row = json[i];
                     
-                    const dateVal = row['Date (DD/MM/YYYY)'] || row['date (dd/mm/yyyy)'] || row['Date'] || row['date'];
-                    const accountNameVal = row['Account Name'] || row['account name'] || row['Account'] || row['account'];
-                    const bankCashNameVal = row['Bank/Cash Account'] || row['bank/cash account'] || row['Bank/Cash'] || row['bank/cash'] || row['Bank'] || row['bank'] || row['Cash'] || row['cash'] || row['Account (First Party)'] || row['account (first party)'];
-                    const amountVal = row['Amount'] || row['amount'];
-                    const paymentModeVal = row['Payment Mode'] || row['payment mode'] || row['Mode'] || row['mode'];
+                    const dateVal = row['Date (DD/MM/YYYY)*'] || row['Date (DD/MM/YYYY)'] || row['date (dd/mm/yyyy)'] || row['Date'] || row['date'];
+                    const accountNameVal = row['Account Name*'] || row['Account Name'] || row['account name'] || row['Account'] || row['account'];
+                    const bankCashNameVal = row['Bank/Cash Account*'] || row['Bank/Cash Account'] || row['bank/cash account'] || row['Bank/Cash'] || row['bank/cash'] || row['Bank'] || row['bank'] || row['Cash'] || row['cash'] || row['Account (First Party)*'] || row['Account (First Party)'] || row['Bank/Cash (Receiver)*'] || row['Bank/Cash (Receiver)'];
+                    const amountVal = row['Amount*'] || row['Amount'] || row['amount'];
+                    const paymentModeVal = row['Payment Mode*'] || row['Payment Mode'] || row['payment mode'] || row['Mode'] || row['mode'];
                     const narrationVal = row['Narration'] || row['narration'] || '';
 
-                    if (!dateVal || !accountNameVal || !bankCashNameVal || !amountVal) {
-                        errorCount++;
-                        errors.push(`Row ${i + 2}: Missing required fields (Date, Account Name, Bank/Cash, or Amount)`);
-                        continue;
+                    const isReceiptOrPayment = activeSubTab === 'Receipts' || activeSubTab === 'Payments';
+
+                    if (isReceiptOrPayment) {
+                        if (!dateVal || !accountNameVal || !bankCashNameVal || !amountVal || !paymentModeVal) {
+                            errorCount++;
+                            errors.push(`Row ${i + 2}: Missing required fields. Date, Account Name, Bank/Cash Account, Amount, and Payment Mode are compulsory.`);
+                            continue;
+                        }
+                    } else {
+                        if (!dateVal || !accountNameVal || !bankCashNameVal || !amountVal) {
+                            errorCount++;
+                            errors.push(`Row ${i + 2}: Missing required fields (Date, Accounts, or Amount).`);
+                            continue;
+                        }
                     }
 
                     // 1. Match Bank/Cash Account (First Party)
@@ -1360,15 +1489,23 @@ const Finance = () => {
 
                     // 5. Payment Mode mapping
                     let mode = 'NET_BANKING';
-                    const rawMode = String(paymentModeVal || '').toUpperCase().replace(' ', '_');
-                    if (['DEBIT_CARD', 'CREDIT_CARD', 'NET_BANKING', 'CHEQUE', 'UPI', 'CASH'].includes(rawMode)) {
-                        mode = rawMode;
-                    } else if (rawMode === 'NETBANKING') {
-                        mode = 'NET_BANKING';
-                    } else if (rawMode === 'CREDITCARD') {
-                        mode = 'CREDIT_CARD';
-                    } else if (rawMode === 'DEBITCARD') {
-                        mode = 'DEBIT_CARD';
+                    if (paymentModeVal) {
+                        const rawMode = String(paymentModeVal || '').toUpperCase().trim().replace(/[\s_\-]+/g, '_');
+                        if (['CASH', 'NET_BANKING', 'DEBIT_CARD', 'CREDIT_CARD', 'CHEQUE', 'UPI'].includes(rawMode)) {
+                            mode = rawMode;
+                        } else if (rawMode === 'NETBANKING' || rawMode === 'NET_BANK') {
+                            mode = 'NET_BANKING';
+                        } else if (rawMode === 'CREDITCARD') {
+                            mode = 'CREDIT_CARD';
+                        } else if (rawMode === 'DEBITCARD') {
+                            mode = 'DEBIT_CARD';
+                        } else if (rawMode === 'CHECK') {
+                            mode = 'CHEQUE';
+                        } else if (isReceiptOrPayment) {
+                            errorCount++;
+                            errors.push(`Row ${i + 2}: Invalid Payment Mode '${paymentModeVal}'. Must be one of: Cash, Net Banking, Debit Card, Credit Card, Cheque, UPI.`);
+                            continue;
+                        }
                     }
 
                     // 6. Create Payload
@@ -1498,28 +1635,7 @@ const Finance = () => {
             {/* Fiscal Year Switcher & Filter Bar */}
             {activeMainTab !== 'Settlement' && (
                 <>
-                    {/* Fiscal Year Switcher */}
-                    <div className="flex justify-start mb-8">
-                        <div className="inline-flex bg-white p-1 rounded-[16px] border border-[#E5E7EB] shadow-sm">
-                            {fiscalYears.map((year) => {
-                                const isActive = activeFiscalYear === year;
-                                return (
-                                    <button
-                                        key={year}
-                                        onClick={() => handleFiscalYearChange(year)}
-                                        className={`px-6 py-2 rounded-[12px] text-[14px] font-bold transition-all duration-300 whitespace-nowrap
-                                            ${isActive 
-                                                ? 'bg-[#073318] text-white shadow-lg' 
-                                                : 'text-[#6B7280] hover:text-[#111827]'
-                                            }`}
-                                    >
-                                        {year}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                    
+
                     {/* Filter Bar */}
                     <div className="bg-white p-4 sm:p-5 rounded-[24px] border border-[#E5E7EB] shadow-sm mb-8">
                         <div className="flex flex-wrap xl:flex-nowrap items-center justify-between gap-3 sm:gap-4">
@@ -1635,23 +1751,23 @@ const Finance = () => {
                                         <>
                                             {/* Import Button */}
                                             <button 
-                                                className="h-[40px] px-4 bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#374151] rounded-[8px] font-bold text-[14px] transition-colors flex items-center gap-2 shadow-sm animate-fade-in"
+                                                className="h-[44px] px-6 bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] rounded-[10px] font-bold text-[14px] transition-all flex items-center gap-2 shadow-sm animate-fade-in cursor-pointer"
                                                 onClick={() => {
                                                     setShowImportModal(true);
                                                     setSelectedImportFile(null);
                                                 }}
                                             >
-                                                <Download size={16} className="text-[#475569]" />
+                                                <Upload size={16} className="text-[#6B7280]" />
                                                 {t('common:import')}
                                             </button>
 
                                             {/* Export Button */}
                                             <div className="relative">
                                                 <button 
-                                                    className="h-[40px] px-4 bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#374151] rounded-[8px] font-bold text-[14px] transition-colors flex items-center gap-2 shadow-sm animate-fade-in"
+                                                    className="h-[44px] px-6 bg-white border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] rounded-[10px] font-bold text-[14px] transition-all flex items-center gap-2 shadow-sm animate-fade-in cursor-pointer"
                                                     onClick={(e) => { e.stopPropagation(); setShowMainExportMenu(!showMainExportMenu); }}
                                                 >
-                                                    <Upload size={16} className="text-[#475569]" />
+                                                    <Download size={16} className="text-[#6B7280]" />
                                                     {t('common:export')}
                                                 </button>
                                                 
@@ -1697,6 +1813,7 @@ const Finance = () => {
                                 <tr className="bg-[#E5E7EB] text-[#4B5563] font-bold text-[14px]">
                                     {activeMainTab === 'Ledger' ? (
                                         <>
+                                            <th className="px-4 py-4 w-[60px] text-center border-r border-white/10 whitespace-nowrap">SR.NO</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:account_col')}</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:opening_balance')}</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:debit')}</th>
@@ -1705,6 +1822,7 @@ const Finance = () => {
                                         </>
                                     ) : (
                                         <>
+                                            <th className="px-4 py-4 w-[60px] text-center border-r border-white/10 whitespace-nowrap">SR.NO</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:date_col')}</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">{t('modules:voucher_no')}</th>
                                             <th className="px-6 py-4 border-r border-white/10 whitespace-nowrap text-center">
@@ -1721,6 +1839,84 @@ const Finance = () => {
                                 </tr>
                             </thead>
                             <tbody className="text-[14px] text-[#111827]">
+                                {/* Summary Rows after Header */}
+                                {(() => {
+                                    const pageOpening = currentRows.reduce((sum, item) => sum + Number(item.openingBalance || 0), 0);
+                                    const pageDebit = currentRows.reduce((sum, item) => sum + Number(item.debit || 0), 0);
+                                    const pageCredit = currentRows.reduce((sum, item) => sum + Number(item.credit || 0), 0);
+                                    const pageClosing = currentRows.reduce((sum, item) => sum + Number(item.closingBalance || 0), 0);
+                                    const pageAmount = currentRows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+                                    const allData = summaryData && summaryData.length > 0 ? summaryData : currentRows;
+                                    const grandOpening = allData.reduce((sum, item) => sum + Number(item.openingBalance || 0), 0);
+                                    const grandDebit = allData.reduce((sum, item) => sum + Number(item.debit || 0), 0);
+                                    const grandCredit = allData.reduce((sum, item) => sum + Number(item.credit || 0), 0);
+                                    const grandClosing = allData.reduce((sum, item) => sum + Number(item.closingBalance || 0), 0);
+                                    const grandAmount = allData.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+                                    return (
+                                        <>
+                                            {activeMainTab === 'Ledger' ? (
+                                                <>
+                                                    {/* Page Total Row */}
+                                                    <tr className="border-b border-[#E2E8F0] bg-gray-50/90 font-bold">
+                                                        <td className="px-4 py-3.5 text-center font-bold text-[#111827]"></td>
+                                                        <td className="px-6 py-3.5 text-center font-extrabold text-[#111827]">Page Total</td>
+                                                        <td className="px-6 py-3.5 text-center font-bold text-[#111827]">
+                                                            {`${Math.abs(pageOpening).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (pageOpening >= 0 ? 'Cr' : 'Dr') : (pageOpening >= 0 ? 'Dr' : 'Cr')}`}
+                                                        </td>
+                                                        <td className="px-6 py-3.5 text-center font-bold text-[#111827]">
+                                                            {pageDebit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-6 py-3.5 text-center font-bold text-[#111827]">
+                                                            {pageCredit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-6 py-3.5 text-center font-extrabold text-[#111827]">
+                                                            {`${Math.abs(pageClosing).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (pageClosing >= 0 ? 'Cr' : 'Dr') : (pageClosing >= 0 ? 'Dr' : 'Cr')}`}
+                                                        </td>
+                                                    </tr>
+                                                    {/* Grand Total Row */}
+                                                    <tr className="bg-[#E6F4EA] font-extrabold text-[#064E3B] border-b border-[#A7F3D0]">
+                                                        <td className="px-4 py-3.5 text-center font-bold text-emerald-950"></td>
+                                                        <td className="px-6 py-3.5 text-center font-black text-emerald-950">Grand Total</td>
+                                                        <td className="px-6 py-3.5 text-center font-extrabold text-emerald-900">
+                                                            {`${Math.abs(grandOpening).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (grandOpening >= 0 ? 'Cr' : 'Dr') : (grandOpening >= 0 ? 'Dr' : 'Cr')}`}
+                                                        </td>
+                                                        <td className="px-6 py-3.5 text-center font-extrabold text-emerald-900">
+                                                            {grandDebit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-6 py-3.5 text-center font-extrabold text-emerald-900">
+                                                            {grandCredit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-6 py-3.5 text-center font-black text-emerald-950">
+                                                            {`${Math.abs(grandClosing).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeSubTab === 'Sundry Creditors' ? (grandClosing >= 0 ? 'Cr' : 'Dr') : (grandClosing >= 0 ? 'Dr' : 'Cr')}`}
+                                                        </td>
+                                                    </tr>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {/* Page Total Row */}
+                                                    <tr className="border-b border-[#E2E8F0] bg-gray-50/90 font-bold">
+                                                        <td colSpan="6" className="px-6 py-3.5 text-right font-extrabold text-[#111827]">Page Total</td>
+                                                        <td className="px-6 py-3.5 text-center font-bold text-[#111827]">
+                                                            ₹ {pageAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-6 py-3.5 text-center">-</td>
+                                                    </tr>
+                                                    {/* Grand Total Row */}
+                                                    <tr className="bg-[#E6F4EA] font-extrabold text-[#064E3B] border-b border-[#A7F3D0]">
+                                                        <td colSpan="6" className="px-6 py-3.5 text-right font-black text-emerald-950">Grand Total</td>
+                                                        <td className="px-6 py-3.5 text-center font-black text-emerald-950">
+                                                            ₹ {grandAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="px-6 py-3.5 text-center">-</td>
+                                                    </tr>
+                                                </>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+
                                 {activeSubTab === 'Group Ledger' ? (
                                     (() => {
                                         const tree = [];
@@ -1752,7 +1948,18 @@ const Finance = () => {
                                         }
 
                                         currentRows.forEach(item => {
-                                            let path = (item.allGroups && item.allGroups.length > 0) ? item.allGroups : [item.primaryGroup || item.groupName || 'General'];
+                                            let rawPath = (item.allGroups && item.allGroups.length > 0) ? item.allGroups : [item.primaryGroup || item.groupName || 'General'];
+                                            let path = rawPath.map(g => {
+                                                const lower = String(g).trim().toLowerCase();
+                                                if (lower === 'indirect expenses' || lower === 'indirect_expense' || lower === 'indirect_expenses') return 'Indirect Expense';
+                                                if (lower === 'direct expenses' || lower === 'direct_expense' || lower === 'direct_expenses') return 'Direct Expense';
+                                                if (lower === 'indirect incomes' || lower === 'indirect_income' || lower === 'indirect_incomes') return 'Indirect Income';
+                                                if (lower === 'direct incomes' || lower === 'direct_income' || lower === 'direct_incomes') return 'Direct Income';
+                                                if (lower === 'purchases') return 'Purchase';
+                                                if (lower === 'sales') return 'Sale';
+                                                return g;
+                                            });
+
                                             if (selectedGroup && selectedGroup !== 'ALL') {
                                                 const grpIdx = path.findIndex(g => String(g).toLowerCase().trim() === selectedGroup.toLowerCase().trim());
                                                 if (grpIdx !== -1) {
@@ -1838,6 +2045,7 @@ const Finance = () => {
 
                                             const nodeRow = (
                                                 <tr key={node.id} className={`${depth === 0 ? 'bg-gray-100/90 font-bold' : 'bg-white font-semibold'} border-b border-gray-200 select-none`}>
+                                                    <td className="px-4 py-3.5 text-center font-bold text-[#111827]"></td>
                                                     <td className={`px-6 py-3.5 text-left ${paddingLeft}`}>
                                                         <div className="flex items-center gap-3">
                                                             {hasSubNodes ? (
@@ -1883,6 +2091,7 @@ const Finance = () => {
                                                     {node.children.map(child => renderNode(child, depth + 1))}
                                                     {node.items.map(item => (
                                                         <tr key={item.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all bg-white">
+                                                            <td className="px-4 py-3.5 text-center font-bold text-[#111827]"></td>
                                                             <td 
                                                                 className={`px-6 py-3.5 text-left font-semibold text-[#111827] hover:underline cursor-pointer ${depth === 0 ? 'pl-14' : depth === 1 ? 'pl-18' : 'pl-22'}`}
                                                                 onClick={() => setSelectedAccount(item)}
@@ -1910,6 +2119,9 @@ const Finance = () => {
                                         <tr key={item.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-all">
                                             {activeMainTab === 'Ledger' ? (
                                                 <>
+                                                    <td className="px-4 py-4 text-center font-bold text-gray-500">
+                                                        {(currentPage - 1) * rowsPerPage + index + 1}
+                                                    </td>
                                                     <td 
                                                         className="px-6 py-4 text-center font-bold text-[#111827] hover:underline cursor-pointer"
                                                         onClick={() => setSelectedAccount(item)}
@@ -1927,6 +2139,9 @@ const Finance = () => {
                                                 </>
                                             ) : (
                                                 <>
+                                                    <td className="px-4 py-4 text-center font-bold text-gray-500">
+                                                        {(currentPage - 1) * rowsPerPage + index + 1}
+                                                    </td>
                                                     <td className="px-6 py-4 text-center">{item.date}</td>
                                                     <td className="px-6 py-4 text-center font-bold">{item.vchNo}</td>
                                                     <td className="px-6 py-4 text-center">{item.account}</td>
@@ -1990,6 +2205,7 @@ const Finance = () => {
                                     ))
                                 )}
                             </tbody>
+
                         </table>
                     </ScrollableTable>
                     {/* Pagination Footer */}
@@ -2475,46 +2691,46 @@ const Finance = () => {
             )}
 
             {showImportModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white rounded-[20px] w-full max-w-[480px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] overflow-hidden font-['Plus_Jakarta_Sans'] animate-scale-up">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[16px] shadow-2xl w-full max-w-lg mx-4 flex flex-col animate-in slide-in-from-top-4 duration-300 overflow-hidden">
                         {/* Modal Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                            <h3 className="text-[18px] font-bold text-[#111827]">{t('modules:import_data')}</h3>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-[#F3F4F6]">
+                            <h2 className="text-[20px] font-bold text-[#111827]">{t('common:import_data', 'Import Data')}</h2>
                             <button 
                                 onClick={() => {
                                     setShowImportModal(false);
                                     setSelectedImportFile(null);
                                 }}
-                                className="p-1.5 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600 cursor-pointer"
+                                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors cursor-pointer"
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
                         {/* Modal Body */}
-                        <div className="p-6 flex flex-col items-center">
-                            {/* Download Sample Section */}
+                        <div className="p-6 flex flex-col items-center gap-6 max-h-[80vh] overflow-y-auto">
+                            {/* Download Sample Button */}
                             <button
                                 onClick={handleDownloadTemplate}
-                                className="flex items-center gap-2 bg-[#ECFDF5] hover:bg-[#D1FAE5] text-[#137333] font-bold text-[14px] px-5 py-2.5 rounded-[8px] transition-colors cursor-pointer"
+                                className="flex items-center gap-3 px-6 h-[44px] bg-[#E8F5E9] text-[#0A3622] rounded-[10px] text-[14px] font-bold hover:bg-[#C8E6C9] transition-all shadow-sm w-max cursor-pointer"
                             >
                                 <Download size={18} />
-                                {t('modules:download_sample')}
+                                {t('modules:download_sample', 'Download Sample Template')}
                             </button>
 
                             {/* Divider */}
-                            <div className="w-full border-t border-gray-100 my-6"></div>
+                            <div className="w-full h-px bg-[#F3F4F6]"></div>
 
                             {/* Upload File Section */}
-                            <span className="text-[15px] font-bold text-[#374151] mb-4">{t('modules:upload_file')}</span>
+                            <div className="w-full flex flex-col gap-4">
+                                <h3 className="text-center font-bold text-[#4B5563]">{t('modules:upload_file', 'Upload File')}</h3>
 
-                            <div className="w-full flex items-center gap-4">
-                                <span className="text-[14px] font-semibold text-[#6B7280] min-w-[80px]">{t('common:select')} {t('common:file', 'File')}</span>
-                                <div className="flex-1 flex items-center border border-dashed border-[#CBD5E1] rounded-[8px] bg-gray-50/20 overflow-hidden text-[14px] h-[40px]">
-                                    <label className="bg-[#E5E7EB]/50 hover:bg-[#E5E7EB] text-[#374151] font-bold px-4 h-full flex items-center border-r border-[#CBD5E1] border-dashed cursor-pointer transition-colors">
-                                        {t('modules:choose_file')}
+                                <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
+                                    <span className="text-[14px] font-medium text-[#6B7280]">{t('common:select', 'Select File')}</span>
+                                    <div className="relative flex items-center w-full max-w-[280px]">
                                         <input 
                                             type="file" 
+                                            id="bank-rec-modal-file"
                                             accept=".xlsx,.xls" 
                                             onChange={(e) => {
                                                 if (e.target.files && e.target.files[0]) {
@@ -2523,27 +2739,32 @@ const Finance = () => {
                                             }} 
                                             className="hidden" 
                                         />
-                                    </label>
-                                    <span className="px-3 text-gray-500 truncate flex-1 text-left">
-                                        {selectedImportFile ? selectedImportFile.name : t('modules:no_file_chosen')}
-                                    </span>
+                                        <div 
+                                            className="flex items-center w-full border border-dashed border-[#D1D5DB] rounded-[8px] bg-[#F9FAFB] overflow-hidden group hover:border-[#0A3622] transition-colors cursor-pointer"
+                                            onClick={() => document.getElementById('bank-rec-modal-file').click()}
+                                        >
+                                            <div className="bg-[#F3F4F6] px-4 h-[42px] flex items-center justify-center border-r border-dashed border-[#D1D5DB] group-hover:border-[#0A3622] transition-colors">
+                                                <span className="text-[13px] font-bold text-[#4B5563] whitespace-nowrap">{t('modules:choose_file', 'Choose File')}</span>
+                                            </div>
+                                            <span className="flex-1 px-4 text-[#6B7280] truncate text-[13px]">
+                                                {selectedImportFile ? selectedImportFile.name : t('modules:no_file_chosen', 'No file chosen')}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         {/* Modal Footer / Submit */}
-                        <div className="px-6 pb-6 pt-4 flex justify-center border-t border-gray-50">
+                        <div className="px-6 py-4 border-t border-[#F3F4F6] flex justify-center bg-gray-50 rounded-b-[16px]">
                             <button
+                                type="button"
                                 onClick={handleSubmitImport}
                                 disabled={!selectedImportFile || loading}
-                                className={`flex items-center gap-2 px-8 py-2.5 font-bold text-white rounded-[8px] transition-all shadow-sm ${
-                                    selectedImportFile && !loading
-                                        ? 'bg-[#7C8D82] hover:bg-[#6C7D72] active:scale-95 cursor-pointer' 
-                                        : 'bg-[#A3B3A8] opacity-60 cursor-not-allowed'
-                                }`}
+                                className="flex items-center justify-center gap-2 px-10 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md cursor-pointer"
                             >
                                 <UploadCloud size={18} />
-                                {loading ? t('common:processing') : t('common:submit', 'Submit')}
+                                {loading ? t('common:processing', 'Importing...') : t('common:submit', 'Submit')}
                             </button>
                         </div>
                     </div>

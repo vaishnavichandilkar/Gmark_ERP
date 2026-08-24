@@ -64,12 +64,12 @@ const ScrollableTable = ({ children, className = "" }) => {
           }
         `}
       </style>
-      <div className={`relative group/scroll flex flex-col flex-1 ${className}`}>
+      <div className={`relative group/scroll flex flex-col ${className}`}>
         {/* Scrollable Container */}
         <div
           ref={containerRef}
           onScroll={checkScroll}
-          className="w-full flex-1 overflow-x-auto overflow-y-visible custom-table-scrollbar selection:bg-emerald-100 min-h-[300px]"
+          className="w-full overflow-x-auto overflow-y-visible custom-table-scrollbar selection:bg-emerald-100"
         >
           {children}
         </div>
