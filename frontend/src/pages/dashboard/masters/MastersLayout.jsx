@@ -21,6 +21,9 @@ const MastersLayout = () => {
         { name: t('category_master'), path: '/seller/masters/category' },
         { name: t('hsn_master', 'HSN Master'), path: '/seller/masters/hsn-master' },
         { name: t('product_master'), path: '/seller/masters/product-master' },
+        { name: 'Employee Master', path: '/seller/masters/employee-master' },
+        { name: 'Department Master', path: '/seller/masters/department-master' },
+        { name: 'Cost Centre Master', path: '/seller/masters/cost-centre-master' },
     ];
 
     // If we are on the base /seller/masters route, redirect to the first tab (Group Master)

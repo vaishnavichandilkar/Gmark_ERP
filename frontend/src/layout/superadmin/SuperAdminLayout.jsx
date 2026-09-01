@@ -9,7 +9,8 @@ import {
     Bell,
     ChevronDown,
     Menu,
-    X
+    X,
+    ShieldCheck
 } from 'lucide-react';
 import logo from '../../assets/images/ERP_Logo2.png';
 
@@ -42,6 +43,7 @@ const SuperAdminLayout = () => {
 
     const menuItems = [
         { path: '/superadmin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+        { path: '/superadmin/admin-management', icon: ShieldCheck, label: 'Admin Management' },
         { path: '/superadmin/pending-sellers', icon: Users, label: 'Pending Sellers' },
         { path: '/superadmin/approved-sellers', icon: UserCheck, label: 'Approved Sellers' },
         { path: '/superadmin/rejected-sellers', icon: UserX, label: 'Rejected Sellers' },

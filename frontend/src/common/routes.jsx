@@ -23,6 +23,9 @@ const UnitMaster = lazy(() => import("../pages/dashboard/masters/UnitMaster"));
 const CategoryMaster = lazy(() => import("../pages/dashboard/masters/CategoryMaster"));
 const ProductMaster = lazy(() => import("../pages/dashboard/masters/ProductMaster"));
 const HSNMasterPage = lazy(() => import("../pages/dashboard/masters/HSNMasterPage"));
+const EmployeeMaster = lazy(() => import("../pages/dashboard/masters/EmployeeMaster"));
+const DepartmentMaster = lazy(() => import("../pages/dashboard/masters/DepartmentMaster"));
+const CostCentreMaster = lazy(() => import("../pages/dashboard/masters/CostCentreMaster"));
 
 // Purchase Pages
 const PurchaseLayout = lazy(() => import("../pages/dashboard/purchase/PurchaseLayout"));
@@ -57,6 +60,7 @@ const SystemSettings = lazy(() => import("../features/settings/pages/SystemSetti
 const ReportDashboard = lazy(() => import("../features/reports/pages/ReportDashboard"));
 const Finance = lazy(() => import("../pages/dashboard/finance/Finance"));
 const LedgerView = lazy(() => import("../pages/dashboard/finance/LedgerView"));
+const UserManagement = lazy(() => import("../pages/dashboard/users/UserManagement"));
 
 import { ROUTES } from "../constants/routes";
 import { 
@@ -72,6 +76,7 @@ const SuperAdminDashboard = lazy(() => import("../pages/superadmin/SuperAdminDas
 const PendingSellers = lazy(() => import("../pages/superadmin/PendingSellers"));
 const ApprovedSellers = lazy(() => import("../pages/superadmin/ApprovedSellers"));
 const RejectedSellers = lazy(() => import("../pages/superadmin/RejectedSellers"));
+const AdminManagement = lazy(() => import("../pages/superadmin/AdminManagement"));
 
 export const router = createBrowserRouter([
   {
@@ -119,7 +124,7 @@ export const router = createBrowserRouter([
         element: <Navigate to="/seller/reports" replace />,
       },
       {
-        element: <ProtectedRoute allowedRoles={["SELLER"]} />,
+        element: <ProtectedRoute allowedRoles={["SELLER", "ADMIN", "USER"]} />,
         children: [
           {
             path: "/seller",
@@ -132,6 +137,10 @@ export const router = createBrowserRouter([
               {
                 path: "dashboard",
                 element: <Home />,
+              },
+              {
+                path: "users",
+                element: <UserManagement />,
               },
               {
                 path: "reports",
@@ -196,6 +205,33 @@ export const router = createBrowserRouter([
                       { path: "add", element: <HSNMasterPage /> },
                       { path: "view/:id", element: <HSNMasterPage /> },
                       { path: "edit/:id", element: <HSNMasterPage /> },
+                    ],
+                  },
+                  {
+                    path: "employee-master",
+                    children: [
+                      { index: true, element: <EmployeeMaster /> },
+                      { path: "add", element: <EmployeeMaster /> },
+                      { path: "view/:id", element: <EmployeeMaster /> },
+                      { path: "edit/:id", element: <EmployeeMaster /> },
+                    ],
+                  },
+                  {
+                    path: "department-master",
+                    children: [
+                      { index: true, element: <DepartmentMaster /> },
+                      { path: "add", element: <DepartmentMaster /> },
+                      { path: "view/:id", element: <DepartmentMaster /> },
+                      { path: "edit/:id", element: <DepartmentMaster /> },
+                    ],
+                  },
+                  {
+                    path: "cost-centre-master",
+                    children: [
+                      { index: true, element: <CostCentreMaster /> },
+                      { path: "add", element: <CostCentreMaster /> },
+                      { path: "view/:id", element: <CostCentreMaster /> },
+                      { path: "edit/:id", element: <CostCentreMaster /> },
                     ],
                   },
                 ],
@@ -359,6 +395,14 @@ export const router = createBrowserRouter([
           {
             path: "rejected-sellers",
             element: <RejectedSellers />,
+          },
+          {
+            path: "admin-management",
+            element: <AdminManagement />,
+          },
+          {
+            path: "admins",
+            element: <AdminManagement />,
           },
         ],
       },

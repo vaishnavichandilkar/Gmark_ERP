@@ -8,14 +8,19 @@ import {
     TrendingUp,
     Settings,
     X,
-    Wallet
+    Wallet,
+    Users
 } from 'lucide-react';
 import logo from '../../assets/images/ERP_Logo1.png';
 import { useTranslation } from 'react-i18next';
+import { getSafeUser } from '../../utils/user';
 
 const Sidebar = ({ isOpen, setIsOpen }) => {
     const { t } = useTranslation(['modules', 'terms']);
     const location = useLocation();
+    const user = getSafeUser();
+    const userRole = (user.role || '').toUpperCase();
+    const isAdmin = userRole === 'ADMIN' || userRole === 'SELLER';
 
     const menuItems = [
         { path: '/seller/dashboard', label: t('terms:dashboard'), icon: LayoutDashboard },
@@ -24,6 +29,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
         { path: '/seller/purchase', label: t('purchase'), icon: ShoppingCart },
         { path: '/seller/sales', label: t('sales'), icon: TrendingUp },
         { path: '/seller/finance', label: t('finance'), icon: Wallet },
+        ...(isAdmin ? [{ path: '/seller/users', label: 'User Management', icon: Users }] : []),
         { path: '/seller/settings', label: t('settings'), icon: Settings },
     ];
 

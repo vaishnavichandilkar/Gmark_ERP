@@ -33,10 +33,14 @@ export const InitialRedirect = () => {
     if (role === "SUPERADMIN")
       return <Navigate to="/superadmin/dashboard" replace />;
 
-    if (role === "SELLER") {
+    if (role === "SELLER" || role === "ADMIN") {
       if (user.approvalStatus !== "APPROVED" || user.isFirstApprovalLogin) {
         return <Navigate to="/application-status" replace />;
       }
+      return <Navigate to="/seller/reports" replace />;
+    }
+
+    if (role === "USER" || role === "OPERATOR") {
       return <Navigate to="/seller/reports" replace />;
     }
   }
@@ -60,15 +64,17 @@ export const AuthGuard = () => {
     if (role === "SUPERADMIN")
       return <Navigate to="/superadmin/dashboard" replace />;
 
-    // Strictly block sellers from Auth flow if they are in PENDING, REJECTED, or first-time APPROVED
-    // EXCEPT when they are on the signup page to correct and resubmit a rejected application.
-    if (role === "SELLER") {
+    if (role === "SELLER" || role === "ADMIN") {
       if (user.approvalStatus !== "APPROVED" || user.isFirstApprovalLogin) {
         if (location.pathname === "/signup" && user.approvalStatus === "REJECTED") {
           return <Outlet />;
         }
         return <Navigate to="/application-status" replace />;
       }
+      return <Navigate to="/seller/reports" replace />;
+    }
+
+    if (role === "USER" || role === "OPERATOR") {
       return <Navigate to="/seller/reports" replace />;
     }
   }
@@ -85,7 +91,17 @@ export const ProtectedRoute = ({ allowedRoles }) => {
   if (!token && !refreshToken) return <Navigate to="/landing" replace />;
 
   const role = (user.role || "").toString().toUpperCase();
-  if (allowedRoles && !allowedRoles.includes(role)) {
+  const normalizedAllowedRoles = (allowedRoles || []).map(r => r.toUpperCase());
+
+  // Check role compatibility (SELLER maps to ADMIN)
+  const isAllowed = normalizedAllowedRoles.some(r => {
+    if (r === role) return true;
+    if ((r === 'ADMIN' || r === 'SELLER') && (role === 'ADMIN' || role === 'SELLER')) return true;
+    if ((r === 'USER' || r === 'OPERATOR') && (role === 'USER' || role === 'OPERATOR')) return true;
+    return false;
+  });
+
+  if (allowedRoles && !isAllowed) {
     return <Navigate to="/" replace />;
   }
 
