@@ -154,6 +154,9 @@ export class OnboardingService {
         });
 
         if (existingUser) {
+            if (existingUser.role === 'superadmin' || existingUser.role === 'SUPERADMIN') {
+                throw new BadRequestException('This phone number belongs to System Admin. Please use the Login page.');
+            }
             // Requirement 2: If phone exists
             if (existingUser.verified && existingUser.onboarded_at) {
                 throw new ConflictException('Phone number already registered and account is active');

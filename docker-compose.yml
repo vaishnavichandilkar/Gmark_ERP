@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gmark_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: erp_user
+      POSTGRES_PASSWORD: erp_password
+      POSTGRES_DB: gmark_erp_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - gmark-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: gmark_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - gmark-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gmark_backend
+    restart: always
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: erp_user
+      DATABASE_PASSWORD: erp_password
+      DATABASE_NAME: gmark_erp_db
+      DATABASE_URL: postgresql://erp_user:erp_password@postgres:5432/gmark_erp_db?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ENABLE_DEV_OTP: "true"
+      DEV_OTP: "123456"
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - gmark-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gmark_frontend
+    restart: always
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - gmark-network
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: gmark_tunnel
+    restart: always
+    command: tunnel --url http://frontend:80
+    depends_on:
+      - frontend
+    networks:
+      - gmark-network
+
+volumes:
+  pgdata:
+
+networks:
+  gmark-network:
+    driver: bridge
