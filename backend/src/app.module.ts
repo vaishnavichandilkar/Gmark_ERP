@@ -21,6 +21,7 @@ import { FinanceModule } from './modules/Finance/finance.module';
 import { LedgerModule } from './modules/Ledger/ledger.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { QueueModule } from './infrastructure/queue/queue.module';
+import { UserManagementModule } from './modules/user-management/user-management.module';
 import { AppController } from './app.controller';
 import { ImportValidationModule } from './common/services/import-validation.module';
 
@@ -35,6 +36,7 @@ import { ImportValidationModule } from './common/services/import-validation.modu
         QueueModule,
         ImportValidationModule,
         AuthModule,
+        UserManagementModule,
         UploadModule,
         BusinessModule,
         OnboardingModule,

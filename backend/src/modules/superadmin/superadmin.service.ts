@@ -313,4 +313,142 @@ export class SuperAdminService {
 
         return { message: 'Seller application rejected' };
     }
+
+    async getAllAdmins() {
+        const admins = await this.prisma.user.findMany({
+            where: {
+                role: { in: ['seller', 'ADMIN', 'administrator'] },
+                adminId: null, // Only root admins
+            },
+            include: {
+                shopDetail: true,
+                subUsers: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true,
+                        phone: true,
+                        status: true,
+                        created_at: true,
+                    }
+                }
+            },
+            orderBy: { created_at: 'desc' }
+        });
+
+        return admins.map(admin => ({
+            id: admin.id,
+            name: `${admin.first_name || ''} ${admin.last_name || ''}`.trim() || admin.phone || admin.username || 'Admin',
+            email: admin.email,
+            phone: admin.phone,
+            shopName: admin.shopDetail?.shopName || 'N/A',
+            role: 'ADMIN',
+            status: admin.status,
+            approvalStatus: admin.approvalStatus,
+            rejectionReason: admin.rejectionReason,
+            usersCount: admin.subUsers.length,
+            createdAt: admin.created_at,
+            updatedAt: admin.updated_at,
+        }));
+    }
+
+    async createAdmin(data: { name: string; email: string; phone: string; shopName?: string; password?: string }) {
+        const [firstName, ...lastNameParts] = data.name.split(' ');
+        const bcrypt = await import('bcrypt');
+        const passwordHash = data.password ? await bcrypt.hash(data.password, 10) : null;
+
+        const newAdmin = await this.prisma.user.create({
+            data: {
+                first_name: firstName,
+                last_name: lastNameParts.join(' '),
+                email: data.email,
+                phone: data.phone,
+                username: data.email || data.phone,
+                role: 'seller',
+                status: 'ACTIVE',
+                approvalStatus: 'APPROVED',
+                isApproved: true,
+                isFirstApprovalLogin: false,
+                onboarded_at: new Date(),
+                passwordHash: passwordHash,
+            }
+        });
+
+        if (data.shopName) {
+            await this.prisma.shopDetail.create({
+                data: {
+                    userId: newAdmin.id,
+                    shopName: data.shopName,
+                    address: 'Registered Address',
+                    pinCode: '000000',
+                    state: 'Default State',
+                    district: 'Default District',
+                }
+            });
+        }
+
+        return {
+            id: newAdmin.id,
+            name: data.name,
+            email: newAdmin.email,
+            phone: newAdmin.phone,
+            shopName: data.shopName || 'N/A',
+            approvalStatus: newAdmin.approvalStatus,
+            status: newAdmin.status,
+        };
+    }
+
+    async getAdminDetails(adminId: number) {
+        const admin = await this.prisma.user.findUnique({
+            where: { id: adminId },
+            include: {
+                shopDetail: true,
+                bankDetail: true,
+                sellerDocuments: true,
+                subUsers: true,
+            }
+        });
+        if (!admin) throw new BadRequestException('Admin not found');
+        return admin;
+    }
+
+    async suspendAdmin(adminId: number) {
+        await this.prisma.user.update({
+            where: { id: adminId },
+            data: { approvalStatus: 'SUSPENDED', isApproved: false }
+        });
+        return { message: 'Admin account suspended successfully' };
+    }
+
+    async activateAdmin(adminId: number) {
+        await this.prisma.user.update({
+            where: { id: adminId },
+            data: { approvalStatus: 'APPROVED', status: 'ACTIVE', isApproved: true }
+        });
+        return { message: 'Admin account activated successfully' };
+    }
+
+    async deactivateAdmin(adminId: number) {
+        await this.prisma.user.update({
+            where: { id: adminId },
+            data: { status: 'INACTIVE' }
+        });
+        return { message: 'Admin account deactivated successfully' };
+    }
+
+    async getAdminUsers(adminId: number) {
+        const users = await this.prisma.user.findMany({
+            where: { adminId: adminId, deleted_at: null },
+            orderBy: { created_at: 'desc' }
+        });
+        return users.map(u => ({
+            id: u.id,
+            name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.phone || u.username,
+            email: u.email,
+            phone: u.phone,
+            status: u.status,
+            createdAt: u.created_at,
+        }));
+    }
 }

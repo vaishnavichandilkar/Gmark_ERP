@@ -28,3 +28,15 @@ export class RefreshTokenDto {
     @IsNotEmpty()
     refreshToken: string;
 }
+
+export class LoginWithPasswordDto {
+    @ApiProperty({ example: 'admin@weighpro.com' })
+    @IsString()
+    @IsNotEmpty()
+    identifier: string;
+
+    @ApiProperty({ example: 'password123' })
+    @IsString()
+    @IsNotEmpty()
+    password: string;
+}

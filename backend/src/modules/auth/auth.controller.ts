@@ -31,6 +31,14 @@ export class AuthController {
         return this.authService.login(dto);
     }
 
+    @Post('login-password')
+    @ApiOperation({ summary: 'Login using Email/Phone/Username and Password' })
+    @ApiResponse({ status: 201, description: 'Login successful.' })
+    @ApiResponse({ status: 401, description: 'Invalid credentials.' })
+    loginWithPassword(@Body() dto: { identifier: string; password: string }) {
+        return this.authService.loginWithPassword(dto);
+    }
+
     @Post('refresh-token')
     @ApiOperation({ summary: 'Refresh access token' })
     @ApiResponse({ status: 201, description: 'Token refresh successful.' })

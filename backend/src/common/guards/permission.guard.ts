@@ -23,7 +23,7 @@ export class PermissionGuard implements CanActivate {
             return false;
         }
 
-        if (user.role === 'SUPERADMIN' || user.role === 'SELLER') {
+        if (user.role === 'SUPERADMIN' || user.role === 'ADMIN' || user.role === 'SELLER') {
             return true;
         }
 

@@ -44,24 +44,70 @@ export class AuthService {
             throw new UnauthorizedException('User not found');
         }
 
-        // 3. Strict Seller Verification (As per DB requirements)
-        if (roleType === 'SELLER') {
-            if (!user.verified) {
-                throw new UnauthorizedException('Phone number not verified.');
-            }
-            if (user.isBlocked) {
-                throw new UnauthorizedException('Account is blocked. Please contact support.');
-            }
-        }
+        // 3. Strict Verification & Status Checks
+        this.verifyUserLoginStatus(user, roleType);
 
         // Cleanup OTP after success
         await this.smsService.deleteOtp(dto.phone);
 
-        // Ensure default UOMs are seeded for the user if they don't have any
-        await this.ensureDefaultUnits(user.id);
+        // Ensure default UOMs are seeded for the user/admin
+        const effectiveAdminId = (roleType === 'USER' || roleType === 'OPERATOR') ? (user.adminId || user.id) : user.id;
+        await this.ensureDefaultUnits(effectiveAdminId);
 
         // 5. Generate tokens and manage session in DB
         return this.generateTokens(user, roleType);
+    }
+
+    async loginWithPassword(dto: { identifier: string; password: string }) {
+        const identifier = dto.identifier.trim();
+        const user = await this.prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email: identifier },
+                    { phone: identifier },
+                    { username: identifier },
+                ]
+            }
+        });
+
+        if (!user) {
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        if (!user.passwordHash) {
+            throw new BadRequestException('Password not set for this account. Please use OTP login.');
+        }
+
+        const isPasswordMatch = await bcrypt.compare(dto.password, user.passwordHash);
+        if (!isPasswordMatch) {
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        const roleType = user.role.toUpperCase();
+        this.verifyUserLoginStatus(user, roleType);
+
+        const effectiveAdminId = (roleType === 'USER' || roleType === 'OPERATOR') ? (user.adminId || user.id) : user.id;
+        await this.ensureDefaultUnits(effectiveAdminId);
+
+        return this.generateTokens(user, roleType);
+    }
+
+    private verifyUserLoginStatus(user: any, roleType: string) {
+        if (user.isBlocked || user.status === 'INACTIVE') {
+            throw new UnauthorizedException('Account is blocked or deactivated. Please contact administrator.');
+        }
+
+        if (roleType === 'ADMIN' || roleType === 'SELLER') {
+            if (user.approvalStatus === 'PENDING') {
+                throw new UnauthorizedException('Admin account is pending Super Admin approval.');
+            }
+            if (user.approvalStatus === 'REJECTED') {
+                throw new UnauthorizedException(`Admin account application was rejected: ${user.rejectionReason || 'Contact Super Admin'}`);
+            }
+            if (user.approvalStatus === 'SUSPENDED') {
+                throw new UnauthorizedException('Admin account has been suspended by Super Admin.');
+            }
+        }
     }
 
     private async ensureDefaultUnits(userId: number) {

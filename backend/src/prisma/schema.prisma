@@ -28,6 +28,12 @@ model User {
   rejectionReason      String?
   regType              RegType?
   isFirstApprovalLogin Boolean             @default(true)
+  adminId              Int?
+  parentAdmin          User?               @relation("AdminToUsers", fields: [adminId], references: [id], onDelete: SetNull)
+  subUsers             User[]              @relation("AdminToUsers")
+  status               MasterStatus        @default(ACTIVE)
+  passwordHash         String?
+  permissions          Json?
   bankDetail           BankDetail?
   sellerDocuments      SellerDocument[]    @relation("UploadedByUser")
   shopDetail           ShopDetail?
@@ -51,7 +57,11 @@ model User {
   paymentVouchers      PaymentVoucher[]
   journalVouchers      JournalVoucher[]
   contraVouchers       ContraVoucher[]
+  employees            EmployeeMaster[]
+  departments          DepartmentMaster[]
+  costCentres          CostCentreMaster[]
 
+  @@index([adminId])
   @@map("User")
 }
 
@@ -860,6 +870,9 @@ enum Role {
   superadmin
   administrator
   operator
+  SUPERADMIN
+  ADMIN
+  USER
 }
 
 enum GstType {
@@ -880,6 +893,7 @@ enum ApprovalStatus {
   PENDING
   APPROVED
   REJECTED
+  SUSPENDED
 }
 
 enum FacilityStatus {
@@ -1229,6 +1243,92 @@ model HsnMaster {
   @@unique([code, createdBy])
   @@index([code], name: "idx_hsn_master_code")
   @@map("hsn_master")
+}
+
+model EmployeeMaster {
+  id                   Int              @id @default(autoincrement())
+  employeeCode         String
+  name                 String
+  address              String
+  mobileNo             String
+  department           String
+  personalEmail        String
+  companyEmail         String?
+  shiftTiming          String?
+  dateOfJoining        DateTime
+  dob                  DateTime
+  bloodGroup           String
+  designation          String
+  gender               String
+  employmentType       String           // On-roll, Contractual
+  reportingToId        Int?
+  reportingTo          EmployeeMaster?  @relation("ReportingHierarchy", fields: [reportingToId], references: [id], onDelete: SetNull)
+  subordinates         EmployeeMaster[] @relation("ReportingHierarchy")
+  salaryAmount         Decimal          @db.Decimal(12, 2)
+  paymentMode          String           // Cash, Net Banking, Debit/Credit, Cheque, UPI
+  
+  // Emergency Contact
+  emergencyName        String
+  emergencyMobile      String
+
+  // Documents
+  aadhaarNo            String
+  aadhaarDocUrl        String?
+  panNo                String
+  panDocUrl            String?
+  esicNo               String?
+  esicDocUrl           String?
+  uanNo                String?
+  uanDocUrl            String?
+
+  // Bank Details
+  bankName             String
+  accountNumber        String
+  ifscCode             String
+  branch               String
+
+  userId               Int
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status               MasterStatus     @default(ACTIVE)
+
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@unique([employeeCode, userId])
+  @@index([userId])
+  @@map("employee_master")
+}
+
+model DepartmentMaster {
+  id             Int          @id @default(autoincrement())
+  prefix         String       // 2 letters identifier e.g., ST, PR, PU
+  departmentName String       // e.g., Production, Purchase, Sales
+  userId         Int
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         MasterStatus @default(ACTIVE)
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([departmentName, userId])
+  @@index([userId])
+  @@map("department_master")
+}
+
+model CostCentreMaster {
+  id             Int          @id @default(autoincrement())
+  prefix         String       // 2 letters identifier e.g., FC, HO, SO
+  costCentreName String       // e.g., Head Office, Factory, Sales Office
+  userId         Int
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         MasterStatus @default(ACTIVE)
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([costCentreName, userId])
+  @@index([userId])
+  @@map("cost_centre_master")
 }
 
 
