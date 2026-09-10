@@ -24,6 +24,7 @@ import { API_BASE_URL } from '../../../config/api.config';
 import ScrollableTable from '../../../components/common/ScrollableTable';
 import CustomSelect from '../../../components/common/CustomSelect';
 import * as XLSX from 'xlsx';
+import ImportModal from './components/ImportModal';
 
 const DepartmentMaster = () => {
   const [viewMode, setViewMode] = useState('GRID'); // 'GRID', 'ADD', 'EDIT', 'VIEW'
@@ -31,6 +32,7 @@ const DepartmentMaster = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedDept, setSelectedDept] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
 
@@ -54,8 +56,10 @@ const DepartmentMaster = () => {
 
   const exportRef = useRef(null);
   const dropdownRef = useRef(null);
-  const token = localStorage.getItem('token');
-  const getHeaders = () => ({ headers: { Authorization: `Bearer ${token}` } });
+  const getHeaders = () => {
+    const token = localStorage.getItem('token');
+    return { headers: { Authorization: `Bearer ${token}` } };
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -78,7 +82,8 @@ const DepartmentMaster = () => {
       setDepartments(deptList);
     } catch (err) {
       console.error('Failed to fetch departments:', err);
-      toast.error('Failed to load department list');
+      const errMsg = err.response?.data?.message || err.message || 'Failed to load department list';
+      toast.error(errMsg);
       setDepartments([]);
     } finally {
       setLoading(false);
@@ -224,7 +229,7 @@ const DepartmentMaster = () => {
           {/* Top Title & Header Action */}
           <div className="flex flex-row items-center justify-between gap-4 mb-4 md:mb-6">
             <h2 className="text-[20px] md:text-[24px] font-bold text-[#111827] tracking-tight">
-              Department Master
+              Vertical Master
             </h2>
 
             <button
@@ -232,7 +237,7 @@ const DepartmentMaster = () => {
               className="flex flex-row items-center justify-center gap-2 bg-[#073318] hover:bg-[#04200f] text-white px-6 h-[44px] rounded-[10px] text-[15px] font-bold transition-all shadow-sm active:scale-[0.98] shrink-0 whitespace-nowrap"
             >
               <Plus size={18} />
-              Add Department
+              Add Vertical
             </button>
           </div>
 
@@ -276,8 +281,16 @@ const DepartmentMaster = () => {
                 </button>
               </div>
 
-              {/* Export Control */}
+              {/* Import & Export Controls */}
               <div className="flex items-center gap-3" ref={exportRef}>
+                <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="flex items-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all duration-200 bg-white shadow-sm"
+                >
+                  <Download size={18} />
+                  Import
+                </button>
+
                 <div className="relative">
                   <button 
                     onClick={() => setIsExportOpen(!isExportOpen)} 
@@ -319,7 +332,7 @@ const DepartmentMaster = () => {
                     </th>
                     <th className="border-r border-white/10">
                       <div className="flex items-center gap-2">
-                        DEPARTMENT NAME <ChevronsUpDown size={14} className="opacity-70" />
+                        VERTICAL NAME <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
                     <th className="text-center w-24">
@@ -342,7 +355,7 @@ const DepartmentMaster = () => {
                     <th className="px-2 py-2 border-r border-white/10">
                       <input
                         type="text"
-                        placeholder="Search Department..."
+                        placeholder="Search Vertical..."
                         value={columnFilters.departmentName}
                         onChange={(e) => setColumnFilters(prev => ({ ...prev, departmentName: e.target.value }))}
                         className="w-full min-w-[120px] px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium"
@@ -435,7 +448,7 @@ const DepartmentMaster = () => {
                   ) : (
                     <tr>
                       <td colSpan="4" className="px-6 py-16 text-center text-gray-400 font-medium">
-                        No departments found matching your criteria.
+                        No verticals found matching your criteria.
                       </td>
                     </tr>
                   )}
@@ -489,9 +502,9 @@ const DepartmentMaster = () => {
           <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm flex flex-col w-full relative">
             <div className="flex border-b border-[#E5E7EB] px-6 py-4 items-center justify-between bg-white rounded-t-[12px]">
               <h2 className="text-[18px] md:text-[20px] font-bold text-[#111827]">
-                {viewMode === 'ADD' && 'Add Department'}
-                {viewMode === 'EDIT' && 'Edit Department'}
-                {viewMode === 'VIEW' && 'Department Details'}
+                {viewMode === 'ADD' && 'Add Vertical'}
+                {viewMode === 'EDIT' && 'Edit Vertical'}
+                {viewMode === 'VIEW' && 'Vertical Details'}
               </h2>
 
               <div className="flex items-center gap-3">
@@ -499,10 +512,9 @@ const DepartmentMaster = () => {
                   <button
                     type="button"
                     onClick={() => setViewMode('EDIT')}
-                    className="flex items-center justify-center h-[40px] px-5 bg-[#073318] text-white rounded-[8px] text-[14px] font-bold hover:bg-[#0a4722] transition-all shadow-sm active:scale-95 gap-2"
+                    className="flex items-center justify-center h-[40px] px-6 bg-[#073318] hover:bg-[#04200f] text-white rounded-[10px] text-[14px] font-bold transition-all shadow-sm active:scale-95"
                   >
-                    <Edit3 size={16} />
-                    Edit Department
+                    Edit Vertical
                   </button>
                 )}
 
@@ -538,16 +550,16 @@ const DepartmentMaster = () => {
                     <span className="text-[11px] text-gray-400 font-medium">Unique identifier prefix for department code generation</span>
                   </div>
 
-                  {/* Department Name */}
+                  {/* Vertical Name */}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[13px] font-semibold text-[#4B5563]">
-                      Department Name <span className="text-red-[#EF4444]">*</span>
+                      Vertical Name <span className="text-red-[#EF4444]">*</span>
                     </label>
                     <input
                       type="text"
                       required
                       disabled={viewMode === 'VIEW'}
-                      placeholder="Enter department name"
+                      placeholder="Enter vertical name"
                       value={formData.departmentName}
                       onChange={(e) => setFormData({ ...formData, departmentName: e.target.value })}
                       className="w-full h-[42px] px-4 bg-white border border-[#E5E7EB] rounded-[10px] text-[14px] font-medium text-[#111827] outline-none focus:border-[#073318] transition-all placeholder:text-gray-400 shadow-sm disabled:bg-gray-50"
@@ -561,19 +573,10 @@ const DepartmentMaster = () => {
                     onClick={() => setViewMode('GRID')}
                     className="px-6 h-[40px] border border-[#E5E7EB] text-[#4B5563] rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
                   >
-                    Back
+                    {viewMode === 'VIEW' ? 'Close' : 'Back'}
                   </button>
 
-                  {viewMode === 'VIEW' ? (
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('EDIT')}
-                      className="px-8 h-[40px] bg-[#073318] hover:bg-[#04200f] text-white rounded-[8px] text-[14px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2"
-                    >
-                      <Edit3 size={16} />
-                      Edit Department
-                    </button>
-                  ) : (
+                  {viewMode !== 'VIEW' && (
                     <button
                       type="submit"
                       disabled={actionLoading}
@@ -597,11 +600,14 @@ const DepartmentMaster = () => {
               <div className="p-3 bg-rose-100 rounded-full">
                 <AlertTriangle size={24} />
               </div>
-              <h3 className="text-lg font-bold text-gray-900">Confirm Delete</h3>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Deactivate Vertical</h3>
+                <p className="text-xs text-gray-500 font-medium">Confirm deletion</p>
+              </div>
             </div>
 
             <p className="text-xs text-gray-600 mb-6 leading-relaxed">
-              Are you sure you want to delete department <strong className="text-gray-900 font-bold">"{deptToDelete?.departmentName}"</strong>? This action cannot be undone.
+              Are you sure you want to delete vertical <strong className="text-gray-900 font-bold">"{deptToDelete?.departmentName}"</strong>? This action cannot be undone.
             </p>
 
             <div className="flex items-center justify-end gap-3">
@@ -621,6 +627,48 @@ const DepartmentMaster = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Import Modal */}
+      {isImportModalOpen && (
+        <ImportModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          sampleFileName="Vertical_Master_Sample.xlsx"
+          sampleHeaders={['Prefix', 'Vertical Name']}
+          onImport={async (file) => {
+            try {
+              const reader = new FileReader();
+              reader.onload = async (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet);
+
+                let count = 0;
+                for (const row of json) {
+                  const prefix = row['Prefix'] || row['prefix'] || 'DEPT';
+                  const departmentName = row['Department Name'] || row['departmentName'] || row['Name'] || row['name'];
+                  if (departmentName) {
+                    await axios.post(`${API_BASE_URL}/masters/department-master`, {
+                      prefix: String(prefix).trim().toUpperCase(),
+                      departmentName: String(departmentName).trim(),
+                    }, getHeaders());
+                    count++;
+                  }
+                }
+                toast.success(`Successfully imported ${count} Departments`);
+                fetchDepartments();
+                setIsImportModalOpen(false);
+              };
+              reader.readAsArrayBuffer(file);
+            } catch (err) {
+              console.error('Import failed:', err);
+              toast.error('Failed to import Departments');
+            }
+          }}
+        />
       )}
     </div>
   );

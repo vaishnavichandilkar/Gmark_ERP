@@ -23,7 +23,7 @@ export class PermissionGuard implements CanActivate {
             return false;
         }
 
-        if (user.role === 'SUPERADMIN' || user.role === 'ADMIN' || user.role === 'SELLER') {
+        if (user.role === 'SUPERADMIN' || user.role === 'ADMIN' || user.role === 'SELLER' || user.rawRole === 'SELLER' || user.rawRole === 'SUPERADMIN' || user.rawRole === 'ADMIN') {
             return true;
         }
 
@@ -35,10 +35,12 @@ export class PermissionGuard implements CanActivate {
             return false;
         }
 
-        // 3. Check Permissions Map
-        // user.permissions = { "Facilities": { canCreate: true, ... } }
-        if (user.permissions && user.permissions[moduleName] && user.permissions[moduleName][action]) {
-            return true;
+        // 3. Check Permissions Map (Case-Insensitive module match)
+        if (user.permissions && typeof user.permissions === 'object') {
+            const key = Object.keys(user.permissions).find(k => k.toLowerCase() === moduleName.toLowerCase());
+            if (key && user.permissions[key] && user.permissions[key][action]) {
+                return true;
+            }
         }
 
         throw new ForbiddenException(`You do not have permission: ${requiredPermission} -> ${moduleName}.${action}`);

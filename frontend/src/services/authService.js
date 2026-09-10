@@ -11,6 +11,11 @@ export const loginApi = async (phone, otp) => {
     return response.data;
 };
 
+export const loginWithPasswordApi = async (identifier, password) => {
+    const response = await axiosInstance.post(AUTH_ENDPOINTS.LOGIN_WITH_PASSWORD, { identifier, password });
+    return response.data;
+};
+
 export const getProfileApi = async () => {
     const response = await axiosInstance.get(AUTH_ENDPOINTS.PROFILE);
     return response.data;

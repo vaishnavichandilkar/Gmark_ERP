@@ -417,19 +417,6 @@ export class ReportsService {
       // Ignore audit log failure to avoid blocking report generation
     }
 
-    const accounts = await this.prisma.accountMaster.findMany({
-      where: { userId },
-      select: {
-        id: true,
-        accountName: true,
-        groupName: true,
-        supplierOpeningBalance: true,
-        supplierBalanceType: true,
-        customerOpeningBalance: true,
-        customerBalanceType: true,
-      },
-    });
-
     const txWhere: Prisma.TransactionWhereInput = { userId };
     if (fromDateObj || toDateObj) {
       txWhere.bookingDate = {};
@@ -437,13 +424,86 @@ export class ReportsService {
       if (toDateObj) txWhere.bookingDate.lte = toDateObj;
     }
 
-    const txAggregations = await this.prisma.transaction.groupBy({
-      by: ['accountId', 'entryType'],
-      where: txWhere,
-      _sum: {
-        amount: true,
-      },
-    });
+    const [
+      accounts,
+      txAggregations,
+      l1Groups,
+      l2SubGroups,
+      l3SubSubGroups,
+      l4SubSubSubGroups,
+      l5SubSubSubSubGroups,
+    ] = await Promise.all([
+      this.prisma.accountMaster.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          accountName: true,
+          groupName: true,
+          supplierOpeningBalance: true,
+          supplierBalanceType: true,
+          customerOpeningBalance: true,
+          customerBalanceType: true,
+        },
+      }),
+      this.prisma.transaction.groupBy({
+        by: ['accountId', 'entryType'],
+        where: txWhere,
+        _sum: {
+          amount: true,
+        },
+      }),
+      this.prisma.group.findMany({ select: { id: true, group_name: true, parent_id: true } }),
+      this.prisma.subGroup.findMany({ select: { id: true, subgroup_name: true, group_id: true } }),
+      this.prisma.subSubGroup.findMany({ select: { id: true, name: true, sub_group_id: true } }),
+      this.prisma.subSubSubGroup.findMany({ select: { id: true, name: true, sub_sub_group_id: true } }),
+      this.prisma.subSubSubSubGroup.findMany({ select: { id: true, name: true, sub_sub_sub_group_id: true } }),
+    ]);
+
+    const groupParentMap = new Map<string, string>();
+    const l1Map = new Map<number, any>(l1Groups.map((g) => [g.id, g]));
+    for (const g of l1Groups) {
+      if (g.parent_id && l1Map.has(g.parent_id)) {
+        groupParentMap.set(g.group_name.trim().toLowerCase(), l1Map.get(g.parent_id).group_name);
+      }
+    }
+    for (const sg of l2SubGroups) {
+      if (l1Map.has(sg.group_id)) {
+        groupParentMap.set(sg.subgroup_name.trim().toLowerCase(), l1Map.get(sg.group_id).group_name);
+      }
+    }
+    const l2Map = new Map<number, any>(l2SubGroups.map((sg) => [sg.id, sg]));
+    for (const ssg of l3SubSubGroups) {
+      if (l2Map.has(ssg.sub_group_id)) {
+        groupParentMap.set(ssg.name.trim().toLowerCase(), l2Map.get(ssg.sub_group_id).subgroup_name);
+      }
+    }
+    const l3Map = new Map<number, any>(l3SubSubGroups.map((ssg) => [ssg.id, ssg]));
+    for (const sssg of l4SubSubSubGroups) {
+      if (l3Map.has(sssg.sub_sub_group_id)) {
+        groupParentMap.set(sssg.name.trim().toLowerCase(), l3Map.get(sssg.sub_sub_group_id).name);
+      }
+    }
+    const l4Map = new Map<number, any>(l4SubSubSubGroups.map((sssg) => [sssg.id, sssg]));
+    for (const ssssg of l5SubSubSubSubGroups) {
+      if (l4Map.has(ssssg.sub_sub_sub_group_id)) {
+        groupParentMap.set(ssssg.name.trim().toLowerCase(), l4Map.get(ssssg.sub_sub_sub_group_id).name);
+      }
+    }
+
+    const resolveAncestors = (groupNameStr: string): string[] => {
+      const ancestors: string[] = [groupNameStr];
+      let curr = groupNameStr.trim().toLowerCase();
+      const visited = new Set<string>([curr]);
+      while (groupParentMap.has(curr)) {
+        const parentName = groupParentMap.get(curr)!;
+        const parentLower = parentName.trim().toLowerCase();
+        if (visited.has(parentLower)) break;
+        visited.add(parentLower);
+        ancestors.unshift(parentName);
+        curr = parentLower;
+      }
+      return ancestors;
+    };
 
     const txMap: Record<number, { Dr: number; Cr: number }> = {};
     txAggregations.forEach((agg) => {
@@ -469,10 +529,16 @@ export class ReportsService {
     const matchGroup = (groups: string[], keywords: string[], exclude: string[] = []): boolean => {
       if (!groups || groups.length === 0) return false;
       return groups.some((g) => {
-        const lower = g.toLowerCase();
-        const matchesKey = keywords.some((k) => lower.includes(k.toLowerCase()));
-        const isExcluded = exclude.some((ex) => lower.includes(ex.toLowerCase()));
-        return matchesKey && !isExcluded;
+        const lower = g.toLowerCase().trim();
+        const isExcluded = exclude.some((ex) => lower.includes(ex.toLowerCase().trim()));
+        if (isExcluded) return false;
+        return keywords.some((k) => {
+          const keyLower = k.toLowerCase().trim();
+          if ((keyLower === 'direct' || keyLower.startsWith('direct')) && lower.includes('indirect')) {
+            return false;
+          }
+          return lower.includes(keyLower);
+        });
       });
     };
 
@@ -484,7 +550,16 @@ export class ReportsService {
     const hasDateFilter = Boolean(fromDateObj || toDateObj);
 
     accounts.forEach((account) => {
-      const groups = account.groupName || [];
+      const rawGroups = account.groupName || [];
+      const expandedGroups = new Set<string>();
+      for (const g of rawGroups) {
+        if (!g) continue;
+        const anc = resolveAncestors(g);
+        for (const a of anc) {
+          expandedGroups.add(a);
+        }
+      }
+      const groups = Array.from(expandedGroups);
       const tx = txMap[account.id] || { Dr: 0, Cr: 0 };
 
       // Vendor/Customer opening balance is a Balance Sheet item (Creditors/Debtors), NOT Trading P&L purchase/sales expense.
@@ -511,39 +586,7 @@ export class ReportsService {
         salesReturn += getCreditBal();
       } else if (matchGroup(groups, ['sale', 'sales', 'sales accounts'], ['return'])) {
         sales += getCreditBal();
-      } else if (matchGroup(groups, ['indirect expense', 'indirect expenses', 'indirect', 'administrative', 'selling expense', 'operating expense'])) {
-        const activity = Math.abs(tx.Dr - tx.Cr);
-        const bal = getDebitBal();
-        const amt = Math.max(bal, activity);
-        indirectExpenses += amt;
-        if (amt > 0) {
-          indirectExpensesBreakdown.push({
-            id: account.id,
-            accountName: account.accountName,
-            groupName: groups,
-            totalAmount: amt,
-            taxableAmount: amt,
-            taxAmount: 0,
-            status: 'COMPLETED',
-          });
-        }
-      } else if (matchGroup(groups, ['direct expense', 'direct expenses', 'manufacturing', 'freight', 'carriage inward', 'expense'], ['indirect'])) {
-        const activity = Math.abs(tx.Dr - tx.Cr);
-        const bal = getDebitBal();
-        const amt = Math.max(bal, activity);
-        directExpenses += amt;
-        if (amt > 0) {
-          directExpensesBreakdown.push({
-            id: account.id,
-            accountName: account.accountName,
-            groupName: groups,
-            totalAmount: amt,
-            taxableAmount: amt,
-            taxAmount: 0,
-            status: 'COMPLETED',
-          });
-        }
-      } else if (matchGroup(groups, ['indirect income', 'indirect incomes', 'other income', 'indirect'])) {
+      } else if (matchGroup(groups, ['indirect income', 'indirect incomes', 'other income'], ['expense', 'expenses'])) {
         const activity = Math.abs(tx.Cr - tx.Dr);
         const bal = getCreditBal();
         const amt = Math.max(bal, activity);
@@ -559,13 +602,93 @@ export class ReportsService {
             status: 'COMPLETED',
           });
         }
-      } else if (matchGroup(groups, ['direct income', 'direct incomes', 'direct sale', 'direct revenue', 'income'], ['indirect'])) {
+      } else if (matchGroup(groups, ['indirect expense', 'indirect expenses', 'administrative', 'selling expense', 'operating expense'], ['income', 'incomes'])) {
+        const activity = Math.abs(tx.Dr - tx.Cr);
+        const bal = getDebitBal();
+        const amt = Math.max(bal, activity);
+        indirectExpenses += amt;
+        if (amt > 0) {
+          indirectExpensesBreakdown.push({
+            id: account.id,
+            accountName: account.accountName,
+            groupName: groups,
+            totalAmount: amt,
+            taxableAmount: amt,
+            taxAmount: 0,
+            status: 'COMPLETED',
+          });
+        }
+      } else if (matchGroup(groups, ['direct income', 'direct incomes', 'direct sale', 'direct revenue'], ['expense', 'expenses', 'indirect'])) {
         const activity = Math.abs(tx.Cr - tx.Dr);
         const bal = getCreditBal();
         const amt = Math.max(bal, activity);
         directIncome += amt;
         if (amt > 0) {
           directIncomeBreakdown.push({
+            id: account.id,
+            accountName: account.accountName,
+            groupName: groups,
+            totalAmount: amt,
+            taxableAmount: amt,
+            taxAmount: 0,
+            status: 'COMPLETED',
+          });
+        }
+      } else if (matchGroup(groups, ['direct expense', 'direct expenses', 'manufacturing', 'carriage inward'], ['income', 'incomes', 'indirect'])) {
+        const activity = Math.abs(tx.Dr - tx.Cr);
+        const bal = getDebitBal();
+        const amt = Math.max(bal, activity);
+        directExpenses += amt;
+        if (amt > 0) {
+          directExpensesBreakdown.push({
+            id: account.id,
+            accountName: account.accountName,
+            groupName: groups,
+            totalAmount: amt,
+            taxableAmount: amt,
+            taxAmount: 0,
+            status: 'COMPLETED',
+          });
+        }
+      } else if (matchGroup(groups, ['income'], ['expense', 'expenses', 'indirect'])) {
+        const activity = Math.abs(tx.Cr - tx.Dr);
+        const bal = getCreditBal();
+        const amt = Math.max(bal, activity);
+        directIncome += amt;
+        if (amt > 0) {
+          directIncomeBreakdown.push({
+            id: account.id,
+            accountName: account.accountName,
+            groupName: groups,
+            totalAmount: amt,
+            taxableAmount: amt,
+            taxAmount: 0,
+            status: 'COMPLETED',
+          });
+        }
+      } else if (matchGroup(groups, ['freight', 'carriage inward', 'direct cost'], ['income', 'incomes', 'indirect'])) {
+        const activity = Math.abs(tx.Dr - tx.Cr);
+        const bal = getDebitBal();
+        const amt = Math.max(bal, activity);
+        directExpenses += amt;
+        if (amt > 0) {
+          directExpensesBreakdown.push({
+            id: account.id,
+            accountName: account.accountName,
+            groupName: groups,
+            totalAmount: amt,
+            taxableAmount: amt,
+            taxAmount: 0,
+            status: 'COMPLETED',
+          });
+        }
+      } else if (matchGroup(groups, ['expense', 'expenses'], ['income', 'incomes', 'direct'])) {
+        const activity = Math.abs(tx.Dr - tx.Cr);
+        const bal = getDebitBal();
+        const amt = Math.max(bal, activity);
+        indirectExpenses += amt;
+        if (amt > 0) {
+          indirectExpensesBreakdown.push({
             id: account.id,
             accountName: account.accountName,
             groupName: groups,
@@ -664,10 +787,16 @@ export class ReportsService {
         status: 'COMPLETED',
       };
 
-      if (matchGroup([groupName], ['indirect expense', 'indirect expenses', 'indirect', 'administrative', 'selling expense', 'operating expense'])) {
+      if (matchGroup([groupName], ['indirect expense', 'indirect expenses', 'administrative', 'selling expense', 'operating expense'], ['income', 'incomes'])) {
         indirectExpenses += amt;
         indirectExpensesBreakdown.push(record);
-      } else if (matchGroup([groupName], ['direct expense', 'direct expenses', 'manufacturing', 'freight', 'carriage inward', 'expense', 'direct'], ['indirect'])) {
+      } else if (matchGroup([groupName], ['indirect income', 'indirect incomes', 'other income'], ['expense', 'expenses'])) {
+        indirectIncome += amt;
+        indirectIncomeBreakdown.push(record);
+      } else if (matchGroup([groupName], ['direct income', 'direct incomes', 'direct sale', 'direct revenue'], ['expense', 'expenses'])) {
+        directIncome += amt;
+        directIncomeBreakdown.push(record);
+      } else {
         directExpenses += amt;
         directExpensesBreakdown.push(record);
       }
@@ -677,7 +806,7 @@ export class ReportsService {
       const amt = Number(exp.amount || 0);
       if (amt <= 0) return;
 
-      const groupName = exp.groupName || 'Direct Expense';
+      const groupName = exp.groupName || 'Direct Income';
       const record = {
         id: exp.id,
         accountName: groupName,
@@ -690,18 +819,18 @@ export class ReportsService {
         status: 'COMPLETED',
       };
 
-      if (matchGroup([groupName], ['indirect income', 'indirect incomes', 'other income', 'indirect'])) {
+      if (matchGroup([groupName], ['indirect income', 'indirect incomes', 'other income'], ['expense', 'expenses'])) {
         indirectIncome += amt;
         indirectIncomeBreakdown.push(record);
-      } else if (matchGroup([groupName], ['direct income', 'direct incomes', 'direct sale', 'direct revenue', 'income'], ['indirect'])) {
-        directIncome += amt;
-        directIncomeBreakdown.push(record);
-      } else if (matchGroup([groupName], ['indirect expense', 'indirect expenses', 'administrative', 'selling expense', 'operating expense'])) {
+      } else if (matchGroup([groupName], ['indirect expense', 'indirect expenses', 'administrative', 'selling expense', 'operating expense'], ['income', 'incomes'])) {
         indirectExpenses += amt;
         indirectExpensesBreakdown.push(record);
-      } else if (matchGroup([groupName], ['direct expense', 'direct expenses', 'manufacturing', 'freight', 'carriage inward', 'expense'], ['indirect'])) {
+      } else if (matchGroup([groupName], ['direct expense', 'direct expenses', 'manufacturing', 'carriage inward'], ['income', 'incomes'])) {
         directExpenses += amt;
         directExpensesBreakdown.push(record);
+      } else {
+        directIncome += amt;
+        directIncomeBreakdown.push(record);
       }
     });
 

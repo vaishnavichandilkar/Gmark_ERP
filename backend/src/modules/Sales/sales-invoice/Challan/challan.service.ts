@@ -315,23 +315,34 @@ export class ChallanService {
   }
   
   async generateChallanNumber(userId: number): Promise<string> {
-    const lastChallan = await this.prisma.salesChallan.findFirst({
+    const challans = await this.prisma.salesChallan.findMany({
       where: { 
         userId,
         challanNumber: { startsWith: 'CH' } 
       },
-      orderBy: { challanNumber: 'desc' },
       select: { challanNumber: true },
     });
 
-    if (!lastChallan) return 'CH0001';
-    
-    const lastNumStr = lastChallan.challanNumber.replace('CH', '');
-    const lastNumber = parseInt(lastNumStr, 10);
-    
-    if (isNaN(lastNumber)) return 'CH0001';
-    
-    return `CH${(lastNumber + 1).toString().padStart(4, '0')}`;
+    let maxNumber = 0;
+    for (const ch of challans) {
+      const match = ch.challanNumber.match(/(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    }
+
+    let nextNumber = maxNumber + 1;
+    let candidate = `CH${nextNumber.toString().padStart(4, '0')}`;
+
+    while (await this.prisma.salesChallan.findFirst({ where: { userId, challanNumber: candidate } })) {
+      nextNumber++;
+      candidate = `CH${nextNumber.toString().padStart(4, '0')}`;
+    }
+
+    return candidate;
   }
 
   async updateSOStatusAfterChallan(soId: number, tx: any) {

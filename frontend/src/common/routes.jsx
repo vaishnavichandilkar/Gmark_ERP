@@ -26,6 +26,8 @@ const HSNMasterPage = lazy(() => import("../pages/dashboard/masters/HSNMasterPag
 const EmployeeMaster = lazy(() => import("../pages/dashboard/masters/EmployeeMaster"));
 const DepartmentMaster = lazy(() => import("../pages/dashboard/masters/DepartmentMaster"));
 const CostCentreMaster = lazy(() => import("../pages/dashboard/masters/CostCentreMaster"));
+const ShiftMaster = lazy(() => import("../pages/dashboard/masters/ShiftMaster"));
+const ComingSoonMaster = lazy(() => import("../pages/dashboard/masters/components/ComingSoonMaster"));
 
 // Purchase Pages
 const PurchaseLayout = lazy(() => import("../pages/dashboard/purchase/PurchaseLayout"));
@@ -233,6 +235,27 @@ export const router = createBrowserRouter([
                       { path: "view/:id", element: <CostCentreMaster /> },
                       { path: "edit/:id", element: <CostCentreMaster /> },
                     ],
+                  },
+                  {
+                    path: "shift-master",
+                    children: [
+                      { index: true, element: <ShiftMaster /> },
+                      { path: "add", element: <ShiftMaster /> },
+                      { path: "view/:id", element: <ShiftMaster /> },
+                      { path: "edit/:id", element: <ShiftMaster /> },
+                    ],
+                  },
+                  {
+                    path: "tds-master",
+                    element: <ComingSoonMaster title="TDS Master" />,
+                  },
+                  {
+                    path: "project-master",
+                    element: <ComingSoonMaster title="Project Master" />,
+                  },
+                  {
+                    path: "asset-master",
+                    element: <ComingSoonMaster title="Asset Master" />,
                   },
                 ],
               },

@@ -60,11 +60,14 @@ export class AuthService {
 
     async loginWithPassword(dto: { identifier: string; password: string }) {
         const identifier = dto.identifier.trim();
+        const cleanPhone = identifier.replace(/\D/g, '').slice(-10);
+
         const user = await this.prisma.user.findFirst({
             where: {
                 OR: [
                     { email: identifier },
                     { phone: identifier },
+                    ...(cleanPhone ? [{ phone: cleanPhone }] : []),
                     { username: identifier },
                 ]
             }

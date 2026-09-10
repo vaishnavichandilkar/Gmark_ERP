@@ -127,6 +127,17 @@ export const updateContraVoucher = async (id, data) => {
     return response.data;
 };
 
+export const importBankReconciliation = async (file, subTab) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await axiosInstance.post(`/finance/bank-reconciliation/import?subTab=${encodeURIComponent(subTab)}`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+    return response.data;
+};
+
 export default {
     getBankCashAccounts,
     getCustomers,
@@ -151,5 +162,7 @@ export default {
     updateContraVoucher,
     createContraVoucher,
     getContraVouchers,
-    getContraVoucherById
+    getContraVoucherById,
+    importBankReconciliation,
 };
+

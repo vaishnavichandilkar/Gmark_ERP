@@ -105,8 +105,13 @@ axiosInstance.interceptors.response.use(
             return axiosInstance(originalRequest);
         }
 
-        // 2. Token refresh / 401 handling
-        if (error.response && error.response.status === 401 && !originalRequest._retry) {
+        // 2. Token refresh / 401 handling (only for protected routes, skip auth requests)
+        const requestUrl = originalRequest.url || '';
+        const isAuthRequest = requestUrl.includes('/auth/login') || 
+                              requestUrl.includes('/auth/send-login-otp') || 
+                              requestUrl.includes('/auth/resend-otp');
+
+        if (error.response && error.response.status === 401 && !originalRequest._retry && !isAuthRequest) {
             if (isRefreshing) {
                 return new Promise((resolve, reject) => {
                     failedQueue.push({ resolve, reject });
@@ -143,24 +148,22 @@ axiosInstance.interceptors.response.use(
                     }
                 } catch (refreshError) {
                     processQueue(refreshError, null);
-                    // Clear all session and authentication data
+                    // Clear session data (preserve language setting)
                     localStorage.removeItem('token');
                     localStorage.removeItem('refreshToken');
                     localStorage.removeItem('user');
                     localStorage.removeItem('sessionId');
-                    localStorage.removeItem('languageConfirmed');
                     window.location.href = '/login';
                     return Promise.reject(refreshError);
                 } finally {
                     isRefreshing = false;
                 }
             } else {
-                // No refresh token available, clear everything and redirect
+                // No refresh token available, clear session data and redirect (preserve language setting)
                 localStorage.removeItem('token');
                 localStorage.removeItem('refreshToken');
                 localStorage.removeItem('user');
                 localStorage.removeItem('sessionId');
-                localStorage.removeItem('languageConfirmed');
                 window.location.href = '/login';
             }
         }

@@ -24,6 +24,7 @@ import { API_BASE_URL } from '../../../config/api.config';
 import ScrollableTable from '../../../components/common/ScrollableTable';
 import CustomSelect from '../../../components/common/CustomSelect';
 import * as XLSX from 'xlsx';
+import ImportModal from './components/ImportModal';
 
 const CostCentreMaster = () => {
   const [viewMode, setViewMode] = useState('GRID'); // 'GRID', 'ADD', 'EDIT', 'VIEW'
@@ -31,6 +32,7 @@ const CostCentreMaster = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedCostCentre, setSelectedCostCentre] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
 
@@ -54,8 +56,10 @@ const CostCentreMaster = () => {
 
   const exportRef = useRef(null);
   const dropdownRef = useRef(null);
-  const token = localStorage.getItem('token');
-  const getHeaders = () => ({ headers: { Authorization: `Bearer ${token}` } });
+  const getHeaders = () => {
+    const token = localStorage.getItem('token');
+    return { headers: { Authorization: `Bearer ${token}` } };
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -78,7 +82,8 @@ const CostCentreMaster = () => {
       setCostCentres(ccList);
     } catch (err) {
       console.error('Failed to fetch cost centres:', err);
-      toast.error('Failed to load cost centre list');
+      const errMsg = err.response?.data?.message || err.message || 'Failed to load cost centre list';
+      toast.error(errMsg);
       setCostCentres([]);
     } finally {
       setLoading(false);
@@ -276,8 +281,16 @@ const CostCentreMaster = () => {
                 </button>
               </div>
 
-              {/* Export Control */}
+              {/* Import & Export Controls */}
               <div className="flex items-center gap-3" ref={exportRef}>
+                <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="flex items-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all duration-200 bg-white shadow-sm"
+                >
+                  <Download size={18} />
+                  Import
+                </button>
+
                 <div className="relative">
                   <button 
                     onClick={() => setIsExportOpen(!isExportOpen)} 
@@ -499,9 +512,8 @@ const CostCentreMaster = () => {
                   <button
                     type="button"
                     onClick={() => setViewMode('EDIT')}
-                    className="flex items-center justify-center h-[40px] px-5 bg-[#073318] text-white rounded-[8px] text-[14px] font-bold hover:bg-[#0a4722] transition-all shadow-sm active:scale-95 gap-2"
+                    className="flex items-center justify-center h-[40px] px-6 bg-[#073318] hover:bg-[#04200f] text-white rounded-[10px] text-[14px] font-bold transition-all shadow-sm active:scale-95"
                   >
-                    <Edit3 size={16} />
                     Edit Cost Centre
                   </button>
                 )}
@@ -561,19 +573,10 @@ const CostCentreMaster = () => {
                     onClick={() => setViewMode('GRID')}
                     className="px-6 h-[40px] border border-[#E5E7EB] text-[#4B5563] rounded-[8px] text-[14px] font-bold hover:bg-gray-50 transition-all bg-white shadow-sm"
                   >
-                    Back
+                    {viewMode === 'VIEW' ? 'Close' : 'Back'}
                   </button>
 
-                  {viewMode === 'VIEW' ? (
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('EDIT')}
-                      className="px-8 h-[40px] bg-[#073318] hover:bg-[#04200f] text-white rounded-[8px] text-[14px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2"
-                    >
-                      <Edit3 size={16} />
-                      Edit Cost Centre
-                    </button>
-                  ) : (
+                  {viewMode !== 'VIEW' && (
                     <button
                       type="submit"
                       disabled={actionLoading}
@@ -597,7 +600,10 @@ const CostCentreMaster = () => {
               <div className="p-3 bg-rose-100 rounded-full">
                 <AlertTriangle size={24} />
               </div>
-              <h3 className="text-lg font-bold text-gray-900">Confirm Delete</h3>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Deactivate Cost Centre</h3>
+                <p className="text-xs text-gray-500 font-medium">Confirm deletion</p>
+              </div>
             </div>
 
             <p className="text-xs text-gray-600 mb-6 leading-relaxed">
@@ -621,6 +627,48 @@ const CostCentreMaster = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Import Modal */}
+      {isImportModalOpen && (
+        <ImportModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          sampleFileName="Cost_Centre_Master_Sample.xlsx"
+          sampleHeaders={['Prefix', 'Cost Centre Name']}
+          onImport={async (file) => {
+            try {
+              const reader = new FileReader();
+              reader.onload = async (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet);
+
+                let count = 0;
+                for (const row of json) {
+                  const prefix = row['Prefix'] || row['prefix'] || 'CC';
+                  const costCentreName = row['Cost Centre Name'] || row['costCentreName'] || row['Name'] || row['name'];
+                  if (costCentreName) {
+                    await axios.post(`${API_BASE_URL}/masters/cost-centre-master`, {
+                      prefix: String(prefix).trim().toUpperCase(),
+                      costCentreName: String(costCentreName).trim(),
+                    }, getHeaders());
+                    count++;
+                  }
+                }
+                toast.success(`Successfully imported ${count} Cost Centres`);
+                fetchCostCentres();
+                setIsImportModalOpen(false);
+              };
+              reader.readAsArrayBuffer(file);
+            } catch (err) {
+              console.error('Import failed:', err);
+              toast.error('Failed to import Cost Centres');
+            }
+          }}
+        />
       )}
     </div>
   );

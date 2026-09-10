@@ -7,23 +7,20 @@ const MastersLayout = () => {
     const { t } = useTranslation(['modules', 'common']);
     const location = useLocation();
 
-    // Required Tab Sequence from User:
-    // 1. Group Master
-    // 2. Account Master
-    // 3. Unit Master
-    // 4. Category
-    // 5. Product Master
-    // 6. HSN Master
     const tabs = [
-        { name: t('group_master'), path: '/seller/masters/group-master' },
-        { name: t('account_master'), path: '/seller/masters/account-master' },
-        { name: t('unit_master'), path: '/seller/masters/unit-master' },
-        { name: t('category_master'), path: '/seller/masters/category' },
-        { name: t('hsn_master', 'HSN Master'), path: '/seller/masters/hsn-master' },
-        { name: t('product_master'), path: '/seller/masters/product-master' },
-        { name: 'Employee Master', path: '/seller/masters/employee-master' },
-        { name: 'Department Master', path: '/seller/masters/department-master' },
+        { name: 'Group Master', path: '/seller/masters/group-master' },
+        { name: 'Vertical Master', path: '/seller/masters/department-master' },
         { name: 'Cost Centre Master', path: '/seller/masters/cost-centre-master' },
+        { name: 'Shift Master', path: '/seller/masters/shift-master' },
+        { name: 'Employee Master', path: '/seller/masters/employee-master' },
+        { name: 'Account Master', path: '/seller/masters/account-master' },
+        { name: 'Unit Master', path: '/seller/masters/unit-master' },
+        { name: 'Category Master', path: '/seller/masters/category' },
+        { name: 'HSN Master', path: '/seller/masters/hsn-master' },
+        { name: 'TDS Master', path: '/seller/masters/tds-master' },
+        { name: 'Product Master', path: '/seller/masters/product-master' },
+        { name: 'Project Master', path: '/seller/masters/project-master' },
+        { name: 'Asset Master', path: '/seller/masters/asset-master' },
     ];
 
     // If we are on the base /seller/masters route, redirect to the first tab (Group Master)
@@ -44,17 +41,17 @@ const MastersLayout = () => {
             </div>
 
             {/* Tab Navigation */}
-            <div className="border-b border-[#E5E7EB] mb-6 overflow-x-auto scroll-smooth pb-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full">
-                <div className="flex items-center gap-2 md:gap-4 min-w-max md:min-w-full md:justify-center pb-1">
+            <div className="border-b border-[#E5E7EB] mb-6 pb-2">
+                <div className="flex items-center justify-between gap-1 flex-wrap w-full pb-1">
                     {tabs.map((tab) => (
                         <NavLink
                             key={tab.path}
                             to={tab.path}
                             className={({ isActive }) =>
-                                `relative text-[14px] md:text-[16px] font-bold transition-all duration-300 ease-in-out whitespace-nowrap px-4 py-2.5 rounded-[12px]
+                                `relative text-[11px] xl:text-[12px] font-bold transition-all duration-200 ease-in-out whitespace-nowrap px-2 xl:px-2.5 py-1.5 rounded-[8px]
                                 ${isActive
-                                    ? 'text-[#073318] bg-[#073318]/5 border-2 border-[#E5E7EB] shadow-sm shadow-[#073318]/10'
-                                    : 'text-[#6B7280] hover:text-[#111827] hover:bg-gray-50 border-2 border-transparent'
+                                    ? 'text-[#073318] bg-[#073318]/10 border border-[#073318]/30 shadow-sm'
+                                    : 'text-[#6B7280] hover:text-[#111827] hover:bg-gray-100 border border-transparent'
                                 }`
                             }
                         >

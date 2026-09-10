@@ -25,11 +25,16 @@ import { RequirePermission } from '../../../common/decorators/require-permission
 export class DepartmentMasterController {
     constructor(private departmentService: DepartmentMasterService) { }
 
+    private getUserId(req: any): number {
+        const id = req.user?.effectiveAdminId ?? req.user?.userId ?? req.user?.id ?? req.user?.actualUserId;
+        return Number(id) || 1;
+    }
+
     @Get()
     @RequirePermission('masters_view')
     @ApiOperation({ summary: 'List all departments' })
     async findAll(@Request() req, @Query('search') search?: string) {
-        const userId = req.user.effectiveAdminId;
+        const userId = this.getUserId(req);
         return this.departmentService.findAll(userId, search);
     }
 
@@ -37,7 +42,7 @@ export class DepartmentMasterController {
     @RequirePermission('masters_view')
     @ApiOperation({ summary: 'Get department by ID' })
     async findOne(@Request() req, @Param('id', ParseIntPipe) id: number) {
-        const userId = req.user.effectiveAdminId;
+        const userId = this.getUserId(req);
         return this.departmentService.findOne(id, userId);
     }
 
@@ -45,7 +50,7 @@ export class DepartmentMasterController {
     @RequirePermission('masters_create')
     @ApiOperation({ summary: 'Create new department' })
     async create(@Request() req, @Body() dto: CreateDepartmentDto) {
-        const userId = req.user.effectiveAdminId;
+        const userId = this.getUserId(req);
         return this.departmentService.create(dto, userId);
     }
 
@@ -57,7 +62,7 @@ export class DepartmentMasterController {
         @Param('id', ParseIntPipe) id: number, 
         @Body() dto: UpdateDepartmentDto
     ) {
-        const userId = req.user.effectiveAdminId;
+        const userId = this.getUserId(req);
         return this.departmentService.update(id, dto, userId);
     }
 
@@ -65,7 +70,7 @@ export class DepartmentMasterController {
     @RequirePermission('masters_delete')
     @ApiOperation({ summary: 'Delete department' })
     async remove(@Request() req, @Param('id', ParseIntPipe) id: number) {
-        const userId = req.user.effectiveAdminId;
+        const userId = this.getUserId(req);
         return this.departmentService.remove(id, userId);
     }
 }

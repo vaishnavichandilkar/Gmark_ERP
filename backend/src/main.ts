@@ -61,7 +61,7 @@ async function bootstrap() {
     setupSwagger(app);
 
     const configService = app.get(ConfigService);
-    const port = configService.get('PORT') || configService.get('port') || 3001;
+    const port = configService.get('PORT') || configService.get('port') || 3002;
     await app.listen(port);
     console.log(`Application is running on: http://localhost:${port}`);
     console.log(`Swagger Docs available at: http://localhost:${port}${process.env.SWAGGER_PATH || '/api/docs'}`);

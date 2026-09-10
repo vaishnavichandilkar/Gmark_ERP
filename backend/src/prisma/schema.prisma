@@ -60,6 +60,7 @@ model User {
   employees            EmployeeMaster[]
   departments          DepartmentMaster[]
   costCentres          CostCentreMaster[]
+  shifts               ShiftMaster[]
 
   @@index([adminId])
   @@map("User")
@@ -1331,4 +1332,19 @@ model CostCentreMaster {
   @@map("cost_centre_master")
 }
 
+model ShiftMaster {
+  id        Int          @id @default(autoincrement())
+  shiftName String
+  startTime String
+  endTime   String
+  userId    Int
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    MasterStatus @default(ACTIVE)
 
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([shiftName, userId])
+  @@index([userId])
+  @@map("shift_master")
+}

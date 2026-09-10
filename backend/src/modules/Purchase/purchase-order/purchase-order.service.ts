@@ -27,16 +27,31 @@ export class PurchaseOrderService {
   ) {}
 
   async getNextNumber(userId: number): Promise<string> {
-    const last = await this.prisma.purchaseOrder.findFirst({
+    const pos = await this.prisma.purchaseOrder.findMany({
       where: { userId, poNumber: { startsWith: 'PO-' } },
-      orderBy: { poNumber: 'desc' },
       select: { poNumber: true },
     });
 
-    if (!last) return 'PO-0001';
-    const num = parseInt(last.poNumber.replace('PO-', ''), 10);
-    if (isNaN(num)) return 'PO-0001';
-    return `PO-${(num + 1).toString().padStart(4, '0')}`;
+    let maxNumber = 0;
+    for (const po of pos) {
+      const match = po.poNumber.match(/(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    }
+
+    let nextNumber = maxNumber + 1;
+    let candidate = `PO-${nextNumber.toString().padStart(4, '0')}`;
+
+    while (await this.prisma.purchaseOrder.findFirst({ where: { userId, poNumber: candidate } })) {
+      nextNumber++;
+      candidate = `PO-${nextNumber.toString().padStart(4, '0')}`;
+    }
+
+    return candidate;
   }
 
   async getSupplierDetails(supplierId: number, userId: number) {

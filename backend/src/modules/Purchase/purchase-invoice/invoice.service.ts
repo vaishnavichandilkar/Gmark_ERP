@@ -222,19 +222,31 @@ export class PurchaseInvoiceService {
   }
 
   async generateInvoiceNumber(userId: number): Promise<string> {
-    const lastInvoice = await this.prisma.purchaseInvoice.findFirst({
+    const invoices = await this.prisma.purchaseInvoice.findMany({
       where: { userId, invoiceNumber: { startsWith: 'INV-' } },
-      orderBy: { invoiceNumber: 'desc' },
       select: { invoiceNumber: true },
     });
 
-    if (!lastInvoice) {
-      return 'INV-0001';
+    let maxNumber = 0;
+    for (const inv of invoices) {
+      const match = inv.invoiceNumber.match(/(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNumber) {
+          maxNumber = num;
+        }
+      }
     }
 
-    const lastNumber = parseInt(lastInvoice.invoiceNumber.replace('INV-', ''), 10);
-    if (isNaN(lastNumber)) return 'INV-0001';
-    return `INV-${(lastNumber + 1).toString().padStart(4, '0')}`;
+    let nextNumber = maxNumber + 1;
+    let candidate = `INV-${nextNumber.toString().padStart(4, '0')}`;
+
+    while (await this.prisma.purchaseInvoice.findFirst({ where: { userId, invoiceNumber: candidate } })) {
+      nextNumber++;
+      candidate = `INV-${nextNumber.toString().padStart(4, '0')}`;
+    }
+
+    return candidate;
   }
 
   private async validateInvoiceDate(invoiceDate: Date, poIds: string[] | undefined, challanNumbers: string[] | undefined, userId: number) {
@@ -370,7 +382,10 @@ export class PurchaseInvoiceService {
   }
 
   async create(createDto: CreatePurchaseInvoiceDto, userId: number, uploadedFilePath?: string) {
-    const invoiceNumber = await this.generateInvoiceNumber(userId);
+    let invoiceNumber = createDto.invoiceNumber;
+    if (!invoiceNumber || await this.prisma.purchaseInvoice.findFirst({ where: { userId, invoiceNumber } })) {
+      invoiceNumber = await this.generateInvoiceNumber(userId);
+    }
 
     const bookingDate = new Date(); // Enforced (Condition 1, 2, 3)
     const invoiceDate = new Date(createDto.invoiceDate || new Date());
@@ -589,7 +604,7 @@ export class PurchaseInvoiceService {
     const invoice = await this.prisma.$transaction(async (tx) => {
       const inv = await tx.purchaseInvoice.create({
         data: {
-          invoiceNumber: createDto.invoiceNumber || invoiceNumber,
+          invoiceNumber: invoiceNumber,
           bookingDate: createDto.bookingDate ? new Date(createDto.bookingDate) : new Date(),
           invoiceDate: createDto.invoiceDate ? new Date(createDto.invoiceDate) : new Date(),
           supplierInvoiceNumber: createDto.supplierInvoiceNumber,

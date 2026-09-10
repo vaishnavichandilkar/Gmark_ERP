@@ -625,11 +625,14 @@ export class LedgerService {
       account.accountType?.toUpperCase() === 'CASH' ||
       (type && (type === 'Bank' || type === 'Cash'));
 
-    const allowedTypes = isBankOrCash
-      ? [TransactionType.Payment, TransactionType.Receipt, TransactionType.Journal, TransactionType.Contra]
-      : isCreditorLedger
-        ? [TransactionType.Purchase, TransactionType.Payment, TransactionType.Journal]
-        : [TransactionType.Sales, TransactionType.Receipt, TransactionType.Journal];
+    const allowedTypes = [
+      TransactionType.Payment,
+      TransactionType.Receipt,
+      TransactionType.Journal,
+      TransactionType.Contra,
+      TransactionType.Purchase,
+      TransactionType.Sales,
+    ];
 
     // Auto-sync missing transactions for generated/completed purchase or sales invoices
     if (isCreditorLedger) {
@@ -1237,15 +1240,9 @@ export class LedgerService {
     const jvNarrationMap = new Map(jvs.map((j: any) => [j.voucherNumber, j.narration || '']));
 
     return transactions.filter((t) => {
-      const isPV = t.invoiceNumber?.startsWith('PV-');
-      const isRV = t.invoiceNumber?.startsWith('RV-');
       const isJV = t.invoiceNumber?.startsWith('JV-');
 
       if (isCreditorLedger) {
-        // Supplier Ledger (Sundry Creditors):
-        // Exclude Receipt Vouchers (customer entries)
-        if (isRV) return false;
-
         // Exclude customer-side Journal Vouchers (child JVs from RV)
         if (isJV) {
           const narration = jvNarrationMap.get(t.invoiceNumber) || '';
@@ -1254,10 +1251,6 @@ export class LedgerService {
           }
         }
       } else {
-        // Customer Ledger (Sundry Debtors):
-        // Exclude Payment Vouchers (supplier entries)
-        if (isPV) return false;
-
         // Exclude supplier-side Journal Vouchers (child JVs with Parent PV)
         if (isJV) {
           const narration = jvNarrationMap.get(t.invoiceNumber) || '';

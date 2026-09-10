@@ -18,11 +18,12 @@ import {
   ChevronsUpDown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import axios from 'axios';
+import axiosInstance from '../../../services/axiosInstance';
 import { API_BASE_URL } from '../../../config/api.config';
 import ScrollableTable from '../../../components/common/ScrollableTable';
 import CustomSelect from '../../../components/common/CustomSelect';
 import * as XLSX from 'xlsx';
+import ImportModal from './components/ImportModal';
 
 const DEPARTMENTS = [
   'IT',
@@ -52,10 +53,10 @@ const INITIAL_FORM = {
   name: '',
   address: '',
   mobileNo: '',
-  department: 'IT',
+  department: '',
   personalEmail: '',
   companyEmail: '',
-  shiftTiming: 'General Shift (9 AM - 6 PM)',
+  shiftTiming: '',
   dateOfJoining: new Date().toISOString().split('T')[0],
   dob: '1995-01-01',
   bloodGroup: 'O+',
@@ -92,12 +93,40 @@ const EmployeeMaster = () => {
   const [employees, setEmployees] = useState([]);
   const [reportingList, setReportingList] = useState([]);
   const [deptOptions, setDeptOptions] = useState([]);
+  const [shiftOptions, setShiftOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [nextCode, setNextCode] = useState('');
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [empForUser, setEmpForUser] = useState(null);
+  const [userCreationSuccess, setUserCreationSuccess] = useState(null);
+  const [addUserLoading, setAddUserLoading] = useState(false);
+
+  const handleOpenAddUserModal = (emp) => {
+    setEmpForUser(emp);
+    setUserCreationSuccess(null);
+    setShowAddUserModal(true);
+  };
+
+  const handleCreateUserAccount = async () => {
+    if (!empForUser) return;
+    try {
+      setAddUserLoading(true);
+      const res = await axiosInstance.post(`/masters/employee-master/${empForUser.id}/create-user`);
+      setUserCreationSuccess(res.data);
+      toast.success(res.data?.message || `User account created for ${empForUser.name}`);
+      fetchEmployees();
+    } catch (err) {
+      console.error('Failed to create user account:', err);
+      toast.error(err.response?.data?.message || 'Failed to create user account');
+    } finally {
+      setAddUserLoading(false);
+    }
+  };
 
   const currentUser = useMemo(() => {
     try {
@@ -136,6 +165,31 @@ const EmployeeMaster = () => {
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const verticalOptions = useMemo(() => {
+    const fromApi = Array.isArray(deptOptions)
+      ? deptOptions.map(d => (typeof d === 'string' ? d : (d.departmentName || d.name || ''))).filter(Boolean)
+      : [];
+    if (formData?.department && !fromApi.includes(formData.department)) {
+      return [...fromApi, formData.department];
+    }
+    return fromApi;
+  }, [deptOptions, formData?.department]);
+
+  const formattedShiftOptions = useMemo(() => {
+    const fromApi = Array.isArray(shiftOptions)
+      ? shiftOptions.map(s => {
+          if (typeof s === 'string') return s;
+          const name = s.shiftName || s.name || '';
+          const times = [s.startTime, s.endTime].filter(Boolean).join(' - ');
+          return times ? `${name} (${times})` : name;
+        }).filter(Boolean)
+      : [];
+    if (formData?.shiftTiming && !fromApi.includes(formData.shiftTiming)) {
+      return [...fromApi, formData.shiftTiming];
+    }
+    return fromApi;
+  }, [shiftOptions, formData?.shiftTiming]);
+
   // File Upload State
   const [files, setFiles] = useState({
     aadhaarDoc: null,
@@ -146,8 +200,6 @@ const EmployeeMaster = () => {
 
   const exportRef = useRef(null);
   const dropdownRef = useRef(null);
-  const token = localStorage.getItem('token');
-  const getHeaders = () => ({ headers: { Authorization: `Bearer ${token}` } });
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -162,15 +214,15 @@ const EmployeeMaster = () => {
   const fetchEmployees = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_BASE_URL}/masters/employee-master`, {
-        ...getHeaders(),
+      const res = await axiosInstance.get('/masters/employee-master', {
         params: { search: searchQuery }
       });
-      const empList = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.data) ? res.data.data : []);
+      const empList = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res) ? res : []));
       setEmployees(empList);
     } catch (err) {
       console.error('Failed to fetch employees:', err);
-      toast.error('Failed to load employee list');
+      const errMsg = err.response?.data?.message || err.message || 'Failed to load employee list';
+      toast.error(errMsg);
       setEmployees([]);
     } finally {
       setLoading(false);
@@ -179,8 +231,8 @@ const EmployeeMaster = () => {
 
   const fetchReportingList = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/masters/employee-master/reporting-list`, getHeaders());
-      const rList = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.data) ? res.data.data : []);
+      const res = await axiosInstance.get('/masters/employee-master/reporting-list');
+      const rList = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res) ? res : []));
       setReportingList(rList);
     } catch (err) {
       console.error('Failed to fetch reporting list:', err);
@@ -190,8 +242,8 @@ const EmployeeMaster = () => {
 
   const fetchDepartmentOptions = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/masters/department-master`, getHeaders());
-      const list = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.data) ? res.data.data : []);
+      const res = await axiosInstance.get('/masters/department-master');
+      const list = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res) ? res : []));
       setDeptOptions(list);
     } catch (err) {
       console.error('Failed to fetch department options:', err);
@@ -199,10 +251,21 @@ const EmployeeMaster = () => {
     }
   };
 
+  const fetchShiftOptions = async () => {
+    try {
+      const res = await axiosInstance.get('/masters/shift-master');
+      const list = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res) ? res : []));
+      setShiftOptions(list);
+    } catch (err) {
+      console.error('Failed to fetch shift options:', err);
+      setShiftOptions([]);
+    }
+  };
+
   const fetchNextCode = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/masters/employee-master/next-code`, getHeaders());
-      setNextCode(res.data?.employeeCode || 'EMP-0001');
+      const res = await axiosInstance.get('/masters/employee-master/next-code');
+      setNextCode(res.data?.employeeCode || res?.employeeCode || 'EMP-0001');
     } catch (err) {
       console.error('Failed to fetch next code:', err);
     }
@@ -212,6 +275,7 @@ const EmployeeMaster = () => {
     fetchEmployees();
     fetchReportingList();
     fetchDepartmentOptions();
+    fetchShiftOptions();
   }, []);
 
   // Filtered & Paginated Table Data
@@ -330,9 +394,21 @@ const EmployeeMaster = () => {
     try {
       setActionLoading(true);
 
+      const EXCLUDED_FIELDS = [
+        'id',
+        'employeeCode',
+        'userId',
+        'status',
+        'createdAt',
+        'updatedAt',
+        'reportingToName',
+        'hasUserAccount',
+        'reportingTo'
+      ];
+
       const postData = new FormData();
       Object.keys(formData).forEach(key => {
-        if (formData[key] !== null && formData[key] !== undefined) {
+        if (!EXCLUDED_FIELDS.includes(key) && formData[key] !== null && formData[key] !== undefined) {
           postData.append(key, formData[key]);
         }
       });
@@ -342,26 +418,19 @@ const EmployeeMaster = () => {
       if (files.esicDoc) postData.append('esicDoc', files.esicDoc);
       if (files.uanDoc) postData.append('uanDoc', files.uanDoc);
 
-      const config = {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        }
-      };
-
       if (viewMode === 'EDIT' && selectedEmp) {
-        await axios.patch(`${API_BASE_URL}/masters/employee-master/${selectedEmp.id}`, postData, config);
+        await axiosInstance.patch(`/masters/employee-master/${selectedEmp.id}`, postData);
         toast.success('Employee updated successfully');
       } else {
-        const res = await axios.post(`${API_BASE_URL}/masters/employee-master`, postData, config);
-        toast.success(`Employee created successfully! Form Code: ${res.data.employeeCode}`);
+        const res = await axiosInstance.post('/masters/employee-master', postData);
+        toast.success(`Employee created successfully! Form Code: ${res.data?.employeeCode || res?.employeeCode || ''}`);
       }
 
       setViewMode('GRID');
       fetchEmployees();
     } catch (err) {
       console.error('Failed to save employee:', err);
-      toast.error(err.response?.data?.message || 'Failed to save employee record');
+      toast.error(err.response?.data?.message || err.message || 'Failed to save employee record');
     } finally {
       setActionLoading(false);
     }
@@ -372,7 +441,7 @@ const EmployeeMaster = () => {
 
     try {
       setActionLoading(true);
-      await axios.delete(`${API_BASE_URL}/masters/employee-master/${id}`, getHeaders());
+      await axiosInstance.delete(`/masters/employee-master/${id}`);
       toast.success('Employee deactivated successfully');
       fetchEmployees();
     } catch (err) {
@@ -468,8 +537,16 @@ const EmployeeMaster = () => {
                 </button>
               </div>
 
-              {/* Export Control */}
+              {/* Import & Export Controls */}
               <div className="flex items-center gap-3" ref={exportRef}>
+                <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="flex items-center gap-2 px-4 h-[42px] border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#4B5563] hover:bg-gray-50 transition-all duration-200 bg-white shadow-sm"
+                >
+                  <Download size={18} />
+                  Import
+                </button>
+
                 <div className="relative">
                   <button 
                     onClick={() => setIsExportOpen(!isExportOpen)} 
@@ -495,7 +572,7 @@ const EmployeeMaster = () => {
             </div>
 
             {/* Scrollable Table */}
-            <ScrollableTable className="master-table-wrapper">
+            <ScrollableTable className="master-table-wrapper min-h-[300px]">
               <table className="master-table min-w-[1300px]">
                 <thead>
                   <tr>
@@ -512,7 +589,7 @@ const EmployeeMaster = () => {
                     </th>
                     <th className="border-r border-white/10">
                       <div className="flex items-center gap-2">
-                        DEPT <ChevronsUpDown size={14} className="opacity-70" />
+                        VERTICAL <ChevronsUpDown size={14} className="opacity-70" />
                       </div>
                     </th>
                     <th className="border-r border-white/10">
@@ -574,10 +651,10 @@ const EmployeeMaster = () => {
                     <th className="px-2 py-2 border-r border-white/10">
                       <input
                         type="text"
-                        placeholder="Dept..."
+                        placeholder="Vertical..."
                         value={columnFilters.department}
                         onChange={(e) => setColumnFilters(prev => ({ ...prev, department: e.target.value }))}
-                        className="w-full min-w-[80px] px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium"
+                        className="w-full min-w-[70px] px-2 py-1 text-[12px] bg-white/10 text-white placeholder-white/40 border border-white/20 rounded focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all font-medium"
                       />
                     </th>
                     <th className="px-2 py-2 border-r border-white/10">
@@ -704,7 +781,7 @@ const EmployeeMaster = () => {
                           {activeDropdown === emp.id && (
                             <div
                               className={`absolute right-4 w-max min-w-[170px] bg-white border border-gray-100 rounded-[14px] shadow-[0_10px_40px_rgba(0,0,0,0.15)] z-[110] py-2 animate-in fade-in zoom-in-95 duration-200 text-left ${
-                                (index >= currentData.length - 2 || currentData.length <= 2)
+                                (index > 0 && (currentData.length <= 2 || index >= currentData.length - 2))
                                   ? "bottom-0 mb-2"
                                   : "top-0 mt-2"
                               }`}
@@ -719,6 +796,20 @@ const EmployeeMaster = () => {
                               >
                                 <Eye size={18} className="text-gray-400" />
                                 View and Edit
+                              </button>
+
+                              <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenAddUserModal(emp);
+                                  setActiveDropdown(null);
+                                }}
+                                className="w-full px-5 py-3 flex items-center gap-3 text-[14px] text-emerald-800 hover:bg-emerald-50 transition-colors whitespace-nowrap font-bold"
+                              >
+                                <UserCheck size={18} className="text-emerald-700" />
+                                {emp.hasUserAccount ? 'Update User' : 'Add User'}
                               </button>
 
                               <div className="h-[1px] bg-[#F3F4F6] mx-2 my-1" />
@@ -812,9 +903,8 @@ const EmployeeMaster = () => {
                   <button
                     type="button"
                     onClick={() => setViewMode('EDIT')}
-                    className="flex items-center justify-center h-[40px] px-5 bg-[#073318] text-white rounded-[8px] text-[14px] font-bold hover:bg-[#0a4722] transition-all shadow-sm active:scale-95 gap-2"
+                    className="flex items-center justify-center h-[40px] px-6 bg-[#073318] hover:bg-[#04200f] text-white rounded-[10px] text-[14px] font-bold transition-all shadow-sm active:scale-95"
                   >
-                    <Edit3 size={16} />
                     Edit Employee
                   </button>
                 )}
@@ -887,7 +977,7 @@ const EmployeeMaster = () => {
 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[13px] font-semibold text-[#4B5563]">
-                        Department <span className="text-red-500">*</span>
+                        Vertical <span className="text-red-500">*</span>
                       </label>
                       <select
                         required
@@ -896,17 +986,12 @@ const EmployeeMaster = () => {
                         onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                         className="w-full h-[42px] px-4 bg-white border border-[#E5E7EB] rounded-[10px] text-[14px] font-bold text-[#111827] outline-none focus:border-[#073318] transition-all shadow-sm disabled:bg-gray-50"
                       >
-                        <option value="">-- Select Department --</option>
-                        {deptOptions.length > 0
-                          ? deptOptions.map((dept) => (
-                              <option key={dept.id || dept.departmentName} value={dept.departmentName}>
-                                {dept.departmentName}
-                              </option>
-                            ))
-                          : DEPARTMENTS.map((dept) => (
-                              <option key={dept} value={dept}>{dept}</option>
-                            ))
-                        }
+                        <option value="">-- Select Vertical --</option>
+                        {verticalOptions.map((vName) => (
+                          <option key={vName} value={vName}>
+                            {vName}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
@@ -947,7 +1032,8 @@ const EmployeeMaster = () => {
                         onChange={(e) => setFormData({ ...formData, shiftTiming: e.target.value })}
                         className="w-full h-[42px] px-4 bg-white border border-[#E5E7EB] rounded-[10px] text-[14px] font-medium text-[#111827] outline-none focus:border-[#073318] transition-all shadow-sm disabled:bg-gray-50"
                       >
-                        {SHIFT_TIMINGS.map(shift => (
+                        <option value="">Select Shift Timing</option>
+                        {formattedShiftOptions.map(shift => (
                           <option key={shift} value={shift}>{shift}</option>
                         ))}
                       </select>
@@ -1460,16 +1546,7 @@ const EmployeeMaster = () => {
                     {viewMode === 'VIEW' ? 'Close' : 'Cancel'}
                   </button>
 
-                  {viewMode === 'VIEW' ? (
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('EDIT')}
-                      className="px-8 h-[40px] bg-[#073318] hover:bg-[#04200f] text-white rounded-[8px] text-[14px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2"
-                    >
-                      <Edit3 size={16} />
-                      Edit Employee
-                    </button>
-                  ) : (
+                  {viewMode !== 'VIEW' && (
                     <button
                       type="submit"
                       disabled={actionLoading}
@@ -1481,6 +1558,176 @@ const EmployeeMaster = () => {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {isImportModalOpen && (
+        <ImportModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          sampleFileName="Employee_Master_Sample.xlsx"
+          sampleHeaders={[
+            'Full Name', 'Address', 'Mobile No', 'Department', 'Personal Email', 
+            'Company Email', 'Date of Joining (YYYY-MM-DD)', 'Date of Birth (YYYY-MM-DD)', 
+            'Blood Group', 'Designation', 'Gender', 'Employment Type', 'Salary Amount', 
+            'Payment Mode', 'Emergency Name', 'Emergency Mobile', 'Aadhaar No', 'PAN No',
+            'Bank Name', 'Account Number', 'IFSC Code', 'Branch'
+          ]}
+          onImport={async (file) => {
+            try {
+              const reader = new FileReader();
+              reader.onload = async (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet);
+
+                let count = 0;
+                for (const row of json) {
+                  const name = row['Full Name'] || row['name'];
+                  if (name) {
+                    const formDataObj = new FormData();
+                    formDataObj.append('name', String(name).trim());
+                    formDataObj.append('address', row['Address'] || 'N/A');
+                    formDataObj.append('mobileNo', String(row['Mobile No'] || '0000000000'));
+                    formDataObj.append('department', row['Department'] || 'General');
+                    formDataObj.append('personalEmail', row['Personal Email'] || 'employee@gmark.com');
+                    if (row['Company Email']) formDataObj.append('companyEmail', row['Company Email']);
+                    formDataObj.append('dateOfJoining', row['Date of Joining (YYYY-MM-DD)'] || new Date().toISOString().split('T')[0]);
+                    formDataObj.append('dob', row['Date of Birth (YYYY-MM-DD)'] || '1995-01-01');
+                    formDataObj.append('bloodGroup', row['Blood Group'] || 'O+');
+                    formDataObj.append('designation', row['Designation'] || 'Staff');
+                    formDataObj.append('gender', row['Gender'] || 'Male');
+                    formDataObj.append('employmentType', row['Employment Type'] || 'On-roll');
+                    formDataObj.append('salaryAmount', row['Salary Amount'] || 0);
+                    formDataObj.append('paymentMode', row['Payment Mode'] || 'Net Banking');
+                    formDataObj.append('emergencyName', row['Emergency Name'] || 'Contact');
+                    formDataObj.append('emergencyMobile', String(row['Emergency Mobile'] || '0000000000'));
+                    formDataObj.append('aadhaarNo', String(row['Aadhaar No'] || '000000000000'));
+                    formDataObj.append('panNo', String(row['PAN No'] || 'ABCDE1234F'));
+                    formDataObj.append('bankName', row['Bank Name'] || 'Bank');
+                    formDataObj.append('accountNumber', String(row['Account Number'] || '0000000000'));
+                    formDataObj.append('ifscCode', row['IFSC Code'] || 'IFSC0001');
+                    formDataObj.append('branch', row['Branch'] || 'Main');
+
+                    await axios.post(`${API_BASE_URL}/masters/employee-master`, formDataObj, {
+                      headers: {
+                        Authorization: `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'multipart/form-data',
+                      }
+                    });
+                    count++;
+                  }
+                }
+                toast.success(`Successfully imported ${count} Employees`);
+                fetchEmployees();
+                setIsImportModalOpen(false);
+              };
+              reader.readAsArrayBuffer(file);
+            } catch (err) {
+              console.error('Import failed:', err);
+              toast.error('Failed to import Employees');
+            }
+          }}
+        />
+      )}
+
+      {/* Add User Access Modal */}
+      {showAddUserModal && empForUser && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-100 text-emerald-800 rounded-xl">
+                  <UserCheck size={24} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Add User Access</h3>
+                  <p className="text-xs text-gray-500 font-medium">Create system login for employee</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => { setShowAddUserModal(false); setEmpForUser(null); setUserCreationSuccess(null); }}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {!userCreationSuccess ? (
+              <div className="flex flex-col gap-4">
+                <p className="text-xs text-gray-600 leading-relaxed">
+                  Generating a user account will allow <strong className="text-gray-900 font-bold">{empForUser.name}</strong> to log into the system with full module access.
+                </p>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col gap-2.5 text-xs font-medium">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Employee Code / Username:</span>
+                    <span className="font-mono font-bold text-gray-900 bg-white px-2.5 py-1 rounded border border-gray-200">{empForUser.employeeCode}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Default Password:</span>
+                    <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">password</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Access Level:</span>
+                    <span className="font-bold text-slate-800 bg-slate-200/70 px-2 py-0.5 rounded text-[11px]">Full Access (Can see all)</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => { setShowAddUserModal(false); setEmpForUser(null); }}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreateUserAccount}
+                    disabled={addUserLoading}
+                    className="px-5 py-2 bg-[#073318] hover:bg-[#04200f] text-white rounded-xl font-bold text-xs transition-colors shadow-md flex items-center gap-2"
+                  >
+                    {addUserLoading ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      'Create User Account'
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col gap-2">
+                  <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs">
+                    <UserCheck size={16} />
+                    <span>User Account Ready!</span>
+                  </div>
+                  <p className="text-[12px] text-emerald-700 font-medium">
+                    Employee can now log in using the credentials below:
+                  </p>
+                  <div className="mt-1 bg-white p-3 rounded-lg border border-emerald-200 flex flex-col gap-1.5 text-xs">
+                    <div><span className="text-gray-500 font-medium">Username:</span> <strong className="font-mono text-gray-900">{userCreationSuccess.username}</strong></div>
+                    <div><span className="text-gray-500 font-medium">Password:</span> <strong className="font-mono text-emerald-700">password</strong></div>
+                    <div><span className="text-gray-500 font-medium">Permissions:</span> <span className="text-slate-700 font-bold">Full Access (All Modules)</span></div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => { setShowAddUserModal(false); setEmpForUser(null); setUserCreationSuccess(null); }}
+                    className="px-5 py-2 bg-[#073318] hover:bg-[#04200f] text-white rounded-xl font-bold text-xs shadow-sm"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -14,7 +14,7 @@ import {
 
 export const useHsnPermissions = () => {
     const user = useSelector((state) => state.auth.user) || JSON.parse(localStorage.getItem('user') || '{}');
-    const isSellerOrAdmin = user.role === 'SELLER' || user.role === 'SUPERADMIN';
+    const isSellerOrAdmin = user.role === 'SELLER' || user.role === 'SUPERADMIN' || user.role === 'ADMIN';
 
     const hasPermission = useCallback((permission) => {
         if (isSellerOrAdmin) return true;

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException }
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CreateEmployeeDto, UpdateEmployeeDto } from './dto/employee-master.dto';
 import { Prisma } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class EmployeeMasterService {
@@ -164,6 +165,7 @@ export class EmployeeMasterService {
     }
 
     async findAll(userId: number, query: { search?: string; department?: string }) {
+        if (!userId) return [];
         const adminName = await this.getAdminLabel(userId);
 
         const where: Prisma.EmployeeMasterWhereInput = {
@@ -201,10 +203,23 @@ export class EmployeeMasterService {
             orderBy: { createdAt: 'desc' }
         });
 
+        const usernames = employees.map(e => e.employeeCode).filter(Boolean);
+        let userSet = new Set<string>();
+        if (usernames.length > 0) {
+            const existingUsers = await this.prisma.user.findMany({
+                where: {
+                    username: { in: usernames },
+                },
+                select: { username: true }
+            });
+            userSet = new Set(existingUsers.map(u => u.username).filter(Boolean) as string[]);
+        }
+
         return employees.map(emp => ({
             ...emp,
             reportingToName: emp.reportingTo ? emp.reportingTo.name : adminName,
             salaryAmount: Number(emp.salaryAmount),
+            hasUserAccount: userSet.has(emp.employeeCode),
         }));
     }
 
@@ -313,5 +328,82 @@ export class EmployeeMasterService {
         });
 
         return { message: 'Employee deactivated successfully' };
+    }
+
+    async createUserForEmployee(id: number, adminId: number) {
+        const employee = await this.findOne(id, adminId);
+        if (!employee) {
+            throw new NotFoundException('Employee record not found');
+        }
+
+        const username = employee.employeeCode;
+        const defaultPassword = 'password';
+        const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+        const [firstName, ...lastNameParts] = (employee.name || '').trim().split(' ');
+        const lastName = lastNameParts.join(' ');
+
+        // Full access permissions for all modules
+        const fullPermissions = {
+            Dashboard: { canView: true, canCreate: true, canUpdate: true, canDelete: true },
+            Reports: { canView: true, canCreate: true, canUpdate: true, canDelete: true },
+            Masters: { canView: true, canCreate: true, canUpdate: true, canDelete: true },
+            Purchase: { canView: true, canCreate: true, canUpdate: true, canDelete: true },
+            Sales: { canView: true, canCreate: true, canUpdate: true, canDelete: true },
+            Finance: { canView: true, canCreate: true, canUpdate: true, canDelete: true },
+            Settings: { canView: true, canCreate: true, canUpdate: true, canDelete: true },
+        };
+
+        const existingUser = await this.prisma.user.findFirst({
+            where: { username }
+        });
+
+        if (existingUser) {
+            await this.prisma.user.update({
+                where: { id: existingUser.id },
+                data: {
+                    first_name: firstName,
+                    last_name: lastName || null,
+                    email: employee.companyEmail || employee.personalEmail || existingUser.email,
+                    phone: employee.mobileNo || existingUser.phone,
+                    passwordHash,
+                    role: 'operator',
+                    status: 'ACTIVE',
+                    permissions: fullPermissions,
+                }
+            });
+
+            return {
+                message: `User account updated successfully for ${employee.name}`,
+                username,
+                password: defaultPassword,
+                updated: true,
+            };
+        }
+
+        const newUser = await this.prisma.user.create({
+            data: {
+                first_name: firstName,
+                last_name: lastName || null,
+                email: employee.companyEmail || employee.personalEmail || null,
+                phone: employee.mobileNo || null,
+                username,
+                role: 'operator',
+                adminId,
+                status: 'ACTIVE',
+                approvalStatus: 'APPROVED',
+                isApproved: true,
+                passwordHash,
+                permissions: fullPermissions,
+            }
+        });
+
+        return {
+            message: `User account created successfully for ${employee.name}`,
+            username,
+            password: defaultPassword,
+            created: true,
+            user: { id: newUser.id, username: newUser.username }
+        };
     }
 }

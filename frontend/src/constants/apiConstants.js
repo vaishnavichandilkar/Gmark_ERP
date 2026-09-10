@@ -4,6 +4,7 @@ export const BASE_URL = API_BASE_URL;
 export const AUTH_ENDPOINTS = {
   SEND_LOGIN_OTP: '/auth/send-login-otp',
   LOGIN: '/auth/login',
+  LOGIN_WITH_PASSWORD: '/auth/login-password',
   LOGOUT: '/auth/logout',
   REFRESH_TOKEN: '/auth/refresh-token',
   PROFILE: '/auth/me',

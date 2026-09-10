@@ -1,5 +1,6 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsNumber, Min } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, IsNumber, Min, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 
 export class CreateEmployeeDto {
     @ApiProperty({ example: 'John Doe' })
@@ -29,6 +30,7 @@ export class CreateEmployeeDto {
 
     @ApiPropertyOptional({ example: 'john.doe@company.com' })
     @IsOptional()
+    @ValidateIf((o) => o.companyEmail && o.companyEmail.trim() !== '')
     @IsEmail()
     companyEmail?: string;
 
@@ -69,10 +71,12 @@ export class CreateEmployeeDto {
 
     @ApiPropertyOptional({ example: 1 })
     @IsOptional()
+    @Type(() => Number)
     reportingToId?: number;
 
     @ApiProperty({ example: 75000 })
     @IsNotEmpty()
+    @Type(() => Number)
     salaryAmount: number;
 
     @ApiProperty({ example: 'Net Banking' })
@@ -154,4 +158,4 @@ export class CreateEmployeeDto {
     branch: string;
 }
 
-export class UpdateEmployeeDto extends CreateEmployeeDto {}
+export class UpdateEmployeeDto extends PartialType(CreateEmployeeDto) {}

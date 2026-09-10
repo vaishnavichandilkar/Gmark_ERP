@@ -304,18 +304,34 @@ export class SalesInvoiceService {
   }
 
   async generateInvoiceNumber(userId: number): Promise<string> {
-    const lastInvoice = await this.prisma.salesInvoice.findFirst({
+    const invoices = await this.prisma.salesInvoice.findMany({
       where: { 
         userId,
         invoiceNumber: { startsWith: 'SINV-' } 
       },
-      orderBy: { invoiceNumber: 'desc' },
       select: { invoiceNumber: true },
     });
 
-    if (!lastInvoice) return 'SINV-0001';
-    const lastNumber = parseInt(lastInvoice.invoiceNumber.replace('SINV-', ''), 10);
-    return `SINV-${(lastNumber + 1).toString().padStart(4, '0')}`;
+    let maxNumber = 0;
+    for (const inv of invoices) {
+      const match = inv.invoiceNumber.match(/(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    }
+
+    let nextNumber = maxNumber + 1;
+    let candidate = `SINV-${nextNumber.toString().padStart(4, '0')}`;
+
+    while (await this.prisma.salesInvoice.findFirst({ where: { userId, invoiceNumber: candidate } })) {
+      nextNumber++;
+      candidate = `SINV-${nextNumber.toString().padStart(4, '0')}`;
+    }
+
+    return candidate;
   }
 
   async generateCustomerInvoiceNumber(userId: number): Promise<string> {
@@ -333,25 +349,35 @@ export class SalesInvoiceService {
     }
     const fyString = `${startYear}-${endYear.toString().slice(-2)}`;
 
-    const lastInvoice = await this.prisma.salesInvoice.findFirst({
+    const invoices = await this.prisma.salesInvoice.findMany({
       where: {
         userId,
         customerInvoiceNumber: { startsWith: `${fyString}/` }
       },
-      orderBy: { customerInvoiceNumber: 'desc' },
       select: { customerInvoiceNumber: true }
     });
 
-    if (!lastInvoice) return `${fyString}/0001`;
+    let maxNumber = 0;
+    for (const inv of invoices) {
+      if (inv.customerInvoiceNumber) {
+        const parts = inv.customerInvoiceNumber.split('/');
+        const lastNumStr = parts[parts.length - 1];
+        const num = parseInt(lastNumStr, 10);
+        if (!isNaN(num) && num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    }
 
-    // Extract the number part after '/'
-    const parts = lastInvoice.customerInvoiceNumber.split('/');
-    const lastNumStr = parts[parts.length - 1];
-    const lastNumber = parseInt(lastNumStr, 10);
-    
-    if (isNaN(lastNumber)) return `${fyString}/0001`;
-    
-    return `${fyString}/${(lastNumber + 1).toString().padStart(4, '0')}`;
+    let nextNumber = maxNumber + 1;
+    let candidate = `${fyString}/${nextNumber.toString().padStart(4, '0')}`;
+
+    while (await this.prisma.salesInvoice.findFirst({ where: { userId, customerInvoiceNumber: candidate } })) {
+      nextNumber++;
+      candidate = `${fyString}/${nextNumber.toString().padStart(4, '0')}`;
+    }
+
+    return candidate;
   }
 
   private async validateInvoiceDate(

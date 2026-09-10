@@ -8,6 +8,7 @@ import { HsnMasterModule } from './hsn-master/hsn-master.module';
 import { EmployeeMasterModule } from './employee-master/employee-master.module';
 import { DepartmentMasterModule } from './department-master/department-master.module';
 import { CostCentreMasterModule } from './cost-centre-master/cost-centre-master.module';
+import { ShiftMasterModule } from './shift-master/shift-master.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CostCentreMasterModule } from './cost-centre-master/cost-centre-master.
     EmployeeMasterModule,
     DepartmentMasterModule,
     CostCentreMasterModule,
+    ShiftMasterModule,
   ],
 })
 export class MasterModule {}

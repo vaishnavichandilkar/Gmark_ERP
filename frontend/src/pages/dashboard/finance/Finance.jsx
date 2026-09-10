@@ -242,6 +242,7 @@ const Finance = () => {
     // Import Modal States
     const [showImportModal, setShowImportModal] = useState(false);
     const [selectedImportFile, setSelectedImportFile] = useState(null);
+    const [importResult, setImportResult] = useState(null);
     const getCurrentFiscalYear = () => {
         const now = new Date();
         const year = now.getFullYear();
@@ -1376,191 +1377,41 @@ const Finance = () => {
         throw new Error(`Invalid Date '${dateStr}'. Date must follow DD/MM/YYYY format.`);
     };
 
+    const downloadBase64File = (base64Data, fileName) => {
+        if (!base64Data) return;
+        const link = document.createElement('a');
+        link.href = base64Data;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const handleSubmitImport = async () => {
         if (!selectedImportFile) return;
 
         setLoading(true);
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-            try {
-                const data = evt.target.result;
-                const workbook = XLSX.read(data, { type: 'binary' });
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                const json = XLSX.utils.sheet_to_json(worksheet);
+        setImportResult(null);
+        try {
+            const res = await voucherService.importBankReconciliation(selectedImportFile, activeSubTab);
+            setImportResult(res);
 
-                if (activeSubTab === 'Receipts' && sheetName === 'Payments Template') {
-                    toast.error("You are attempting to import a Payments template under the Receipts section. Please upload the Receipts template.");
-                    setLoading(false);
-                    return;
-                }
-
-                if (activeSubTab === 'Payments' && sheetName === 'Receipts Template') {
-                    toast.error("You are attempting to import a Receipts template under the Payments section. Please upload the Payments template.");
-                    setLoading(false);
-                    return;
-                }
-
-                if (json.length === 0) {
-                    toast.error("Excel sheet is empty.");
-                    setLoading(false);
-                    return;
-                }
-
-                // Fetch reference lists for matching names to IDs
-                const [bankCashRes, customersRes, suppliersRes, activeAccountsRes] = await Promise.all([
-                    voucherService.getBankCashAccounts(),
-                    voucherService.getCustomers(),
-                    voucherService.getSuppliers(),
-                    voucherService.getActiveAccounts()
-                ]);
-
-                const allAccounts = [...customersRes, ...suppliersRes];
-
-                let successCount = 0;
-                let errorCount = 0;
-                const errors = [];
-
-                for (let i = 0; i < json.length; i++) {
-                    const row = json[i];
-                    
-                    const dateVal = row['Date (DD/MM/YYYY)*'] || row['Date (DD/MM/YYYY)'] || row['date (dd/mm/yyyy)'] || row['Date'] || row['date'];
-                    const accountNameVal = row['Account Name*'] || row['Account Name'] || row['account name'] || row['Account'] || row['account'];
-                    const bankCashNameVal = row['Bank/Cash Account*'] || row['Bank/Cash Account'] || row['bank/cash account'] || row['Bank/Cash'] || row['bank/cash'] || row['Bank'] || row['bank'] || row['Cash'] || row['cash'] || row['Account (First Party)*'] || row['Account (First Party)'] || row['Bank/Cash (Receiver)*'] || row['Bank/Cash (Receiver)'];
-                    const amountVal = row['Amount*'] || row['Amount'] || row['amount'];
-                    const paymentModeVal = row['Payment Mode*'] || row['Payment Mode'] || row['payment mode'] || row['Mode'] || row['mode'];
-                    const narrationVal = row['Narration'] || row['narration'] || '';
-
-                    const isReceiptOrPayment = activeSubTab === 'Receipts' || activeSubTab === 'Payments';
-
-                    if (isReceiptOrPayment) {
-                        if (!dateVal || !accountNameVal || !bankCashNameVal || !amountVal || !paymentModeVal) {
-                            errorCount++;
-                            errors.push(`Row ${i + 2}: Missing required fields. Date, Account Name, Bank/Cash Account, Amount, and Payment Mode are compulsory.`);
-                            continue;
-                        }
-                    } else {
-                        if (!dateVal || !accountNameVal || !bankCashNameVal || !amountVal) {
-                            errorCount++;
-                            errors.push(`Row ${i + 2}: Missing required fields (Date, Accounts, or Amount).`);
-                            continue;
-                        }
-                    }
-
-                    // 1. Match Bank/Cash Account (First Party)
-                    const bankCashList = activeSubTab === 'JV' ? (activeAccountsRes || []) : bankCashRes;
-                    const matchedBank = bankCashList.find(b => 
-                        (b.ledgerName || b.accountName || b.name || '').toLowerCase().trim() === String(bankCashNameVal).toLowerCase().trim()
-                    );
-                    if (!matchedBank) {
-                        errorCount++;
-                        errors.push(`Row ${i + 2}: ${activeSubTab === 'JV' ? 'First party account' : 'Bank/Cash account'} '${bankCashNameVal}' not found`);
-                        continue;
-                    }
-
-                    // 2. Match Supplier/Customer Account (Second Party)
-                    const targetAccounts = activeSubTab === 'JV' ? (activeAccountsRes || []) : allAccounts;
-                    const matchedAccount = targetAccounts.find(a => 
-                        (a.accountName || a.ledgerName || a.name || '').toLowerCase().trim() === String(accountNameVal).toLowerCase().trim()
-                    );
-                    if (!matchedAccount) {
-                        errorCount++;
-                        errors.push(`Row ${i + 2}: Account '${accountNameVal}' not found`);
-                        continue;
-                    }
-
-                    // 3. Format Date
-                    let formattedDate;
-                    try {
-                        formattedDate = parseExcelDate(dateVal);
-                    } catch {
-                        errorCount++;
-                        errors.push(`Row ${i + 2}: Invalid date format '${dateVal}'`);
-                        continue;
-                    }
-
-                    // 4. Validate Amount
-                    const amt = parseFloat(amountVal);
-                    if (isNaN(amt) || amt <= 0) {
-                        errorCount++;
-                        errors.push(`Row ${i + 2}: Amount must be a positive number`);
-                        continue;
-                    }
-
-                    // 5. Payment Mode mapping
-                    let mode = 'NET_BANKING';
-                    if (paymentModeVal) {
-                        const rawMode = String(paymentModeVal || '').toUpperCase().trim().replace(/[\s_\-]+/g, '_');
-                        if (['CASH', 'NET_BANKING', 'DEBIT_CARD', 'CREDIT_CARD', 'CHEQUE', 'UPI'].includes(rawMode)) {
-                            mode = rawMode;
-                        } else if (rawMode === 'NETBANKING' || rawMode === 'NET_BANK') {
-                            mode = 'NET_BANKING';
-                        } else if (rawMode === 'CREDITCARD') {
-                            mode = 'CREDIT_CARD';
-                        } else if (rawMode === 'DEBITCARD') {
-                            mode = 'DEBIT_CARD';
-                        } else if (rawMode === 'CHECK') {
-                            mode = 'CHEQUE';
-                        } else if (isReceiptOrPayment) {
-                            errorCount++;
-                            errors.push(`Row ${i + 2}: Invalid Payment Mode '${paymentModeVal}'. Must be one of: Cash, Net Banking, Debit Card, Credit Card, Cheque, UPI.`);
-                            continue;
-                        }
-                    }
-
-                    // 6. Create Payload
-                    const payload = {
-                        voucherDate: formattedDate,
-                        bankCashLedgerId: matchedBank.id,
-                        paymentMode: mode,
-                        narration: String(narrationVal).trim(),
-                        items: [{
-                            accountId: matchedAccount.id,
-                            amount: amt,
-                            accountType: matchedAccount.accountType || (activeSubTab === 'Receipts' ? 'CUSTOMER' : 'SUPPLIER'),
-                            settlements: []
-                        }]
-                    };
-
-                    try {
-                        if (activeSubTab === 'Receipts') {
-                            await voucherService.createReceiptVoucher(payload);
-                        } else if (activeSubTab === 'Payments') {
-                            await voucherService.createPaymentVoucher(payload);
-                        } else if (activeSubTab === 'JV') {
-                            await voucherService.createJournalVoucher(payload);
-                        } else if (activeSubTab === 'Contra') {
-                            await voucherService.createContraVoucher(payload);
-                        } else {
-                            throw new Error(`Unsupported tab for import: ${activeSubTab}`);
-                        }
-                        successCount++;
-                    } catch (err) {
-                        errorCount++;
-                        const errMsg = err.response?.data?.message || err.message;
-                        errors.push(`Row ${i + 2}: ${Array.isArray(errMsg) ? errMsg[0] : errMsg}`);
-                    }
-                }
-
-                if (successCount > 0) {
-                    toast.success(`Successfully imported ${successCount} vouchers!`);
-                    fetchVouchers();
-                    setShowImportModal(false);
-                    setSelectedImportFile(null);
-                }
-                if (errorCount > 0) {
-                    console.error("Import errors:", errors);
-                    toast.error(`Import failed for ${errorCount} rows. See console for details.`);
-                }
-
-            } catch (err) {
-                console.error("Failed to import Excel:", err);
-                toast.error("Failed to parse Excel file.");
-            } finally {
-                setLoading(false);
+            if (res.successCount > 0 && res.errorCount === 0) {
+                toast.success(`Successfully imported ${res.successCount} bank reconciliation entries!`);
+                fetchVouchers();
+            } else if (res.successCount > 0 && res.errorCount > 0) {
+                toast.success(`Import completed: ${res.successCount} successful (On Account), ${res.errorCount} failed.`);
+                fetchVouchers();
+            } else if (res.errorCount > 0) {
+                toast.error(`Import completed with errors. Download Error File for details.`);
             }
-        };
-        reader.readAsBinaryString(selectedImportFile);
+        } catch (err) {
+            console.error("Failed to import bank reconciliation entries:", err);
+            const errMsg = err.response?.data?.message || err.message || "Failed to process import file.";
+            toast.error(Array.isArray(errMsg) ? errMsg[0] : errMsg);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -1585,6 +1436,9 @@ const Finance = () => {
                                 key={tab}
                                 onClick={() => {
                                     setActiveMainTab(tab);
+                                    if (tab !== 'Ledger') {
+                                        setSummaryData([]);
+                                    }
                                     const firstSubTab = getSubTabs(tab)[0];
                                     setActiveSubTab(firstSubTab);
                                     setSearchParams({ tab, subTab: firstSubTab });
@@ -1847,12 +1701,15 @@ const Finance = () => {
                                     const pageClosing = currentRows.reduce((sum, item) => sum + Number(item.closingBalance || 0), 0);
                                     const pageAmount = currentRows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-                                    const allData = summaryData && summaryData.length > 0 ? summaryData : currentRows;
+                                    const allData = activeMainTab === 'Ledger' 
+                                        ? (summaryData && summaryData.length > 0 ? summaryData : filteredMainData)
+                                        : filteredMainData;
+
                                     const grandOpening = allData.reduce((sum, item) => sum + Number(item.openingBalance || 0), 0);
                                     const grandDebit = allData.reduce((sum, item) => sum + Number(item.debit || 0), 0);
                                     const grandCredit = allData.reduce((sum, item) => sum + Number(item.credit || 0), 0);
                                     const grandClosing = allData.reduce((sum, item) => sum + Number(item.closingBalance || 0), 0);
-                                    const grandAmount = allData.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+                                    const grandAmount = filteredMainData.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
                                     return (
                                         <>
@@ -2695,11 +2552,14 @@ const Finance = () => {
                     <div className="bg-white rounded-[16px] shadow-2xl w-full max-w-lg mx-4 flex flex-col animate-in slide-in-from-top-4 duration-300 overflow-hidden">
                         {/* Modal Header */}
                         <div className="flex items-center justify-between px-6 py-4 border-b border-[#F3F4F6]">
-                            <h2 className="text-[20px] font-bold text-[#111827]">{t('common:import_data', 'Import Data')}</h2>
+                            <h2 className="text-[20px] font-bold text-[#111827]">
+                                {t('common:import_data', 'Import Bank Reconciliation Data')} ({activeSubTab})
+                            </h2>
                             <button 
                                 onClick={() => {
                                     setShowImportModal(false);
                                     setSelectedImportFile(null);
+                                    setImportResult(null);
                                 }}
                                 className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors cursor-pointer"
                             >
@@ -2731,10 +2591,11 @@ const Finance = () => {
                                         <input 
                                             type="file" 
                                             id="bank-rec-modal-file"
-                                            accept=".xlsx,.xls" 
+                                            accept=".xlsx,.xls,.csv" 
                                             onChange={(e) => {
                                                 if (e.target.files && e.target.files[0]) {
                                                     setSelectedImportFile(e.target.files[0]);
+                                                    setImportResult(null);
                                                 }
                                             }} 
                                             className="hidden" 
@@ -2753,19 +2614,87 @@ const Finance = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Import Result Summary Card */}
+                            {importResult && (
+                                <div className="w-full p-5 bg-slate-50 border border-slate-200 rounded-[12px] flex flex-col gap-4 animate-in fade-in duration-200">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-bold text-[15px] text-gray-800">
+                                            {importResult.errorCount === 0 ? 'Import Completed' : 'Import Completed with Errors'}
+                                        </span>
+                                        <span className={`text-[12px] font-bold px-2.5 py-1 rounded-full ${importResult.errorCount === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                            {importResult.errorCount === 0 ? '100% Success' : 'Partial Import'}
+                                        </span>
+                                    </div>
+
+                                    {/* Stats Grid */}
+                                    <div className="grid grid-cols-3 gap-3 text-center">
+                                        <div className="p-3 bg-white border border-gray-100 rounded-[8px] shadow-2xs">
+                                            <div className="text-[11px] font-medium text-gray-500 uppercase">Total Rows</div>
+                                            <div className="text-[18px] font-bold text-gray-800 mt-1">{importResult.totalRows}</div>
+                                        </div>
+                                        <div className="p-3 bg-emerald-50/60 border border-emerald-100 rounded-[8px]">
+                                            <div className="text-[11px] font-bold text-emerald-700 uppercase">Success</div>
+                                            <div className="text-[18px] font-bold text-emerald-700 mt-1">{importResult.successCount}</div>
+                                        </div>
+                                        <div className="p-3 bg-rose-50/60 border border-rose-100 rounded-[8px]">
+                                            <div className="text-[11px] font-bold text-rose-700 uppercase">Failed</div>
+                                            <div className="text-[18px] font-bold text-rose-700 mt-1">{importResult.errorCount}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Actions to Download Result Files */}
+                                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full justify-center pt-2">
+                                        {importResult.successFile && (
+                                            <button
+                                                type="button"
+                                                onClick={() => downloadBase64File(importResult.successFile, `Bank_Reconciliation_${activeSubTab}_Success.xlsx`)}
+                                                className="flex-1 flex items-center justify-center gap-2 h-[38px] px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-bold rounded-[8px] transition-colors shadow-2xs cursor-pointer w-full"
+                                            >
+                                                <Download size={15} />
+                                                Download Success File
+                                            </button>
+                                        )}
+                                        {importResult.errorFile && (
+                                            <button
+                                                type="button"
+                                                onClick={() => downloadBase64File(importResult.errorFile, `Bank_Reconciliation_${activeSubTab}_Errors.xlsx`)}
+                                                className="flex-1 flex items-center justify-center gap-2 h-[38px] px-4 bg-rose-600 hover:bg-rose-700 text-white text-[13px] font-bold rounded-[8px] transition-colors shadow-2xs cursor-pointer w-full"
+                                            >
+                                                <Download size={15} />
+                                                Download Error File
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Modal Footer / Submit */}
-                        <div className="px-6 py-4 border-t border-[#F3F4F6] flex justify-center bg-gray-50 rounded-b-[16px]">
-                            <button
-                                type="button"
-                                onClick={handleSubmitImport}
-                                disabled={!selectedImportFile || loading}
-                                className="flex items-center justify-center gap-2 px-10 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md cursor-pointer"
-                            >
-                                <UploadCloud size={18} />
-                                {loading ? t('common:processing', 'Importing...') : t('common:submit', 'Submit')}
-                            </button>
+                        <div className="px-6 py-4 border-t border-[#F3F4F6] flex justify-center gap-4 bg-gray-50 rounded-b-[16px]">
+                            {importResult ? (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowImportModal(false);
+                                        setSelectedImportFile(null);
+                                        setImportResult(null);
+                                    }}
+                                    className="flex items-center justify-center gap-2 px-10 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-md cursor-pointer"
+                                >
+                                    Done
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleSubmitImport}
+                                    disabled={!selectedImportFile || loading}
+                                    className="flex items-center justify-center gap-2 px-10 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md cursor-pointer"
+                                >
+                                    <UploadCloud size={18} />
+                                    {loading ? t('common:processing', 'Importing...') : t('common:submit', 'Submit')}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
