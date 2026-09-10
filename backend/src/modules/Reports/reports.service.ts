@@ -483,12 +483,76 @@ export class ReportsService {
 
     const hasDateFilter = Boolean(fromDateObj || toDateObj);
 
+    const [l1Groups, l2SubGroups, l3SubSubGroups, l4SubSubSubGroups, l5SubSubSubSubGroups] = await Promise.all([
+      this.prisma.group.findMany({ select: { id: true, group_name: true, parent_id: true } }),
+      this.prisma.subGroup.findMany({ select: { id: true, subgroup_name: true, group_id: true } }),
+      this.prisma.subSubGroup.findMany({ select: { id: true, name: true, sub_group_id: true } }),
+      this.prisma.subSubSubGroup.findMany({ select: { id: true, name: true, sub_sub_group_id: true } }),
+      this.prisma.subSubSubSubGroup.findMany({ select: { id: true, name: true, sub_sub_sub_group_id: true } }),
+    ]);
+
+    const groupParentMap = new Map<string, string>();
+    const l1Map = new Map<number, any>(l1Groups.map((g) => [g.id, g]));
+    for (const g of l1Groups) {
+      if (g.parent_id && l1Map.has(g.parent_id)) {
+        groupParentMap.set(g.group_name.trim().toLowerCase(), l1Map.get(g.parent_id).group_name);
+      }
+    }
+    for (const sg of l2SubGroups) {
+      if (l1Map.has(sg.group_id)) {
+        groupParentMap.set(sg.subgroup_name.trim().toLowerCase(), l1Map.get(sg.group_id).group_name);
+      }
+    }
+    const l2Map = new Map<number, any>(l2SubGroups.map((sg) => [sg.id, sg]));
+    for (const ssg of l3SubSubGroups) {
+      if (l2Map.has(ssg.sub_group_id)) {
+        groupParentMap.set(ssg.name.trim().toLowerCase(), l2Map.get(ssg.sub_group_id).subgroup_name);
+      }
+    }
+    const l3Map = new Map<number, any>(l3SubSubGroups.map((sssg) => [sssg.id, sssg]));
+    for (const sssg of l4SubSubSubGroups) {
+      if (l3Map.has(sssg.sub_sub_group_id)) {
+        groupParentMap.set(sssg.name.trim().toLowerCase(), l3Map.get(sssg.sub_sub_group_id).name);
+      }
+    }
+    const l4Map = new Map<number, any>(l4SubSubSubGroups.map((sssg) => [sssg.id, sssg]));
+    for (const sssssg of l5SubSubSubSubGroups) {
+      if (l4Map.has(sssssg.sub_sub_sub_group_id)) {
+        groupParentMap.set(sssssg.name.trim().toLowerCase(), l4Map.get(sssssg.sub_sub_sub_group_id).name);
+      }
+    }
+
+    const resolveAncestors = (groupNameStr: string): string[] => {
+      const ancestors: string[] = [groupNameStr];
+      let curr = groupNameStr.trim().toLowerCase();
+      const visited = new Set<string>([curr]);
+      while (groupParentMap.has(curr)) {
+        const parentName = groupParentMap.get(curr)!;
+        const parentLower = parentName.trim().toLowerCase();
+        if (visited.has(parentLower)) break;
+        visited.add(parentLower);
+        ancestors.unshift(parentName);
+        curr = parentLower;
+      }
+      return ancestors;
+    };
+
     accounts.forEach((account) => {
-      const groups = account.groupName || [];
+      const rawGroups = account.groupName || [];
+      const groups: string[] = [];
+      for (const g of rawGroups) {
+        if (!g) continue;
+        const anc = resolveAncestors(g);
+        for (const a of anc) {
+          if (!groups.includes(a)) {
+            groups.push(a);
+          }
+        }
+      }
       const tx = txMap[account.id] || { Dr: 0, Cr: 0 };
 
       // Vendor/Customer opening balance is a Balance Sheet item (Creditors/Debtors), NOT Trading P&L purchase/sales expense.
-      const opBal = matchGroup(groups, ['opening stock']) ? Number(account.supplierOpeningBalance || account.customerOpeningBalance || 0) : 0;
+      const opBal = Number(account.supplierOpeningBalance || account.customerOpeningBalance || 0);
       const opType = account.supplierBalanceType || account.customerBalanceType || 'Dr';
 
       const getDebitBal = () => {
@@ -527,7 +591,7 @@ export class ReportsService {
             status: 'COMPLETED',
           });
         }
-      } else if (matchGroup(groups, ['direct expense', 'direct expenses', 'manufacturing', 'freight', 'carriage inward', 'expense'], ['indirect'])) {
+      } else if (matchGroup(groups, ['direct expense', 'direct expenses', 'manufacturing', 'freight inward', 'carriage inward'], ['indirect', 'income'])) {
         const activity = Math.abs(tx.Dr - tx.Cr);
         const bal = getDebitBal();
         const amt = Math.max(bal, activity);
@@ -559,7 +623,7 @@ export class ReportsService {
             status: 'COMPLETED',
           });
         }
-      } else if (matchGroup(groups, ['direct income', 'direct incomes', 'direct sale', 'direct revenue', 'income'], ['indirect'])) {
+      } else if (matchGroup(groups, ['direct income', 'direct incomes', 'direct sale', 'direct revenue', 'income', 'outward', 'outword', 'freight & transport (outword)', 'freight & transport (outward)'], ['indirect', 'expense'])) {
         const activity = Math.abs(tx.Cr - tx.Dr);
         const bal = getCreditBal();
         const amt = Math.max(bal, activity);
@@ -593,16 +657,24 @@ export class ReportsService {
     };
 
     if (fromDateObj || toDateObj) {
-      piWhereInput.bookingDate = {};
-      siWhereInput.bookingDate = {};
+      const piCond: any = {};
+      const siCond: any = {};
       if (fromDateObj) {
-        piWhereInput.bookingDate.gte = fromDateObj;
-        siWhereInput.bookingDate.gte = fromDateObj;
+        piCond.gte = fromDateObj;
+        siCond.gte = fromDateObj;
       }
       if (toDateObj) {
-        piWhereInput.bookingDate.lte = toDateObj;
-        siWhereInput.bookingDate.lte = toDateObj;
+        piCond.lte = toDateObj;
+        siCond.lte = toDateObj;
       }
+      piWhereInput.OR = [
+        { supplierInvoiceDate: piCond },
+        { invoiceDate: piCond },
+      ];
+      siWhereInput.OR = [
+        { customerInvoiceDate: siCond },
+        { invoiceDate: siCond },
+      ];
     }
 
     const pieWhereInput: Prisma.PurchaseInvoiceExpenseWhereInput = {
@@ -667,7 +739,7 @@ export class ReportsService {
       if (matchGroup([groupName], ['indirect expense', 'indirect expenses', 'indirect', 'administrative', 'selling expense', 'operating expense'])) {
         indirectExpenses += amt;
         indirectExpensesBreakdown.push(record);
-      } else if (matchGroup([groupName], ['direct expense', 'direct expenses', 'manufacturing', 'freight', 'carriage inward', 'expense', 'direct'], ['indirect'])) {
+      } else {
         directExpenses += amt;
         directExpensesBreakdown.push(record);
       }
@@ -677,11 +749,11 @@ export class ReportsService {
       const amt = Number(exp.amount || 0);
       if (amt <= 0) return;
 
-      const groupName = exp.groupName || 'Direct Expense';
+      const groupName = exp.groupName || 'Direct Income';
       const record = {
         id: exp.id,
         accountName: groupName,
-        supplierName: exp.salesInvoice?.customerName || 'Sales Expense/Income',
+        supplierName: exp.salesInvoice?.customerName || 'Sales Income',
         supplierInvoiceNumber: exp.salesInvoice?.invoiceNumber || '-',
         bookingDate: exp.salesInvoice?.bookingDate,
         totalAmount: amt,
@@ -693,15 +765,9 @@ export class ReportsService {
       if (matchGroup([groupName], ['indirect income', 'indirect incomes', 'other income', 'indirect'])) {
         indirectIncome += amt;
         indirectIncomeBreakdown.push(record);
-      } else if (matchGroup([groupName], ['direct income', 'direct incomes', 'direct sale', 'direct revenue', 'income'], ['indirect'])) {
+      } else {
         directIncome += amt;
         directIncomeBreakdown.push(record);
-      } else if (matchGroup([groupName], ['indirect expense', 'indirect expenses', 'administrative', 'selling expense', 'operating expense'])) {
-        indirectExpenses += amt;
-        indirectExpensesBreakdown.push(record);
-      } else if (matchGroup([groupName], ['direct expense', 'direct expenses', 'manufacturing', 'freight', 'carriage inward', 'expense'], ['indirect'])) {
-        directExpenses += amt;
-        directExpensesBreakdown.push(record);
       }
     });
 
@@ -994,9 +1060,29 @@ export class ReportsService {
       status: { in: ['GENERATED', 'COMPLETED'] as any },
     };
 
-    if (dateTo) {
-      piWhere.bookingDate = { lte: new Date(dateTo) };
-      siWhere.bookingDate = { lte: new Date(dateTo) };
+    if (dateFrom || dateTo) {
+      const piCond: any = {};
+      const siCond: any = {};
+      if (dateFrom) {
+        piCond.gte = new Date(dateFrom);
+        siCond.gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        const dTo = new Date(dateTo);
+        if (typeof dateTo === 'string' && dateTo.length === 10) {
+          dTo.setUTCHours(23, 59, 59, 999);
+        }
+        piCond.lte = dTo;
+        siCond.lte = dTo;
+      }
+      piWhere.OR = [
+        { supplierInvoiceDate: piCond },
+        { invoiceDate: piCond },
+      ];
+      siWhere.OR = [
+        { customerInvoiceDate: siCond },
+        { invoiceDate: siCond },
+      ];
     }
 
     // 2. Fetch purchase items and sales items

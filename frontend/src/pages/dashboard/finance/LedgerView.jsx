@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Download, Search, FileText, FileSpreadsheet, RotateCcw, XSquare, Upload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, Search, FileText, FileSpreadsheet, RotateCcw, XSquare, Upload } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -794,7 +794,19 @@ const LedgerView = () => {
                         </p>
                     </div>
                     
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={() => {
+                                setCurrentPage(1);
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            disabled={currentPage === 1 || loading}
+                            title="First Page"
+                            className={`flex items-center justify-center w-[44px] h-[44px] rounded-[12px] border border-[#E5E7EB] text-[14px] font-bold transition-all shadow-sm ${currentPage === 1 ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 hover:border-gray-300 active:scale-95'}`}
+                        >
+                            <ChevronsLeft size={18} />
+                        </button>
+
                         <button 
                             onClick={() => {
                                 setCurrentPage(prev => Math.max(1, prev - 1));
@@ -831,7 +843,19 @@ const LedgerView = () => {
                             className={`flex items-center gap-2 h-[44px] px-6 rounded-[12px] border border-[#E5E7EB] text-[14px] font-bold transition-all shadow-sm ${currentPage === totalPages ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 hover:border-gray-300 active:scale-95'}`}
                         >
                             {t('common:next')}
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="rotate-180"><path d="m15 18-6-6 6-6"/></svg>
+                            <ChevronRight size={18} />
+                        </button>
+
+                        <button 
+                            onClick={() => {
+                                setCurrentPage(totalPages);
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            disabled={currentPage === totalPages || loading}
+                            title="Last Page"
+                            className={`flex items-center justify-center w-[44px] h-[44px] rounded-[12px] border border-[#E5E7EB] text-[14px] font-bold transition-all shadow-sm ${currentPage === totalPages ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 hover:border-gray-300 active:scale-95'}`}
+                        >
+                            <ChevronsRight size={18} />
                         </button>
                     </div>
                 </div>

@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import { fetchReportsStart } from '../reportSlice';
 import Card, { CardContent, CardHeader } from '../../../components/common/Card';
-import { FileText, ShoppingCart, TrendingUp, IndianRupee, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent, Package, Search, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus } from 'lucide-react';
+import { FileText, ShoppingCart, TrendingUp, IndianRupee, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent, Package, Search, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Plus, Minus } from 'lucide-react';
 import Loader from '../../../components/common/Loader';
 import ReportTable from '../components/ReportTable';
 import reportService from '../../../services/reportService';
@@ -28,6 +28,68 @@ const formatDisplayDateDDMMYYYY = (dStr) => {
         return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
     return dStr;
+};
+
+const parseLocalDateStart = (dStr) => {
+    if (!dStr) return null;
+    if (typeof dStr === 'string' && dStr.includes('-')) {
+        const parts = dStr.split('-').map(Number);
+        if (parts.length === 3 && parts[0] > 1000) {
+            return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0).getTime();
+        }
+    }
+    const dt = new Date(dStr);
+    return isNaN(dt.getTime()) ? null : new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 0, 0, 0, 0).getTime();
+};
+
+const parseLocalDateEnd = (dStr) => {
+    if (!dStr) return null;
+    if (typeof dStr === 'string' && dStr.includes('-')) {
+        const parts = dStr.split('-').map(Number);
+        if (parts.length === 3 && parts[0] > 1000) {
+            return new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999).getTime();
+        }
+    }
+    const dt = new Date(dStr);
+    return isNaN(dt.getTime()) ? null : new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 23, 59, 59, 999).getTime();
+};
+
+const isItemInDateRange = (item, fromDateStr, toDateStr) => {
+    const fromTime = parseLocalDateStart(fromDateStr);
+    const toTime = parseLocalDateEnd(toDateStr);
+    if (!fromTime && !toTime) return true;
+
+    const rawDate = item.supplierInvoiceDate || item.customerInvoiceDate || item.invoiceDate || item.bookingDate || item.grnDate || item.poDate || item.soDate || item.createdAt;
+    if (!rawDate) return true;
+
+    const itemDt = new Date(rawDate);
+    if (isNaN(itemDt.getTime())) return true;
+    const itemTime = itemDt.getTime();
+
+    if (fromTime && itemTime < fromTime) return false;
+    if (toTime && itemTime > toTime) return false;
+    return true;
+};
+
+const getCurrentFYBounds = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const fyStartYear = month >= 3 ? year : year - 1;
+    const fyEndYear = fyStartYear + 1;
+    const fromDate = `${fyStartYear}-04-01`;
+    const toDate = `${fyEndYear}-03-31`;
+    const label = `FY ${fyStartYear}-${String(fyEndYear).slice(-2)}`;
+    return { fromDate, toDate, label };
+};
+
+const getCurrentMonthBounds = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const firstDay = toLocalISOString(new Date(year, month, 1));
+    const lastDay = toLocalISOString(new Date(year, month + 1, 0));
+    return { fromDate: firstDay, toDate: lastDay };
 };
 
 const ReportDashboard = () => {
@@ -52,27 +114,20 @@ const ReportDashboard = () => {
     const [detailView, setDetailView] = useState(null); // { type: 'PO', status: 'Created', data: [] }
     const [profitLossData, setProfitLossData] = useState(null);
     const [plLoading, setPlLoading] = useState(false);
-    const [plFromDate, setPlFromDate] = useState('2026-04-01');
-    const [plToDate, setPlToDate] = useState('2027-03-31');
+    const defaultFy = useMemo(() => getCurrentFYBounds(), []);
+    const [plFromDate, setPlFromDate] = useState(defaultFy.fromDate);
+    const [plToDate, setPlToDate] = useState(defaultFy.toDate);
 
     const [isPurchaseExpanded, setIsPurchaseExpanded] = useState(false);
     const [isSalesExpanded, setIsSalesExpanded] = useState(false);
 
     const supplierBreakdown = useMemo(() => {
         const groups = {};
-        const fromTime = plFromDate ? new Date(plFromDate).getTime() : null;
-        const toTime = plToDate ? new Date(plToDate + 'T23:59:59.999').getTime() : null;
 
         (purchaseData || []).forEach(item => {
             if (item.status === 'DELETED') return;
-            if (fromTime || toTime) {
-                const bDateStr = item.bookingDate || item.supplierInvoiceDate || item.createdAt;
-                if (bDateStr) {
-                    const itemTime = new Date(bDateStr).getTime();
-                    if (fromTime && itemTime < fromTime) return;
-                    if (toTime && itemTime > toTime) return;
-                }
-            }
+            if (!isItemInDateRange(item, plFromDate, plToDate)) return;
+
             const name = item.supplierName || item.vendorName || item.supplier_name || 'Unknown Supplier';
             if (!groups[name]) {
                 groups[name] = { name, basicAmount: 0, count: 0, items: [] };
@@ -92,18 +147,11 @@ const ReportDashboard = () => {
 
     const customerBreakdown = useMemo(() => {
         const groups = {};
-        const fromTime = plFromDate ? new Date(plFromDate).getTime() : null;
-        const toTime = plToDate ? new Date(plToDate + 'T23:59:59.999').getTime() : null;
 
-        (salesInvoicesData || []).filter(s => s.status === 'GENERATED' || s.status === 'INVOICE_GENERATED').forEach(item => {
-            if (fromTime || toTime) {
-                const bDateStr = item.bookingDate || item.customerInvoiceDate || item.createdAt;
-                if (bDateStr) {
-                    const itemTime = new Date(bDateStr).getTime();
-                    if (fromTime && itemTime < fromTime) return;
-                    if (toTime && itemTime > toTime) return;
-                }
-            }
+        (salesInvoicesData || []).forEach(item => {
+            if (item.status === 'DELETED') return;
+            if (!isItemInDateRange(item, plFromDate, plToDate)) return;
+
             const name = item.customerName || item.customer_name || item.customer?.customerName || 'Unknown Customer';
             if (!groups[name]) {
                 groups[name] = { name, basicAmount: 0, count: 0, items: [] };
@@ -183,33 +231,10 @@ const ReportDashboard = () => {
         dispatch(fetchReportsStart());
     }, [dispatch]);
 
-    useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (detailView) {
-                const clickedCard = e.target.closest('.status-card-element');
-                const clickedTable = e.target.closest('.report-table-element');
-                if (!clickedCard && !clickedTable) {
-                    setDetailView(null);
-                }
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [detailView]);
+
 
     const metrics = useMemo(() => {
-        const fromTime = plFromDate ? new Date(plFromDate).getTime() : null;
-        const toTime = plToDate ? new Date(plToDate + 'T23:59:59.999').getTime() : null;
-
-        const filterByDate = (item) => {
-            if (!fromTime && !toTime) return true;
-            const bDateStr = item.bookingDate || item.supplierInvoiceDate || item.customerInvoiceDate || item.grnDate || item.poDate || item.soDate || item.createdAt;
-            if (!bDateStr) return true;
-            const itemTime = new Date(bDateStr).getTime();
-            if (fromTime && itemTime < fromTime) return false;
-            if (toTime && itemTime > toTime) return false;
-            return true;
-        };
+        const filterByDate = (item) => isItemInDateRange(item, plFromDate, plToDate);
 
         const filteredSalesInvoices = (salesInvoicesData || []).filter(filterByDate);
         const filteredPurchaseInvoices = (purchaseData || []).filter(filterByDate);
@@ -218,8 +243,8 @@ const ReportDashboard = () => {
         const filteredGrnData = (grnData || []).filter(filterByDate);
         const filteredChallanData = (challanData || []).filter(filterByDate);
 
-        const completedSales = filteredSalesInvoices.filter(s => s.status === 'GENERATED' || s.status === 'INVOICE_GENERATED');
-        const validPurchases = filteredPurchaseInvoices.filter(p => p.status === 'GENERATED' || p.status === 'COMPLETED' || p.status === 'INVOICE_GENERATED');
+        const completedSales = filteredSalesInvoices.filter(s => s.status !== 'DELETED');
+        const validPurchases = filteredPurchaseInvoices.filter(p => p.status !== 'DELETED');
 
         const totalPurchases = validPurchases.reduce((sum, item) => sum + (item.grandTotal || item.totalAmount || 0), 0);
         const purchaseExpenses = validPurchases.reduce((sum, item) => {
@@ -373,7 +398,7 @@ const ReportDashboard = () => {
                 if (item.status === 'DELETED') {
                     deleted++;
                     deletedAmt += amt;
-                } else if (item.status === 'GENERATED' || item.status === 'INVOICE_GENERATED') {
+                } else if (item.status !== 'DELETED') {
                     generated++;
                     generatedAmt += amt;
                 }
@@ -502,7 +527,7 @@ const ReportDashboard = () => {
             }
         };
 
-        const validPurchasesForChart = (purchaseData || []).filter(p => p.status === 'GENERATED');
+        const validPurchasesForChart = (purchaseData || []).filter(p => p.status !== 'DELETED');
         validPurchasesForChart.forEach(item => {
             const rawDate = item.invoiceDate || item.createdAt || item.bookingDate || new Date();
             const date = new Date(rawDate);
@@ -521,7 +546,7 @@ const ReportDashboard = () => {
             aggregated[key].Purchases += (item.grandTotal || 0);
         });
 
-        const completedSalesForChart = (salesInvoicesData || []).filter(s => s.status === 'GENERATED' || s.status === 'INVOICE_GENERATED');
+        const completedSalesForChart = (salesInvoicesData || []).filter(s => s.status !== 'DELETED');
         completedSalesForChart.forEach(item => {
             const rawDate = item.invoiceDate || item.createdAt || item.soCreationDate || new Date();
             const date = new Date(rawDate);
@@ -554,6 +579,90 @@ const ReportDashboard = () => {
         { id: 'INVENTORY', label: 'Inventory', icon: Package },
         { id: 'PROFIT_LOSS', label: 'Profit & Loss', icon: Scale },
     ];
+
+    const renderPeriodFilterBar = () => {
+        const fy = getCurrentFYBounds();
+        const m = getCurrentMonthBounds();
+
+        const isFyActive = plFromDate === fy.fromDate && plToDate === fy.toDate;
+        const isMonthActive = plFromDate === m.fromDate && plToDate === m.toDate;
+        const isAllTimeActive = !plFromDate && !plToDate;
+
+        return (
+            <div className="bg-gray-50/90 p-4 md:p-5 rounded-[20px] border border-gray-200/80 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
+                <div>
+                    <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                        <Scale size={18} className="text-emerald-700" />
+                        Report Financial Period
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                        Period: <span className="font-semibold text-gray-800">{plFromDate ? formatDisplayDateDDMMYYYY(plFromDate) : 'Beginning'}</span> to <span className="font-semibold text-gray-800">{plToDate ? formatDisplayDateDDMMYYYY(plToDate) : 'Current Date'}</span>
+                    </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs font-semibold text-gray-600">From:</label>
+                        <input
+                            type="date"
+                            value={plFromDate}
+                            onChange={(e) => setPlFromDate(e.target.value)}
+                            className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white shadow-xs font-medium"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs font-semibold text-gray-600">To:</label>
+                        <input
+                            type="date"
+                            value={plToDate}
+                            onChange={(e) => setPlToDate(e.target.value)}
+                            className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white shadow-xs font-medium"
+                        />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            onClick={() => {
+                                setPlFromDate(fy.fromDate);
+                                setPlToDate(fy.toDate);
+                            }}
+                            className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-all ${
+                                isFyActive
+                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                            }`}
+                        >
+                            {fy.label}
+                        </button>
+                        <button
+                            onClick={() => {
+                                setPlFromDate(m.fromDate);
+                                setPlToDate(m.toDate);
+                            }}
+                            className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-all ${
+                                isMonthActive
+                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                            }`}
+                        >
+                            This Month
+                        </button>
+                        <button
+                            onClick={() => {
+                                setPlFromDate('');
+                                setPlToDate('');
+                            }}
+                            className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-all ${
+                                isAllTimeActive
+                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                            }`}
+                        >
+                            All Time
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     if (loading) {
         return <div className="flex justify-center items-center h-screen"><Loader /></div>;
@@ -1019,66 +1128,7 @@ const ReportDashboard = () => {
                 <CardHeader title="Trading & Profit & Loss Account" />
                 <CardContent className="p-0 md:p-8 bg-white">
                     {/* Period Filter Bar */}
-                    <div className="bg-gray-50/80 p-4 md:p-6 rounded-[16px] border border-gray-200/60 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-900">Profit & Loss Financial Statement</h3>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                                Period: {plFromDate ? formatDisplayDateDDMMYYYY(plFromDate) : 'Beginning'} to {plToDate ? formatDisplayDateDDMMYYYY(plToDate) : 'Current Date'}
-                            </p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex items-center gap-2">
-                                <label className="text-xs font-semibold text-gray-600">From:</label>
-                                <input
-                                    type="date"
-                                    value={plFromDate}
-                                    onChange={(e) => setPlFromDate(e.target.value)}
-                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
-                                />
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <label className="text-xs font-semibold text-gray-600">To:</label>
-                                <input
-                                    type="date"
-                                    value={plToDate}
-                                    onChange={(e) => setPlToDate(e.target.value)}
-                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
-                                />
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <button
-                                    onClick={() => {
-                                        setPlFromDate('2026-04-01');
-                                        setPlToDate('2027-03-31');
-                                    }}
-                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 transition-colors"
-                                >
-                                    FY 2026-27
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        const now = new Date();
-                                        const firstDay = toLocalISOString(new Date(now.getFullYear(), now.getMonth(), 1));
-                                        const today = toLocalISOString(now);
-                                        setPlFromDate(firstDay);
-                                        setPlToDate(today);
-                                    }}
-                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-                                >
-                                    This Month
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setPlFromDate('');
-                                        setPlToDate('');
-                                    }}
-                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-                                >
-                                    All Time
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    {renderPeriodFilterBar()}
 
                     <div className="w-full border border-gray-200/60 rounded-[16px] shadow-sm bg-gray-50/10 overflow-hidden">
                         {/* 2-Column Trading Account Layout */}
@@ -1090,14 +1140,14 @@ const ReportDashboard = () => {
                                     EXPENDITURE
                                 </div>
                                 <div className="divide-y divide-gray-100 flex-1">
-                                    {/* Opening Balance */}
+                                    {/* Opening Stock */}
                                     <div
-                                        onClick={() => handleCardClick('STOCK', 'Opening Balance Breakdown', openingStock > 0 ? (inventoryData?.items || []) : [])}
+                                        onClick={() => handleCardClick('STOCK', 'Opening Stock Breakdown', openingStock > 0 ? (inventoryData?.items || []) : [])}
                                         className="flex items-center justify-between px-6 py-4 hover:bg-emerald-50/30 transition-colors cursor-pointer group font-semibold text-gray-700"
                                     >
                                         <div className="flex items-center gap-2">
                                             <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                                            <span className="group-hover:translate-x-0.5 transition-transform">Opening Balance</span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Opening Stock</span>
                                         </div>
                                         <span className="text-gray-900 font-bold">{formatCurrency(openingStock)}</span>
                                     </div>
@@ -1209,14 +1259,14 @@ const ReportDashboard = () => {
                                         <span className="text-gray-900 font-bold">{formatCurrency(directIncome)}</span>
                                     </div>
 
-                                    {/* Closing Balance */}
+                                    {/* Closing Stock */}
                                     <div
-                                        onClick={() => handleCardClick('STOCK', 'Closing Balance Breakdown', closingStock > 0 ? (inventoryData?.items || []) : [])}
+                                        onClick={() => handleCardClick('STOCK', 'Closing Stock Breakdown', closingStock > 0 ? (inventoryData?.items || []) : [])}
                                         className="flex items-center justify-between px-6 py-4 hover:bg-emerald-50/30 transition-colors cursor-pointer group font-semibold text-gray-700"
                                     >
                                         <div className="flex items-center gap-2">
                                             <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                                            <span className="group-hover:translate-x-0.5 transition-transform">Closing Balance</span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Closing Stock</span>
                                         </div>
                                         <span className="text-gray-900 font-bold">{formatCurrency(closingStock)}</span>
                                     </div>
@@ -1531,7 +1581,16 @@ const ReportDashboard = () => {
                                 <div className="flex items-center gap-2">
                                     <button
                                         disabled={meta.page <= 1}
+                                        onClick={() => setInvPage(1)}
+                                        title="First Page"
+                                        className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                                    >
+                                        <ChevronsLeft size={16} />
+                                    </button>
+                                    <button
+                                        disabled={meta.page <= 1}
                                         onClick={() => setInvPage(p => Math.max(1, p - 1))}
+                                        title="Previous Page"
                                         className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
                                     >
                                         <ChevronLeft size={16} />
@@ -1542,9 +1601,18 @@ const ReportDashboard = () => {
                                     <button
                                         disabled={meta.page >= meta.totalPages}
                                         onClick={() => setInvPage(p => Math.min(meta.totalPages, p + 1))}
+                                        title="Next Page"
                                         className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
                                     >
                                         <ChevronRight size={16} />
+                                    </button>
+                                    <button
+                                        disabled={meta.page >= meta.totalPages}
+                                        onClick={() => setInvPage(meta.totalPages)}
+                                        title="Last Page"
+                                        className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                                    >
+                                        <ChevronsRight size={16} />
                                     </button>
                                 </div>
                             </div>
@@ -1719,6 +1787,7 @@ const ReportDashboard = () => {
                 </div>
             </div>
 
+            {renderPeriodFilterBar()}
             {renderSummaryCards()}
             {renderSelectedStatusCards()}
             {activeTab !== 'INVENTORY' && renderGraphs()}

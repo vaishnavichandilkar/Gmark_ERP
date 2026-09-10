@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, X, ArrowLeft, ArrowRight, FileText, MoreVertical, Eye, Printer, Trash2, RefreshCw, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Layers } from 'lucide-react';
+import { Search, X, ArrowLeft, ArrowRight, ChevronsLeft, ChevronsRight, FileText, MoreVertical, Eye, Printer, Trash2, RefreshCw, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Layers, Plus, Minus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../../constants/routes';
 import toast from 'react-hot-toast';
@@ -120,28 +120,13 @@ const ReportTable = ({ data, type, status, onClose }) => {
         return Object.values(groups);
     }, [data, type, isEntityGroupable, isSupplierType]);
 
+    const isSummaryView = isEntityGroupable && !selectedEntity && (groupedSummary && groupedSummary.length > 1);
+
     const toggleRowExpand = (name) => {
         setExpandedRows(prev => ({
             ...prev,
             [name]: !prev[name]
         }));
-    };
-
-    const isAllExpanded = useMemo(() => {
-        if (!groupedSummary || groupedSummary.length === 0) return false;
-        return groupedSummary.every(item => expandedRows[item.name]);
-    }, [groupedSummary, expandedRows]);
-
-    const toggleExpandAll = () => {
-        if (isAllExpanded) {
-            setExpandedRows({});
-        } else {
-            const next = {};
-            (groupedSummary || []).forEach(item => {
-                next[item.name] = true;
-            });
-            setExpandedRows(next);
-        }
     };
 
     // Summary Columns for Level 1: Clean Supplier / Customer breakdown
@@ -152,8 +137,6 @@ const ReportTable = ({ data, type, status, onClose }) => {
             { header: 'Total Invoices Created', key: 'invoiceCount', render: (val) => `${val} Invoices` },
         ];
     }, [isSupplierType]);
-
-    const isSummaryView = isEntityGroupable && !selectedEntity && (groupedSummary && groupedSummary.length > 1);
 
     const renderStatus = (val, item) => {
         if (['PO', 'SO'].includes(type) && item) {
@@ -504,6 +487,121 @@ const ReportTable = ({ data, type, status, onClose }) => {
         return result;
     }, [rawDisplayData, searchQuery]);
 
+    const getRealSubgroupName = (item) => {
+        const accName = (item.accountName || item.supplierName || item.customerName || item.name || '').trim().toLowerCase();
+
+        if (Array.isArray(item.groupName) && item.groupName.length > 0) {
+            if (item.groupName.length >= 3) {
+                const sg = item.groupName[1];
+                if (sg && sg.trim().toLowerCase() !== accName) {
+                    return sg;
+                }
+            }
+            if (item.groupName.length === 2) {
+                const sg = item.groupName[1];
+                if (sg && sg.trim().toLowerCase() !== accName) {
+                    return sg;
+                }
+            }
+        }
+
+        if (item.subGroup) {
+            const sg = typeof item.subGroup === 'object' ? (item.subGroup.subgroup_name || item.subGroup.name) : String(item.subGroup);
+            if (sg && sg.trim().toLowerCase() !== accName) {
+                return sg;
+            }
+        }
+
+        if (item.subgroup) {
+            const sg = String(item.subgroup);
+            if (sg && sg.trim().toLowerCase() !== accName) {
+                return sg;
+            }
+        }
+
+        return null;
+    };
+
+    const isSubgroupGroupable = !isSummaryView && ['EXPENSE', 'INCOME', 'LEDGER'].includes(type);
+
+    const subgroupDisplayData = useMemo(() => {
+        if (!isSubgroupGroupable) return null;
+
+        let hasAnySubgroup = false;
+        const groupsMap = {};
+        const orderedEntries = [];
+
+        (filteredData || []).forEach(item => {
+            const sgName = getRealSubgroupName(item);
+            if (sgName) {
+                hasAnySubgroup = true;
+                if (!groupsMap[sgName]) {
+                    const entry = {
+                        isSubgroup: true,
+                        name: sgName,
+                        itemCount: 0,
+                        taxableAmount: 0,
+                        taxAmount: 0,
+                        grandTotal: 0,
+                        totalAmount: 0,
+                        items: []
+                    };
+                    groupsMap[sgName] = entry;
+                    orderedEntries.push(entry);
+                }
+
+                const taxAmt = calcTaxAmount(item, item.taxAmount);
+                const gross = Number(item.grandTotal ?? item.totalAmount ?? item.amount ?? 0);
+                const taxable = Number(item.taxableAmount ?? 0) || Math.max(0, gross - taxAmt);
+
+                groupsMap[sgName].itemCount += 1;
+                groupsMap[sgName].taxableAmount += taxable;
+                groupsMap[sgName].taxAmount += taxAmt;
+                groupsMap[sgName].grandTotal += gross;
+                groupsMap[sgName].totalAmount += gross;
+                groupsMap[sgName].items.push(item);
+            } else {
+                orderedEntries.push({
+                    isSubgroup: false,
+                    item
+                });
+            }
+        });
+
+        if (!hasAnySubgroup) return null;
+        return orderedEntries;
+    }, [filteredData, isSubgroupGroupable]);
+
+    const subgroupList = useMemo(() => {
+        if (!subgroupDisplayData) return [];
+        return subgroupDisplayData.filter(e => e.isSubgroup);
+    }, [subgroupDisplayData]);
+
+    const isAllExpanded = useMemo(() => {
+        if (isSummaryView) {
+            if (!groupedSummary || groupedSummary.length === 0) return false;
+            return groupedSummary.every(item => expandedRows[item.name]);
+        }
+        if (subgroupList.length > 0) {
+            return subgroupList.every(sg => expandedRows[sg.name]);
+        }
+        return false;
+    }, [isSummaryView, groupedSummary, subgroupList, expandedRows]);
+
+    const toggleExpandAll = () => {
+        if (isAllExpanded) {
+            setExpandedRows({});
+        } else {
+            const next = {};
+            if (isSummaryView) {
+                (groupedSummary || []).forEach(item => { next[item.name] = true; });
+            } else if (subgroupList.length > 0) {
+                subgroupList.forEach(sg => { next[sg.name] = true; });
+            }
+            setExpandedRows(next);
+        }
+    };
+
     const columnTotals = useMemo(() => {
         const totals = {
             totalAmount: 0,
@@ -531,8 +629,14 @@ const ReportTable = ({ data, type, status, onClose }) => {
         return totals;
     }, [filteredData, isSummaryView]);
 
-    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    const currentItems = filteredData.slice(
+    const displayList = useMemo(() => {
+        if (isSummaryView) return groupedSummary || [];
+        if (isSubgroupGroupable && subgroupDisplayData) return subgroupDisplayData;
+        return filteredData || [];
+    }, [isSummaryView, groupedSummary, isSubgroupGroupable, subgroupDisplayData, filteredData]);
+
+    const totalPages = Math.ceil(displayList.length / itemsPerPage);
+    const currentItems = displayList.slice(
         (currentPage - 1) * itemsPerPage,
         currentPage * itemsPerPage
     );
@@ -567,7 +671,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                             </span>
                         </h2>
 
-                        {isSummaryView && groupedSummary && groupedSummary.length > 0 && (
+                        {((isSummaryView && groupedSummary && groupedSummary.length > 0) || (subgroupList && subgroupList.length > 0)) && (
                             <button
                                 onClick={toggleExpandAll}
                                 className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-[#004f3b] font-extrabold rounded-xl text-xs transition-colors flex items-center gap-1.5 border border-emerald-200/60 shadow-2xs"
@@ -579,7 +683,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     </div>
 
                     <p className="text-[13px] md:text-[14px] text-gray-500 mt-1">
-                        Showing {filteredData.length} {isSummaryView ? (isSupplierType ? 'suppliers' : 'customers') : 'records'}
+                        Showing {displayList.length} {isSummaryView ? (isSupplierType ? 'suppliers' : 'customers') : 'records'}
                     </p>
                 </div>
 
@@ -626,47 +730,171 @@ const ReportTable = ({ data, type, status, onClose }) => {
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {currentItems.length > 0 ? (
-                                currentItems.map((item, rowIdx) => {
-                                    const isExpanded = isSummaryView && !!expandedRows[item.name];
-                                    return (
-                                        <React.Fragment key={rowIdx}>
-                                            <tr
-                                                onClick={() => {
-                                                    if (isSummaryView) {
-                                                        setSelectedEntity(item.name);
-                                                        setSearchQuery('');
-                                                        setCurrentPage(1);
-                                                    }
-                                                }}
-                                                className={`hover:bg-emerald-50/30 transition-colors group ${isSummaryView ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-emerald-50/40 font-bold border-l-4 border-emerald-600' : ''}`}
-                                            >
-                                                {activeColumns.map((col, colIdx) => (
-                                                    <td key={colIdx} className={`px-8 py-4 text-[14px] text-gray-700 font-semibold ${col.isAction ? 'relative' : ''}`}>
-                                                        {col.key === 'name' && isSummaryView ? (
+                                isSubgroupGroupable && subgroupDisplayData ? (
+                                    currentItems.map((entry, rowIdx) => {
+                                        if (entry.isSubgroup) {
+                                            const isExpanded = !!expandedRows[entry.name];
+                                            return (
+                                                <React.Fragment key={`sg-${rowIdx}`}>
+                                                    {/* Subgroup Summary Row */}
+                                                    <tr
+                                                        onClick={() => toggleRowExpand(entry.name)}
+                                                        className={`hover:bg-emerald-50/40 transition-colors cursor-pointer group ${isExpanded ? 'bg-emerald-50/60 font-bold border-l-4 border-emerald-600' : 'bg-emerald-50/20'}`}
+                                                    >
+                                                        <td className="px-8 py-4 text-[14px] text-gray-400 font-medium">-</td>
+                                                        <td className="px-8 py-4 text-[14px] text-gray-900 font-semibold">
                                                             <div className="flex items-center gap-2.5">
                                                                 <button
-                                                                    onClick={(e) => { e.stopPropagation(); toggleRowExpand(item.name); }}
-                                                                    className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-emerald-100 hover:text-emerald-800'}`}
+                                                                    onClick={(e) => { e.stopPropagation(); toggleRowExpand(entry.name); }}
+                                                                    className={`w-6 h-6 rounded-md flex items-center justify-center font-extrabold text-xs transition-all shadow-2xs ${isExpanded ? 'bg-emerald-600 text-white' : 'bg-[#004f3b] text-white hover:bg-emerald-700'}`}
+                                                                    title={isExpanded ? "Collapse (-)" : "Expand (+)"}
                                                                 >
-                                                                    {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                                                    {isExpanded ? <Minus size={14} strokeWidth={3} /> : <Plus size={14} strokeWidth={3} />}
                                                                 </button>
-                                                                <span className="font-bold text-gray-900">{item.name}</span>
+                                                                <span className="font-extrabold text-[#004f3b] text-[15px]">{entry.name}</span>
+                                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-100/80 text-emerald-900 rounded-full font-extrabold text-xs">
+                                                                    {entry.itemCount} {entry.itemCount === 1 ? 'account' : 'accounts'}
+                                                                </span>
                                                             </div>
-                                                        ) : (col.key === 'invoiceCount' && isSummaryView) ? (
-                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100/80 text-emerald-900 rounded-full font-extrabold text-xs">
-                                                                <FileText size={13} />
-                                                                {item.invoiceCount} Invoices Created
+                                                        </td>
+                                                        <td className="px-8 py-4 text-[14px] text-gray-400 font-medium">-</td>
+                                                        <td className="px-8 py-4 text-[14px]">
+                                                            <span className="px-2.5 py-1 bg-emerald-100/70 text-emerald-800 rounded-lg text-xs font-extrabold uppercase tracking-wider">
+                                                                SUBGROUP
                                                             </span>
-                                                        ) : (col.isAction
-                                                            ? (col.render ? col.render(item[col.key], item) : renderActionMenu(item, rowIdx))
-                                                            : (col.key === 'status' ? renderStatus(item[col.key], item) : (col.render ? col.render(item[col.key], item) : (item[col.key] || '-')))
-                                                        )}
+                                                        </td>
+                                                        <td className="px-8 py-4 text-[14px] text-gray-900 font-bold">
+                                                            {formatCurrency(entry.taxableAmount)}
+                                                        </td>
+                                                        <td className="px-8 py-4 text-[14px] text-gray-900 font-bold">
+                                                            {formatCurrency(entry.taxAmount)}
+                                                        </td>
+                                                        <td className="px-8 py-4 text-[14px] text-emerald-900 font-extrabold">
+                                                            {formatCurrency(entry.grandTotal)}
+                                                        </td>
+                                                    </tr>
+
+                                                    {/* Child Account Rows when expanded */}
+                                                    {isExpanded && entry.items.map((item, childIdx) => {
+                                                        const taxAmt = calcTaxAmount(item, item.taxAmount);
+                                                        const gross = Number(item.grandTotal ?? item.totalAmount ?? item.amount ?? 0);
+                                                        const taxable = Number(item.taxableAmount ?? 0) || Math.max(0, gross - taxAmt);
+                                                        const accName = item.accountName || item.supplierName || item.customerName || item.description || item.name || 'Account';
+                                                        const docNo = item.supplierInvoiceNumber || item.soNumber || item.poNumber || item.challanNumber || item.voucherNo || '-';
+                                                        const dateVal = item.bookingDate || item.supplierInvoiceDate || item.soCreationDate || item.poCreationDate || item.created_at;
+
+                                                        return (
+                                                            <tr key={`child-${rowIdx}-${childIdx}`} className="bg-white hover:bg-emerald-50/20 transition-colors border-b border-gray-50">
+                                                                <td className="px-8 py-3.5 text-[13px] text-gray-600 font-medium pl-10">
+                                                                    {formatDate(dateVal)}
+                                                                </td>
+                                                                <td className="px-8 py-3.5 text-[14px] text-gray-900 font-semibold">
+                                                                    <div className="flex items-center gap-2.5 pl-6 border-l-2 border-emerald-400">
+                                                                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                                                                        <span>{accName}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-8 py-3.5 text-[13px] text-gray-500 font-medium">
+                                                                    {docNo}
+                                                                </td>
+                                                                <td className="px-8 py-3.5 text-[13px] text-gray-600 font-medium">
+                                                                    {renderStatus(item.status, item)}
+                                                                </td>
+                                                                <td className="px-8 py-3.5 text-[14px] text-gray-700 font-semibold">
+                                                                    {formatCurrency(taxable)}
+                                                                </td>
+                                                                <td className="px-8 py-3.5 text-[14px] text-gray-700 font-semibold">
+                                                                    {formatCurrency(taxAmt)}
+                                                                </td>
+                                                                <td className="px-8 py-3.5 text-[14px] text-gray-900 font-bold">
+                                                                    {formatCurrency(gross)}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </React.Fragment>
+                                            );
+                                        } else {
+                                            // Standalone Account Row
+                                            const item = entry.item;
+                                            const taxAmt = calcTaxAmount(item, item.taxAmount);
+                                            const gross = Number(item.grandTotal ?? item.totalAmount ?? item.amount ?? 0);
+                                            const taxable = Number(item.taxableAmount ?? 0) || Math.max(0, gross - taxAmt);
+                                            const accName = item.accountName || item.supplierName || item.customerName || item.description || item.name || 'General Transaction';
+                                            const docNo = item.supplierInvoiceNumber || item.soNumber || item.poNumber || item.challanNumber || item.voucherNo || '-';
+                                            const dateVal = item.bookingDate || item.supplierInvoiceDate || item.soCreationDate || item.poCreationDate || item.created_at;
+
+                                            return (
+                                                <tr key={`item-${rowIdx}`} className="hover:bg-emerald-50/30 transition-colors bg-white">
+                                                    <td className="px-8 py-4 text-[14px] text-gray-700 font-semibold">
+                                                        {formatDate(dateVal)}
                                                     </td>
-                                                ))}
-                                            </tr>
-                                        </React.Fragment>
-                                    );
-                                })
+                                                    <td className="px-8 py-4 text-[14px] text-gray-900 font-semibold">
+                                                        {accName}
+                                                    </td>
+                                                    <td className="px-8 py-4 text-[14px] text-gray-500 font-medium">
+                                                        {docNo}
+                                                    </td>
+                                                    <td className="px-8 py-4 text-[14px] text-gray-600 font-medium">
+                                                        {renderStatus(item.status, item)}
+                                                    </td>
+                                                    <td className="px-8 py-4 text-[14px] text-gray-700 font-semibold">
+                                                        {formatCurrency(taxable)}
+                                                    </td>
+                                                    <td className="px-8 py-4 text-[14px] text-gray-700 font-semibold">
+                                                        {formatCurrency(taxAmt)}
+                                                    </td>
+                                                    <td className="px-8 py-4 text-[14px] text-gray-900 font-bold">
+                                                        {formatCurrency(gross)}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+                                    })
+                                ) : (
+                                    currentItems.map((item, rowIdx) => {
+                                        const isExpanded = isSummaryView && !!expandedRows[item.name];
+                                        return (
+                                            <React.Fragment key={rowIdx}>
+                                                <tr
+                                                    onClick={() => {
+                                                        if (isSummaryView) {
+                                                            setSelectedEntity(item.name);
+                                                            setSearchQuery('');
+                                                            setCurrentPage(1);
+                                                        }
+                                                    }}
+                                                    className={`hover:bg-emerald-50/30 transition-colors group ${isSummaryView ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-emerald-50/40 font-bold border-l-4 border-emerald-600' : ''}`}
+                                                >
+                                                    {activeColumns.map((col, colIdx) => (
+                                                        <td key={colIdx} className={`px-8 py-4 text-[14px] text-gray-700 font-semibold ${col.isAction ? 'relative' : ''}`}>
+                                                            {col.key === 'name' && isSummaryView ? (
+                                                                <div className="flex items-center gap-2.5">
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); toggleRowExpand(item.name); }}
+                                                                        className={`w-6 h-6 rounded-md flex items-center justify-center font-extrabold text-xs transition-all shadow-2xs ${isExpanded ? 'bg-emerald-600 text-white' : 'bg-[#004f3b] text-white hover:bg-emerald-700'}`}
+                                                                        title={isExpanded ? "Collapse (-)" : "Expand (+)"}
+                                                                    >
+                                                                        {isExpanded ? <Minus size={14} strokeWidth={3} /> : <Plus size={14} strokeWidth={3} />}
+                                                                    </button>
+                                                                    <span className="font-bold text-gray-900">{item.name}</span>
+                                                                </div>
+                                                            ) : (col.key === 'invoiceCount' && isSummaryView) ? (
+                                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100/80 text-emerald-900 rounded-full font-extrabold text-xs">
+                                                                    <FileText size={13} />
+                                                                    {item.invoiceCount} Invoices Created
+                                                                </span>
+                                                            ) : (col.isAction
+                                                                ? (col.render ? col.render(item[col.key], item) : renderActionMenu(item, rowIdx))
+                                                                : (col.key === 'status' ? renderStatus(item[col.key], item) : (col.render ? col.render(item[col.key], item) : (item[col.key] || '-')))
+                                                            )}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            </React.Fragment>
+                                        );
+                                    })
+                                )
                             ) : (
                                 <tr>
                                     <td colSpan={activeColumns.length} className="px-8 py-20 text-center text-gray-400 font-medium">
@@ -728,7 +956,16 @@ const ReportTable = ({ data, type, status, onClose }) => {
                     <div className="flex gap-2">
                         <button
                             disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(1)}
+                            title="First Page"
+                            className="w-10 h-10 border border-gray-200 rounded-xl flex items-center justify-center bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 transition-all"
+                        >
+                            <ChevronsLeft size={18} />
+                        </button>
+                        <button
+                            disabled={currentPage === 1}
                             onClick={() => setCurrentPage(p => p - 1)}
+                            title="Previous Page"
                             className="w-10 h-10 border border-gray-200 rounded-xl flex items-center justify-center bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 transition-all"
                         >
                             <ArrowLeft size={18} />
@@ -736,9 +973,18 @@ const ReportTable = ({ data, type, status, onClose }) => {
                         <button
                             disabled={currentPage === totalPages || totalPages === 0}
                             onClick={() => setCurrentPage(p => p + 1)}
+                            title="Next Page"
                             className="w-10 h-10 border border-gray-200 rounded-xl flex items-center justify-center bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 transition-all"
                         >
                             <ArrowRight size={18} />
+                        </button>
+                        <button
+                            disabled={currentPage === totalPages || totalPages === 0}
+                            onClick={() => setCurrentPage(totalPages)}
+                            title="Last Page"
+                            className="w-10 h-10 border border-gray-200 rounded-xl flex items-center justify-center bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 transition-all"
+                        >
+                            <ChevronsRight size={18} />
                         </button>
                     </div>
                 </div>

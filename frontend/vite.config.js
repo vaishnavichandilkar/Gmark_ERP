@@ -18,4 +18,15 @@ export default defineConfig({
       'html2canvas': 'html2canvas-pro'
     },
   },
+  server: {
+    host: true,
+    allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
 })

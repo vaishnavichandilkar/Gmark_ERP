@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { MoreVertical, X, Eye, Users, BookOpen, Download, Search, FileText, FileSpreadsheet, RotateCcw, ChevronLeft, ChevronRight, Plus, Minus, Landmark, Trash2, ChevronDown, XSquare, Upload, UploadCloud, Check, Maximize2, Minimize2 } from 'lucide-react';
+import { MoreVertical, X, Eye, Users, BookOpen, Download, Search, FileText, FileSpreadsheet, RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Minus, Landmark, Trash2, ChevronDown, XSquare, Upload, UploadCloud, Check, Maximize2, Minimize2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import CustomSelect from '../../../components/common/CustomSelect';
 import jsPDF from 'jspdf';
@@ -2224,6 +2224,15 @@ const Finance = () => {
                             </span>
                             <div className="flex items-center gap-2">
                                 <button 
+                                    title="First Page"
+                                    className="p-2 rounded-[10px] bg-white border border-[#E5E7EB] text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F9FAFB] hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-[#E5E7EB]"
+                                    onClick={() => setCurrentPage(1)}
+                                    disabled={currentPage === 1 || !filteredMainData || filteredMainData.length === 0}
+                                >
+                                    <ChevronsLeft size={18} strokeWidth={2.5} />
+                                </button>
+                                <button 
+                                    title="Previous Page"
                                     className="p-2 rounded-[10px] bg-white border border-[#E5E7EB] text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F9FAFB] hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-[#E5E7EB]"
                                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                                     disabled={currentPage === 1 || !filteredMainData || filteredMainData.length === 0}
@@ -2231,11 +2240,20 @@ const Finance = () => {
                                     <ChevronLeft size={18} strokeWidth={2.5} />
                                 </button>
                                 <button 
+                                    title="Next Page"
                                     className="p-2 rounded-[10px] bg-white border border-[#E5E7EB] text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F9FAFB] hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-[#E5E7EB]"
                                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                     disabled={currentPage === totalPages || !filteredMainData || filteredMainData.length === 0}
                                 >
                                     <ChevronRight size={18} strokeWidth={2.5} />
+                                </button>
+                                <button 
+                                    title="Last Page"
+                                    className="p-2 rounded-[10px] bg-white border border-[#E5E7EB] text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F9FAFB] hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-[#E5E7EB]"
+                                    onClick={() => setCurrentPage(totalPages)}
+                                    disabled={currentPage === totalPages || !filteredMainData || filteredMainData.length === 0}
+                                >
+                                    <ChevronsRight size={18} strokeWidth={2.5} />
                                 </button>
                             </div>
                         </div>
@@ -2639,6 +2657,15 @@ const Finance = () => {
                                         
                                         <div className="flex items-center gap-2">
                                             <button 
+                                                onClick={() => setDetailedCurrentPage(1)}
+                                                disabled={detailedCurrentPage === 1 || detailedLoading}
+                                                title="First Page"
+                                                className={`flex items-center justify-center w-[36px] h-[36px] rounded-[8px] border border-[#E5E7EB] text-[13px] font-bold transition-all shadow-sm ${detailedCurrentPage === 1 ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 active:scale-95'}`}
+                                            >
+                                                <ChevronsLeft size={16} />
+                                            </button>
+
+                                            <button 
                                                 onClick={() => setDetailedCurrentPage(prev => Math.max(1, prev - 1))}
                                                 disabled={detailedCurrentPage === 1 || detailedLoading}
                                                 className={`flex items-center gap-1 h-[36px] px-4 rounded-[8px] border border-[#E5E7EB] text-[13px] font-bold transition-all shadow-sm ${detailedCurrentPage === 1 ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 active:scale-95'}`}
@@ -2666,6 +2693,15 @@ const Finance = () => {
                                             >
                                                 {t('common:next')}
                                                 <ChevronRight size={16} />
+                                            </button>
+
+                                            <button 
+                                                onClick={() => setDetailedCurrentPage(detailedTotalPages)}
+                                                disabled={detailedCurrentPage === detailedTotalPages || detailedLoading}
+                                                title="Last Page"
+                                                className={`flex items-center justify-center w-[36px] h-[36px] rounded-[8px] border border-[#E5E7EB] text-[13px] font-bold transition-all shadow-sm ${detailedCurrentPage === detailedTotalPages ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 active:scale-95'}`}
+                                            >
+                                                <ChevronsRight size={16} />
                                             </button>
                                         </div>
                                     </div>
