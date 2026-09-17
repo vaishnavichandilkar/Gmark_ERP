@@ -305,4 +305,51 @@ export interface InventoryReportResponseDto {
   };
 }
 
+export class BalanceSheetQueryDto {
+  @IsOptional()
+  @IsDateString()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dateTo?: string;
+
+  @IsOptional()
+  @IsDateString()
+  asOfDate?: string;
+}
+
+export interface BalanceSheetItemDto {
+  id: string;
+  code?: string;
+  name: string;
+  category: 'ASSET' | 'LIABILITY' | 'EQUITY';
+  subGroup?: string;
+  amount: number;
+  children?: BalanceSheetItemDto[];
+}
+
+export interface BalanceSheetSectionDto {
+  title: string;
+  total: number;
+  items: BalanceSheetItemDto[];
+}
+
+export interface BalanceSheetResponseDto {
+  asOfDate: string;
+  is_balanced: boolean;
+  discrepancy_amount: number;
+  liabilities_and_equity: {
+    total: number;
+    capital_equity: BalanceSheetSectionDto;
+    non_current_liabilities: BalanceSheetSectionDto;
+    current_liabilities: BalanceSheetSectionDto;
+  };
+  assets: {
+    total: number;
+    non_current_assets: BalanceSheetSectionDto;
+    current_assets: BalanceSheetSectionDto;
+  };
+}
+
 

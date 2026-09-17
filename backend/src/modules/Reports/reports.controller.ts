@@ -9,6 +9,7 @@ import {
   TrendQueryDto,
   ProfitLossQueryDto,
   InventoryQueryDto,
+  BalanceSheetQueryDto,
 } from './dto/reports.dto';
 
 @ApiTags('Reports')
@@ -17,6 +18,13 @@ import {
 @ApiBearerAuth()
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
+
+  @Get('balance-sheet')
+  @RequirePermission('reports_view')
+  @ApiOperation({ summary: 'Get Balance Sheet (Financial Position) report data' })
+  async getBalanceSheet(@Query() query: BalanceSheetQueryDto, @Request() req) {
+    return this.reportsService.getBalanceSheet(req.user.userId, query);
+  }
 
   @Get('inventory')
   @RequirePermission('reports_view')

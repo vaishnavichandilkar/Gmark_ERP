@@ -361,4 +361,58 @@ body {
 .text-\[12px\] { font-size: 11px !important; }
 .text-\[11px\] { font-size: 10px !important; }
 .text-\[10px\] { font-size: 9px !important; }
+
+/* Media Print Optimizations - Clean PDF Export */
+@media print {
+    /* Hide navigation, sidebars, buttons, and control elements */
+    nav, 
+    aside, 
+    header,
+    .no-print,
+    button,
+    input,
+    label,
+    select,
+    .shadow-xl,
+    .shadow-lg,
+    .shadow-md,
+    .shadow-sm {
+        display: none !important;
+    }
+
+    @page {
+        size: A4 portrait;
+        margin: 8mm 8mm 8mm 8mm;
+    }
+
+    body, html {
+        background: #ffffff !important;
+        color: #000000 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        overflow: visible !important;
+        font-size: 12px !important;
+    }
+
+    main, 
+    #root, 
+    .flex-1,
+    .container {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .grid {
+        display: grid !important;
+        width: 100% !important;
+    }
+
+    div, section, article {
+        box-shadow: none !important;
+    }
+}
 
