@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
+import html2pdf from 'html2pdf.js';
 import { useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
@@ -8,9 +10,10 @@ import {
 } from 'recharts';
 import { fetchReportsStart } from '../reportSlice';
 import Card, { CardContent, CardHeader } from '../../../components/common/Card';
-import { FileText, ShoppingCart, TrendingUp, IndianRupee, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent, Package, Search, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Plus, Minus } from 'lucide-react';
+import { FileText, ShoppingCart, TrendingUp, IndianRupee, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent, Package, Search, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Plus, Minus, Landmark, Maximize2, Minimize2, Upload, FileSpreadsheet, Download } from 'lucide-react';
 import Loader from '../../../components/common/Loader';
 import ReportTable from '../components/ReportTable';
+import BalanceSheetView from '../components/BalanceSheetView';
 import reportService from '../../../services/reportService';
 
 const toLocalISOString = (d) => {
@@ -102,7 +105,7 @@ const ReportDashboard = () => {
         const tabParam = searchParams.get('tab');
         if (tabParam) {
             const upper = tabParam.toUpperCase();
-            if (['ALL', 'PURCHASE', 'SALES', 'INVENTORY', 'PROFIT_LOSS'].includes(upper)) {
+            if (['ALL', 'PURCHASE', 'SALES', 'INVENTORY', 'PROFIT_LOSS', 'BALANCE_SHEET'].includes(upper)) {
                 return upper;
             }
         }
@@ -120,6 +123,8 @@ const ReportDashboard = () => {
 
     const [isPurchaseExpanded, setIsPurchaseExpanded] = useState(false);
     const [isSalesExpanded, setIsSalesExpanded] = useState(false);
+    const [showPLExportMenu, setShowPLExportMenu] = useState(false);
+    const plReportRef = useRef(null);
 
     const supplierBreakdown = useMemo(() => {
         const groups = {};
@@ -200,6 +205,8 @@ const ReportDashboard = () => {
         }
     }, [invPage, invLimit, invSearch, invSortBy, invSortOrder]);
 
+    const [balanceSheetData, setBalanceSheetData] = useState(null);
+
     const fetchPL = useCallback(async () => {
         setPlLoading(true);
         try {
@@ -215,8 +222,23 @@ const ReportDashboard = () => {
         }
     }, [plFromDate, plToDate]);
 
+    const fetchBS = useCallback(async () => {
+        setPlLoading(true);
+        try {
+            const params = {};
+            if (plFromDate) params.dateFrom = plFromDate;
+            if (plToDate) params.dateTo = plToDate;
+            const data = await reportService.getBalanceSheet(params);
+            setBalanceSheetData(data);
+        } catch (err) {
+            console.error("Error loading Balance Sheet report:", err);
+        } finally {
+            setPlLoading(false);
+        }
+    }, [plFromDate, plToDate]);
+
     useEffect(() => {
-        if (activeTab === 'INVENTORY' || activeTab === 'PROFIT_LOSS' || activeTab === 'ALL') {
+        if (activeTab === 'INVENTORY' || activeTab === 'PROFIT_LOSS' || activeTab === 'BALANCE_SHEET' || activeTab === 'ALL') {
             fetchInventory();
         }
     }, [activeTab, fetchInventory]);
@@ -225,7 +247,10 @@ const ReportDashboard = () => {
         if (activeTab === 'PROFIT_LOSS' || activeTab === 'ALL') {
             fetchPL();
         }
-    }, [activeTab, fetchPL]);
+        if (activeTab === 'BALANCE_SHEET' || activeTab === 'ALL') {
+            fetchBS();
+        }
+    }, [activeTab, fetchPL, fetchBS]);
 
     useEffect(() => {
         dispatch(fetchReportsStart());
@@ -578,6 +603,7 @@ const ReportDashboard = () => {
         { id: 'SALES', label: 'Sales Reports', icon: TrendingUp },
         { id: 'INVENTORY', label: 'Inventory', icon: Package },
         { id: 'PROFIT_LOSS', label: 'Profit & Loss', icon: Scale },
+        { id: 'BALANCE_SHEET', label: 'Balance Sheet', icon: Landmark },
     ];
 
     const renderPeriodFilterBar = () => {
@@ -1128,9 +1154,160 @@ const ReportDashboard = () => {
                 <CardHeader title="Trading & Profit & Loss Account" />
                 <CardContent className="p-0 md:p-8 bg-white">
                     {/* Period Filter Bar */}
+<<<<<<< HEAD
                     {renderPeriodFilterBar()}
+=======
+                    <div className="bg-gray-50/80 p-4 md:p-6 rounded-[16px] border border-gray-200/60 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex flex-wrap items-center justify-between w-full gap-3">
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-semibold text-gray-600">From:</label>
+                                <input
+                                    type="date"
+                                    value={plFromDate}
+                                    onChange={(e) => setPlFromDate(e.target.value)}
+                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-semibold text-gray-600">To:</label>
+                                <input
+                                    type="date"
+                                    value={plToDate}
+                                    onChange={(e) => setPlToDate(e.target.value)}
+                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                />
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => {
+                                        setPlFromDate('2026-04-01');
+                                        setPlToDate('2027-03-31');
+                                    }}
+                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 transition-colors"
+                                >
+                                    FY 2026-27
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const now = new Date();
+                                        const firstDay = toLocalISOString(new Date(now.getFullYear(), now.getMonth(), 1));
+                                        const today = toLocalISOString(now);
+                                        setPlFromDate(firstDay);
+                                        setPlToDate(today);
+                                    }}
+                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                    This Month
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setPlFromDate('');
+                                        setPlToDate('');
+                                    }}
+                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                    All Time
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-2 border-l border-gray-300 pl-2 ml-1">
+                                <button
+                                    onClick={() => {
+                                        const isAllExp = isPurchaseExpanded && isSalesExpanded;
+                                        setIsPurchaseExpanded(!isAllExp);
+                                        setIsSalesExpanded(!isAllExp);
+                                    }}
+                                    className="px-4 py-1.5 text-xs font-semibold text-[#0f4a3c] bg-white border border-[#0f4a3c]/30 rounded-2xl hover:bg-emerald-50/60 hover:border-[#0f4a3c]/60 shadow-2xs transition-all flex items-center gap-2 cursor-pointer"
+                                    title={(isPurchaseExpanded && isSalesExpanded) ? "Collapse All Sections" : "Expand All Sections"}
+                                >
+                                    {(isPurchaseExpanded && isSalesExpanded) ? (
+                                        <Minimize2 size={15} className="text-[#0f4a3c]" />
+                                    ) : (
+                                        <Maximize2 size={15} className="text-[#0f4a3c]" />
+                                    )}
+                                    <span>{(isPurchaseExpanded && isSalesExpanded) ? 'Collapse All' : 'Expand All'}</span>
+                                </button>
 
-                    <div className="w-full border border-gray-200/60 rounded-[16px] shadow-sm bg-gray-50/10 overflow-hidden">
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowPLExportMenu(!showPLExportMenu)}
+                                        className="px-4 py-1.5 text-xs font-semibold text-[#0f4a3c] bg-white border border-[#0f4a3c]/30 rounded-2xl hover:bg-emerald-50/60 hover:border-[#0f4a3c]/60 shadow-2xs transition-all flex items-center gap-2 cursor-pointer"
+                                        title="Export Options"
+                                    >
+                                        <Upload size={15} className="text-[#0f4a3c]" />
+                                        <span>Export</span>
+                                        <ChevronDown size={12} className={`text-[#0f4a3c] transition-transform ${showPLExportMenu ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {showPLExportMenu && (
+                                        <div 
+                                            className="absolute right-0 mt-1.5 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1 overflow-hidden"
+                                            onMouseLeave={() => setShowPLExportMenu(false)}
+                                        >
+                                            <button
+                                                onClick={() => {
+                                                    const rows = [
+                                                        ['EXPENDITURE', 'AMOUNT (INR)', 'INCOME', 'AMOUNT (INR)'],
+                                                        ['Opening Balance', openingStock, 'Sales', sale],
+                                                        ['Purchase', purchase, 'Direct Income', directIncome],
+                                                        ['Direct Expenses', directExpenses, 'Closing Balance', closingStock],
+                                                        ['Gross Profit', grossProfit, 'Gross Loss', grossLoss],
+                                                        ['Indirect Expenses', indirectExpenses, 'Indirect Income', indirectIncome],
+                                                        ['Net Profit', netProfit, 'Net Loss', netLoss],
+                                                        [],
+                                                        ['TOTAL EXPENDITURE', totalExpenditure, 'TOTAL INCOME', totalIncome]
+                                                    ];
+                                                    const ws = XLSX.utils.aoa_to_sheet(rows);
+                                                    ws['!cols'] = [
+                                                        { wch: 30 },
+                                                        { wch: 20 },
+                                                        { wch: 30 },
+                                                        { wch: 20 }
+                                                    ];
+                                                    const wb = XLSX.utils.book_new();
+                                                    XLSX.utils.book_append_sheet(wb, ws, 'Profit and Loss');
+                                                    XLSX.writeFile(wb, `Profit_and_Loss_Statement_${plToDate || 'current'}.xlsx`);
+                                                    setShowPLExportMenu(false);
+                                                }}
+                                                className="w-full px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition-colors text-left cursor-pointer"
+                                            >
+                                                <FileSpreadsheet size={14} className="text-emerald-700" />
+                                                <span>Export to Excel</span>
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    setShowPLExportMenu(false);
+                                                    if (plReportRef.current) {
+                                                        const element = plReportRef.current;
+                                                        const opt = {
+                                                            margin: [6, 6, 6, 6],
+                                                            filename: `Profit_and_Loss_${plToDate || 'current'}.pdf`,
+                                                            image: { type: 'jpeg', quality: 0.98 },
+                                                            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                                                            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                                                        };
+                                                        try {
+                                                            await html2pdf().set(opt).from(element).save();
+                                                            return;
+                                                        } catch (err) {
+                                                            console.error('P&L PDF error:', err);
+                                                        }
+                                                    }
+                                                    window.print();
+                                                }}
+                                                className="w-full px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition-colors text-left cursor-pointer"
+                                            >
+                                                <Download size={14} className="text-[#0f4a3c]" />
+                                                <span>Export to PDF</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+>>>>>>> acf9d243505001043e4d121218e6631a11bdea06
+
+                    <div ref={plReportRef} className="w-full border border-gray-200/60 rounded-[16px] shadow-sm bg-gray-50/10 overflow-hidden bg-white p-2">
                         {/* 2-Column Trading Account Layout */}
                         <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-200 bg-white">
                             {/* EXPENDITURE COLUMN */}
@@ -1404,6 +1581,226 @@ const ReportDashboard = () => {
         );
     };
 
+    const renderBalanceSheetStatement = () => {
+        const trading = profitLossData?.trading || {};
+        const pl = profitLossData?.profitLoss || {};
+
+        const openingStock = trading.openingStock ?? profitLossData?.openingStock ?? 0;
+        const purchase = trading.netPurchase ?? trading.purchase ?? profitLossData?.purchase ?? 0;
+        const directExpenses = trading.directExpenses ?? profitLossData?.directExpenses ?? 0;
+        const directIncome = trading.directIncome ?? profitLossData?.directIncome ?? 0;
+        const sale = trading.netSales ?? trading.sales ?? profitLossData?.sales ?? 0;
+        const closingStock = trading.closingStock ?? profitLossData?.closingStock ?? 0;
+
+        const indirectExpenses = pl.indirectExpenses ?? profitLossData?.indirectExpenses ?? 0;
+        const indirectIncome = pl.indirectIncome ?? profitLossData?.indirectIncome ?? 0;
+
+        const totalTradingExpenditure = trading.totalExpenditure ?? (openingStock + purchase + directExpenses);
+        const totalTradingIncome = trading.totalIncome ?? (sale + directIncome + closingStock + indirectIncome);
+
+        const isGrossProfit = trading.isGrossProfit ?? (totalTradingIncome >= totalTradingExpenditure);
+        const grossProfit = isGrossProfit ? (trading.grossProfit ?? (totalTradingIncome - totalTradingExpenditure)) : 0;
+        const grossLoss = !isGrossProfit ? (trading.grossLoss ?? (totalTradingExpenditure - totalTradingIncome)) : 0;
+
+        const netProfitVal = grossProfit - grossLoss - indirectExpenses;
+
+        // Balance sheet items derived from metrics & data
+        const sundryCreditors = metrics.totalPurchases || 0;
+        const taxPayable = metrics.totalSalesTax || 0;
+        const capitalAccount = Math.max(0, netProfitVal);
+
+        const sundryDebtors = metrics.totalSales || 0;
+        const closingInventoryVal = closingStock;
+        const inputTaxCredit = metrics.totalPurchaseTax || 0;
+        const cashBankBalance = Math.max(0, sundryDebtors - sundryCreditors);
+
+        const totalLiabilities = capitalAccount + sundryCreditors + taxPayable;
+        const totalAssets = closingInventoryVal + sundryDebtors + inputTaxCredit + cashBankBalance;
+
+        return (
+            <Card className="mb-8 border border-gray-100 shadow-xl overflow-hidden rounded-[24px]">
+                <CardHeader title="Balance Sheet Statement" />
+                <CardContent className="p-0 md:p-8 bg-white">
+                    {/* Period Filter Bar */}
+                    <div className="bg-gray-50/80 p-4 md:p-6 rounded-[16px] border border-gray-200/60 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900">Balance Sheet (Financial Position)</h3>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                As of Date: {plToDate ? formatDisplayDateDDMMYYYY(plToDate) : 'Current Date'}
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-semibold text-gray-600">From:</label>
+                                <input
+                                    type="date"
+                                    value={plFromDate}
+                                    onChange={(e) => setPlFromDate(e.target.value)}
+                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-semibold text-gray-600">To:</label>
+                                <input
+                                    type="date"
+                                    value={plToDate}
+                                    onChange={(e) => setPlToDate(e.target.value)}
+                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                />
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => {
+                                        setPlFromDate('2026-04-01');
+                                        setPlToDate('2027-03-31');
+                                    }}
+                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 transition-colors"
+                                >
+                                    FY 2026-27
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const now = new Date();
+                                        const firstDay = toLocalISOString(new Date(now.getFullYear(), now.getMonth(), 1));
+                                        const today = toLocalISOString(now);
+                                        setPlFromDate(firstDay);
+                                        setPlToDate(today);
+                                    }}
+                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                    This Month
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setPlFromDate('');
+                                        setPlToDate('');
+                                    }}
+                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                    All Time
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="w-full border border-gray-200/60 rounded-[16px] shadow-sm bg-gray-50/10 overflow-hidden">
+                        {/* 2-Column Balance Sheet Layout */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-200 bg-white">
+                            {/* LIABILITIES COLUMN */}
+                            <div className="flex flex-col">
+                                <div className="px-6 py-4 bg-[#004f3b] text-white font-bold text-sm uppercase tracking-widest text-center flex items-center justify-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-white"></span>
+                                    LIABILITIES
+                                </div>
+                                <div className="divide-y divide-gray-100 flex-1">
+                                    {/* Capital Account / Net Profit */}
+                                    <div className="flex items-center justify-between px-6 py-4 hover:bg-emerald-50/30 transition-colors font-semibold text-gray-700">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span>Capital Account (Net Earnings)</span>
+                                        </div>
+                                        <span className="text-gray-900 font-bold">{formatCurrency(capitalAccount)}</span>
+                                    </div>
+
+                                    {/* Sundry Creditors */}
+                                    <div
+                                        onClick={() => handleCardClick('PI', 'Sundry Creditors (Purchases)', purchaseData)}
+                                        className="flex items-center justify-between px-6 py-4 hover:bg-emerald-50/30 transition-colors cursor-pointer group font-semibold text-gray-700"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Sundry Creditors (Accounts Payable)</span>
+                                        </div>
+                                        <span className="text-gray-900 font-bold">{formatCurrency(sundryCreditors)}</span>
+                                    </div>
+
+                                    {/* Tax Payable */}
+                                    <div className="flex items-center justify-between px-6 py-4 hover:bg-emerald-50/30 transition-colors font-semibold text-gray-700">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span>Duties & Taxes Payable (Output GST)</span>
+                                        </div>
+                                        <span className="text-gray-900 font-bold">{formatCurrency(taxPayable)}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ASSETS COLUMN */}
+                            <div className="flex flex-col">
+                                <div className="px-6 py-4 bg-[#004f3b] text-white font-bold text-sm uppercase tracking-widest text-center flex items-center justify-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-white"></span>
+                                    ASSETS
+                                </div>
+                                <div className="divide-y divide-gray-100 flex-1">
+                                    {/* Sundry Debtors */}
+                                    <div
+                                        onClick={() => handleCardClick('SI', 'Sundry Debtors (Sales)', salesInvoicesData)}
+                                        className="flex items-center justify-between px-6 py-4 hover:bg-blue-50/30 transition-colors cursor-pointer group font-semibold text-gray-700"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Sundry Debtors (Accounts Receivable)</span>
+                                        </div>
+                                        <span className="text-gray-900 font-bold">{formatCurrency(sundryDebtors)}</span>
+                                    </div>
+
+                                    {/* Closing Stock */}
+                                    <div
+                                        onClick={() => handleCardClick('STOCK', 'Closing Stock Valuation', closingStock > 0 ? (inventoryData?.items || []) : [])}
+                                        className="flex items-center justify-between px-6 py-4 hover:bg-blue-50/30 transition-colors cursor-pointer group font-semibold text-gray-700"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Closing Stock / Inventory</span>
+                                        </div>
+                                        <span className="text-gray-900 font-bold">{formatCurrency(closingInventoryVal)}</span>
+                                    </div>
+
+                                    {/* Input Tax Credit */}
+                                    <div className="flex items-center justify-between px-6 py-4 hover:bg-blue-50/30 transition-colors font-semibold text-gray-700">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
+                                            <span>Input Tax Credit (Input GST)</span>
+                                        </div>
+                                        <span className="text-gray-900 font-bold">{formatCurrency(inputTaxCredit)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Totals Row */}
+                        <table className="w-full border-collapse text-sm border-t-2 border-gray-300">
+                            <tbody>
+                                <tr className="bg-emerald-100/80 font-bold border-b-2 border-gray-300">
+                                    <td className="px-6 py-4 text-emerald-955 font-extrabold text-sm uppercase tracking-wider w-1/4">Total Liabilities</td>
+                                    <td className="px-6 py-4 text-right text-emerald-955 font-black border-r-2 border-gray-300 text-base w-1/4">
+                                        {formatCurrency(totalLiabilities)}
+                                    </td>
+                                    <td className="px-6 py-4 text-emerald-955 font-extrabold text-sm uppercase tracking-wider w-1/4">Total Assets</td>
+                                    <td className="px-6 py-4 text-right text-emerald-955 font-black text-base w-1/4">
+                                        {formatCurrency(totalAssets)}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Interactive Report Detail Table for Balance Sheet */}
+                    {detailView && (
+                        <div className="report-table-element w-full animate-in fade-in slide-in-from-top-4 duration-500 mt-6 mb-4" id="status-section-PI">
+                            <ReportTable
+                                type={detailView.type}
+                                status={detailView.status}
+                                data={detailView.data}
+                                onClose={() => setDetailView(null)}
+                            />
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        );
+    };
+
     const renderSelectedStatusCards = () => {
         if (activeTab === 'ALL') {
             return (
@@ -1449,6 +1846,28 @@ const ReportDashboard = () => {
             return (
                 <div className="mb-2 animate-in fade-in duration-300">
                     {renderProfitLossStatement()}
+                </div>
+            );
+        }
+        if (activeTab === 'BALANCE_SHEET') {
+            if (plLoading) {
+                return (
+                    <div className="flex justify-center items-center py-20 bg-white rounded-[20px] border border-gray-100 shadow-md mb-8">
+                        <Loader />
+                    </div>
+                );
+            }
+            return (
+                <div className="mb-2 animate-in fade-in duration-300">
+                    <BalanceSheetView
+                        balanceData={balanceSheetData}
+                        fromDate={plFromDate}
+                        toDate={plToDate}
+                        onFromDateChange={setPlFromDate}
+                        onToDateChange={setPlToDate}
+                        onItemClick={(item) => handleCardClick(item.category === 'ASSET' ? 'SI' : 'PI', item.name, item.category === 'ASSET' ? salesInvoicesData : purchaseData)}
+                        loading={plLoading}
+                    />
                 </div>
             );
         }
@@ -1751,16 +2170,16 @@ const ReportDashboard = () => {
     }
 
     return (
-        <div className="flex flex-col w-full max-w-[1400px] mx-auto pb-10 px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col w-full max-w-[1400px] mx-auto pt-0 pb-8 px-4 sm:px-6 lg:px-8">
             {/* Header */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between mt-4 md:mt-6 mb-6 md:mb-8 gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between mt-1 md:mt-2 mb-4 md:mb-6 gap-4">
                 <div>
                     <h1 className="text-[28px] md:text-[35px] font-bold text-gray-900 leading-tight">Reports</h1>
                     <p className="text-[14px] md:text-[16px] text-gray-500 mt-1">Detailed financial breakdowns and analytical graphs</p>
                 </div>
 
                 {/* Custom Premium Tabs */}
-                <div className="flex max-w-full overflow-x-auto bg-gray-100/80 p-1.5 rounded-xl no-scrollbar w-full md:w-auto">
+                <div className="flex flex-wrap sm:flex-nowrap max-w-full overflow-x-auto bg-gray-100/80 p-1 md:p-1.5 rounded-xl no-scrollbar gap-1 w-full lg:w-auto">
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = activeTab === tab.id;
@@ -1772,14 +2191,14 @@ const ReportDashboard = () => {
                                     e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
                                 }}
                                 className={`
-                  relative flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 text-xs md:text-sm whitespace-nowrap font-medium rounded-lg transition-all duration-300 ease-out shrink-0
+                  relative flex items-center justify-center gap-1.5 px-3 md:px-4 py-2 text-xs md:text-xs lg:text-sm whitespace-nowrap font-medium rounded-lg transition-all duration-300 ease-out shrink-0 sm:shrink
                   ${isActive
                                         ? 'text-[#073318] bg-white shadow-sm ring-1 ring-black/5'
                                         : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'
                                     }
                 `}
                             >
-                                <Icon size={16} className={isActive ? 'text-[#10B981]' : ''} />
+                                <Icon size={15} className={isActive ? 'text-[#10B981]' : ''} />
                                 {tab.label}
                             </button>
                         );

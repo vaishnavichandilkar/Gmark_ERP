@@ -19,6 +19,8 @@ import {
   InventoryReportResponseDto,
   InventoryReportItemDto,
   InventoryReportSummaryDto,
+  BalanceSheetQueryDto,
+  BalanceSheetResponseDto,
 } from './dto/reports.dto';
 import { Prisma } from '@prisma/client';
 
@@ -1243,6 +1245,126 @@ export class ReportsService {
         page,
         limit,
         totalPages: Math.ceil(totalProducts / limit) || 1,
+      },
+    };
+  }
+
+  async getBalanceSheet(
+    userId: number,
+    query: BalanceSheetQueryDto,
+  ): Promise<BalanceSheetResponseDto> {
+    const { dateFrom, dateTo, asOfDate } = query;
+    const targetDateStr = asOfDate || dateTo || new Date().toISOString().split('T')[0];
+
+    // Fetch Profit & Loss for calculating Net Profit / Retained Earnings
+    const plData = await this.getProfitLoss(userId, { fromDate: dateFrom, toDate: dateTo });
+
+    const netProfitVal = plData?.profitLoss?.netProfit || (
+      (plData?.trading?.isGrossProfit ? (plData?.trading?.grossProfit || 0) : -(plData?.trading?.grossLoss || 0))
+      - (plData?.profitLoss?.indirectExpenses || 0)
+    );
+
+    const closingStock = plData?.trading?.closingStock ?? plData?.closingStock ?? 0;
+
+    // Fetch Gross Purchases & Taxes
+    const purchaseReport = await this.getPurchaseReport(userId);
+    const salesReport = await this.getSalesReport(userId);
+
+    const totalPurchases = purchaseReport?.grossPurchases || 0;
+    const totalPurchaseTax = purchaseReport?.totalTaxPaid || 0;
+
+    const totalSales = salesReport?.grossSales || 0;
+    const totalSalesTax = salesReport?.totalTaxCollected || 0;
+
+    // Capital & Equity
+    const capitalAccountAmt = Math.max(0, netProfitVal);
+    const reservesSurplusAmt = 0;
+
+    // Non-Current Liabilities
+    const longTermLoans = 0;
+
+    // Current Liabilities
+    const sundryCreditors = totalPurchases;
+    const bankOverdraft = 0;
+    const dutiesTaxesPayable = totalSalesTax;
+    const customerAdvances = 0;
+
+    const totalCapEquity = capitalAccountAmt + reservesSurplusAmt;
+    const totalNonCurrentLiab = longTermLoans;
+    const totalCurrentLiab = sundryCreditors + bankOverdraft + dutiesTaxesPayable + customerAdvances;
+    const totalLiabilitiesAndEquity = totalCapEquity + totalNonCurrentLiab + totalCurrentLiab;
+
+    // Fixed Assets
+    const tangibleAssets = 0;
+    const intangibleAssets = 0;
+
+    // Current Assets
+    const sundryDebtors = totalSales;
+    const closingInventoryVal = closingStock;
+    const inputTaxCredit = totalPurchaseTax;
+    const liquidFunds = Math.max(0, totalSales - totalPurchases);
+    const supplierAdvances = 0;
+
+    const totalNonCurrentAssets = tangibleAssets + intangibleAssets;
+    const totalCurrentAssets = sundryDebtors + closingInventoryVal + inputTaxCredit + liquidFunds + supplierAdvances;
+    const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
+
+    const is_balanced = totalAssets === totalLiabilitiesAndEquity;
+    const discrepancy_amount = Math.abs(totalAssets - totalLiabilitiesAndEquity);
+
+    return {
+      asOfDate: targetDateStr,
+      is_balanced,
+      discrepancy_amount,
+      liabilities_and_equity: {
+        total: totalLiabilitiesAndEquity,
+        capital_equity: {
+          title: 'Capital & Equity',
+          total: totalCapEquity,
+          items: [
+            { id: 'cap_1', name: 'Capital Account (Net Earnings)', category: 'EQUITY', amount: capitalAccountAmt },
+            { id: 'cap_2', name: 'Reserves & Surplus', category: 'EQUITY', amount: reservesSurplusAmt },
+          ],
+        },
+        non_current_liabilities: {
+          title: 'Non-Current Liabilities',
+          total: totalNonCurrentLiab,
+          items: [
+            { id: 'ncl_1', name: 'Long-Term Loans & Borrowings', category: 'LIABILITY', amount: longTermLoans },
+          ],
+        },
+        current_liabilities: {
+          title: 'Current Liabilities',
+          total: totalCurrentLiab,
+          items: [
+            { id: 'cl_1', name: 'Sundry Creditors (Accounts Payable)', category: 'LIABILITY', amount: sundryCreditors },
+            { id: 'cl_2', name: 'Bank Overdraft / Cash Credit (C.C.)', category: 'LIABILITY', amount: bankOverdraft },
+            { id: 'cl_3', name: 'Duties & Taxes Payable (Output GST)', category: 'LIABILITY', amount: dutiesTaxesPayable },
+            { id: 'cl_4', name: 'Customer Advances', category: 'LIABILITY', amount: customerAdvances },
+          ],
+        },
+      },
+      assets: {
+        total: totalAssets,
+        non_current_assets: {
+          title: 'Non-Current / Fixed Assets',
+          total: totalNonCurrentAssets,
+          items: [
+            { id: 'nca_1', name: 'Tangible Assets (Machinery, Vehicles)', category: 'ASSET', amount: tangibleAssets },
+            { id: 'nca_2', name: 'Intangible Assets (Patents, Software)', category: 'ASSET', amount: intangibleAssets },
+          ],
+        },
+        current_assets: {
+          title: 'Current Assets',
+          total: totalCurrentAssets,
+          items: [
+            { id: 'ca_1', name: 'Sundry Debtors (Accounts Receivable)', category: 'ASSET', amount: sundryDebtors },
+            { id: 'ca_2', name: 'Closing Stock / Inventory', category: 'ASSET', amount: closingInventoryVal },
+            { id: 'ca_3', name: 'Input Tax Credit (Input GST)', category: 'ASSET', amount: inputTaxCredit },
+            { id: 'ca_4', name: 'Liquid Funds (Cash & Bank Balance)', category: 'ASSET', amount: liquidFunds },
+            { id: 'ca_5', name: 'Supplier Advances / Prepaid Expenses', category: 'ASSET', amount: supplierAdvances },
+          ],
+        },
       },
     };
   }

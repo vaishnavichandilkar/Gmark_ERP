@@ -666,7 +666,7 @@ const ReportTable = ({ data, type, status, onClose }) => {
                             <span className="truncate">
                                 {selectedEntity
                                     ? `${selectedEntity} - ${type} Invoices`
-                                    : `${status || ''} ${type} ${isSummaryView ? (isSupplierType ? 'Supplier Breakdown' : 'Customer Breakdown') : 'Records'}`
+                                    : (status || `${type || ''} ${isSummaryView ? (isSupplierType ? 'Supplier Breakdown' : 'Customer Breakdown') : 'Records'}`)
                                 }
                             </span>
                         </h2>
