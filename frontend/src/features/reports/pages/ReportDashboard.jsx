@@ -1154,9 +1154,6 @@ const ReportDashboard = () => {
                 <CardHeader title="Trading & Profit & Loss Account" />
                 <CardContent className="p-0 md:p-8 bg-white">
                     {/* Period Filter Bar */}
-<<<<<<< HEAD
-                    {renderPeriodFilterBar()}
-=======
                     <div className="bg-gray-50/80 p-4 md:p-6 rounded-[16px] border border-gray-200/60 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="flex flex-wrap items-center justify-between w-full gap-3">
                             <div className="flex items-center gap-2">
@@ -1305,7 +1302,6 @@ const ReportDashboard = () => {
                             </div>
                         </div>
                     </div>
->>>>>>> acf9d243505001043e4d121218e6631a11bdea06
 
                     <div ref={plReportRef} className="w-full border border-gray-200/60 rounded-[16px] shadow-sm bg-gray-50/10 overflow-hidden bg-white p-2">
                         {/* 2-Column Trading Account Layout */}
