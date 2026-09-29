@@ -207,29 +207,40 @@ const InvoiceForm = ({
                 <div className="space-y-2">
                     <label className="text-[14px] font-semibold text-[#374151]">{t('modules:so_number_optional')}</label>
                     <div className="relative">
-                        <select
-                            className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-14 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
-                            value={formData.soId || ""}
-                            onChange={(e) => handleSOChange(e.target.value)}
-                        >
-                            <option value="">{t('modules:enter_so_number')}</option>
-                            {sos.map(p => <option key={p.id} value={p.id}>{p.soNumber}</option>)}
-                            {formData.soNumber && !sos.find(s => String(s.id) === String(formData.soId)) && (
-                                <option value={formData.soId}>{formData.soNumber}</option>
-                            )}
-                        </select>
-                        {formData.soId && (
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSOChange("");
-                                }}
-                                className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors z-10"
-                            >
-                                <X size={16} />
-                            </button>
-                        )}
+                        {(() => {
+                            const selectedSoValue = formData.soId
+                                ? String(formData.soId)
+                                : (formData.soNumber
+                                    ? ((sos || []).find(s => String(s.soNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === String(formData.soNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase())?.id?.toString() || formData.soNumber)
+                                    : "");
+                            return (
+                                <>
+                                    <select
+                                        className="w-full h-[48px] bg-white border border-[#E5E7EB] rounded-[10px] px-4 pr-14 text-[14px] font-bold outline-none focus:border-[#073318] appearance-none"
+                                        value={selectedSoValue}
+                                        onChange={(e) => handleSOChange(e.target.value)}
+                                    >
+                                        <option value="">{t('modules:enter_so_number')}</option>
+                                        {sos.map(p => <option key={p.id} value={String(p.id)}>{p.soNumber}</option>)}
+                                        {formData.soNumber && !sos.some(s => String(s.id) === String(formData.soId) || String(s.soNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === String(formData.soNumber).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()) && (
+                                            <option value={selectedSoValue}>{formData.soNumber}</option>
+                                        )}
+                                    </select>
+                                    {(formData.soId || formData.soNumber) && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleSOChange("");
+                                            }}
+                                            className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors z-10"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    )}
+                                </>
+                            );
+                        })()}
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                     </div>
                 </div>

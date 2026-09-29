@@ -339,6 +339,9 @@ export interface BalanceSheetResponseDto {
   asOfDate: string;
   is_balanced: boolean;
   discrepancy_amount: number;
+  net_profit?: number;
+  net_loss?: number;
+  is_net_profit?: boolean;
   liabilities_and_equity: {
     total: number;
     capital_equity: BalanceSheetSectionDto;

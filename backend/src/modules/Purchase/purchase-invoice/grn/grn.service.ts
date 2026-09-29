@@ -5,7 +5,7 @@ import { CreateGrnDto, UpdateGrnDto } from './dto/grn.dto';
 import { PurchaseOrderService } from '../../purchase-order/purchase-order.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
-import { formatDate } from '../../../../utils/dateFormatter';
+import { formatDate, parseDDMMYYYY } from '../../../../utils/dateFormatter';
 import { generateGRNSampleExcel } from '../../../../common/utils/procurement-bulk-import.processor';
 
 import { ImportValidationService } from '../../../../common/services/import-validation.service';
@@ -92,7 +92,7 @@ export class GrnService implements OnModuleInit {
 
   private async calculateGrnTotals(dto: CreateGrnDto, userId: number, existingId?: number) {
     const bookingDate = new Date(); // Enforced (Condition 1 & 2)
-    const grnDate = new Date(dto.grnDate || new Date());
+    const grnDate = parseDDMMYYYY(dto.grnDate) || new Date();
     const today = new Date();
     today.setHours(23, 59, 59, 999);
 
@@ -412,7 +412,7 @@ export class GrnService implements OnModuleInit {
         const grn = await tx.grn.create({
           data: {
             grnNumber,
-            grnDate: createDto.grnDate ? new Date(createDto.grnDate) : new Date(),
+            grnDate: parseDDMMYYYY(createDto.grnDate) || new Date(),
             bookingDate: totals.bookingDate,
             supplierName: createDto.supplierName,
             address: createDto.address,

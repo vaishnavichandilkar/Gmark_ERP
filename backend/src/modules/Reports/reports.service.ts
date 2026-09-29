@@ -1259,10 +1259,10 @@ export class ReportsService {
     // Fetch Profit & Loss for calculating Net Profit / Retained Earnings
     const plData = await this.getProfitLoss(userId, { fromDate: dateFrom, toDate: dateTo });
 
-    const netProfitVal = plData?.profitLoss?.netProfit || (
-      (plData?.trading?.isGrossProfit ? (plData?.trading?.grossProfit || 0) : -(plData?.trading?.grossLoss || 0))
-      - (plData?.profitLoss?.indirectExpenses || 0)
-    );
+    const isNetProfit = plData?.profitLoss?.isNetProfit ?? ((plData?.profitLoss?.netProfit || plData?.netProfit || 0) >= (plData?.profitLoss?.netLoss || plData?.netLoss || 0));
+    const rawNetProfit = plData?.profitLoss?.netProfit ?? plData?.netProfit ?? 0;
+    const rawNetLoss = plData?.profitLoss?.netLoss ?? plData?.netLoss ?? 0;
+    const periodNetResult = isNetProfit ? rawNetProfit : -rawNetLoss;
 
     const closingStock = plData?.trading?.closingStock ?? plData?.closingStock ?? 0;
 
@@ -1276,10 +1276,6 @@ export class ReportsService {
     const totalSales = salesReport?.grossSales || 0;
     const totalSalesTax = salesReport?.totalTaxCollected || 0;
 
-    // Capital & Equity
-    const capitalAccountAmt = Math.max(0, netProfitVal);
-    const reservesSurplusAmt = 0;
-
     // Non-Current Liabilities
     const longTermLoans = 0;
 
@@ -1289,10 +1285,8 @@ export class ReportsService {
     const dutiesTaxesPayable = totalSalesTax;
     const customerAdvances = 0;
 
-    const totalCapEquity = capitalAccountAmt + reservesSurplusAmt;
     const totalNonCurrentLiab = longTermLoans;
     const totalCurrentLiab = sundryCreditors + bankOverdraft + dutiesTaxesPayable + customerAdvances;
-    const totalLiabilitiesAndEquity = totalCapEquity + totalNonCurrentLiab + totalCurrentLiab;
 
     // Fixed Assets
     const tangibleAssets = 0;
@@ -1302,28 +1296,61 @@ export class ReportsService {
     const sundryDebtors = totalSales;
     const closingInventoryVal = closingStock;
     const inputTaxCredit = totalPurchaseTax;
-    const liquidFunds = Math.max(0, totalSales - totalPurchases);
+
+    const bankCashAccounts = await this.prisma.accountMaster.findMany({
+      where: {
+        userId,
+        groupName: { hasSome: ['Bank & Cash', 'BANK & CASH', 'bank & cash', 'BANK', 'CASH', 'Bank', 'Cash'] },
+      },
+      select: { customerOpeningBalance: true, supplierOpeningBalance: true },
+    });
+    const bankCashOpBal = bankCashAccounts.reduce(
+      (sum, a) => sum + Number(a.customerOpeningBalance || a.supplierOpeningBalance || 0),
+      0,
+    );
+    const liquidFunds = bankCashOpBal > 0 ? bankCashOpBal : Math.max(0, totalSales - totalPurchases);
     const supplierAdvances = 0;
 
     const totalNonCurrentAssets = tangibleAssets + intangibleAssets;
     const totalCurrentAssets = sundryDebtors + closingInventoryVal + inputTaxCredit + liquidFunds + supplierAdvances;
-    const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
+    const totalAssets = Number((totalNonCurrentAssets + totalCurrentAssets).toFixed(2));
 
-    const is_balanced = totalAssets === totalLiabilitiesAndEquity;
-    const discrepancy_amount = Math.abs(totalAssets - totalLiabilitiesAndEquity);
+    // Capital & Equity
+    const capitalAccounts = await this.prisma.accountMaster.findMany({
+      where: {
+        userId,
+        groupName: { hasSome: ['Capital', 'Capital Account', 'CAPITAL', 'Capital Accounts', 'capital account', 'capital accounts', 'capital', 'Share Capital', 'Share capital'] },
+      },
+      select: { customerOpeningBalance: true, supplierOpeningBalance: true },
+    });
+    
+    const capitalAccountAmt = capitalAccounts.reduce(
+      (sum, a) => sum + Number(a.customerOpeningBalance || a.supplierOpeningBalance || 0),
+      0
+    );
+    
+    const totalCapEquity = Number((capitalAccountAmt + periodNetResult).toFixed(2));
+
+    const totalLiabilitiesAndEquity = Number((totalCapEquity + totalNonCurrentLiab + totalCurrentLiab).toFixed(2));
+
+    const is_balanced = Math.abs(totalAssets - totalLiabilitiesAndEquity) < 0.05;
+    const discrepancy_amount = Number(Math.abs(totalAssets - totalLiabilitiesAndEquity).toFixed(2));
 
     return {
       asOfDate: targetDateStr,
       is_balanced,
       discrepancy_amount,
+      net_profit: isNetProfit ? Math.abs(periodNetResult) : 0,
+      net_loss: !isNetProfit ? Math.abs(periodNetResult) : 0,
+      is_net_profit: isNetProfit,
       liabilities_and_equity: {
         total: totalLiabilitiesAndEquity,
         capital_equity: {
           title: 'Capital & Equity',
           total: totalCapEquity,
           items: [
-            { id: 'cap_1', name: 'Capital Account (Net Earnings)', category: 'EQUITY', amount: capitalAccountAmt },
-            { id: 'cap_2', name: 'Reserves & Surplus', category: 'EQUITY', amount: reservesSurplusAmt },
+            { id: 'cap_1', name: 'Capital Account (Opening Balance)', category: 'EQUITY', amount: Math.max(0, capitalAccountAmt) },
+            { id: 'cap_2', name: isNetProfit ? 'Profit & Loss A/c (Net Profit)' : 'Profit & Loss A/c (Net Loss)', category: 'EQUITY', amount: periodNetResult },
           ],
         },
         non_current_liabilities: {

@@ -59,16 +59,6 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
             const totalPO = parseFloat(field === 'totalPoQty' ? finalValue : item.totalPoQty) || 0;
             const receivedPO = parseFloat(item.receivedPoQty) || 0;
 
-            const maxAllowed = totalPO - receivedPO;
-            if (totalPO > 0 && qty > maxAllowed) {
-                toast.error(`Quantity cannot exceed remaining PO quantity of ${maxAllowed}`);
-                qty = Math.max(0, maxAllowed);
-                if (field === 'quantity') {
-                    finalValue = qty;
-                }
-                item.quantity = qty;
-            }
-
             const baseAmount = qty * rate;
 
             let discPct = parseFloat(field === 'discountPercent' ? finalValue : item.discountPercent) || 0;
@@ -135,13 +125,6 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
         }
 
         let qty = 1;
-        if (poQty > 0) {
-            const maxAllowed = poQty - receivedCount;
-            if (qty > maxAllowed) {
-                qty = Math.max(0, maxAllowed);
-                toast.error(`Quantity adjusted to remaining PO quantity of ${qty}`);
-            }
-        }
 
         const baseAmount = qty * rate;
         const isApplicable = typeof gstType === 'object' ? gstType?.gstType !== 'NONE' : gstType !== 'NONE';
@@ -285,32 +268,25 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                 <table className="w-full min-w-[1800px] border-collapse">
                     <thead>
                         <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                            <th className="px-4 py-4 w-[50px] text-center text-[13px] font-bold text-[#4B5563]">#</th>
-                            <th className="px-4 py-4 w-[60px] text-center text-[13px] font-bold text-[#4B5563] border-l border-[#F3F4F6]">{t('common:select', 'Select')}</th>
-                            <th className="px-4 py-4 w-[160px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:product_code', 'Product Code')}</th>
-                            <th className="px-4 py-4 w-[350px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:product_name', 'Product Name')}</th>
-                            <th className="px-4 py-4 w-[300px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:print_desc', 'Print Description')}</th>
-                            {isGRN && (
-                                <>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:total_po_qty', 'total po qty')}</th>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:previous_po_qty', 'previous po qty')}</th>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:received_qty', 'received qty')}</th>
-                                    <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:remaining_qty', 'remaining qty')}</th>
-                                </>
-                            )}
-                            {!isGRN && (
-                                <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:quantity', 'Qty')}</th>
-                            )}
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:rate', 'Rate')}</th>
-                            <th className="px-4 py-4 w-[120px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:uom', 'UOM')}</th>
-                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:discount_amount', 'Discount (₹)')}</th>
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:discount_percent', 'Discount (%)')}</th>
-                            <th className="px-4 py-4 w-[140px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:hsn_code', 'HSN Code')}</th>
-                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:tax_percent', 'Tax (%)')}</th>
-                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:bef_tax_amount', 'Bef. Tax Amount')}</th>
-                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:tax_amount', 'Tax Amount')}</th>
-                            <th className="px-4 py-4 w-[150px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:amount', 'Amount')}</th>
-                            <th className="px-4 py-4 w-[80px] text-center text-[13px] font-bold text-gray-500 border-l border-[#F3F4F6] sticky right-0 bg-white z-10">{t('common:action', 'Action')}</th>
+                            <th className="px-4 py-4 w-[50px] text-center text-[13px] font-bold text-[#4B5563] uppercase">#</th>
+                            <th className="px-4 py-4 w-[60px] text-center text-[13px] font-bold text-[#4B5563] border-l border-[#F3F4F6] uppercase">{t('common:select', 'Select')}</th>
+                            <th className="px-4 py-4 w-[160px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:product_code', 'Product Code')}</th>
+                            <th className="px-4 py-4 w-[350px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:product_name', 'Product Name')}</th>
+                            <th className="px-4 py-4 w-[300px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:print_desc', 'Print Description')}</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:total_po_qty', 'TOTAL PO QTY')}</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:previous_po_qty', 'PREVIOUS PO QTY')}</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:received_qty', 'RECEIVED QTY')}</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:remaining_qty', 'REMAINING QTY')}</th>
+                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:rate', 'Rate')}</th>
+                            <th className="px-4 py-4 w-[120px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:uom', 'UOM')}</th>
+                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:discount_amount', 'Discount (₹)')}</th>
+                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:discount_percent', 'Discount (%)')}</th>
+                            <th className="px-4 py-4 w-[140px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:hsn_code', 'HSN Code')}</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:tax_percent', 'Tax (%)')}</th>
+                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:bef_tax_amount', 'Bef. Tax Amount')}</th>
+                            <th className="px-4 py-4 w-[140px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:tax_amount', 'Tax Amount')}</th>
+                            <th className="px-4 py-4 w-[150px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6] uppercase">{t('modules:amount', 'Amount')}</th>
+                            <th className="px-4 py-4 w-[80px] text-center text-[13px] font-bold text-gray-500 border-l border-[#F3F4F6] sticky right-0 bg-white z-10 uppercase">{t('common:action', 'Action')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -358,45 +334,30 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                         />
                                     </td>
 
-                                    {isGRN && (
-                                        <>
-                                            <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                                <input
-                                                    type="number"
-                                                    value={item.totalPoQty || 0}
-                                                    readOnly
-                                                    className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed"
-                                                />
-                                            </td>
-                                            <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                                <input type="text" value={item.receivedPoQty || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed" />
-                                            </td>
-                                            <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    value={item.quantity === '' ? '' : (item.quantity ?? 0)}
-                                                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                                    className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
-                                                />
-                                            </td>
-                                            <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                                <input type="text" value={item.remainingQty || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-emerald-700 outline-none" />
-                                            </td>
-                                        </>
-                                    )}
-                                    {!isGRN && (
-                                        <td className="px-2 py-2 border-l border-[#F3F4F6]">
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                value={item.quantity === 0 ? '' : item.quantity}
-                                                onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                                readOnly={isGrnSelected || isPoSelected}
-                                                className={`w-full h-[36px] border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none transition-all shadow-sm ${(isGrnSelected || isPoSelected) ? 'bg-gray-50 text-gray-500 cursor-not-allowed border-[#E5E7EB]' : 'bg-white text-[#111827] focus:border-[#073318] border-[#E5E7EB]'} ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : ''}`}
-                                            />
-                                        </td>
-                                    )}
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                        <input
+                                            type="number"
+                                            value={item.totalPoQty || 0}
+                                            readOnly
+                                            className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed"
+                                        />
+                                    </td>
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                        <input type="text" value={item.receivedPoQty || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed" />
+                                    </td>
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={item.quantity === '' ? '' : (item.quantity ?? 0)}
+                                            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                                            readOnly={false}
+                                            className={`w-full h-[36px] bg-white text-[#111827] focus:border-[#073318] border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
+                                        />
+                                    </td>
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                        <input type="text" value={item.remainingQty || 0} readOnly className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-emerald-700 outline-none cursor-not-allowed" />
+                                    </td>
 
                                     {/* Rate */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
@@ -521,7 +482,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                                 </td>
                                                 <td colSpan={2} className="px-4 py-3 border-l border-white/10 font-mono text-[13px] font-black text-white">{p.product_code}</td>
                                                 <td className="px-4 py-3 border-l border-white/10 font-black uppercase text-[14px] tracking-tight text-white">{p.product_name}</td>
-                                                <td colSpan={11} className="px-4 py-3 border-l border-white/10 text-center italic text-[11px] font-bold text-white/90">
+                                                <td colSpan={13} className="px-4 py-3 border-l border-white/10 text-center italic text-[11px] font-bold text-white/90">
                                                     {t('modules:select_product_to_add', 'Select this product to add to the list')}
                                                 </td>
                                                 <td className="px-4 py-3 border-l border-white/10 text-right font-black text-white">₹{p.purchaseRate || 0}</td>
@@ -529,7 +490,7 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                                             </tr>
                                         ))}
                                         <tr className="bg-white border-t border-gray-100 text-center">
-                                            <td colSpan={18} className="px-4 py-4 bg-emerald-50/10">
+                                            <td colSpan={19} className="px-4 py-4 bg-emerald-50/10">
                                                 <button
                                                     onClick={handleAddNewProduct}
                                                     className="inline-flex h-[40px] px-8 bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all items-center gap-3 shadow-lg"
@@ -550,21 +511,12 @@ const GRNTable = ({ items, setItems, products, errors, handleAddNewProduct, gstT
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
-                            {isGRN && (
-                                <>
-                                    <td className="border-l border-[#F3F4F6]"></td>
-                                    <td className="border-l border-[#F3F4F6]"></td>
-                                    <td className="px-4 py-4 text-right text-[14px] font-black text-[#111827] border-l border-[#F3F4F6]">
-                                        {items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0).toFixed(2)}
-                                    </td>
-                                    <td className="border-l border-[#F3F4F6]"></td>
-                                </>
-                            )}
-                            {!isGRN && (
-                                <td className="px-4 py-4 text-right text-[14px] font-black text-[#111827] border-l border-[#F3F4F6]">
-                                    {items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0).toFixed(2)}
-                                </td>
-                            )}
+                            <td className="border-l border-[#F3F4F6]"></td>
+                            <td className="border-l border-[#F3F4F6]"></td>
+                            <td className="px-4 py-4 text-right text-[14px] font-black text-[#111827] border-l border-[#F3F4F6]">
+                                {items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0).toFixed(2)}
+                            </td>
+                            <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>

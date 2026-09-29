@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import html2pdf from 'html2pdf.js';
 import Card, { CardContent, CardHeader } from '../../../components/common/Card';
 import masterService from '../../../services/masterService';
+import ledgerService from '../../../services/ledgerService';
 import { 
     Download, FileSpreadsheet, ChevronDown, ChevronRight, 
     CheckCircle2, AlertTriangle, Plus, Minus, Maximize2, Minimize2, Upload, RotateCw,
@@ -39,22 +40,44 @@ const BalanceSheetView = ({
     toDate, 
     onFromDateChange, 
     onToDateChange, 
+    supplierBreakdown = [],
+    customerBreakdown = [],
     onItemClick,
     loading = false 
 }) => {
     const [expandedSections, setExpandedSections] = useState({
-        shareholders_funds: true,
-        non_current_liabilities: true,
-        current_liabilities: true,
-        non_current_assets: true,
-        fixed_assets: true,
-        current_assets: true,
+        bank_cash: false,
+        shareholders_funds: false,
+        non_current_liabilities: false,
+        current_liabilities: false,
+        non_current_assets: false,
+        fixed_assets: false,
+        current_assets: false,
     });
 
-    const [isAllExpanded, setIsAllExpanded] = useState(true);
+    const [isAllExpanded, setIsAllExpanded] = useState(false);
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [groupMasterTree, setGroupMasterTree] = useState(null);
+    const [bankCashMap, setBankCashMap] = useState({});
+    const [trueDebtors, setTrueDebtors] = useState([]);
+    const [trueCreditors, setTrueCreditors] = useState([]);
     const reportRef = useRef(null);
+
+    const supplierInvoiceMap = React.useMemo(() => {
+        const map = {};
+        (supplierBreakdown || []).forEach(s => {
+            if (s.name) map[s.name.trim().toLowerCase()] = Number(s.basicAmount || 0);
+        });
+        return map;
+    }, [supplierBreakdown]);
+
+    const customerInvoiceMap = React.useMemo(() => {
+        const map = {};
+        (customerBreakdown || []).forEach(c => {
+            if (c.name) map[c.name.trim().toLowerCase()] = Number(c.basicAmount || 0);
+        });
+        return map;
+    }, [customerBreakdown]);
 
     useEffect(() => {
         let isMounted = true;
@@ -68,9 +91,54 @@ const BalanceSheetView = ({
                 console.error("Group Master fetch error:", e);
             }
         };
+        const fetchBankCash = async () => {
+            try {
+                const params = {};
+                if (fromDate) params.startDate = fromDate;
+                if (toDate) params.endDate = toDate;
+                
+                const [bankRes, cashRes] = await Promise.all([
+                    ledgerService.getBankCash({ ...params, group: 'Bank' }),
+                    ledgerService.getBankCash({ ...params, group: 'Cash' })
+                ]);
+                
+                if (isMounted) {
+                    const map = {};
+                    if (bankRes?.data) {
+                        bankRes.data.forEach(b => map[b.accountName.trim().toLowerCase()] = { amount: Math.abs(b.closingBalance), id: b.id });
+                    }
+                    if (cashRes?.data) {
+                        cashRes.data.forEach(c => map[c.accountName.trim().toLowerCase()] = { amount: Math.abs(c.closingBalance), id: c.id });
+                    }
+                    setBankCashMap(map);
+                }
+            } catch (e) {
+                console.error("Bank/Cash fetch error:", e);
+            }
+        };
+        const fetchTrueBalances = async () => {
+            try {
+                const params = {};
+                if (fromDate) params.startDate = fromDate;
+                if (toDate) params.endDate = toDate;
+                const [debRes, credRes] = await Promise.all([
+                    ledgerService.getDebtors(params),
+                    ledgerService.getCreditors(params)
+                ]);
+                if (isMounted) {
+                    setTrueDebtors(debRes?.data || []);
+                    setTrueCreditors(credRes?.data || []);
+                }
+            } catch (e) {
+                console.error("True Balances fetch error:", e);
+            }
+        };
+
         fetchGroups();
+        fetchBankCash();
+        fetchTrueBalances();
         return () => { isMounted = false; };
-    }, []);
+    }, [fromDate, toDate]);
 
     const toggleSection = (key) => {
         setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -92,7 +160,8 @@ const BalanceSheetView = ({
     // Financial values resolution
     const shareCapital = balanceData?.liabilities_and_equity?.capital_equity?.items?.find(i => i.id === 'cap_1')?.amount || 0;
     const reservesSurplus = balanceData?.liabilities_and_equity?.capital_equity?.items?.find(i => i.id === 'cap_2')?.amount || 0;
-    const totalShareholdersFunds = (shareCapital + reservesSurplus) || (balanceData?.liabilities_and_equity?.capital_equity?.total || 0);
+    // Exclude Net Profit/Loss (reservesSurplus/cap_2) from totalShareholdersFunds so it can be explicitly shown at the bottom
+    const totalShareholdersFunds = shareCapital;
 
     const longTermBorrowings = balanceData?.liabilities_and_equity?.non_current_liabilities?.items?.find(i => i.id === 'ncl_1')?.amount || 0;
     const longTermProvisions = 0;
@@ -124,21 +193,62 @@ const BalanceSheetView = ({
 
     const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
 
-    const netProfitVal = balanceData?.net_profit ?? balanceData?.netProfit ?? (totalAssets - totalEquityAndLiabilities);
-    const hasNetLoss = totalAssets < totalEquityAndLiabilities;
-    const diffAmount = Math.abs(totalAssets - totalEquityAndLiabilities);
-    const grandTotal = Math.max(totalAssets, totalEquityAndLiabilities);
-    const netWorth = totalShareholdersFunds + (hasNetLoss ? -diffAmount : diffAmount);
+    const isNetProfitFromAPI = balanceData?.is_net_profit !== undefined ? balanceData.is_net_profit : null;
+    const netLossAmt = balanceData?.net_loss ?? 0;
+    const netProfitAmt = balanceData?.net_profit ?? 0;
+
+    const hasNetLoss = isNetProfitFromAPI !== null ? !isNetProfitFromAPI : (totalAssets < totalEquityAndLiabilities);
+    
+    // Always fetch PNL directly from API values
+    const pnlDisplayAmount = isNetProfitFromAPI !== null ? (hasNetLoss ? netLossAmt : netProfitAmt) : Math.abs(totalAssets - totalEquityAndLiabilities);
+
+    const diffAmount = pnlDisplayAmount;
+    // For balancing, if Net Loss, we add to Assets side. If Net Profit, we add to Liabilities side.
+    const grandTotal = hasNetLoss ? (totalAssets + pnlDisplayAmount) : (totalEquityAndLiabilities + pnlDisplayAmount);
+    
+    const netWorth = shareCapital + reservesSurplus;
 
     const isBalanced = balanceData?.is_balanced !== undefined ? balanceData.is_balanced : true;
 
-    // Helper to compute node balance dynamically from balanceData or opening_balance
-    const getNodeBalance = (node) => {
-        const name = (node.group_name || node.subgroup_name || node.name || '').trim().toLowerCase();
-        
+    // Helper to compute node balance dynamically from balanceData, breakdown maps, or opening_balance
+    const getNodeBalance = (node, isUnderDebtors = false, isUnderCreditors = false) => {
+        if (node.isCalculated) {
+            return node.amount || 0;
+        }
+
+        const rawName = node.group_name || node.subgroup_name || node.name || '';
+        const name = rawName.trim().toLowerCase();
+
+        const localIsDebtor = isUnderDebtors || name.includes('customer') || name.includes('debtor') || name.includes('trade receivable');
+        const localIsCreditor = isUnderCreditors || name.includes('supplier') || name.includes('creditor') || name.includes('trade payable');
+
+        // 1. Check if node matches a specific account in breakdown maps (suppliers / customers)
+        if (localIsCreditor && supplierInvoiceMap[name] !== undefined) {
+            return supplierInvoiceMap[name];
+        }
+        if (localIsDebtor && customerInvoiceMap[name] !== undefined) {
+            return customerInvoiceMap[name];
+        }
+        if (bankCashMap[name] !== undefined) {
+            return bankCashMap[name].amount;
+        }
+
+        // 2. Check if node has children: sum of children takes precedence for parent groups!
+        const children = node.children || node.sub_groups || node.sub_sub_groups || node.sub_sub_sub_groups || [];
+        if (children && children.length > 0) {
+            const childrenSum = children.reduce((sum, child) => sum + getNodeBalance(child, localIsDebtor, localIsCreditor), 0);
+            if (childrenSum > 0) return childrenSum;
+        }
+
+        // 3. Category / Sub-Group level fallbacks from balanceData
         if (name.includes('supplier') || name.includes('trade payable') || name.includes('creditor')) return tradePayables;
         if (name.includes('customer') || name.includes('trade receivable') || name.includes('debtor')) return tradeReceivables;
-        if (name.includes('bank') || name.includes('cash')) return cashAndCashEquivalents;
+        
+        // Exact subgroup match for Bank & Cash (do NOT match individual child accounts like 'Cash' or 'HDFC Bank')
+        if (name === 'bank & cash' || name === 'bank & cash accounts' || name === 'cash & bank' || name === 'bank and cash') {
+            return cashAndCashEquivalents;
+        }
+
         if (name.includes('inventor')) return inventories;
         if (name.includes('fixed asset')) return totalFixedAssets;
         if (name.includes('short term borrowing') || name.includes('short-term borrowing')) return shortTermBorrowings;
@@ -146,33 +256,78 @@ const BalanceSheetView = ({
         if (name.includes('other current liab')) return otherCurrentLiabilities;
         if (name.includes('short term loan') || name.includes('short-term loan')) return shortTermLoansAdvances;
         if (name.includes('other current asset')) return otherCurrentAssets;
-        if (name.includes('share capital')) return shareCapital;
-        if (name.includes('reserves')) return reservesSurplus;
+        if (name === 'capital' || name.includes('share capital') || name.includes('capital account')) return shareCapital;
+        if (name.includes('reserves')) return 0; // Excluded from group master sums to show at bottom
         if (name.includes('shareholder')) return totalShareholdersFunds;
 
+        // 4. Fallback to node.opening_balance if available
         if (node.opening_balance !== null && node.opening_balance !== undefined && !isNaN(node.opening_balance)) {
             return Number(node.opening_balance);
-        }
-
-        const children = node.children || node.sub_groups || node.sub_sub_groups || node.sub_sub_sub_groups || [];
-        if (children.length > 0) {
-            return children.reduce((sum, child) => sum + getNodeBalance(child), 0);
         }
 
         return 0;
     };
 
+    const sortCurrentAssetsSubgroups = (nodes) => {
+        if (!nodes || nodes.length === 0) return [];
+
+        const isBankCash = (node) => {
+            const name = (node.group_name || node.subgroup_name || node.name || '').toLowerCase();
+            return name.includes('bank') || name.includes('cash');
+        };
+
+        const isInventories = (node) => {
+            const name = (node.group_name || node.subgroup_name || node.name || '').toLowerCase();
+            return name.includes('inventor') || name.includes('stock');
+        };
+
+        const isCustomers = (node) => {
+            const name = (node.group_name || node.subgroup_name || node.name || '').toLowerCase();
+            return name.includes('customer') || name.includes('debtor') || name.includes('trade receivable');
+        };
+
+        const getRank = (node) => {
+            if (isBankCash(node)) return 1;
+            if (isInventories(node)) return 2;
+            if (isCustomers(node)) return 3;
+            return 4;
+        };
+
+        return [...nodes].sort((a, b) => getRank(a) - getRank(b));
+    };
+
     // Recursive renderer for dynamic Group Master nodes
-    const renderDynamicGroupNodes = (nodes, level = 1, accentColor = 'emerald') => {
+    const renderDynamicGroupNodes = (nodes, level = 1, accentColor = 'emerald', isDebtorGroup = false, isCreditorGroup = false) => {
         if (!nodes || nodes.length === 0) return null;
 
-        return nodes.map((node, index) => {
+        const processedNodes = nodes.map(node => {
+            const rawName = node.group_name || node.subgroup_name || node.name || '';
+            const name = rawName.trim().toLowerCase();
+            const children = node.children || node.sub_groups || node.sub_sub_groups || node.sub_sub_sub_groups || [];
+            
+            if (name.includes('current asset') && children.length > 0) {
+                const sortedChildren = sortCurrentAssetsSubgroups(children);
+                return { 
+                    ...node, 
+                    children: sortedChildren, 
+                    sub_groups: sortedChildren, 
+                    sub_sub_groups: sortedChildren 
+                };
+            }
+            return node;
+        });
+
+        return processedNodes.map((node, index) => {
             const rawName = node.group_name || node.subgroup_name || node.name || `Group ${index}`;
             const nodeId = node.id ? String(node.id) : rawName;
             const isExpanded = expandedSections[nodeId] !== undefined ? expandedSections[nodeId] : isAllExpanded;
             const children = node.children || node.sub_groups || node.sub_sub_groups || node.sub_sub_sub_groups || [];
             const hasChildren = children.length > 0;
-            const nodeAmount = getNodeBalance(node);
+            
+            const isUnderDebtors = isDebtorGroup || name.includes('customer') || name.includes('debtor') || name.includes('trade receivable');
+            const isUnderCreditors = isCreditorGroup || name.includes('supplier') || name.includes('creditor') || name.includes('trade payable');
+
+            const nodeAmount = getNodeBalance(node, isUnderDebtors, isUnderCreditors);
 
             const isLevel1 = level === 1;
             const indentClass = level === 1 ? 'pl-4 md:pl-6' : level === 2 ? 'pl-8 md:pl-10' : level === 3 ? 'pl-12 md:pl-14' : 'pl-16 md:pl-20';
@@ -184,10 +339,18 @@ const BalanceSheetView = ({
                             if (hasChildren) {
                                 toggleSection(nodeId);
                             } else if (onItemClick) {
+                                let overrideId = node.id;
+                                if (bankCashMap[rawName.trim().toLowerCase()]?.id) {
+                                    overrideId = `acc_${bankCashMap[rawName.trim().toLowerCase()].id}`;
+                                }
                                 onItemClick({ 
+                                    ...node,
                                     name: rawName, 
                                     category: accentColor === 'emerald' ? 'LIABILITY' : 'ASSET', 
-                                    amount: nodeAmount 
+                                    amount: nodeAmount,
+                                    id: overrideId,
+                                    isUnderDebtors,
+                                    isUnderCreditors
                                 });
                             }
                         }}
@@ -214,7 +377,7 @@ const BalanceSheetView = ({
 
                     {hasChildren && isExpanded && (
                         <div className="divide-y divide-gray-100/60">
-                            {renderDynamicGroupNodes(children, level + 1, accentColor)}
+                            {renderDynamicGroupNodes(children, level + 1, accentColor, isUnderDebtors, isUnderCreditors)}
                         </div>
                     )}
                 </div>
@@ -267,6 +430,129 @@ const BalanceSheetView = ({
         return [...nodes].sort((a, b) => getRank(a) - getRank(b));
     };
 
+    const buildPayableNode = () => {
+        const supplierPayables = trueCreditors.filter(c => c.closingBalance !== 0).map(c => ({
+            id: `supp_${c.id}`,
+            name: c.accountName,
+            group_name: c.accountName,
+            isCalculated: true,
+            amount: -c.closingBalance // Negative closingBalance means Credit (which is positive for Liability)
+        }));
+
+        return {
+            id: 'grp_payable',
+            group_name: 'PAYABLE',
+            name: 'PAYABLE',
+            children: [
+                {
+                    id: 'grp_supp_pay',
+                    group_name: 'Supplier Payables',
+                    name: 'Supplier Payables',
+                    children: supplierPayables
+                }
+            ]
+        };
+    };
+
+    const prepareLiabilitiesTree = (rawLiabChildren) => {
+        if (!rawLiabChildren || rawLiabChildren.length === 0) return [];
+        
+        const cleanedChildren = rawLiabChildren.map(group => {
+            const rawName = group.group_name || group.subgroup_name || group.name || '';
+            const name = rawName.trim().toLowerCase();
+            const children = group.children || group.sub_groups || group.sub_sub_groups || group.sub_sub_sub_groups || [];
+
+            if (name.includes('current') && children.length > 0) {
+                const remainingChildren = children.filter(child => {
+                    const childName = (child.group_name || child.subgroup_name || child.name || '').toLowerCase();
+                    return !(childName.includes('creditor') || childName.includes('supplier') || childName.includes('trade payable') || childName.includes('customer') || childName.includes('debtor') || childName.includes('trade receivable'));
+                });
+
+                return {
+                    ...group,
+                    children: remainingChildren,
+                    sub_groups: remainingChildren,
+                    sub_sub_groups: remainingChildren,
+                };
+            }
+            return group;
+        });
+        
+        cleanedChildren.push(buildPayableNode());
+        return sortLiabilitiesChildren(cleanedChildren);
+    };
+
+    const buildReceivableNode = () => {
+        const customerReceivables = trueDebtors.filter(d => d.closingBalance !== 0).map(d => ({
+            id: `cust_${d.id}`,
+            name: d.accountName,
+            group_name: d.accountName,
+            isCalculated: true,
+            amount: d.closingBalance // Positive closingBalance means Debit (which is positive for Asset)
+        }));
+
+        return {
+            id: 'grp_receivable',
+            group_name: 'RECEIVABLE',
+            name: 'RECEIVABLE',
+            children: [
+                {
+                    id: 'grp_cust_rec',
+                    group_name: 'Customer Receivables',
+                    name: 'Customer Receivables',
+                    children: customerReceivables
+                }
+            ]
+        };
+    };
+
+    const prepareAssetsTree = (rawAssetsChildren) => {
+        if (!rawAssetsChildren || rawAssetsChildren.length === 0) return [];
+
+        let bankCashNode = null;
+        const cleanedChildren = rawAssetsChildren.map(group => {
+            const rawName = group.group_name || group.subgroup_name || group.name || '';
+            const name = rawName.trim().toLowerCase();
+            const children = group.children || group.sub_groups || group.sub_sub_groups || group.sub_sub_sub_groups || [];
+
+            if (name.includes('current asset') && children.length > 0) {
+                const foundBankCash = children.find(child => {
+                    const childName = (child.group_name || child.subgroup_name || child.name || '').toLowerCase();
+                    return childName.includes('bank') || childName.includes('cash');
+                });
+
+                if (foundBankCash) {
+                    bankCashNode = {
+                        ...foundBankCash,
+                        group_name: 'Bank & Cash',
+                        name: 'Bank & Cash',
+                    };
+                }
+
+                const remainingChildren = children.filter(child => {
+                    const childName = (child.group_name || child.subgroup_name || child.name || '').toLowerCase();
+                    return !(childName.includes('bank') || childName.includes('cash') || childName.includes('debtor') || childName.includes('customer') || childName.includes('trade receivable') || childName.includes('creditor') || childName.includes('supplier') || childName.includes('trade payable'));
+                });
+
+                return {
+                    ...group,
+                    children: remainingChildren,
+                    sub_groups: remainingChildren,
+                    sub_sub_groups: remainingChildren,
+                };
+            }
+            return group;
+        });
+
+        cleanedChildren.push(buildReceivableNode());
+
+        if (bankCashNode) {
+            return [bankCashNode, ...cleanedChildren];
+        }
+
+        return cleanedChildren;
+    };
+
     const handleExportExcel = () => {
         const sheetData = [];
         sheetData.push(['BALANCE SHEET']);
@@ -280,10 +566,11 @@ const BalanceSheetView = ({
         let assetRows = [];
 
         const liabGroup = groupMasterTree?.find(g => (g.group_name || '').toLowerCase() === 'liabilities');
-        const liabChildren = sortLiabilitiesChildren(liabGroup?.children || liabGroup?.sub_groups || []);
+        const liabChildren = prepareLiabilitiesTree(liabGroup?.children || liabGroup?.sub_groups || []);
 
         const assetsGroup = groupMasterTree?.find(g => (g.group_name || '').toLowerCase() === 'assets');
-        const assetsChildren = assetsGroup?.children || assetsGroup?.sub_groups || [];
+        const rawAssetsChildren = assetsGroup?.children || assetsGroup?.sub_groups || [];
+        const assetsChildren = prepareAssetsTree(rawAssetsChildren);
 
         if (liabChildren.length > 0) {
             liabRows = flattenGroupForExcel(liabChildren, 0);
@@ -312,10 +599,10 @@ const BalanceSheetView = ({
                 ['   Fixed Assets', totalFixedAssets],
                 ['   Long Term Loans & Advances', 0],
                 ['Current Assets:'],
-                ['   Current Investment', 0],
+                ['   Bank & Cash', cashAndCashEquivalents],
                 ['   Inventories', inventories],
                 ['   Customers', tradeReceivables],
-                ['   Bank & Cash', cashAndCashEquivalents],
+                ['   Current Investment', 0],
                 ['   Short Term Loans and Advances', shortTermLoansAdvances],
                 ['   Other Current Assets', otherCurrentAssets],
             ];
@@ -401,7 +688,6 @@ const BalanceSheetView = ({
                             <div>
                                 <p className="text-xs font-medium text-blue-800/70 mb-0.5">Total Assets</p>
                                 <h4 className="text-2xl font-bold text-blue-900">{formatINR(totalAssets)}</h4>
-                                <p className="text-[11px] text-blue-600 mt-0.5">Fixed & Current Assets</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -415,7 +701,6 @@ const BalanceSheetView = ({
                             <div>
                                 <p className="text-xs font-medium text-emerald-800/70 mb-0.5">Total Liabilities</p>
                                 <h4 className="text-2xl font-bold text-emerald-900">{formatINR(totalEquityAndLiabilities)}</h4>
-                                <p className="text-[11px] text-emerald-600 mt-0.5">Capital & Borrowings</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -429,27 +714,23 @@ const BalanceSheetView = ({
                             <div>
                                 <p className="text-xs font-medium text-teal-800/70 mb-0.5">Net Worth</p>
                                 <h4 className="text-2xl font-bold text-teal-900">{formatINR(netWorth)}</h4>
-                                <p className="text-[11px] text-teal-600 mt-0.5">Equity & Reserves</p>
                             </div>
                         </CardContent>
                     </Card>
 
                     {/* Card 4: Net Profit / Loss */}
-                    <Card className={hasNetLoss ? "bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-100 shadow-sm rounded-[20px]" : "bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-100 shadow-sm rounded-[20px]"}>
+                    <Card className={hasNetLoss ? "bg-gradient-to-br from-rose-50 to-rose-100/50 border border-rose-100 shadow-sm rounded-[20px]" : "bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-100 shadow-sm rounded-[20px]"}>
                         <CardContent className="p-5 flex items-center">
-                            <div className={`w-12 h-12 rounded-full flex items-center justify-center mr-4 shrink-0 ${hasNetLoss ? 'bg-amber-500/20 text-amber-700' : 'bg-purple-500/20 text-purple-700'}`}>
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center mr-4 shrink-0 ${hasNetLoss ? 'bg-rose-500/20 text-rose-700' : 'bg-emerald-500/20 text-emerald-700'}`}>
                                 <Activity size={22} />
                             </div>
                             <div>
-                                <p className={`text-xs font-medium mb-0.5 ${hasNetLoss ? 'text-amber-800/70' : 'text-purple-800/70'}`}>
+                                <p className={`text-xs font-medium mb-0.5 ${hasNetLoss ? 'text-rose-800/70' : 'text-emerald-800/70'}`}>
                                     {hasNetLoss ? 'Net Loss' : 'Net Profit'}
                                 </p>
-                                <h4 className={`text-2xl font-bold ${hasNetLoss ? 'text-amber-900' : 'text-purple-900'}`}>
-                                    {hasNetLoss ? `-${formatINR(diffAmount)}` : formatINR(diffAmount)}
+                                <h4 className={`text-2xl font-bold ${hasNetLoss ? 'text-rose-900' : 'text-emerald-900'}`}>
+                                    {hasNetLoss ? `-${formatINR(pnlDisplayAmount)}` : formatINR(pnlDisplayAmount)}
                                 </h4>
-                                <p className={`text-[11px] mt-0.5 ${hasNetLoss ? 'text-amber-600' : 'text-purple-600'}`}>
-                                    {hasNetLoss ? 'Excess of Expense' : 'Total Net Income'}
-                                </p>
                             </div>
                         </CardContent>
                     </Card>
@@ -523,17 +804,6 @@ const BalanceSheetView = ({
                                 <span>{isAllExpanded ? 'Collapse All' : 'Expand All'}</span>
                             </button>
 
-                            <button
-                                onClick={() => {
-                                    onFromDateChange && onFromDateChange(fromDate);
-                                    onToDateChange && onToDateChange(toDate);
-                                }}
-                                className="px-3 py-1.5 text-xs font-semibold text-[#0f4a3c] bg-white border border-[#0f4a3c]/30 rounded-2xl hover:bg-emerald-50/60 hover:border-[#0f4a3c]/60 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
-                                title="Refresh Report Data"
-                            >
-                                <RotateCw size={14} className="text-[#0f4a3c]" />
-                                <span>Refresh</span>
-                            </button>
 
                             <div className="relative">
                                 <button
@@ -592,7 +862,7 @@ const BalanceSheetView = ({
                             <div className="divide-y divide-gray-100 flex-1">
                                 {(() => {
                                     const liabGroup = groupMasterTree?.find(g => (g.group_name || '').toLowerCase() === 'liabilities');
-                                    const liabChildren = sortLiabilitiesChildren(liabGroup?.children || liabGroup?.sub_groups || []);
+                                    const liabChildren = prepareLiabilitiesTree(liabGroup?.children || liabGroup?.sub_groups || []);
 
                                     if (liabChildren.length > 0) {
                                         return renderDynamicGroupNodes(liabChildren, 1, 'emerald');
@@ -683,7 +953,8 @@ const BalanceSheetView = ({
                             <div className="divide-y divide-gray-100 flex-1">
                                 {(() => {
                                     const assetsGroup = groupMasterTree?.find(g => (g.group_name || '').toLowerCase() === 'assets');
-                                    const assetsChildren = assetsGroup?.children || assetsGroup?.sub_groups || [];
+                                    const rawAssetsChildren = assetsGroup?.children || assetsGroup?.sub_groups || [];
+                                    const assetsChildren = prepareAssetsTree(rawAssetsChildren);
 
                                     if (assetsChildren.length > 0) {
                                         return renderDynamicGroupNodes(assetsChildren, 1, 'blue');
@@ -691,6 +962,30 @@ const BalanceSheetView = ({
 
                                     return (
                                         <>
+                                            {/* Fallback Bank & Cash Main Top Head */}
+                                            <div>
+                                                <div 
+                                                    onClick={() => toggleSection('bank_cash')}
+                                                    className="flex items-center justify-between px-4 md:px-6 py-3 bg-gray-50/80 hover:bg-blue-50/30 transition-colors cursor-pointer group font-bold text-gray-900 text-xs uppercase tracking-wider"
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="flex items-center justify-center w-4 h-4 rounded bg-blue-100 text-blue-800 font-black text-xs shrink-0">
+                                                            {expandedSections.bank_cash ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                                                        </span>
+                                                        <span>Bank & Cash</span>
+                                                    </div>
+                                                    <span className="font-bold text-gray-900">{formatINR(cashAndCashEquivalents)}</span>
+                                                </div>
+                                                {expandedSections.bank_cash && (
+                                                    <div className="divide-y divide-gray-100/60">
+                                                        <div onClick={() => onItemClick && onItemClick({ name: 'Bank & Cash', category: 'ASSET', amount: cashAndCashEquivalents })} className="flex items-center justify-between pl-8 md:pl-10 pr-4 md:pr-6 py-2.5 text-xs hover:bg-blue-50/20 cursor-pointer font-medium text-gray-800">
+                                                            <span>Bank & Cash Accounts</span>
+                                                            <span className="font-bold text-gray-900">{formatINR(cashAndCashEquivalents)}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
                                             {/* Fallback Non-Current Assets */}
                                             <div>
                                                 <div 
@@ -731,14 +1026,10 @@ const BalanceSheetView = ({
                                                         </span>
                                                         <span>Current Assets</span>
                                                     </div>
-                                                    <span className="font-bold text-gray-900">{formatINR(totalCurrentAssets)}</span>
+                                                    <span className="font-bold text-gray-900">{formatINR(totalCurrentAssets - cashAndCashEquivalents)}</span>
                                                 </div>
                                                 {expandedSections.current_assets && (
                                                     <div className="divide-y divide-gray-100/60">
-                                                        <div className="flex items-center justify-between pl-8 md:pl-10 pr-4 md:pr-6 py-2.5 text-xs font-medium text-gray-800">
-                                                            <span>Current Investment</span>
-                                                            <span className="font-bold text-gray-900">{formatINR(0)}</span>
-                                                        </div>
                                                         <div onClick={() => onItemClick && onItemClick({ name: 'Inventories', category: 'ASSET', amount: inventories })} className="flex items-center justify-between pl-8 md:pl-10 pr-4 md:pr-6 py-2.5 text-xs hover:bg-blue-50/20 cursor-pointer font-medium text-gray-800">
                                                             <span>Inventories</span>
                                                             <span className="font-bold text-gray-900">{formatINR(inventories)}</span>
@@ -747,9 +1038,9 @@ const BalanceSheetView = ({
                                                             <span>Customers</span>
                                                             <span className="font-bold text-gray-900">{formatINR(tradeReceivables)}</span>
                                                         </div>
-                                                        <div onClick={() => onItemClick && onItemClick({ name: 'Bank & Cash', category: 'ASSET', amount: cashAndCashEquivalents })} className="flex items-center justify-between pl-8 md:pl-10 pr-4 md:pr-6 py-2.5 text-xs hover:bg-blue-50/20 cursor-pointer font-medium text-gray-800">
-                                                            <span>Bank & Cash</span>
-                                                            <span className="font-bold text-gray-900">{formatINR(cashAndCashEquivalents)}</span>
+                                                        <div className="flex items-center justify-between pl-8 md:pl-10 pr-4 md:pr-6 py-2.5 text-xs font-medium text-gray-800">
+                                                            <span>Current Investment</span>
+                                                            <span className="font-bold text-gray-900">{formatINR(0)}</span>
                                                         </div>
                                                         <div onClick={() => onItemClick && onItemClick({ name: 'Short Term Loans and Advances', category: 'ASSET', amount: shortTermLoansAdvances })} className="flex items-center justify-between pl-8 md:pl-10 pr-4 md:pr-6 py-2.5 text-xs hover:bg-blue-50/20 cursor-pointer font-medium text-gray-800">
                                                             <span>Short Term Loans and Advances</span>

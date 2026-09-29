@@ -67,14 +67,22 @@ const InvoiceForm = ({ formData, setFormData, handleSupplierChange, handlePOChan
                 {/* PO Number */}
                 <div className="space-y-2">
                     <label className="text-[14px] font-semibold text-[#374151]">PO Number (Optional)</label>
-                    <select 
-                        className="w-full px-5 py-3 bg-gray-50/50 border border-transparent rounded-2xl focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318]/30 transition-all font-medium text-gray-700 h-[48px]"
-                        value={formData.po_number || ""}
-                        onChange={(e) => handlePOChange(e.target.value)}
-                    >
-                        <option value="">Select PO</option>
-                        {pos.map(p => <option key={p.id} value={p.poNumber}>{p.poNumber}</option>)}
-                    </select>
+                    {(() => {
+                        const selectedPoValue = formData.po_number || "";
+                        return (
+                            <select 
+                                className="w-full px-5 py-3 bg-gray-50/50 border border-transparent rounded-2xl focus:ring-2 focus:ring-[#073318]/10 focus:border-[#073318]/30 transition-all font-medium text-gray-700 h-[48px]"
+                                value={selectedPoValue}
+                                onChange={(e) => handlePOChange(e.target.value)}
+                            >
+                                <option value="">Select PO</option>
+                                {pos.map(p => <option key={p.id} value={p.poNumber}>{p.poNumber}</option>)}
+                                {formData.po_number && !pos.some(p => String(p.poNumber).toLowerCase() === String(formData.po_number).toLowerCase()) && (
+                                    <option value={formData.po_number}>{formData.po_number}</option>
+                                )}
+                            </select>
+                        );
+                    })()}
                 </div>
 
                 <div className="space-y-2">

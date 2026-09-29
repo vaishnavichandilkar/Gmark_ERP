@@ -328,6 +328,84 @@ const AddSalesInvoice = () => {
             console.error("Error fetching customer data:", error);
         }
     };
+
+    const mergeSalesInvoiceItems = (rawItems) => {
+        if (!rawItems || rawItems.length === 0) return [];
+        
+        const productMap = {};
+        for (const item of rawItems) {
+            if (!item) continue;
+            const key = item.productId 
+                ? `id_${item.productId}` 
+                : item.productCode 
+                    ? `code_${String(item.productCode).toLowerCase().trim()}`
+                    : `name_${String(item.productName || '').toLowerCase().trim()}`;
+
+            const qty = parseFloat(item.quantity || item.challanQty) || 0;
+            const totalSoQty = parseFloat(item.totalSoQty) || 0;
+            const givenSoQty = parseFloat(item.givenSoQty) || 0;
+            const rate = parseFloat(item.rate) || 0;
+            const discAmt = parseFloat(item.discountAmount) || 0;
+            const gross = qty * rate;
+
+            if (!productMap[key]) {
+                productMap[key] = {
+                    ...item,
+                    id: Date.now() + Math.random(),
+                    quantity: qty,
+                    totalSoQty: totalSoQty,
+                    givenSoQty: givenSoQty,
+                    totalGross: gross,
+                    discountAmount: discAmt,
+                    challanIds: item.challanId ? [item.challanId] : [],
+                    challanNumbers: item.challanNumber ? [item.challanNumber] : [],
+                };
+            } else {
+                productMap[key].quantity += qty;
+                productMap[key].totalSoQty = Math.max(productMap[key].totalSoQty, totalSoQty);
+                productMap[key].givenSoQty = Math.min(productMap[key].givenSoQty, givenSoQty);
+                productMap[key].totalGross += gross;
+                productMap[key].discountAmount += discAmt;
+                if (item.challanId && !productMap[key].challanIds.includes(item.challanId)) {
+                    productMap[key].challanIds.push(item.challanId);
+                }
+                if (item.challanNumber && !productMap[key].challanNumbers.includes(item.challanNumber)) {
+                    productMap[key].challanNumbers.push(item.challanNumber);
+                }
+            }
+        }
+
+        return Object.values(productMap).map(item => {
+            const qty = item.quantity;
+            const gross = item.totalGross;
+            const discAmt = item.discountAmount;
+            const taxPct = parseFloat(item.taxPercent) || 0;
+
+            const rate = qty > 0 ? (gross / qty) : 0;
+            const discPct = gross > 0 ? (discAmt / gross) * 100 : 0;
+            const befTax = Math.max(0, gross - discAmt);
+            const taxAmt = isGstApplicable ? (befTax * taxPct) / 100 : 0;
+            const totalAmt = befTax + taxAmt;
+            const remQty = item.totalSoQty > 0 ? Math.max(0, item.totalSoQty - item.givenSoQty - qty) : 0;
+
+            return {
+                ...item,
+                quantity: qty,
+                rate: parseFloat(rate.toFixed(2)),
+                discountAmount: parseFloat(discAmt.toFixed(2)),
+                discountPercent: parseFloat(discPct.toFixed(2)),
+                beforeTaxAmount: parseFloat(befTax.toFixed(2)),
+                taxAmount: parseFloat(taxAmt.toFixed(2)),
+                totalAmount: parseFloat(totalAmt.toFixed(2)),
+                totalSoQty: item.totalSoQty,
+                givenSoQty: item.givenSoQty,
+                remainingQty: parseFloat(remQty.toFixed(2)),
+                challanId: item.challanIds.join(','),
+                challanNumber: item.challanNumbers.join(', ')
+            };
+        });
+    };
+
     const handleSOChange = async (soId) => {
         if (!soId) {
             const customer = customers.find(c => c.id === parseInt(formData.customerId));
@@ -385,13 +463,25 @@ const AddSalesInvoice = () => {
                                 const taxAmt = isGstApplicable ? (befTax * taxPct) / 100 : 0;
                                 const totalAmt = befTax + taxAmt;
 
+                                let givenSo = 0;
+                                if (selectedSO?.soNumber) {
+                                    try {
+                                        const hist = await challanService.getReceivedQty(formData.customerName || selectedSO.customerName, (item.productCode || item.product_code || item.productName), selectedSO.soNumber);
+                                        const totalDelivered = parseFloat(hist?.givenSoQty || hist?.totalQty || 0);
+                                        givenSo = Math.max(0, totalDelivered - qty);
+                                    } catch (e) {
+                                        console.error("Error fetching givenSoQty for product:", item.productCode, e);
+                                    }
+                                }
+
                                 allItems.push({
                                     ...item,
                                     id: Date.now() + Math.random(),
                                     productId: item.productId || product?.id,
                                     quantity: qty,
                                     rate: rate,
-                                    totalSoQty: qty,
+                                    totalSoQty: parseFloat(soItem?.quantity || item.totalSoQty || item.soQuantity || qty) || 0,
+                                    givenSoQty: givenSo,
                                     hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
                                     taxPercent: taxPct,
                                     discountAmount: discAmt,
@@ -422,7 +512,8 @@ const AddSalesInvoice = () => {
                     }
                 }
 
-                setItems(allItems.length > 0 ? allItems : [{
+                const mergedItems = mergeSalesInvoiceItems(allItems);
+                setItems(mergedItems.length > 0 ? mergedItems : [{
                     id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
                     uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0,
                     taxAmount: 0, totalAmount: 0, printDescription: ''
@@ -449,11 +540,22 @@ const AddSalesInvoice = () => {
                 challanIds: [] // Clear previously selected challans when SO changes
             }));
 
-            const mappedItems = selectedSO.items.map(item => {
-                const qty = item.remainingQty || item.quantity;
-                const rate = item.rate || 0;
-                const discAmt = item.discountAmount || 0;
-                const taxPct = item.taxPercent || 0;
+            const customerName = formData.customerName || selectedSO.customerName;
+            const mappedItems = await Promise.all((selectedSO.items || []).map(async (item) => {
+                let givenSo = 0;
+                try {
+                    const hist = await challanService.getReceivedQty(customerName, (item.productCode || item.product_code || item.productName), selectedSO.soNumber);
+                    givenSo = parseFloat(hist?.givenSoQty || hist?.totalQty || 0);
+                } catch (e) {
+                    console.error("Error fetching givenSoQty for product:", item.productCode, e);
+                }
+
+                const totalSo = parseFloat(item.quantity) || 0;
+                const remainingInSO = Math.max(0, totalSo - givenSo);
+                const qty = item.remainingQty !== undefined ? parseFloat(item.remainingQty) : remainingInSO;
+                const rate = parseFloat(item.rate) || 0;
+                const discAmt = parseFloat(item.discountAmount) || 0;
+                const taxPct = parseFloat(item.taxPercent) || 0;
                 
                 const baseAmt = qty * rate;
                 const befTax = Math.max(0, baseAmt - discAmt);
@@ -468,7 +570,8 @@ const AddSalesInvoice = () => {
                     productCode: item.productCode,
                     productName: item.productName,
                     quantity: qty, 
-                    totalSoQty: qty, 
+                    totalSoQty: totalSo, 
+                    givenSoQty: givenSo,
                     rate: rate,
                     uom: item.uom,
                     hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
@@ -481,36 +584,112 @@ const AddSalesInvoice = () => {
                     printDescription: printDesc,
                     originalPrintDescription: printDesc,
                 };
-            });
+            }));
 
-            setItems(mappedItems);
+            const mergedItems = mergeSalesInvoiceItems(mappedItems);
+            setItems(mergedItems.length > 0 ? mergedItems : [{
+                id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
+                uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0,
+                taxAmount: 0, totalAmount: 0, printDescription: ''
+            }]);
             setExpenses([]);
         }
     };
 
     const handleChallanChange = async (selectedIds) => {
         if (!selectedIds || selectedIds.length === 0) {
-            const customer = customers.find(c => c.id === parseInt(formData.customerId));
-            const defaultCreditDays = customer ? (customer.customerCreditDays || customer.creditDays || 0) : 0;
-            setFormData(prev => ({ 
-                ...prev, 
-                challanIds: [],
-                soId: '',
-                soNumber: '',
-                creditDays: defaultCreditDays
-            }));
-            setItems([{
-                id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
-                uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0,
-                taxAmount: 0, totalAmount: 0, printDescription: ''
-            }]);
-            setExpenses([]);
+            if (formData.soId) {
+                // Keep SO selected when Challans are cancelled/cleared
+                setFormData(prev => ({ 
+                    ...prev, 
+                    challanIds: []
+                }));
+                // Reload items directly from the selected SO
+                try {
+                    const selectedSO = sos.find(s => String(s.id) === String(formData.soId));
+                    if (selectedSO) {
+                        const customerName = formData.customerName || selectedSO.customerName;
+                        const mappedItems = await Promise.all((selectedSO.items || []).map(async (item) => {
+                            let givenSo = 0;
+                            try {
+                                const hist = await challanService.getReceivedQty(customerName, (item.productCode || item.product_code || item.productName), selectedSO.soNumber);
+                                givenSo = parseFloat(hist?.givenSoQty || hist?.totalQty || 0);
+                            } catch (e) {
+                                console.error("Error fetching givenSoQty for product:", item.productCode, e);
+                            }
+
+                            const totalSo = parseFloat(item.quantity) || 0;
+                            const remainingInSO = Math.max(0, totalSo - givenSo);
+                            const qty = item.remainingQty !== undefined ? parseFloat(item.remainingQty) : remainingInSO;
+                            const rate = parseFloat(item.rate) || 0;
+                            const discAmt = parseFloat(item.discountAmount) || 0;
+                            const taxPct = parseFloat(item.taxPercent) || 0;
+                            
+                            const baseAmt = qty * rate;
+                            const befTax = Math.max(0, baseAmt - discAmt);
+                            const taxAmt = isGstApplicable ? (befTax * taxPct) / 100 : 0;
+                            const totalAmt = befTax + taxAmt;
+
+                            const product = products.find(p => p.id === item.productId || p.product_code === item.productCode);
+                            const printDesc = item.printDescription || item.print_description || item.description || product?.description || item.productName || '';
+                            return {
+                                id: Date.now() + Math.random(),
+                                productId: item.productId || product?.id,
+                                productCode: item.productCode,
+                                productName: item.productName,
+                                quantity: qty, 
+                                totalSoQty: totalSo, 
+                                givenSoQty: givenSo,
+                                rate: rate,
+                                uom: item.uom,
+                                hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
+                                taxPercent: taxPct,
+                                discountAmount: discAmt,
+                                discountPercent: item.discountPercent || 0,
+                                beforeTaxAmount: parseFloat(befTax.toFixed(2)),
+                                taxAmount: parseFloat(taxAmt.toFixed(2)),
+                                totalAmount: parseFloat(totalAmt.toFixed(2)),
+                                printDescription: printDesc,
+                                originalPrintDescription: printDesc,
+                            };
+                        }));
+                        const mergedItems = mergeSalesInvoiceItems(mappedItems);
+                        setItems(mergedItems.length > 0 ? mergedItems : [{
+                            id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
+                            uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0,
+                            taxAmount: 0, totalAmount: 0, printDescription: ''
+                        }]);
+                        setExpenses([]);
+                    }
+                } catch (e) {
+                    console.error("Error loading SO items after clearing Challans:", e);
+                }
+            } else {
+                const customer = customers.find(c => c.id === parseInt(formData.customerId));
+                const defaultCreditDays = customer ? (customer.customerCreditDays || customer.creditDays || 0) : 0;
+                setFormData(prev => ({ 
+                    ...prev, 
+                    challanIds: [],
+                    soId: '',
+                    soNumber: '',
+                    creditDays: defaultCreditDays
+                }));
+                setItems([{
+                    id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
+                    uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0,
+                    taxAmount: 0, totalAmount: 0, printDescription: ''
+                }]);
+                setExpenses([]);
+            }
             return;
         }
 
         try {
             // Auto-select SO if any of the selected challans have an associated SO
-            let soFields = {};
+            let soFields = {
+                soId: formData.soId || '',
+                soNumber: formData.soNumber || ''
+            };
             let matchedSODetails = null;
             const selectedChallanObjects = (challans || []).filter(c => selectedIds.map(String).includes(String(c.id)));
             const firstWithSo = selectedChallanObjects.find(c => c.soId || c.soNumber);
@@ -537,6 +716,21 @@ const AddSalesInvoice = () => {
                         };
                         matchedSODetails = matchedSO;
                     }
+                } else if (firstWithSo.soId || firstWithSo.soNumber) {
+                    let foundSoDetails = null;
+                    if (firstWithSo.soId) {
+                        try {
+                            foundSoDetails = await salesOrderService.getSalesOrderById(firstWithSo.soId);
+                        } catch (e) {
+                            console.error("Error fetching SO by id from challan:", e);
+                        }
+                    }
+                    soFields = {
+                        soId: foundSoDetails?.id || firstWithSo.soId || '',
+                        soNumber: foundSoDetails?.soNumber || firstWithSo.soNumber || '',
+                        creditDays: foundSoDetails?.creditDays !== undefined && foundSoDetails?.creditDays !== null ? foundSoDetails.creditDays : undefined
+                    };
+                    matchedSODetails = foundSoDetails;
                 }
             }
 
@@ -566,13 +760,25 @@ const AddSalesInvoice = () => {
                             const taxAmt = isGstApplicable ? (befTax * taxPct) / 100 : 0;
                             const totalAmt = befTax + taxAmt;
 
+                            let givenSo = 0;
+                            if (matchedSODetails?.soNumber) {
+                                try {
+                                    const hist = await challanService.getReceivedQty(formData.customerName || matchedSODetails.customerName, (item.productCode || item.product_code || item.productName), matchedSODetails.soNumber);
+                                    const totalDelivered = parseFloat(hist?.givenSoQty || hist?.totalQty || 0);
+                                    givenSo = Math.max(0, totalDelivered - qty);
+                                } catch (e) {
+                                    console.error("Error fetching givenSoQty for product:", item.productCode, e);
+                                }
+                            }
+
                             allItems.push({
                                 ...item,
                                 id: Date.now() + Math.random(),
                                 productId: item.productId || product?.id,
                                 quantity: qty,
                                 rate: rate,
-                                totalSoQty: qty, // Set limit for Invoice based on Challan Qty
+                                totalSoQty: parseFloat(soItem?.quantity || item.totalSoQty || item.soQuantity || qty) || 0,
+                                givenSoQty: givenSo,
                                 hsnCode: item.hsnCode || product?.hsn_code || product?.hsnCode || '',
                                 taxPercent: taxPct,
                                 discountAmount: discAmt,
@@ -602,7 +808,8 @@ const AddSalesInvoice = () => {
                     }
                 }
             }
-            setItems(allItems.length > 0 ? allItems : [{
+            const mergedItems = mergeSalesInvoiceItems(allItems);
+            setItems(mergedItems.length > 0 ? mergedItems : [{
                 id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0,
                 uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0,
                 taxAmount: 0, totalAmount: 0, printDescription: ''

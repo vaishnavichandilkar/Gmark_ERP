@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import html2pdf from 'html2pdf.js';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import {
@@ -98,6 +98,7 @@ const getCurrentMonthBounds = () => {
 const ReportDashboard = () => {
     const { t } = useTranslation(['reports', 'common']);
     const dispatch = useDispatch();
+    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { purchaseData, salesData, salesInvoicesData, poData, loading, error, grnData, challanData } = useSelector(state => state.reports);
 
@@ -189,9 +190,9 @@ const ReportDashboard = () => {
         setInvError(null);
         try {
             const params = {
-                page: invPage,
-                limit: invLimit,
-                search: invSearch,
+                page: 1,
+                limit: 1000,
+                search: invSearch || undefined,
                 sortBy: invSortBy || undefined,
                 sortOrder: invSortBy ? invSortOrder : undefined,
             };
@@ -203,7 +204,7 @@ const ReportDashboard = () => {
         } finally {
             setInvLoading(false);
         }
-    }, [invPage, invLimit, invSearch, invSortBy, invSortOrder]);
+    }, [invSearch, invSortBy, invSortOrder]);
 
     const [balanceSheetData, setBalanceSheetData] = useState(null);
 
@@ -603,7 +604,7 @@ const ReportDashboard = () => {
         { id: 'SALES', label: 'Sales Reports', icon: TrendingUp },
         { id: 'INVENTORY', label: 'Inventory', icon: Package },
         { id: 'PROFIT_LOSS', label: 'Profit & Loss', icon: Scale },
-        { id: 'BALANCE_SHEET', label: 'Balance Sheet', icon: Landmark },
+        // { id: 'BALANCE_SHEET', label: 'Balance Sheet', icon: Landmark }, // Hidden for now
     ];
 
     const renderPeriodFilterBar = () => {
@@ -700,7 +701,8 @@ const ReportDashboard = () => {
 
     const formatCurrency = (amount) => {
         return Number(amount || 0).toLocaleString('en-IN', {
-            maximumFractionDigits: 0
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
         });
     };
 
@@ -1434,7 +1436,7 @@ const ReportDashboard = () => {
 
                                     {/* Closing Stock */}
                                     <div
-                                        onClick={() => handleCardClick('STOCK', 'Closing Stock Breakdown', closingStock > 0 ? (inventoryData?.items || []) : [])}
+                                        onClick={() => handleCardClick('STOCK', 'Closing Stock Breakdown', inventoryData?.data || [])}
                                         className="flex items-center justify-between px-6 py-4 hover:bg-emerald-50/30 transition-colors cursor-pointer group font-semibold text-gray-700"
                                     >
                                         <div className="flex items-center gap-2">
@@ -1861,9 +1863,80 @@ const ReportDashboard = () => {
                         toDate={plToDate}
                         onFromDateChange={setPlFromDate}
                         onToDateChange={setPlToDate}
-                        onItemClick={(item) => handleCardClick(item.category === 'ASSET' ? 'SI' : 'PI', item.name, item.category === 'ASSET' ? salesInvoicesData : purchaseData)}
+                        supplierBreakdown={supplierBreakdown}
+                        customerBreakdown={customerBreakdown}
+                        onItemClick={(item) => {
+                            const rawName = item?.name || '';
+                            const nameLower = rawName.trim().toLowerCase();
+
+                            // 1. Inventories / Stock -> Show Product Stock item breakdown
+                            if (nameLower.includes('inventor') || nameLower.includes('stock')) {
+                                handleCardClick('STOCK', 'Product Inventories', inventoryData?.data || []);
+                                return;
+                            }
+
+                            // 2. Main Customers / Debtors Header -> Show customer breakdown summary
+                            if (nameLower === 'customers' || nameLower === 'sundry debtors' || nameLower === 'trade receivables' || nameLower === 'trade receivable') {
+                                handleCardClick('SI', 'Customers', salesInvoicesData);
+                                return;
+                            }
+
+                            // 3. Main Suppliers / Creditors Header -> Show supplier breakdown summary
+                            if (nameLower === 'suppliers' || nameLower === 'sundry creditors' || nameLower === 'trade payables' || nameLower === 'trade payable') {
+                                handleCardClick('PI', 'Suppliers', purchaseData);
+                                return;
+                            }
+
+                            // 4. Specific Customer Name Clicked (e.g. "Jitendra Kothavale") -> Filter invoices for this customer
+                            if (item?.isUnderDebtors) {
+                                const custMatches = (salesInvoicesData || []).filter(inv => {
+                                    const cName = (inv.customerName || inv.customer_name || inv.customer?.customerName || '').trim().toLowerCase();
+                                    if (!cName) return false;
+                                    return cName === nameLower || cName.includes(nameLower) || nameLower.includes(cName);
+                                });
+                                if (custMatches.length > 0) {
+                                    handleCardClick('SI', `${rawName} Invoices`, custMatches);
+                                    return;
+                                }
+                            }
+
+                            // 5. Specific Supplier Name Clicked (e.g. "Gurudas Bhikale") -> Filter invoices for this supplier
+                            if (item?.isUnderCreditors) {
+                                const suppMatches = (purchaseData || []).filter(inv => {
+                                    const sName = (inv.supplierName || inv.vendorName || inv.supplier_name || '').trim().toLowerCase();
+                                    if (!sName) return false;
+                                    return sName === nameLower || sName.includes(nameLower) || nameLower.includes(sName);
+                                });
+                                if (suppMatches.length > 0) {
+                                    handleCardClick('PI', `${rawName} Invoices`, suppMatches);
+                                    return;
+                                }
+                            }
+
+                            // 6. Generic Account -> Navigate to Ledger View
+                            if (item?.id?.startsWith('acc_') || item?.id?.startsWith('cust_') || item?.id?.startsWith('supp_')) {
+                                const idStr = item.id.replace('acc_', '').replace('cust_', '').replace('supp_', '');
+                                const accountId = parseInt(idStr, 10);
+                                if (!isNaN(accountId)) {
+                                    navigate(`/seller/finance/ledger/${accountId}?startDate=${plFromDate || ''}&endDate=${plToDate || ''}`);
+                                    return;
+                                }
+                            }
+
+                            handleCardClick(item.category === 'ASSET' ? 'SI' : 'PI', item.name, item.category === 'ASSET' ? salesInvoicesData : purchaseData);
+                        }}
                         loading={plLoading}
                     />
+                    {detailView && (
+                        <div className="report-table-element w-full animate-in fade-in slide-in-from-top-4 duration-500 mt-6 mb-4" id={`status-section-${detailView.type}`}>
+                            <ReportTable
+                                type={detailView.type}
+                                status={detailView.status}
+                                data={detailView.data}
+                                onClose={() => setDetailView(null)}
+                            />
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -1880,8 +1953,11 @@ const ReportDashboard = () => {
     };
 
     const renderInventoryTable = () => {
-        const items = inventoryData?.data || [];
-        const meta = inventoryData?.meta || { total: 0, page: 1, limit: 10, totalPages: 1 };
+        const allRawItems = inventoryData?.data || [];
+        const totalItems = allRawItems.length;
+        const totalPages = Math.ceil(totalItems / invLimit) || 1;
+        const items = allRawItems.slice((invPage - 1) * invLimit, invPage * invLimit);
+        const meta = { total: totalItems, page: invPage, limit: invLimit, totalPages };
 
         return (
             <Card className="mb-8 border border-gray-100 shadow-xl overflow-hidden rounded-[24px]">
@@ -2202,7 +2278,7 @@ const ReportDashboard = () => {
                 </div>
             </div>
 
-            {renderPeriodFilterBar()}
+            {activeTab !== 'PROFIT_LOSS' && activeTab !== 'BALANCE_SHEET' && renderPeriodFilterBar()}
             {renderSummaryCards()}
             {renderSelectedStatusCards()}
             {activeTab !== 'INVENTORY' && renderGraphs()}

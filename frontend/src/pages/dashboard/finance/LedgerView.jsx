@@ -442,8 +442,8 @@ const LedgerView = () => {
                                     onChange={handleAccountChange}
                                     className="w-full h-11 px-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:border-[#073318] outline-none"
                                 >
-                                    <option value="Sundry Creditors">Sundry Creditors</option>
-                                    <option value="Sundry Debtors">Sundry Debtors</option>
+                                    <option value="Sundry Creditors">Sundry Creditors (Supplier)</option>
+                                    <option value="Sundry Debtors">Sundry Debtors (Customer)</option>
                                     <option value="Bank">Bank</option>
                                     <option value="Cash">Cash</option>
                                 </select>
