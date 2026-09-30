@@ -17,6 +17,7 @@ import ledgerService from '../../../services/ledgerService';
 import voucherService from '../../../services/voucherService';
 import masterService from '../../../services/masterService';
 import PaymentModal from '../../../components/common/PaymentModal';
+import ImportModal from '@/pages/dashboard/masters/components/ImportModal';
 import OneTabSettlement from './OneTabSettlement';
 import DateInput from '@/components/common/DateInput';
 import { toDisplayDate, toIsoDate, formatDate } from '@/utils/dateUtils';
@@ -1376,191 +1377,205 @@ const Finance = () => {
         throw new Error(`Invalid Date '${dateStr}'. Date must follow DD/MM/YYYY format.`);
     };
 
-    const handleSubmitImport = async () => {
-        if (!selectedImportFile) return;
+    const handleSubmitImport = async (formData) => {
+        const file = formData.get('file');
+        if (!file) throw new Error("No file selected.");
 
-        setLoading(true);
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-            try {
-                const data = evt.target.result;
-                const workbook = XLSX.read(data, { type: 'binary' });
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                const json = XLSX.utils.sheet_to_json(worksheet);
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const data = evt.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
 
-                if (activeSubTab === 'Receipts' && sheetName === 'Payments Template') {
-                    toast.error("You are attempting to import a Payments template under the Receipts section. Please upload the Receipts template.");
-                    setLoading(false);
-                    return;
-                }
+                    if (activeSubTab === 'Receipts' && sheetName === 'Payments Template') {
+                        return reject(new Error("You are attempting to import a Payments template under the Receipts section. Please upload the Receipts template."));
+                    }
 
-                if (activeSubTab === 'Payments' && sheetName === 'Receipts Template') {
-                    toast.error("You are attempting to import a Receipts template under the Payments section. Please upload the Payments template.");
-                    setLoading(false);
-                    return;
-                }
+                    if (activeSubTab === 'Payments' && sheetName === 'Receipts Template') {
+                        return reject(new Error("You are attempting to import a Receipts template under the Payments section. Please upload the Payments template."));
+                    }
 
-                if (json.length === 0) {
-                    toast.error("Excel sheet is empty.");
-                    setLoading(false);
-                    return;
-                }
+                    if (json.length === 0) {
+                        return reject(new Error("Excel sheet is empty."));
+                    }
 
-                // Fetch reference lists for matching names to IDs
-                const [bankCashRes, customersRes, suppliersRes, activeAccountsRes] = await Promise.all([
-                    voucherService.getBankCashAccounts(),
-                    voucherService.getCustomers(),
-                    voucherService.getSuppliers(),
-                    voucherService.getActiveAccounts()
-                ]);
+                    const [bankCashRes, customersRes, suppliersRes, activeAccountsRes] = await Promise.all([
+                        voucherService.getBankCashAccounts(),
+                        voucherService.getCustomers(),
+                        voucherService.getSuppliers(),
+                        voucherService.getActiveAccounts()
+                    ]);
 
-                const allAccounts = [...customersRes, ...suppliersRes];
+                    const allAccounts = [...customersRes, ...suppliersRes];
 
-                let successCount = 0;
-                let errorCount = 0;
-                const errors = [];
+                    let successCount = 0;
+                    let errorCount = 0;
+                    const errorsList = [];
+                    const errorRows = [];
+                    const successRows = [];
 
-                for (let i = 0; i < json.length; i++) {
-                    const row = json[i];
-                    
-                    const dateVal = row['Date (DD/MM/YYYY)*'] || row['Date (DD/MM/YYYY)'] || row['date (dd/mm/yyyy)'] || row['Date'] || row['date'];
-                    const accountNameVal = row['Account Name*'] || row['Account Name'] || row['account name'] || row['Account'] || row['account'];
-                    const bankCashNameVal = row['Bank/Cash Account*'] || row['Bank/Cash Account'] || row['bank/cash account'] || row['Bank/Cash'] || row['bank/cash'] || row['Bank'] || row['bank'] || row['Cash'] || row['cash'] || row['Account (First Party)*'] || row['Account (First Party)'] || row['Bank/Cash (Receiver)*'] || row['Bank/Cash (Receiver)'];
-                    const amountVal = row['Amount*'] || row['Amount'] || row['amount'];
-                    const paymentModeVal = row['Payment Mode*'] || row['Payment Mode'] || row['payment mode'] || row['Mode'] || row['mode'];
-                    const narrationVal = row['Narration'] || row['narration'] || '';
+                    for (let i = 0; i < json.length; i++) {
+                        const row = json[i];
+                        const dateVal = row['Date (DD/MM/YYYY)*'] || row['Date (DD/MM/YYYY)'] || row['date (dd/mm/yyyy)'] || row['Date'] || row['date'];
+                        const accountNameVal = row['Account Name*'] || row['Account Name'] || row['account name'] || row['Account'] || row['account'] || row['Account (2nd Party)*'] || row['Account (2nd Party)'];
+                        const bankCashNameVal = row['Bank/Cash Account*'] || row['Bank/Cash Account'] || row['bank/cash account'] || row['Bank/Cash'] || row['bank/cash'] || row['Bank'] || row['bank'] || row['Cash'] || row['cash'] || row['Account (First Party)*'] || row['Account (First Party)'] || row['Bank/Cash (Receiver)*'] || row['Bank/Cash (Receiver)'] || row['Account (1st Party)*'] || row['Account (1st Party)'];
+                        const amountVal = row['Amount*'] || row['Amount'] || row['amount'];
+                        const paymentModeVal = row['Payment Mode*'] || row['Payment Mode'] || row['payment mode'] || row['Mode'] || row['mode'];
+                        const narrationVal = row['Narration'] || row['narration'] || '';
 
-                    const isReceiptOrPayment = activeSubTab === 'Receipts' || activeSubTab === 'Payments';
+                        let rowError = null;
+                        const isReceiptOrPayment = activeSubTab === 'Receipts' || activeSubTab === 'Payments';
 
-                    if (isReceiptOrPayment) {
-                        if (!dateVal || !accountNameVal || !bankCashNameVal || !amountVal || !paymentModeVal) {
+                        if (isReceiptOrPayment) {
+                            if (!dateVal || !accountNameVal || !bankCashNameVal || !amountVal || !paymentModeVal) {
+                                rowError = "Missing required fields. Date, Account Name, Bank/Cash Account, Amount, and Payment Mode are compulsory.";
+                            }
+                        } else {
+                            if (!dateVal || !accountNameVal || !bankCashNameVal || !amountVal) {
+                                rowError = "Missing required fields (Date, Accounts, or Amount).";
+                            }
+                        }
+
+                        if (rowError) {
                             errorCount++;
-                            errors.push(`Row ${i + 2}: Missing required fields. Date, Account Name, Bank/Cash Account, Amount, and Payment Mode are compulsory.`);
+                            errorsList.push({ row: i + 2, error: rowError });
+                            errorRows.push({ ...row, 'Error Message': rowError });
                             continue;
                         }
-                    } else {
-                        if (!dateVal || !accountNameVal || !bankCashNameVal || !amountVal) {
+
+                        const bankCashList = activeSubTab === 'JV' ? (activeAccountsRes || []) : bankCashRes;
+                        const matchedBank = bankCashList.find(b => 
+                            (b.ledgerName || b.accountName || b.name || '').toLowerCase().trim() === String(bankCashNameVal).toLowerCase().trim()
+                        );
+                        if (!matchedBank) {
+                            rowError = `${activeSubTab === 'JV' ? 'First party account' : 'Bank/Cash account'} '${bankCashNameVal}' not found`;
                             errorCount++;
-                            errors.push(`Row ${i + 2}: Missing required fields (Date, Accounts, or Amount).`);
+                            errorsList.push({ row: i + 2, error: rowError });
+                            errorRows.push({ ...row, 'Error Message': rowError });
                             continue;
+                        }
+
+                        const targetAccounts = activeSubTab === 'JV' ? (activeAccountsRes || []) : allAccounts;
+                        const matchedAccount = targetAccounts.find(a => 
+                            (a.accountName || a.ledgerName || a.name || '').toLowerCase().trim() === String(accountNameVal).toLowerCase().trim()
+                        );
+                        if (!matchedAccount) {
+                            rowError = `Account '${accountNameVal}' not found`;
+                            errorCount++;
+                            errorsList.push({ row: i + 2, error: rowError });
+                            errorRows.push({ ...row, 'Error Message': rowError });
+                            continue;
+                        }
+
+                        let formattedDate;
+                        try {
+                            formattedDate = parseExcelDate(dateVal);
+                        } catch {
+                            rowError = `Invalid date format '${dateVal}'`;
+                            errorCount++;
+                            errorsList.push({ row: i + 2, error: rowError });
+                            errorRows.push({ ...row, 'Error Message': rowError });
+                            continue;
+                        }
+
+                        const amt = parseFloat(amountVal);
+                        if (isNaN(amt) || amt <= 0) {
+                            rowError = "Amount must be a positive number";
+                            errorCount++;
+                            errorsList.push({ row: i + 2, error: rowError });
+                            errorRows.push({ ...row, 'Error Message': rowError });
+                            continue;
+                        }
+
+                        let mode = 'NET_BANKING';
+                        if (paymentModeVal) {
+                            const rawMode = String(paymentModeVal || '').toUpperCase().trim().replace(/[\s_\-]+/g, '_');
+                            if (['CASH', 'NET_BANKING', 'DEBIT_CARD', 'CREDIT_CARD', 'CHEQUE', 'UPI'].includes(rawMode)) {
+                                mode = rawMode;
+                            } else if (rawMode === 'NETBANKING' || rawMode === 'NET_BANK') {
+                                mode = 'NET_BANKING';
+                            } else if (rawMode === 'CREDITCARD') {
+                                mode = 'CREDIT_CARD';
+                            } else if (rawMode === 'DEBITCARD') {
+                                mode = 'DEBIT_CARD';
+                            } else if (rawMode === 'CHECK') {
+                                mode = 'CHEQUE';
+                            } else if (isReceiptOrPayment) {
+                                rowError = `Invalid Payment Mode '${paymentModeVal}'. Must be one of: Cash, Net Banking, Debit Card, Credit Card, Cheque, UPI.`;
+                                errorCount++;
+                                errorsList.push({ row: i + 2, error: rowError });
+                                errorRows.push({ ...row, 'Error Message': rowError });
+                                continue;
+                            }
+                        }
+
+                        const payload = {
+                            voucherDate: formattedDate,
+                            bankCashLedgerId: matchedBank.id,
+                            paymentMode: mode,
+                            narration: String(narrationVal).trim(),
+                            items: [{
+                                accountId: matchedAccount.id,
+                                amount: amt,
+                                accountType: matchedAccount.accountType || (activeSubTab === 'Receipts' ? 'CUSTOMER' : 'SUPPLIER'),
+                                settlements: []
+                            }]
+                        };
+
+                        try {
+                            if (activeSubTab === 'Receipts') {
+                                await voucherService.createReceiptVoucher(payload);
+                            } else if (activeSubTab === 'Payments') {
+                                await voucherService.createPaymentVoucher(payload);
+                            } else if (activeSubTab === 'JV') {
+                                await voucherService.createJournalVoucher(payload);
+                            } else if (activeSubTab === 'Contra') {
+                                await voucherService.createContraVoucher(payload);
+                            } else {
+                                throw new Error(`Unsupported tab for import: ${activeSubTab}`);
+                            }
+                            successCount++;
+                            successRows.push(row);
+                        } catch (err) {
+                            errorCount++;
+                            const errMsg = err.response?.data?.message || err.message;
+                            const finalMsg = Array.isArray(errMsg) ? errMsg[0] : errMsg;
+                            errorsList.push({ row: i + 2, error: finalMsg });
+                            errorRows.push({ ...row, 'Error Message': finalMsg });
                         }
                     }
 
-                    // 1. Match Bank/Cash Account (First Party)
-                    const bankCashList = activeSubTab === 'JV' ? (activeAccountsRes || []) : bankCashRes;
-                    const matchedBank = bankCashList.find(b => 
-                        (b.ledgerName || b.accountName || b.name || '').toLowerCase().trim() === String(bankCashNameVal).toLowerCase().trim()
-                    );
-                    if (!matchedBank) {
-                        errorCount++;
-                        errors.push(`Row ${i + 2}: ${activeSubTab === 'JV' ? 'First party account' : 'Bank/Cash account'} '${bankCashNameVal}' not found`);
-                        continue;
-                    }
-
-                    // 2. Match Supplier/Customer Account (Second Party)
-                    const targetAccounts = activeSubTab === 'JV' ? (activeAccountsRes || []) : allAccounts;
-                    const matchedAccount = targetAccounts.find(a => 
-                        (a.accountName || a.ledgerName || a.name || '').toLowerCase().trim() === String(accountNameVal).toLowerCase().trim()
-                    );
-                    if (!matchedAccount) {
-                        errorCount++;
-                        errors.push(`Row ${i + 2}: Account '${accountNameVal}' not found`);
-                        continue;
-                    }
-
-                    // 3. Format Date
-                    let formattedDate;
-                    try {
-                        formattedDate = parseExcelDate(dateVal);
-                    } catch {
-                        errorCount++;
-                        errors.push(`Row ${i + 2}: Invalid date format '${dateVal}'`);
-                        continue;
-                    }
-
-                    // 4. Validate Amount
-                    const amt = parseFloat(amountVal);
-                    if (isNaN(amt) || amt <= 0) {
-                        errorCount++;
-                        errors.push(`Row ${i + 2}: Amount must be a positive number`);
-                        continue;
-                    }
-
-                    // 5. Payment Mode mapping
-                    let mode = 'NET_BANKING';
-                    if (paymentModeVal) {
-                        const rawMode = String(paymentModeVal || '').toUpperCase().trim().replace(/[\s_\-]+/g, '_');
-                        if (['CASH', 'NET_BANKING', 'DEBIT_CARD', 'CREDIT_CARD', 'CHEQUE', 'UPI'].includes(rawMode)) {
-                            mode = rawMode;
-                        } else if (rawMode === 'NETBANKING' || rawMode === 'NET_BANK') {
-                            mode = 'NET_BANKING';
-                        } else if (rawMode === 'CREDITCARD') {
-                            mode = 'CREDIT_CARD';
-                        } else if (rawMode === 'DEBITCARD') {
-                            mode = 'DEBIT_CARD';
-                        } else if (rawMode === 'CHECK') {
-                            mode = 'CHEQUE';
-                        } else if (isReceiptOrPayment) {
-                            errorCount++;
-                            errors.push(`Row ${i + 2}: Invalid Payment Mode '${paymentModeVal}'. Must be one of: Cash, Net Banking, Debit Card, Credit Card, Cheque, UPI.`);
-                            continue;
-                        }
-                    }
-
-                    // 6. Create Payload
-                    const payload = {
-                        voucherDate: formattedDate,
-                        bankCashLedgerId: matchedBank.id,
-                        paymentMode: mode,
-                        narration: String(narrationVal).trim(),
-                        items: [{
-                            accountId: matchedAccount.id,
-                            amount: amt,
-                            accountType: matchedAccount.accountType || (activeSubTab === 'Receipts' ? 'CUSTOMER' : 'SUPPLIER'),
-                            settlements: []
-                        }]
+                    const createBase64Excel = (dataList) => {
+                        if (dataList.length === 0) return null;
+                        const ws = XLSX.utils.json_to_sheet(dataList);
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, "Report");
+                        return XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
                     };
 
-                    try {
-                        if (activeSubTab === 'Receipts') {
-                            await voucherService.createReceiptVoucher(payload);
-                        } else if (activeSubTab === 'Payments') {
-                            await voucherService.createPaymentVoucher(payload);
-                        } else if (activeSubTab === 'JV') {
-                            await voucherService.createJournalVoucher(payload);
-                        } else if (activeSubTab === 'Contra') {
-                            await voucherService.createContraVoucher(payload);
-                        } else {
-                            throw new Error(`Unsupported tab for import: ${activeSubTab}`);
-                        }
-                        successCount++;
-                    } catch (err) {
-                        errorCount++;
-                        const errMsg = err.response?.data?.message || err.message;
-                        errors.push(`Row ${i + 2}: ${Array.isArray(errMsg) ? errMsg[0] : errMsg}`);
-                    }
-                }
+                    fetchVouchers(); // Refresh list
 
-                if (successCount > 0) {
-                    toast.success(`Successfully imported ${successCount} vouchers!`);
-                    fetchVouchers();
-                    setShowImportModal(false);
-                    setSelectedImportFile(null);
-                }
-                if (errorCount > 0) {
-                    console.error("Import errors:", errors);
-                    toast.error(`Import failed for ${errorCount} rows. See console for details.`);
-                }
+                    resolve({
+                        summary: {
+                            totalRows: json.length,
+                            successful: successCount,
+                            failed: errorCount
+                        },
+                        errors: errorsList,
+                        errorFile: createBase64Excel(errorRows),
+                        successFile: createBase64Excel(successRows)
+                    });
 
-            } catch (err) {
-                console.error("Failed to import Excel:", err);
-                toast.error("Failed to parse Excel file.");
-            } finally {
-                setLoading(false);
-            }
-        };
-        reader.readAsBinaryString(selectedImportFile);
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            reader.readAsBinaryString(file);
+        });
     };
 
     return (
@@ -1847,7 +1862,7 @@ const Finance = () => {
                                     const pageClosing = currentRows.reduce((sum, item) => sum + Number(item.closingBalance || 0), 0);
                                     const pageAmount = currentRows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-                                    const allData = summaryData && summaryData.length > 0 ? summaryData : currentRows;
+                                    const allData = filteredMainData && filteredMainData.length > 0 ? filteredMainData : currentRows;
                                     const grandOpening = allData.reduce((sum, item) => sum + Number(item.openingBalance || 0), 0);
                                     const grandDebit = allData.reduce((sum, item) => sum + Number(item.debit || 0), 0);
                                     const grandCredit = allData.reduce((sum, item) => sum + Number(item.credit || 0), 0);
@@ -2727,84 +2742,12 @@ const Finance = () => {
             )}
 
             {showImportModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-[16px] shadow-2xl w-full max-w-lg mx-4 flex flex-col animate-in slide-in-from-top-4 duration-300 overflow-hidden">
-                        {/* Modal Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-[#F3F4F6]">
-                            <h2 className="text-[20px] font-bold text-[#111827]">{t('common:import_data', 'Import Data')}</h2>
-                            <button 
-                                onClick={() => {
-                                    setShowImportModal(false);
-                                    setSelectedImportFile(null);
-                                }}
-                                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors cursor-pointer"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        <div className="p-6 flex flex-col items-center gap-6 max-h-[80vh] overflow-y-auto">
-                            {/* Download Sample Button */}
-                            <button
-                                onClick={handleDownloadTemplate}
-                                className="flex items-center gap-3 px-6 h-[44px] bg-[#E8F5E9] text-[#0A3622] rounded-[10px] text-[14px] font-bold hover:bg-[#C8E6C9] transition-all shadow-sm w-max cursor-pointer"
-                            >
-                                <Download size={18} />
-                                {t('modules:download_sample', 'Download Sample Template')}
-                            </button>
-
-                            {/* Divider */}
-                            <div className="w-full h-px bg-[#F3F4F6]"></div>
-
-                            {/* Upload File Section */}
-                            <div className="w-full flex flex-col gap-4">
-                                <h3 className="text-center font-bold text-[#4B5563]">{t('modules:upload_file', 'Upload File')}</h3>
-
-                                <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
-                                    <span className="text-[14px] font-medium text-[#6B7280]">{t('common:select', 'Select File')}</span>
-                                    <div className="relative flex items-center w-full max-w-[280px]">
-                                        <input 
-                                            type="file" 
-                                            id="bank-rec-modal-file"
-                                            accept=".xlsx,.xls" 
-                                            onChange={(e) => {
-                                                if (e.target.files && e.target.files[0]) {
-                                                    setSelectedImportFile(e.target.files[0]);
-                                                }
-                                            }} 
-                                            className="hidden" 
-                                        />
-                                        <div 
-                                            className="flex items-center w-full border border-dashed border-[#D1D5DB] rounded-[8px] bg-[#F9FAFB] overflow-hidden group hover:border-[#0A3622] transition-colors cursor-pointer"
-                                            onClick={() => document.getElementById('bank-rec-modal-file').click()}
-                                        >
-                                            <div className="bg-[#F3F4F6] px-4 h-[42px] flex items-center justify-center border-r border-dashed border-[#D1D5DB] group-hover:border-[#0A3622] transition-colors">
-                                                <span className="text-[13px] font-bold text-[#4B5563] whitespace-nowrap">{t('modules:choose_file', 'Choose File')}</span>
-                                            </div>
-                                            <span className="flex-1 px-4 text-[#6B7280] truncate text-[13px]">
-                                                {selectedImportFile ? selectedImportFile.name : t('modules:no_file_chosen', 'No file chosen')}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Modal Footer / Submit */}
-                        <div className="px-6 py-4 border-t border-[#F3F4F6] flex justify-center bg-gray-50 rounded-b-[16px]">
-                            <button
-                                type="button"
-                                onClick={handleSubmitImport}
-                                disabled={!selectedImportFile || loading}
-                                className="flex items-center justify-center gap-2 px-10 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md cursor-pointer"
-                            >
-                                <UploadCloud size={18} />
-                                {loading ? t('common:processing', 'Importing...') : t('common:submit', 'Submit')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <ImportModal
+                    isOpen={showImportModal}
+                    onClose={() => setShowImportModal(false)}
+                    onImport={handleSubmitImport}
+                    onDownloadSample={handleDownloadTemplate}
+                />
             )}
         </div>
     );

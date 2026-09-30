@@ -11,6 +11,7 @@ import {
 import { fetchReportsStart } from '../reportSlice';
 import Card, { CardContent, CardHeader } from '../../../components/common/Card';
 import { FileText, ShoppingCart, TrendingUp, IndianRupee, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent, Package, Search, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Plus, Minus, Landmark, Maximize2, Minimize2, Upload, FileSpreadsheet, Download } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import Loader from '../../../components/common/Loader';
 import ReportTable from '../components/ReportTable';
 import BalanceSheetView from '../components/BalanceSheetView';
@@ -31,6 +32,114 @@ const formatDisplayDateDDMMYYYY = (dStr) => {
         return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
     return dStr;
+};
+
+const CustomCombobox = ({ value, options, onChange, placeholder, maxLength, className }) => {
+    const [isOpen, setIsOpen] = React.useState(false);
+    const wrapperRef = React.useRef(null);
+
+    React.useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    return (
+        <div ref={wrapperRef} className="relative flex items-center">
+            <input 
+                type="text" 
+                value={value}
+                placeholder={placeholder}
+                maxLength={maxLength}
+                onChange={onChange}
+                onFocus={() => setIsOpen(true)}
+                className={`${className} pr-4`}
+            />
+            <button 
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="absolute right-1 text-gray-400 hover:text-gray-600 focus:outline-none"
+            >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            {isOpen && (
+                <ul className="absolute top-full left-0 mt-1 max-h-48 overflow-y-auto w-full bg-white border border-gray-200 rounded-md shadow-xl z-50 py-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                    {options.map(opt => (
+                        <li 
+                            key={opt}
+                            onMouseDown={(e) => { e.preventDefault(); }} 
+                            onClick={() => {
+                                onChange({ target: { value: String(opt) } });
+                                setIsOpen(false);
+                            }}
+                            className={`px-1 py-1.5 text-xs hover:bg-emerald-50 cursor-pointer text-center ${String(value) === String(opt) ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-gray-700 font-medium'}`}
+                        >
+                            {opt}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+};
+
+const CustomDateSelect = ({ value, onChange }) => {
+    const [year, month, day] = value ? value.split('-') : ['', '', ''];
+
+    const handleDayChange = (e) => {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val.length > 2) val = val.slice(0, 2);
+        onChange(`${year || new Date().getFullYear()}-${month || '01'}-${val}`);
+    };
+    
+    const handleMonthChange = (e) => {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val.length > 2) val = val.slice(0, 2);
+        onChange(`${year || new Date().getFullYear()}-${val}-${day || '01'}`);
+    };
+    
+    const handleYearChange = (e) => {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val.length > 4) val = val.slice(0, 4);
+        onChange(`${val}-${month || '01'}-${day || '01'}`);
+    };
+
+    const days = Array.from({length: 31}, (_, i) => String(i + 1).padStart(2, '0'));
+    const months = Array.from({length: 12}, (_, i) => String(i + 1).padStart(2, '0'));
+    const years = Array.from({length: 15}, (_, i) => String(2020 + i));
+
+    return (
+        <div className="flex gap-2 items-center">
+            <CustomCombobox 
+                value={day} 
+                options={days}
+                placeholder="DD"
+                maxLength={2}
+                onChange={handleDayChange}
+                className="w-[3.5rem] px-2 py-1.5 text-xs text-center border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs font-medium text-gray-700 bg-white transition-all"
+            />
+            <CustomCombobox 
+                value={month} 
+                options={months}
+                placeholder="MM"
+                maxLength={2}
+                onChange={handleMonthChange}
+                className="w-[3.5rem] px-2 py-1.5 text-xs text-center border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs font-medium text-gray-700 bg-white transition-all"
+            />
+            <CustomCombobox 
+                value={year} 
+                options={years}
+                placeholder="YYYY"
+                maxLength={4}
+                onChange={handleYearChange}
+                className="w-[4.2rem] px-2 py-1.5 text-xs text-center border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs font-medium text-gray-700 bg-white transition-all"
+            />
+        </div>
+    );
 };
 
 const parseLocalDateStart = (dStr) => {
@@ -604,7 +713,7 @@ const ReportDashboard = () => {
         { id: 'SALES', label: 'Sales Reports', icon: TrendingUp },
         { id: 'INVENTORY', label: 'Inventory', icon: Package },
         { id: 'PROFIT_LOSS', label: 'Profit & Loss', icon: Scale },
-        // { id: 'BALANCE_SHEET', label: 'Balance Sheet', icon: Landmark }, // Hidden for now
+        { id: 'BALANCE_SHEET', label: 'Balance Sheet', icon: Landmark },
     ];
 
     const renderPeriodFilterBar = () => {
@@ -629,20 +738,16 @@ const ReportDashboard = () => {
                 <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2">
                         <label className="text-xs font-semibold text-gray-600">From:</label>
-                        <input
-                            type="date"
+                        <CustomDateSelect
                             value={plFromDate}
-                            onChange={(e) => setPlFromDate(e.target.value)}
-                            className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white shadow-xs font-medium"
+                            onChange={(val) => setPlFromDate(val)}
                         />
                     </div>
                     <div className="flex items-center gap-2">
                         <label className="text-xs font-semibold text-gray-600">To:</label>
-                        <input
-                            type="date"
+                        <CustomDateSelect
                             value={plToDate}
-                            onChange={(e) => setPlToDate(e.target.value)}
-                            className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white shadow-xs font-medium"
+                            onChange={(val) => setPlToDate(val)}
                         />
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -1160,53 +1265,70 @@ const ReportDashboard = () => {
                         <div className="flex flex-wrap items-center justify-between w-full gap-3">
                             <div className="flex items-center gap-2">
                                 <label className="text-xs font-semibold text-gray-600">From:</label>
-                                <input
-                                    type="date"
+                                <CustomDateSelect
                                     value={plFromDate}
-                                    onChange={(e) => setPlFromDate(e.target.value)}
-                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                    onChange={(val) => {
+                                        if (plToDate && new Date(val) > new Date(plToDate)) {
+                                            toast.error("From date cannot be greater than To date");
+                                            return;
+                                        }
+                                        setPlFromDate(val);
+                                    }}
                                 />
                             </div>
                             <div className="flex items-center gap-2">
                                 <label className="text-xs font-semibold text-gray-600">To:</label>
-                                <input
-                                    type="date"
+                                <CustomDateSelect
                                     value={plToDate}
-                                    onChange={(e) => setPlToDate(e.target.value)}
-                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                    onChange={(val) => {
+                                        if (plFromDate && new Date(val) < new Date(plFromDate)) {
+                                            toast.error("To date cannot be smaller than From date");
+                                            return;
+                                        }
+                                        setPlToDate(val);
+                                    }}
                                 />
                             </div>
                             <div className="flex items-center gap-1">
-                                <button
-                                    onClick={() => {
-                                        setPlFromDate('2026-04-01');
-                                        setPlToDate('2027-03-31');
-                                    }}
-                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 transition-colors"
-                                >
-                                    FY 2026-27
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        const now = new Date();
-                                        const firstDay = toLocalISOString(new Date(now.getFullYear(), now.getMonth(), 1));
-                                        const today = toLocalISOString(now);
-                                        setPlFromDate(firstDay);
-                                        setPlToDate(today);
-                                    }}
-                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-                                >
-                                    This Month
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setPlFromDate('');
-                                        setPlToDate('');
-                                    }}
-                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-                                >
-                                    All Time
-                                </button>
+                                {(() => {
+                                    const now = new Date();
+                                    const firstDayThisMonth = toLocalISOString(new Date(now.getFullYear(), now.getMonth(), 1));
+                                    const todayDate = toLocalISOString(now);
+                                    const isFY = plFromDate === '2026-04-01' && plToDate === '2027-03-31';
+                                    const isThisMonth = plFromDate === firstDayThisMonth && plToDate === todayDate;
+                                    const isAllTime = plFromDate === '' && plToDate === '';
+                                    return (
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    setPlFromDate('2026-04-01');
+                                                    setPlToDate('2027-03-31');
+                                                }}
+                                                className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-colors outline-none focus:ring-2 focus:ring-emerald-500/40 ${isFY ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                                            >
+                                                FY 2026-27
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setPlFromDate(firstDayThisMonth);
+                                                    setPlToDate(todayDate);
+                                                }}
+                                                className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-colors outline-none focus:ring-2 focus:ring-emerald-500/40 ${isThisMonth ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                                            >
+                                                This Month
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setPlFromDate('');
+                                                    setPlToDate('');
+                                                }}
+                                                className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-colors outline-none focus:ring-2 focus:ring-emerald-500/40 ${isAllTime ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                                            >
+                                                All Time
+                                            </button>
+                                        </>
+                                    );
+                                })()}
                             </div>
                             <div className="flex items-center gap-2 border-l border-gray-300 pl-2 ml-1">
                                 <button
@@ -1630,53 +1752,70 @@ const ReportDashboard = () => {
                         <div className="flex flex-wrap items-center gap-3">
                             <div className="flex items-center gap-2">
                                 <label className="text-xs font-semibold text-gray-600">From:</label>
-                                <input
-                                    type="date"
+                                <CustomDateSelect
                                     value={plFromDate}
-                                    onChange={(e) => setPlFromDate(e.target.value)}
-                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                    onChange={(val) => {
+                                        if (plToDate && new Date(val) > new Date(plToDate)) {
+                                            toast.error("From date cannot be greater than To date");
+                                            return;
+                                        }
+                                        setPlFromDate(val);
+                                    }}
                                 />
                             </div>
                             <div className="flex items-center gap-2">
                                 <label className="text-xs font-semibold text-gray-600">To:</label>
-                                <input
-                                    type="date"
+                                <CustomDateSelect
                                     value={plToDate}
-                                    onChange={(e) => setPlToDate(e.target.value)}
-                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                    onChange={(val) => {
+                                        if (plFromDate && new Date(val) < new Date(plFromDate)) {
+                                            toast.error("To date cannot be smaller than From date");
+                                            return;
+                                        }
+                                        setPlToDate(val);
+                                    }}
                                 />
                             </div>
                             <div className="flex items-center gap-1">
-                                <button
-                                    onClick={() => {
-                                        setPlFromDate('2026-04-01');
-                                        setPlToDate('2027-03-31');
-                                    }}
-                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 transition-colors"
-                                >
-                                    FY 2026-27
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        const now = new Date();
-                                        const firstDay = toLocalISOString(new Date(now.getFullYear(), now.getMonth(), 1));
-                                        const today = toLocalISOString(now);
-                                        setPlFromDate(firstDay);
-                                        setPlToDate(today);
-                                    }}
-                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-                                >
-                                    This Month
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setPlFromDate('');
-                                        setPlToDate('');
-                                    }}
-                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-                                >
-                                    All Time
-                                </button>
+                                {(() => {
+                                    const now = new Date();
+                                    const firstDayThisMonth = toLocalISOString(new Date(now.getFullYear(), now.getMonth(), 1));
+                                    const todayDate = toLocalISOString(now);
+                                    const isFY = plFromDate === '2026-04-01' && plToDate === '2027-03-31';
+                                    const isThisMonth = plFromDate === firstDayThisMonth && plToDate === todayDate;
+                                    const isAllTime = plFromDate === '' && plToDate === '';
+                                    return (
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    setPlFromDate('2026-04-01');
+                                                    setPlToDate('2027-03-31');
+                                                }}
+                                                className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-colors outline-none focus:ring-2 focus:ring-emerald-500/40 ${isFY ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                                            >
+                                                FY 2026-27
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setPlFromDate(firstDayThisMonth);
+                                                    setPlToDate(todayDate);
+                                                }}
+                                                className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-colors outline-none focus:ring-2 focus:ring-emerald-500/40 ${isThisMonth ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                                            >
+                                                This Month
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setPlFromDate('');
+                                                    setPlToDate('');
+                                                }}
+                                                className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-colors outline-none focus:ring-2 focus:ring-emerald-500/40 ${isAllTime ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                                            >
+                                                All Time
+                                            </button>
+                                        </>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>
@@ -1834,29 +1973,15 @@ const ReportDashboard = () => {
             );
         }
         if (activeTab === 'PROFIT_LOSS') {
-            if (plLoading) {
-                return (
-                    <div className="flex justify-center items-center py-20 bg-white rounded-[20px] border border-gray-100 shadow-md mb-8">
-                        <Loader />
-                    </div>
-                );
-            }
             return (
-                <div className="mb-2 animate-in fade-in duration-300">
+                <div className="mb-2 relative animate-in fade-in duration-300">
                     {renderProfitLossStatement()}
                 </div>
             );
         }
         if (activeTab === 'BALANCE_SHEET') {
-            if (plLoading) {
-                return (
-                    <div className="flex justify-center items-center py-20 bg-white rounded-[20px] border border-gray-100 shadow-md mb-8">
-                        <Loader />
-                    </div>
-                );
-            }
             return (
-                <div className="mb-2 animate-in fade-in duration-300">
+                <div className="mb-2 relative animate-in fade-in duration-300">
                     <BalanceSheetView
                         balanceData={balanceSheetData}
                         fromDate={plFromDate}

@@ -2037,7 +2037,7 @@ export class AccountMasterService {
       const row = worksheet.getRow(r);
       let foundHeaders = false;
       row.eachCell((cell, colNumber) => {
-        const val = String(cell.value || '').trim().toLowerCase();
+        const val = String(cell.value || '').trim().toLowerCase().replace(/[*]/g, '');
         if (val.includes('account name') || val.includes('acc name')) { colMap['accountName'] = colNumber; foundHeaders = true; }
         if (val.includes('group name') || val.includes('group')) colMap['groupName'] = colNumber;
         if (val.includes('gst')) colMap['gstNo'] = colNumber;

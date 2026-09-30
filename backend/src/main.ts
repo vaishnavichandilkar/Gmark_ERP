@@ -30,12 +30,16 @@ async function bootstrap() {
     app.setGlobalPrefix('api/v1');
     
     // Secure CORS
-    const corsOrigin = process.env.CORS_ORIGIN;
     app.enableCors({
-        origin: corsOrigin ? corsOrigin.split(',') : true,
+        origin: [
+            'https://<your-cloudfront-id>.cloudfront.net', // CloudFront URL
+            'http://<your-s3-bucket-website-endpoint>',    // S3 static site URL (if not using CloudFront yet)
+            'http://65.1.20.25',                           // EC2 instance IP
+            'http://localhost:5173',                       // Local frontend dev server
+        ],
         credentials: true,
-        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-        allowedHeaders: 'Content-Type,Accept,Authorization,x-session-id,ngrok-skip-browser-warning',
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
     });
 
     app.use((req, res, next) => {

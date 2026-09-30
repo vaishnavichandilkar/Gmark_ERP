@@ -40,9 +40,9 @@ services:
       REDIS_PORT: 6379
       ENABLE_DEV_OTP: "true"
       DEV_OTP: "123456"
-      PORT: 3000
+      PORT: 3001
     ports:
-      - "3000:3000"
+      - "3001:3001"
     depends_on:
       - postgres
       - redis
@@ -56,7 +56,7 @@ services:
     container_name: gmark_frontend
     restart: always
     ports:
-      - "8080:80"
+      - "80:80"
     depends_on:
       - backend
     networks:

@@ -920,7 +920,11 @@ export class ReportsService {
         status: { in: ['GENERATED', 'COMPLETED'] as any },
       };
       if (cutoffDate) {
-        piWhere.bookingDate = isStrictlyBefore ? { lt: cutoffDate } : { lte: cutoffDate };
+        const cond = isStrictlyBefore ? { lt: cutoffDate } : { lte: cutoffDate };
+        piWhere.OR = [
+          { supplierInvoiceDate: cond },
+          { invoiceDate: cond },
+        ];
       }
 
       const purchaseItems = await this.prisma.purchaseInvoiceItem.findMany({
@@ -944,7 +948,11 @@ export class ReportsService {
         status: { in: ['GENERATED', 'COMPLETED'] as any },
       };
       if (cutoffDate) {
-        siWhere.bookingDate = isStrictlyBefore ? { lt: cutoffDate } : { lte: cutoffDate };
+        const cond = isStrictlyBefore ? { lt: cutoffDate } : { lte: cutoffDate };
+        siWhere.OR = [
+          { customerInvoiceDate: cond },
+          { invoiceDate: cond },
+        ];
       }
 
       const salesItems = await this.prisma.salesInvoiceItem.findMany({
