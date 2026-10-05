@@ -4,7 +4,7 @@ import AuthLayout from '../../layout/auth/AuthLayout';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 
-import logo from '../../assets/images/ERP_Logo2.png';
+import logo from '../../assets/images/bizdrona_logo.png';
 import { ChevronDown, ArrowLeft } from 'lucide-react';
 import { sendLoginOtpApi } from '../../services/authService';
 import { useTranslation } from 'react-i18next';
@@ -115,7 +115,7 @@ const SignIn = () => {
     };
 
     return (
-        <AuthLayout hideLeftPanel={true}>
+        <AuthLayout>
             <div className="relative text-left w-full box-border flex flex-col pt-0">
                 <button
                     onClick={() => navigate(-1)}
@@ -128,8 +128,8 @@ const SignIn = () => {
 
                 <img
                     src={logo}
-                    alt="WeighPro Logo"
-                    className="h-18 w-auto mb-2 md:mb-4 block object-contain self-start"
+                    alt="BizDrona Logo"
+                    className="h-16 w-auto mb-2 md:mb-4 block object-contain self-start"
                     onError={(e) => { e.target.style.display = 'none' }}
                 />
                 <h2 className="text-[30px] font-['Geist_Sans'] font-bold mb-1 leading-tight text-gray-900">

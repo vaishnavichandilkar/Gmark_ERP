@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import AuthLayout from '../../layout/auth/AuthLayout';
 import Button from '../../components/common/Button';
 import { ArrowLeft } from 'lucide-react';
-import logo from '../../assets/images/ERP_Logo2.png';
+import logo from '../../assets/images/bizdrona_logo.png';
 
 const VerifyOTP = () => {
     const { t } = useTranslation('auth');
