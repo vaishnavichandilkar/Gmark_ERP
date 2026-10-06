@@ -78,8 +78,7 @@ const Landing = () => {
                     <img
                         src={logo}
                         alt="BizDrona Logo"
-                        className="h-28 md:h-32 w-auto mb-3 block pl-0 ml-0 object-contain self-start"
-                        style={{ paddingLeft: '0px', marginLeft: '0px' }}
+                        className="h-28 md:h-32 w-auto -ml-4 md:-ml-5 mb-3 block object-contain self-start"
                         onError={(e) => { e.target.style.display = 'none' }}
                     />
 

@@ -263,7 +263,7 @@ const VerifyOTP = () => {
                     <img
                         src={logo}
                         alt="BizDrona Logo"
-                        className="h-28 md:h-32 w-auto block object-contain self-start"
+                        className="h-28 md:h-32 w-auto -ml-4 md:-ml-5 block object-contain self-start"
                         onError={(e) => { e.target.style.display = 'none' }}
                     />
                     {mode === 'signup' && (
