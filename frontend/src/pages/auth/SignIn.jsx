@@ -129,7 +129,7 @@ const SignIn = () => {
                 <img
                     src={logo}
                     alt="BizDrona Logo"
-                    className="h-16 w-auto mb-2 md:mb-4 block object-contain self-start"
+                    className="h-28 md:h-32 w-auto mb-2 md:mb-4 block object-contain self-start"
                     onError={(e) => { e.target.style.display = 'none' }}
                 />
                 <h2 className="text-[30px] font-['Geist_Sans'] font-bold mb-1 leading-tight text-gray-900">

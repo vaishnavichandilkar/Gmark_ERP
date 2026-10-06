@@ -262,8 +262,8 @@ const VerifyOTP = () => {
                 <div className="flex justify-between items-center mb-12 w-full">
                     <img
                         src={logo}
-                        alt="WeighPro Logo"
-                        className="h-18 w-auto block object-contain self-start"
+                        alt="BizDrona Logo"
+                        className="h-28 md:h-32 w-auto block object-contain self-start"
                         onError={(e) => { e.target.style.display = 'none' }}
                     />
                     {mode === 'signup' && (
