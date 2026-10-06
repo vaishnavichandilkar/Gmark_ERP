@@ -713,7 +713,7 @@ const ReportDashboard = () => {
         { id: 'SALES', label: 'Sales Reports', icon: TrendingUp },
         { id: 'INVENTORY', label: 'Inventory', icon: Package },
         { id: 'PROFIT_LOSS', label: 'Profit & Loss', icon: Scale },
-        { id: 'BALANCE_SHEET', label: 'Balance Sheet', icon: Landmark },
+        // { id: 'BALANCE_SHEET', label: 'Balance Sheet', icon: Landmark },
     ];
 
     const renderPeriodFilterBar = () => {
