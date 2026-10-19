@@ -41,7 +41,7 @@ const AddSO = () => {
 
     const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
     const [isCustomerTypeDropdownOpen, setIsCustomerTypeDropdownOpen] = useState(false);
-    const customerTypes = ['industrial', 'institutional', 'dealer', 'retailer', 'wholesaler'];
+    const customerTypes = ['industrial', 'institutional', 'dealer', 'retailer'];
     const [customerSearch, setCustomerSearch] = useState('');
     const [customers, setCustomers] = useState([]);
     const [poType, setPoType] = useState('');

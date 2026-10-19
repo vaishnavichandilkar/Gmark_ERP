@@ -135,8 +135,13 @@ export interface PurchaseReportResponseDto {
 
 export interface SalesReportResponseDto {
   grossSales: number;
+  netSales: number;
   totalTaxCollected: number;
+  totalDiscounts: number;
+  returnsAndRefunds: number;
   completedSales: number;
+  totalSalesOrders: number;
+  averageOrderValue: number;
 }
 
 export enum StockValuationMethod {
@@ -354,5 +359,222 @@ export interface BalanceSheetResponseDto {
     current_assets: BalanceSheetSectionDto;
   };
 }
+
+export class OverallSalesReportQueryDto {
+  @IsOptional()
+  @IsDateString()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dateTo?: string;
+}
+
+export class CustomerSalesReportQueryDto {
+  @IsOptional()
+  @IsDateString()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dateTo?: string;
+
+  @IsOptional()
+  @IsString()
+  customerTypes?: string;
+
+  @IsOptional()
+  @IsString()
+  customerIds?: string;
+
+  @IsOptional()
+  @IsString()
+  productIds?: string;
+
+  @IsOptional()
+  @IsString()
+  categoryIds?: string;
+
+  @IsOptional()
+  @IsString()
+  subCategoryIds?: string;
+
+  @IsOptional()
+  @IsString()
+  subSubCategoryIds?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  minAmount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  maxAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @IsOptional()
+  @IsString()
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface PeriodComparisonDto {
+  previousValue: number;
+  currentValue: number;
+  changePercent: number | null;
+  isIncrease: boolean;
+}
+
+export interface CustomerSalesSummaryResponseDto {
+  totalCustomers: number;
+  totalSales: number;
+  totalOrders: number;
+  averageOrderValue: number;
+  repeatCustomers: number;
+  newCustomers: number;
+  comparisons: {
+    totalCustomers: PeriodComparisonDto;
+    totalSales: PeriodComparisonDto;
+    totalOrders: PeriodComparisonDto;
+    averageOrderValue: PeriodComparisonDto;
+    repeatCustomers: PeriodComparisonDto;
+    newCustomers: PeriodComparisonDto;
+  };
+}
+
+export interface CustomerMonthlySalesProductItemDto {
+  productName: string;
+  productCode?: string;
+  quantity?: number;
+  uom?: string;
+  totalAmount?: number;
+}
+
+export interface CustomerMonthlySalesItemDto {
+  monthKey: string;
+  monthLabel: string;
+  year: number;
+  month: number;
+  salesAmount: number;
+  orderFrequency: number;
+  sharePercent: number;
+  products?: string[];
+  productDetails?: CustomerMonthlySalesProductItemDto[];
+  totalProductsCount?: number;
+}
+
+export interface CustomerSalesItemDto {
+  customerId: number;
+  customerName: string;
+  customerCode: string;
+  customerType: string;
+  customerTypeLabel: string;
+  totalOrders: number;
+  grossSales: number;
+  discounts: number;
+  taxAmount: number;
+  returnsRefunds: number;
+  netSales: number;
+  averageOrderValue: number;
+  lastPurchaseDate: string | null;
+  monthlySales?: CustomerMonthlySalesItemDto[];
+}
+
+export interface CustomerTypeGroupDto {
+  customerType: string;
+  customerTypeLabel: string;
+  totalCustomers: number;
+  totalSales: number;
+  totalOrders: number;
+  customers: CustomerSalesItemDto[];
+}
+
+export interface CustomerSalesGroupsResponseDto {
+  summary: CustomerSalesSummaryResponseDto;
+  groups: CustomerTypeGroupDto[];
+  totalGroups: number;
+  totalMatchingCustomers: number;
+  totalMatchingOrders: number;
+}
+
+export interface CustomerSalesFilterOptionsResponseDto {
+  customerTypes: { id: string; label: string }[];
+  customers: { id: number; name: string; code: string; type: string }[];
+  products: { id: number; name: string; code: string; categoryId?: string; subCategoryId?: string; subSubCategoryId?: string }[];
+  categories: { id: string; name: string }[];
+  subCategories: { id: string; name: string; categoryId: string }[];
+  subSubCategories: { id: string; name: string; subCategoryId: string; categoryId?: string }[];
+}
+
+export interface CustomerTimeSalesItemDto {
+  key: string;
+  label: string;
+  subLabel?: string;
+  salesAmount: number;
+  orderFrequency: number;
+  sharePercent: number;
+  products?: string[];
+  productDetails?: CustomerMonthlySalesProductItemDto[];
+  totalProductsCount?: number;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
+  isPeak?: boolean;
+}
+
+export interface GranularitySummaryDto {
+  totalPeriods: number;
+  activePeriods: number;
+  averageAmount: number;
+  averageFrequency: number;
+  peakPeriod: { label: string; amount: number; frequency: number; key?: string };
+  peakFrequencyPeriod: { label: string; amount: number; frequency: number; key?: string };
+  lowestPeriod: { label: string; amount: number; frequency: number; key?: string };
+}
+
+export interface CustomerSalesInvoiceItemDto {
+  customerInvoiceDate: Date | string;
+  bookingDate?: Date | string;
+  taxableAmount?: number;
+  grandTotal?: number;
+  soNumber?: string;
+  soId?: number;
+  invoiceNumber?: string;
+  items?: CustomerMonthlySalesProductItemDto[];
+}
+
+export interface CustomerMonthlySalesResponseDto {
+  customerId: number;
+  customerName: string;
+  customerCode: string;
+  customerType: string;
+  customerTypeLabel: string;
+  periodLabel: string;
+  totalAmount: number;
+  totalFrequency: number;
+  averageMonthlyAmount: number;
+  averageMonthlyFrequency: number;
+  peakMonthAmount: { monthLabel: string; amount: number };
+  lowestMonthAmount: { monthLabel: string; amount: number };
+  months: CustomerMonthlySalesItemDto[];
+  daily?: CustomerTimeSalesItemDto[];
+  weekly?: CustomerTimeSalesItemDto[];
+  yearly?: CustomerTimeSalesItemDto[];
+  summaries?: {
+    daily: GranularitySummaryDto;
+    weekly: GranularitySummaryDto;
+    monthly: GranularitySummaryDto;
+    yearly: GranularitySummaryDto;
+  };
+  invoices?: CustomerSalesInvoiceItemDto[];
+}
+
+
 
 

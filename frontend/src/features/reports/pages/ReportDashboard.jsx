@@ -10,11 +10,12 @@ import {
 } from 'recharts';
 import { fetchReportsStart } from '../reportSlice';
 import Card, { CardContent, CardHeader } from '../../../components/common/Card';
-import { FileText, ShoppingCart, TrendingUp, IndianRupee, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent, Package, Search, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Plus, Minus, Landmark, Maximize2, Minimize2, Upload, FileSpreadsheet, Download } from 'lucide-react';
+import { FileText, ShoppingCart, TrendingUp, IndianRupee, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent, Package, Search, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Plus, Minus, Landmark, Maximize2, Minimize2, Upload, FileSpreadsheet, Download, Users, RotateCcw, Receipt } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Loader from '../../../components/common/Loader';
 import ReportTable from '../components/ReportTable';
 import BalanceSheetView from '../components/BalanceSheetView';
+import CustomerSalesReportView from '../components/CustomerSalesReportView';
 import reportService from '../../../services/reportService';
 
 const toLocalISOString = (d) => {
@@ -223,6 +224,7 @@ const ReportDashboard = () => {
     }, [searchParams]);
 
     const [activeTab, setActiveTab] = useState(initialTab); // Default to 'PROFIT_LOSS'
+    const [salesReportTab, setSalesReportTab] = useState('OVERALL'); // 'OVERALL' | 'CUSTOMER'
     const [timeFilter, setTimeFilter] = useState('MONTHLY'); // 'DAILY', 'WEEKLY', 'MONTHLY'
     const [detailView, setDetailView] = useState(null); // { type: 'PO', status: 'Created', data: [] }
     const [profitLossData, setProfitLossData] = useState(null);
@@ -230,6 +232,11 @@ const ReportDashboard = () => {
     const defaultFy = useMemo(() => getCurrentFYBounds(), []);
     const [plFromDate, setPlFromDate] = useState(defaultFy.fromDate);
     const [plToDate, setPlToDate] = useState(defaultFy.toDate);
+
+    const customerDateRange = useMemo(() => ({
+        dateFrom: plFromDate,
+        dateTo: plToDate
+    }), [plFromDate, plToDate]);
 
     const [isPurchaseExpanded, setIsPurchaseExpanded] = useState(false);
     const [isSalesExpanded, setIsSalesExpanded] = useState(false);
@@ -391,6 +398,20 @@ const ReportDashboard = () => {
         const totalSales = completedSales.reduce((sum, item) => sum + (item.grandTotal || item.totalAmount || 0), 0);
         const totalPurchaseTax = validPurchases.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
         const totalSalesTax = completedSales.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
+        const totalDiscounts = completedSales.reduce((sum, item) => sum + (item.discountAmount || item.discount || 0), 0);
+        const grossSales = completedSales.reduce((sum, item) => {
+            if (item.subTotal) return sum + (item.subTotal || 0);
+            const net = item.grandTotal || item.totalAmount || 0;
+            const tax = item.taxAmount || 0;
+            const disc = item.discountAmount || item.discount || 0;
+            return sum + (net - tax + disc);
+        }, 0);
+        const netSales = totalSales;
+        const returnsRefunds = 0;
+        const completedSalesCount = completedSales.length;
+        const validSalesOrders = (filteredSalesData || []).filter(so => so.status !== 'DELETED');
+        const totalSalesOrdersCount = validSalesOrders.length;
+        const averageOrderValue = completedSalesCount > 0 ? (netSales / completedSalesCount) : 0;
         const profit = totalSales - totalPurchases;
 
         const parseSafeDate = (d) => {
@@ -550,6 +571,13 @@ const ReportDashboard = () => {
             materialPurchases,
             purchaseExpenses,
             totalSales,
+            grossSales,
+            netSales,
+            totalDiscounts,
+            returnsRefunds,
+            completedSalesCount,
+            totalSalesOrdersCount,
+            averageOrderValue,
             totalPurchaseTax,
             totalSalesTax,
             profit,
@@ -924,44 +952,141 @@ const ReportDashboard = () => {
             );
         }
         if (activeTab === 'SALES') {
+            if (salesReportTab === 'CUSTOMER') {
+                const pLabel = `${plFromDate ? formatDisplayDateDDMMYYYY(plFromDate) : 'Beginning'} - ${plToDate ? formatDisplayDateDDMMYYYY(plToDate) : 'Current Date'}`;
+                return (
+                    <CustomerSalesReportView
+                        fromDate={plFromDate}
+                        toDate={plToDate}
+                        onFromDateChange={setPlFromDate}
+                        onToDateChange={setPlToDate}
+                        periodLabel={pLabel}
+                    />
+                );
+            }
+
             return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    {/* 1. Gross Sales */}
                     <Card
                         className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100 hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => handleCardClick('SI', 'Total Invoices', salesInvoicesData)}
+                        onClick={() => handleCardClick('SI', 'Gross Sales Invoices', salesInvoicesData)}
                     >
-                        <CardContent className="flex items-center p-6">
-                            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mr-4">
-                                <TrendingUp className="text-blue-700" size={24} />
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <TrendingUp className="text-blue-700" size={22} />
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-blue-800/70 mb-1">Gross Sales</p>
-                                <h4 className="text-2xl font-bold text-blue-900">{formatCurrency(metrics.totalSales)}</h4>
+                                <p className="text-xs font-semibold text-blue-800/70 mb-1 uppercase tracking-wider">Gross Sales</p>
+                                <h4 className="text-xl font-bold text-blue-900">{formatCurrency(metrics.grossSales)}</h4>
+                                <p className="text-[11px] text-blue-600 mt-1">Pre-discount & taxes</p>
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100">
-                        <CardContent className="flex items-center p-6">
-                            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mr-4">
-                                <IndianRupee className="text-blue-700" size={24} />
+
+                    {/* 2. Net Sales */}
+                    <Card
+                        className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleCardClick('SI', 'Net Sales Invoices', salesInvoicesData)}
+                    >
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <IndianRupee className="text-emerald-700" size={22} />
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-blue-800/70 mb-1">Total Tax Collected</p>
-                                <h4 className="text-2xl font-bold text-blue-900">{formatCurrency(metrics.totalSalesTax)}</h4>
+                                <p className="text-xs font-semibold text-emerald-800/70 mb-1 uppercase tracking-wider">Net Sales</p>
+                                <h4 className="text-xl font-bold text-emerald-900">{formatCurrency(metrics.netSales)}</h4>
+                                <p className="text-[11px] text-emerald-600 mt-1">Final billed amount</p>
                             </div>
                         </CardContent>
                     </Card>
-                    <Card
-                        className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100 hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => handleCardClick('SI', 'Total Invoices', salesInvoicesData)}
-                    >
-                        <CardContent className="flex items-center p-6">
-                            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mr-4">
-                                <FileCheck className="text-blue-700" size={24} />
+
+                    {/* 3. Total Tax Collected */}
+                    <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border-indigo-100 hover:shadow-md transition-shadow">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <Receipt className="text-indigo-700" size={22} />
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-blue-800/70 mb-1">Completed Sales</p>
-                                <h4 className="text-2xl font-bold text-blue-900">{metrics.salesCount}</h4>
+                                <p className="text-xs font-semibold text-indigo-800/70 mb-1 uppercase tracking-wider">Total Tax Collected</p>
+                                <h4 className="text-xl font-bold text-indigo-900">{formatCurrency(metrics.totalSalesTax)}</h4>
+                                <p className="text-[11px] text-indigo-600 mt-1">GST / Output Tax</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 4. Total Discounts */}
+                    <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-100 hover:shadow-md transition-shadow">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <Percent className="text-purple-700" size={22} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-purple-800/70 mb-1 uppercase tracking-wider">Total Discounts</p>
+                                <h4 className="text-xl font-bold text-purple-900">{formatCurrency(metrics.totalDiscounts)}</h4>
+                                <p className="text-[11px] text-purple-600 mt-1">Special price deductions</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 5. Returns and Refunds */}
+                    <Card className="bg-gradient-to-br from-rose-50 to-rose-100/50 border-rose-100 hover:shadow-md transition-shadow">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-rose-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <RotateCcw className="text-rose-700" size={22} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-rose-800/70 mb-1 uppercase tracking-wider">Returns & Refunds</p>
+                                <h4 className="text-xl font-bold text-rose-900">{formatCurrency(metrics.returnsRefunds)}</h4>
+                                <p className="text-[11px] text-rose-600 mt-1">Credit notes / returns</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 6. Completed Sales */}
+                    <Card
+                        className="bg-gradient-to-br from-teal-50 to-teal-100/50 border-teal-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleCardClick('SI', 'Completed Invoices', salesInvoicesData)}
+                    >
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-teal-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <FileCheck className="text-teal-700" size={22} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-teal-800/70 mb-1 uppercase tracking-wider">Completed Sales</p>
+                                <h4 className="text-xl font-bold text-teal-900">{metrics.completedSalesCount}</h4>
+                                <p className="text-[11px] text-teal-600 mt-1">Active finalized invoices</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 7. Total Sales Orders */}
+                    <Card
+                        className="bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleCardClick('SO', 'Sales Orders', salesData)}
+                    >
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <ShoppingCart className="text-amber-700" size={22} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-amber-800/70 mb-1 uppercase tracking-wider">Total Sales Orders</p>
+                                <h4 className="text-xl font-bold text-amber-900">{metrics.totalSalesOrdersCount}</h4>
+                                <p className="text-[11px] text-amber-600 mt-1">Orders booked</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 8. Average Order Value */}
+                    <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100/50 border-cyan-100 hover:shadow-md transition-shadow">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-cyan-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <Activity className="text-cyan-700" size={22} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-cyan-800/70 mb-1 uppercase tracking-wider">Average Order Value</p>
+                                <h4 className="text-xl font-bold text-cyan-900">{formatCurrency(metrics.averageOrderValue)}</h4>
+                                <p className="text-[11px] text-cyan-600 mt-1">Net sales / invoice count</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -1957,6 +2082,9 @@ const ReportDashboard = () => {
             );
         }
         if (activeTab === 'SALES') {
+            if (salesReportTab === 'CUSTOMER') {
+                return null;
+            }
             return (
                 <div className="mb-2">
                     {renderStatusCards('Sales Orders Status', metrics.soStatuses, 'SO', salesData)}
@@ -2240,6 +2368,10 @@ const ReportDashboard = () => {
     };
 
     const renderGraphs = () => {
+        if (activeTab === 'SALES' && salesReportTab === 'CUSTOMER') {
+            return null;
+        }
+
         const timeFilterControl = (
             <div className="inline-flex bg-gray-100 rounded-lg p-1">
                 {['DAILY', 'WEEKLY', 'MONTHLY'].map(filter => (
@@ -2403,7 +2535,35 @@ const ReportDashboard = () => {
                 </div>
             </div>
 
-            {activeTab !== 'PROFIT_LOSS' && activeTab !== 'BALANCE_SHEET' && renderPeriodFilterBar()}
+            {activeTab === 'SALES' && (
+                <div className="flex items-center gap-2 mb-6">
+                    <button
+                        type="button"
+                        onClick={() => setSalesReportTab('OVERALL')}
+                        className={`flex items-center gap-2 px-4 py-2 text-xs md:text-sm font-semibold rounded-xl transition-all duration-200 cursor-pointer ${
+                            salesReportTab === 'OVERALL'
+                                ? 'bg-[#073318] text-white shadow-sm ring-2 ring-[#073318]/20'
+                                : 'bg-white text-gray-700 hover:text-[#073318] hover:bg-emerald-50/50 border border-gray-200'
+                        }`}
+                    >
+                        <TrendingUp size={16} className={salesReportTab === 'OVERALL' ? 'text-[#10B981]' : 'text-gray-500'} />
+                        Overall Sales Report
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSalesReportTab('CUSTOMER')}
+                        className={`flex items-center gap-2 px-4 py-2 text-xs md:text-sm font-semibold rounded-xl transition-all duration-200 cursor-pointer ${
+                            salesReportTab === 'CUSTOMER'
+                                ? 'bg-[#073318] text-white shadow-sm ring-2 ring-[#073318]/20'
+                                : 'bg-white text-gray-700 hover:text-[#073318] hover:bg-emerald-50/50 border border-gray-200'
+                        }`}
+                    >
+                        <Users size={16} className={salesReportTab === 'CUSTOMER' ? 'text-[#10B981]' : 'text-gray-500'} />
+                        Customer Sales Report
+                    </button>
+                </div>
+            )}
+            {activeTab !== 'PROFIT_LOSS' && activeTab !== 'BALANCE_SHEET' && !(activeTab === 'SALES' && salesReportTab === 'CUSTOMER') && renderPeriodFilterBar()}
             {renderSummaryCards()}
             {renderSelectedStatusCards()}
             {activeTab !== 'INVENTORY' && renderGraphs()}

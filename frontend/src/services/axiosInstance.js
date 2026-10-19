@@ -106,7 +106,15 @@ axiosInstance.interceptors.response.use(
         }
 
         // 2. Token refresh / 401 handling
-        if (error.response && error.response.status === 401 && !originalRequest._retry) {
+        const isAuthRequest = originalRequest.url && (
+            originalRequest.url.includes('/auth/login') ||
+            originalRequest.url.includes('/auth/send-login-otp') ||
+            originalRequest.url.includes('/auth/resend-otp') ||
+            originalRequest.url.includes('/auth/refresh-token') ||
+            originalRequest.url.includes('/onboarding/step')
+        );
+
+        if (!isAuthRequest && error.response && error.response.status === 401 && !originalRequest._retry) {
             if (isRefreshing) {
                 return new Promise((resolve, reject) => {
                     failedQueue.push({ resolve, reject });
@@ -143,24 +151,22 @@ axiosInstance.interceptors.response.use(
                     }
                 } catch (refreshError) {
                     processQueue(refreshError, null);
-                    // Clear all session and authentication data
+                    // Clear user session data (keep languageConfirmed)
                     localStorage.removeItem('token');
                     localStorage.removeItem('refreshToken');
                     localStorage.removeItem('user');
                     localStorage.removeItem('sessionId');
-                    localStorage.removeItem('languageConfirmed');
                     window.location.href = '/login';
                     return Promise.reject(refreshError);
                 } finally {
                     isRefreshing = false;
                 }
             } else {
-                // No refresh token available, clear everything and redirect
+                // No refresh token available, clear session data and redirect to login
                 localStorage.removeItem('token');
                 localStorage.removeItem('refreshToken');
                 localStorage.removeItem('user');
                 localStorage.removeItem('sessionId');
-                localStorage.removeItem('languageConfirmed');
                 window.location.href = '/login';
             }
         }

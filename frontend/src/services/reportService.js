@@ -41,6 +41,22 @@ const reportService = {
     getBalanceSheet: async (params) => {
         const response = await axiosInstance.get('/reports/balance-sheet', { params });
         return response.data;
+    },
+    getOverallSalesReport: async (params) => {
+        const response = await axiosInstance.get('/reports/sales', { params });
+        return response.data;
+    },
+    getCustomerSalesGroups: async (params) => {
+        const response = await axiosInstance.get('/reports/customer-sales/groups', { params });
+        return response.data;
+    },
+    getCustomerSalesFilterOptions: async () => {
+        const response = await axiosInstance.get('/reports/customer-sales/filter-options');
+        return response.data;
+    },
+    getCustomerMonthlySales: async (customerId, params) => {
+        const response = await axiosInstance.get(`/reports/customer-sales/customer/${customerId}/monthly`, { params });
+        return response.data;
     }
 };
 
