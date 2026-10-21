@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Request, Param, ParseIntPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { ReportsService } from './reports.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -9,6 +9,9 @@ import {
   TrendQueryDto,
   ProfitLossQueryDto,
   InventoryQueryDto,
+  BalanceSheetQueryDto,
+  OverallSalesReportQueryDto,
+  CustomerSalesReportQueryDto,
 } from './dto/reports.dto';
 
 @ApiTags('Reports')
@@ -17,6 +20,13 @@ import {
 @ApiBearerAuth()
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
+
+  @Get('balance-sheet')
+  @RequirePermission('reports_view')
+  @ApiOperation({ summary: 'Get Balance Sheet (Financial Position) report data' })
+  async getBalanceSheet(@Query() query: BalanceSheetQueryDto, @Request() req) {
+    return this.reportsService.getBalanceSheet(req.user.userId, query);
+  }
 
   @Get('inventory')
   @RequirePermission('reports_view')
@@ -75,8 +85,46 @@ export class ReportsController {
   }
 
   @Get('sales')
-  @ApiOperation({ summary: 'Get gross sales and total tax collected' })
-  async getSales(@Request() req) {
-    return this.reportsService.getSalesReport(req.user.userId);
+  @ApiOperation({ summary: 'Get gross sales, net sales, taxes, discounts, orders and average order value' })
+  async getSales(@Query() query: OverallSalesReportQueryDto, @Request() req) {
+    const userId = req.user.userId || req.user.id;
+    return this.reportsService.getSalesReport(userId, query);
+  }
+
+  @Get('customer-sales/filter-options')
+  @ApiOperation({ summary: 'Get customer types, customers, products, and categories for report filters' })
+  async getCustomerSalesFilterOptions(@Request() req) {
+    const userId = req.user.userId || req.user.id;
+    return this.reportsService.getCustomerSalesFilterOptions(userId);
+  }
+
+  @Get('customer-sales/groups')
+  @ApiOperation({ summary: 'Get customer type-wise grouped sales data and summary with filters' })
+  async getCustomerSalesGroups(@Query() query: CustomerSalesReportQueryDto, @Request() req) {
+    const userId = req.user.userId || req.user.id;
+    return this.reportsService.getCustomerSalesGroups(userId, query);
+  }
+
+  @Get('customer-sales/customer/:id/monthly')
+  @ApiOperation({ summary: 'Get monthly sales amount and frequency analysis for a specific customer' })
+  async getCustomerMonthlySales(
+    @Param('id', ParseIntPipe) customerId: number,
+    @Query('dateFrom') dateFrom: string,
+    @Query('dateTo') dateTo: string,
+    @Query('productIds') productIds: string,
+    @Query('categoryIds') categoryIds: string,
+    @Query('subCategoryIds') subCategoryIds: string,
+    @Query('subSubCategoryIds') subSubCategoryIds: string,
+    @Request() req,
+  ) {
+    const userId = req.user.userId || req.user.id;
+    return this.reportsService.getCustomerMonthlySales(userId, customerId, {
+      dateFrom,
+      dateTo,
+      productIds,
+      categoryIds,
+      subCategoryIds,
+      subSubCategoryIds,
+    });
   }
 }

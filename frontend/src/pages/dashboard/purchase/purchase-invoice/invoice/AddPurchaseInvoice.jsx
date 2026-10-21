@@ -429,21 +429,87 @@ const AddPurchaseInvoice = () => {
 
     const handleChallanChange = async (selectedGrnIds) => {
         if (!selectedGrnIds || selectedGrnIds.length === 0) {
-            const supplier = suppliers.find(s => s.id === parseInt(formData.supplier_id));
-            const defaultCreditDays = supplier ? (supplier.supplierCreditDays || supplier.creditDays || 0) : 0;
-            setFormData(prev => ({ 
-                ...prev, 
-                grn_ids: [],
-                po_id: '',
-                po_number: '',
-                po_date: '',
-                credit_days: defaultCreditDays
-            }));
-            setItems([{ 
-                id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0, 
-                uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0, 
-                taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0 
-            }]);
+            if (formData.po_id) {
+                // Keep PO selected when GRNs are cancelled/cleared
+                setFormData(prev => ({ 
+                    ...prev, 
+                    grn_ids: [],
+                    challan_date: ''
+                }));
+                // Reload items directly from the selected PO
+                try {
+                    const poDetails = await purchaseOrderService.getPurchaseOrderById(formData.po_id);
+                    const poItems = await Promise.all(poDetails.items.map(async (item) => {
+                        const quantity = item.quantity || 0;
+                        const rate = item.rate || 0;
+                        const discAmt = item.discountAmount || item.discountAmt || 0;
+                        const taxPct = item.taxPercent || 0;
+                        const discPct = item.discountPercent || 0;
+
+                        let receivedCount = item.receivedQty || 0;
+                        try {
+                           const history = await grnService.getReceivedQty(formData.supplier_name, item.productCode || item.product_code, poDetails.poNumber);
+                           receivedCount = history.receivedPoQty;
+                        } catch (e) {
+                           console.error("Failed to fetch received history", e);
+                        }
+
+                        const remainingInPO = quantity - receivedCount;
+                        const effectiveQty = remainingInPO > 0 ? remainingInPO : 0;
+                        const baseAmount = effectiveQty * rate;
+
+                        let currentDiscAmt = 0;
+                        if (discPct > 0) {
+                            currentDiscAmt = parseFloat(((baseAmount * discPct) / 100).toFixed(2));
+                        } else if (quantity > 0 && discAmt > 0) {
+                            currentDiscAmt = parseFloat(((discAmt / quantity) * effectiveQty).toFixed(2));
+                        }
+
+                        const befTax = baseAmount - currentDiscAmt;
+                        const taxAmt = (befTax * taxPct) / 100;
+                        return {
+                            id: Date.now() + Math.random(),
+                            productId: item.productId,
+                            productCode: item.productCode,
+                            productName: item.productName,
+                            quantity: effectiveQty,
+                            rate: Number(item.rate) || 0,
+                            uom: item.uom,
+                            discountAmount: currentDiscAmt,
+                            discountPercent: item.discountPercent || 0,
+                            hsnCode: item.hsnCode || '',
+                            taxPercent: taxPct,
+                            beforeTaxAmount: befTax,
+                            taxAmount: taxAmt,
+                            totalAmount: befTax + taxAmt,
+                            printDescription: item.printDescription || item.print_description || item.productName || '',
+                            originalPrintDescription: item.printDescription || item.print_description || item.productName || '',
+                            totalPoQty: quantity,
+                            receivedPoQty: receivedCount,
+                            remainingQty: Math.max(0, remainingInPO - effectiveQty).toFixed(2)
+                        };
+                    }));
+                    setItems(poItems);
+                } catch (e) {
+                    console.error("Error loading PO items after clearing GRNs:", e);
+                }
+            } else {
+                const supplier = suppliers.find(s => s.id === parseInt(formData.supplier_id));
+                const defaultCreditDays = supplier ? (supplier.supplierCreditDays || supplier.creditDays || 0) : 0;
+                setFormData(prev => ({ 
+                    ...prev, 
+                    grn_ids: [],
+                    po_id: '',
+                    po_number: '',
+                    po_date: '',
+                    credit_days: defaultCreditDays
+                }));
+                setItems([{ 
+                    id: Date.now(), productId: null, productCode: '', productName: '', quantity: 0, rate: 0, 
+                    uom: '', discountAmount: 0, discountPercent: 0, hsnCode: '', taxPercent: 0, beforeTaxAmount: 0, 
+                    taxAmount: 0, totalAmount: 0, printDescription: '', totalPoQty: 0, receivedPoQty: 0, remainingQty: 0 
+                }]);
+            }
             return;
         }
 
@@ -452,7 +518,12 @@ const AddPurchaseInvoice = () => {
             const grns = await Promise.all(selectedGrnIds.map(id => grnService.getGRNById(id)));
             
             // Auto-select PO if any of the selected GRNs have an associated PO
-            let poFields = {};
+            let poFields = {
+                po_id: formData.po_id || '',
+                po_number: formData.po_number || '',
+                po_date: formData.po_date || ''
+            };
+            let matchedPODetails = null;
             const selectedChallanObjects = (challans || []).filter(c => selectedGrnIds.map(String).includes(String(c.id)));
             const firstWithPo = selectedChallanObjects.find(c => c.poId || c.poNumber);
             if (firstWithPo) {
@@ -469,6 +540,7 @@ const AddPurchaseInvoice = () => {
                             po_date: poDetails.poCreationDate?.split('T')[0] || '',
                             credit_days: poDetails.creditDays !== undefined && poDetails.creditDays !== null ? poDetails.creditDays : undefined
                         };
+                        matchedPODetails = poDetails;
                     } catch (e) {
                         console.error("Error fetching matching PO details:", e);
                         poFields = {
@@ -477,7 +549,24 @@ const AddPurchaseInvoice = () => {
                             po_date: matchedPO.poCreationDate?.split('T')[0] || '',
                             credit_days: matchedPO.creditDays !== undefined && matchedPO.creditDays !== null ? matchedPO.creditDays : undefined
                         };
+                        matchedPODetails = matchedPO;
                     }
+                } else if (firstWithPo.poId || firstWithPo.poNumber) {
+                    let foundPoDetails = null;
+                    if (firstWithPo.poId) {
+                        try {
+                            foundPoDetails = await purchaseOrderService.getPurchaseOrderById(firstWithPo.poId);
+                        } catch (e) {
+                            console.error("Error fetching PO by id from GRN:", e);
+                        }
+                    }
+                    poFields = {
+                        po_id: foundPoDetails?.id || firstWithPo.poId || '',
+                        po_number: foundPoDetails?.poNumber || firstWithPo.poNumber || '',
+                        po_date: foundPoDetails?.poCreationDate?.split('T')[0] || '',
+                        credit_days: foundPoDetails?.creditDays !== undefined && foundPoDetails?.creditDays !== null ? foundPoDetails.creditDays : undefined
+                    };
+                    matchedPODetails = foundPoDetails;
                 }
             }
 
@@ -486,14 +575,18 @@ const AddPurchaseInvoice = () => {
             grns.forEach(grn => {
                 if (grn && grn.items) {
                     grn.items.forEach(item => {
-                        const pid = item.productId;
+                        const key = item.productId 
+                            ? `id_${item.productId}` 
+                            : item.productCode 
+                                ? `code_${String(item.productCode).toLowerCase().trim()}`
+                                : `name_${String(item.productName || '').toLowerCase().trim()}`;
                         const itemDiscAmt = parseFloat(item.discountAmount || item.discountAmt) || 0;
                         const itemQty = parseFloat(item.receivedQty || item.quantity) || 0;
                         const itemRate = parseFloat(item.rate) || 0;
                         const itemGross = itemQty * itemRate;
 
-                        if (!productMap[pid]) {
-                            productMap[pid] = {
+                        if (!productMap[key]) {
+                            productMap[key] = {
                                 id: Date.now() + Math.random(),
                                 productId: item.productId,
                                 productCode: item.productCode,
@@ -503,7 +596,9 @@ const AddPurchaseInvoice = () => {
                                 uom: item.uom,
                                 hsnCode: item.hsnCode || '',
                                 taxPercent: item.taxPercent !== undefined && item.taxPercent !== null ? item.taxPercent : 18,
-                                totalPoQty: item.totalPoQty || 0,
+                                totalPoQty: parseFloat(item.totalPoQty) || 0,
+                                receivedPoQty: parseFloat(item.receivedPoQty) || 0,
+                                remainingQty: item.remainingQty || 0,
                                 discountAmount: itemDiscAmt,
                                 beforeTaxAmount: 0, 
                                 taxAmount: 0,
@@ -512,9 +607,11 @@ const AddPurchaseInvoice = () => {
                                 originalPrintDescription: item.printDescription || item.print_description || item.productName || ''
                             };
                         } else {
-                            productMap[pid].quantity += itemQty;
-                            productMap[pid].totalGross += itemGross;
-                            productMap[pid].discountAmount += itemDiscAmt;
+                            productMap[key].quantity += itemQty;
+                            productMap[key].totalGross += itemGross;
+                            productMap[key].discountAmount += itemDiscAmt;
+                            productMap[key].totalPoQty = Math.max(productMap[key].totalPoQty, parseFloat(item.totalPoQty) || 0);
+                            productMap[key].receivedPoQty = Math.min(productMap[key].receivedPoQty, parseFloat(item.receivedPoQty) || 0);
                         }
                     });
                 }
@@ -532,6 +629,7 @@ const AddPurchaseInvoice = () => {
                 
                 const beforeTax = totalGross - discAmt;
                 const taxAmt = (beforeTax * taxPct) / 100;
+                const remQty = item.totalPoQty > 0 ? Math.max(0, item.totalPoQty - item.receivedPoQty - quantity) : 0;
                 
                 return {
                     ...item,
@@ -539,7 +637,8 @@ const AddPurchaseInvoice = () => {
                     discountPercent: parseFloat(discPercent.toFixed(2)),
                     beforeTaxAmount: parseFloat(beforeTax.toFixed(2)),
                     taxAmount: parseFloat(taxAmt.toFixed(2)),
-                    totalAmount: parseFloat((beforeTax + taxAmt).toFixed(2))
+                    totalAmount: parseFloat((beforeTax + taxAmt).toFixed(2)),
+                    remainingQty: parseFloat(remQty.toFixed(2))
                 };
             });
 
@@ -620,14 +719,18 @@ const AddPurchaseInvoice = () => {
                 grns.forEach(grn => {
                     if (grn && grn.items) {
                         grn.items.forEach(item => {
-                            const pid = item.productId;
+                            const key = item.productId 
+                                ? `id_${item.productId}` 
+                                : item.productCode 
+                                    ? `code_${String(item.productCode).toLowerCase().trim()}`
+                                    : `name_${String(item.productName || '').toLowerCase().trim()}`;
                             const itemDiscAmt = parseFloat(item.discountAmount || item.discountAmt) || 0;
                             const itemQty = parseFloat(item.receivedQty || item.quantity) || 0;
                             const itemRate = parseFloat(item.rate) || 0;
                             const itemGross = itemQty * itemRate;
 
-                            if (!productMap[pid]) {
-                                productMap[pid] = {
+                            if (!productMap[key]) {
+                                productMap[key] = {
                                     id: Date.now() + Math.random(),
                                     productId: item.productId,
                                     productCode: item.productCode,
@@ -637,7 +740,9 @@ const AddPurchaseInvoice = () => {
                                     uom: item.uom,
                                     hsnCode: item.hsnCode || '',
                                     taxPercent: item.taxPercent !== undefined && item.taxPercent !== null ? item.taxPercent : 18,
-                                    totalPoQty: item.totalPoQty || 0,
+                                    totalPoQty: parseFloat(item.totalPoQty) || 0,
+                                    receivedPoQty: parseFloat(item.receivedPoQty) || 0,
+                                    remainingQty: item.remainingQty || 0,
                                     discountAmount: itemDiscAmt,
                                     beforeTaxAmount: 0, 
                                     taxAmount: 0,
@@ -646,9 +751,11 @@ const AddPurchaseInvoice = () => {
                                     originalPrintDescription: item.printDescription || item.print_description || item.productName || ''
                                 };
                             } else {
-                                productMap[pid].quantity += itemQty;
-                                productMap[pid].totalGross += itemGross;
-                                productMap[pid].discountAmount += itemDiscAmt;
+                                productMap[key].quantity += itemQty;
+                                productMap[key].totalGross += itemGross;
+                                productMap[key].discountAmount += itemDiscAmt;
+                                productMap[key].totalPoQty = Math.max(productMap[key].totalPoQty, parseFloat(item.totalPoQty) || 0);
+                                productMap[key].receivedPoQty = Math.min(productMap[key].receivedPoQty, parseFloat(item.receivedPoQty) || 0);
                             }
                         });
                     }
@@ -665,6 +772,7 @@ const AddPurchaseInvoice = () => {
                     
                     const beforeTax = totalGross - discAmt;
                     const taxAmt = (beforeTax * taxPct) / 100;
+                    const remQty = item.totalPoQty > 0 ? Math.max(0, item.totalPoQty - item.receivedPoQty - quantity) : 0;
                     
                     return {
                         ...item,
@@ -672,7 +780,8 @@ const AddPurchaseInvoice = () => {
                         discountPercent: parseFloat(discPercent.toFixed(2)),
                         beforeTaxAmount: parseFloat(beforeTax.toFixed(2)),
                         taxAmount: parseFloat(taxAmt.toFixed(2)),
-                        totalAmount: parseFloat((beforeTax + taxAmt).toFixed(2))
+                        totalAmount: parseFloat((beforeTax + taxAmt).toFixed(2)),
+                        remainingQty: parseFloat(remQty.toFixed(2))
                     };
                 });
 

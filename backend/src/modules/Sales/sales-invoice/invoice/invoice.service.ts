@@ -304,18 +304,25 @@ export class SalesInvoiceService {
   }
 
   async generateInvoiceNumber(userId: number): Promise<string> {
-    const lastInvoice = await this.prisma.salesInvoice.findFirst({
-      where: { 
-        userId,
-        invoiceNumber: { startsWith: 'SINV-' } 
-      },
-      orderBy: { invoiceNumber: 'desc' },
+    const invoices = await this.prisma.salesInvoice.findMany({
+      where: { userId },
       select: { invoiceNumber: true },
     });
 
-    if (!lastInvoice) return 'SINV-0001';
-    const lastNumber = parseInt(lastInvoice.invoiceNumber.replace('SINV-', ''), 10);
-    return `SINV-${(lastNumber + 1).toString().padStart(4, '0')}`;
+    let maxNum = 0;
+    for (const inv of invoices) {
+      if (!inv.invoiceNumber) continue;
+      const matches = inv.invoiceNumber.match(/\d+/g);
+      if (matches) {
+        const num = parseInt(matches[matches.length - 1], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    }
+
+    const nextNum = maxNum + 1;
+    return `SINV-${nextNum.toString().padStart(4, '0')}`;
   }
 
   async generateCustomerInvoiceNumber(userId: number): Promise<string> {

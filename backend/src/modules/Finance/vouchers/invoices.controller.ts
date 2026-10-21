@@ -278,41 +278,6 @@ export class InvoicesController {
       throw new BadRequestException('Account not found or unauthorized');
     }
 
-    const getVoucherRole = async (voucherId: number, voucherType: string): Promise<string> => {
-      let voucherNumber = '';
-      if (voucherType === 'RECEIPT') {
-        const rv = await this.prisma.receiptVoucher.findUnique({
-          where: { id: voucherId },
-          select: { voucherNumber: true }
-        });
-        if (rv) voucherNumber = rv.voucherNumber;
-      } else {
-        const pv = await this.prisma.paymentVoucher.findUnique({
-          where: { id: voucherId },
-          select: { voucherNumber: true }
-        });
-        if (pv) voucherNumber = pv.voucherNumber;
-      }
-
-      if (!voucherNumber) return '';
-
-      const tx = await this.prisma.transaction.findFirst({
-        where: {
-          accountId: ledgerId,
-          invoiceNumber: voucherNumber,
-          userId: userId
-        },
-        select: { transactionType: true }
-      });
-
-      if (tx) {
-        if (tx.transactionType === 'Receipt') return 'CUSTOMER';
-        if (tx.transactionType === 'Payment') return 'SUPPLIER';
-      }
-
-      return '';
-    };
-
     const debitTransactions = [];
     const creditTransactions = [];
 
@@ -332,7 +297,6 @@ export class InvoicesController {
         const settlements = await this.prisma.voucherSettlement.findMany({
           where: {
             invoice_id: invoice.id,
-            voucher_type: 'RECEIPT',
             ledger_id: ledgerId,
           },
         });
@@ -348,9 +312,9 @@ export class InvoicesController {
         }, 0);
         const balanceAmount = totalAmount - paidAmount;
 
-        if (balanceAmount > 0) {
+        if (balanceAmount > 0.001) {
           debitTransactions.push({
-            id: invoice.id,
+            id: `INV-${invoice.id}`,
             invoiceId: invoice.id,
             settlementId: null,
             date: invoice.invoiceDate.toISOString().split('T')[0],
@@ -363,7 +327,7 @@ export class InvoicesController {
       }
 
       // Add Unapplied Customer Payments (Refunds we gave them -> Debit)
-      const payments = await this.prisma.voucherSettlement.findMany({
+      const vsPayments = await this.prisma.voucherSettlement.findMany({
         where: {
           ledger_id: ledgerId,
           voucher_type: 'PAYMENT',
@@ -372,26 +336,24 @@ export class InvoicesController {
         orderBy: { created_at: 'asc' },
       });
 
-      for (const p of payments) {
-        const role = await getVoucherRole(p.voucher_id, 'PAYMENT');
-        const isCustomer = role === 'CUSTOMER' || (!role && ledger.groupName.includes('SUNDRY_DEBTORS'));
-        if (isCustomer) {
-          debitTransactions.push({
-            id: p.id,
-            invoiceId: null,
-            voucherId: p.voucher_id,
-            settlementId: p.id,
-            date: p.created_at.toISOString().split('T')[0],
-            type: p.settlement_type === 'ADVANCE' ? 'Advance' : p.settlement_type === 'ON_ACCOUNT' ? 'On Account' : p.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Payment',
-            refNo: `VS-${p.id}`,
-            totalAmt: Number(p.settled_amount),
-            balanceAmt: Number(p.settled_amount),
-          });
-        }
+      for (const p of vsPayments) {
+        debitTransactions.push({
+          id: `VS-${p.id}`,
+          invoiceId: null,
+          voucherId: p.voucher_id,
+          settlementId: p.id,
+          date: p.created_at.toISOString().split('T')[0],
+          type: p.settlement_type === 'ADVANCE' ? 'Advance' : p.settlement_type === 'ON_ACCOUNT' ? 'On Account' : p.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Payment',
+          refNo: `VS-${p.id}`,
+          totalAmt: Number(p.settled_amount),
+          balanceAmt: Number(p.settled_amount),
+        });
       }
 
-      // 2. Credit Transactions: Unapplied Customer Receipts (they paid us advance/on-account)
-      const receipts = await this.prisma.voucherSettlement.findMany({
+      // 2. Credit Transactions: Customer Receipts (Receipt Vouchers & Voucher Settlements)
+      const processedVoucherIds = new Set<number>();
+
+      const vsReceipts = await this.prisma.voucherSettlement.findMany({
         where: {
           ledger_id: ledgerId,
           voucher_type: 'RECEIPT',
@@ -400,27 +362,73 @@ export class InvoicesController {
         orderBy: { created_at: 'asc' },
       });
 
-      for (const r of receipts) {
-        const role = await getVoucherRole(r.voucher_id, 'RECEIPT');
-        const isCustomer = role === 'CUSTOMER' || (!role && ledger.groupName.includes('SUNDRY_DEBTORS'));
-        if (isCustomer) {
+      for (const r of vsReceipts) {
+        processedVoucherIds.add(r.voucher_id);
+        creditTransactions.push({
+          id: `VS-${r.id}`,
+          invoiceId: null,
+          voucherId: r.voucher_id,
+          settlementId: r.id,
+          date: r.created_at.toISOString().split('T')[0],
+          type: r.settlement_type === 'ADVANCE' ? 'Advance' : r.settlement_type === 'ON_ACCOUNT' ? 'On Account' : r.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Receipt',
+          refNo: `VS-${r.id}`,
+          totalAmt: Number(r.settled_amount),
+          balanceAmt: Number(r.settled_amount),
+        });
+      }
+
+      const receiptItems = await this.prisma.receiptVoucherItem.findMany({
+        where: {
+          accountId: ledgerId,
+          receiptVoucher: {
+            createdBy: userId,
+          },
+        },
+        include: {
+          receiptVoucher: true,
+        },
+        orderBy: {
+          receiptVoucher: { voucherDate: 'asc' },
+        },
+      });
+
+      for (const item of receiptItems) {
+        if (processedVoucherIds.has(item.voucherId)) continue;
+
+        const settledRows = await this.prisma.voucherSettlement.findMany({
+          where: {
+            voucher_id: item.voucherId,
+            voucher_type: 'RECEIPT',
+            ledger_id: ledgerId,
+            invoice_id: { not: null },
+          },
+        });
+
+        const totalAmt = Number(item.amount);
+        const settledAmt = settledRows.reduce((sum, s) => sum + Number(s.settled_amount), 0);
+        const balanceAmt = totalAmt - settledAmt;
+
+        if (balanceAmt > 0.001) {
+          processedVoucherIds.add(item.voucherId);
           creditTransactions.push({
-            id: r.id,
+            id: `RV-${item.id}`,
             invoiceId: null,
-            voucherId: r.voucher_id,
-            settlementId: r.id,
-            date: r.created_at.toISOString().split('T')[0],
-            type: r.settlement_type === 'ADVANCE' ? 'Advance' : r.settlement_type === 'ON_ACCOUNT' ? 'On Account' : r.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Receipt',
-            refNo: `VS-${r.id}`,
-            totalAmt: Number(r.settled_amount),
-            balanceAmt: Number(r.settled_amount),
+            voucherId: item.voucherId,
+            settlementId: null,
+            date: item.receiptVoucher.voucherDate.toISOString().split('T')[0],
+            type: 'Receipt',
+            refNo: item.receiptVoucher.voucherNumber,
+            totalAmt: totalAmt,
+            balanceAmt: balanceAmt,
           });
         }
       }
     } else if (type === 'payment') {
       // Sundry Creditors (Supplier)
-      // 1. Debit Transactions: Unapplied Supplier Payments (we paid them advance/on-account)
-      const payments = await this.prisma.voucherSettlement.findMany({
+      // 1. Debit Transactions: Supplier Payments (Payment Vouchers & Voucher Settlements)
+      const processedVoucherIds = new Set<number>();
+
+      const vsPayments = await this.prisma.voucherSettlement.findMany({
         where: {
           ledger_id: ledgerId,
           voucher_type: 'PAYMENT',
@@ -429,20 +437,64 @@ export class InvoicesController {
         orderBy: { created_at: 'asc' },
       });
 
-      for (const p of payments) {
-        const role = await getVoucherRole(p.voucher_id, 'PAYMENT');
-        const isSupplier = role === 'SUPPLIER' || (!role && ledger.groupName.includes('SUNDRY_CREDITORS'));
-        if (isSupplier) {
+      for (const p of vsPayments) {
+        processedVoucherIds.add(p.voucher_id);
+        debitTransactions.push({
+          id: `VS-${p.id}`,
+          invoiceId: null,
+          voucherId: p.voucher_id,
+          settlementId: p.id,
+          date: p.created_at.toISOString().split('T')[0],
+          type: p.settlement_type === 'ADVANCE' ? 'Advance' : p.settlement_type === 'ON_ACCOUNT' ? 'On Account' : p.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Payment',
+          refNo: `VS-${p.id}`,
+          totalAmt: Number(p.settled_amount),
+          balanceAmt: Number(p.settled_amount),
+        });
+      }
+
+      const paymentItems = await this.prisma.paymentVoucherItem.findMany({
+        where: {
+          accountId: ledgerId,
+          paymentVoucher: {
+            createdBy: userId,
+          },
+        },
+        include: {
+          paymentVoucher: true,
+        },
+        orderBy: {
+          paymentVoucher: { voucherDate: 'asc' },
+        },
+      });
+
+      for (const item of paymentItems) {
+        if (processedVoucherIds.has(item.voucherId)) continue;
+
+        const settledRows = await this.prisma.voucherSettlement.findMany({
+          where: {
+            voucher_id: item.voucherId,
+            voucher_type: 'PAYMENT',
+            ledger_id: ledgerId,
+            invoice_id: { not: null },
+          },
+        });
+
+        const totalAmt = Number(item.amount);
+        const settledAmt = settledRows.reduce((sum, s) => sum + Number(s.settled_amount), 0);
+        const balanceAmt = totalAmt - settledAmt;
+
+        if (balanceAmt > 0.001) {
+          processedVoucherIds.add(item.voucherId);
           debitTransactions.push({
-            id: p.id,
+            id: `PV-${item.id}`,
             invoiceId: null,
-            voucherId: p.voucher_id,
-            settlementId: p.id,
-            date: p.created_at.toISOString().split('T')[0],
-            type: p.settlement_type === 'ADVANCE' ? 'Advance' : p.settlement_type === 'ON_ACCOUNT' ? 'On Account' : p.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Payment',
-            refNo: `VS-${p.id}`,
-            totalAmt: Number(p.settled_amount),
-            balanceAmt: Number(p.settled_amount),
+            voucherId: item.voucherId,
+            settlementId: null,
+            date: item.paymentVoucher.voucherDate.toISOString().split('T')[0],
+            type: 'Payment',
+            refNo: item.paymentVoucher.voucherNumber,
+            totalAmt: totalAmt,
+            balanceAmt: balanceAmt,
           });
         }
       }
@@ -461,7 +513,6 @@ export class InvoicesController {
         const settlements = await this.prisma.voucherSettlement.findMany({
           where: {
             invoice_id: invoice.id,
-            voucher_type: 'PAYMENT',
             ledger_id: ledgerId,
           },
         });
@@ -477,9 +528,9 @@ export class InvoicesController {
         }, 0);
         const balanceAmount = totalAmount - paidAmount;
 
-        if (balanceAmount > 0) {
+        if (balanceAmount > 0.001) {
           creditTransactions.push({
-            id: invoice.id,
+            id: `INV-${invoice.id}`,
             invoiceId: invoice.id,
             settlementId: null,
             date: invoice.invoiceDate.toISOString().split('T')[0],
@@ -492,7 +543,7 @@ export class InvoicesController {
       }
 
       // Add Unapplied Supplier Receipts (Refunds they gave us -> Credit)
-      const receipts = await this.prisma.voucherSettlement.findMany({
+      const vsReceipts = await this.prisma.voucherSettlement.findMany({
         where: {
           ledger_id: ledgerId,
           voucher_type: 'RECEIPT',
@@ -501,22 +552,18 @@ export class InvoicesController {
         orderBy: { created_at: 'asc' },
       });
 
-      for (const r of receipts) {
-        const role = await getVoucherRole(r.voucher_id, 'RECEIPT');
-        const isSupplier = role === 'SUPPLIER' || (!role && ledger.groupName.includes('SUNDRY_CREDITORS'));
-        if (isSupplier) {
-          creditTransactions.push({
-            id: r.id,
-            invoiceId: null,
-            voucherId: r.voucher_id,
-            settlementId: r.id,
-            date: r.created_at.toISOString().split('T')[0],
-            type: r.settlement_type === 'ADVANCE' ? 'Advance' : r.settlement_type === 'ON_ACCOUNT' ? 'On Account' : r.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Receipt',
-            refNo: `VS-${r.id}`,
-            totalAmt: Number(r.settled_amount),
-            balanceAmt: Number(r.settled_amount),
-          });
-        }
+      for (const r of vsReceipts) {
+        creditTransactions.push({
+          id: `VS-${r.id}`,
+          invoiceId: null,
+          voucherId: r.voucher_id,
+          settlementId: r.id,
+          date: r.created_at.toISOString().split('T')[0],
+          type: r.settlement_type === 'ADVANCE' ? 'Advance' : r.settlement_type === 'ON_ACCOUNT' ? 'On Account' : r.settlement_type === 'CANCELLED_SETTLEMENT' ? 'Cancelled Settlement' : 'Receipt',
+          refNo: `VS-${r.id}`,
+          totalAmt: Number(r.settled_amount),
+          balanceAmt: Number(r.settled_amount),
+        });
       }
     }
 
@@ -526,3 +573,4 @@ export class InvoicesController {
     };
   }
 }
+

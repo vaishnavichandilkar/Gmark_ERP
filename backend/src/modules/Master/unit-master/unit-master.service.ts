@@ -268,7 +268,7 @@ export class UnitMasterService {
             const row = worksheet.getRow(r);
             let foundHeaders = false;
             row.eachCell((cell, colNumber) => {
-                const val = String(cell.value || '').trim().toLowerCase();
+                const val = String(cell.value || '').trim().toLowerCase().replace(/[*]/g, '');
                 if (val === 'unit' || val === 'unit name') { colMap['unitName'] = colNumber; foundHeaders = true; }
                 if (val === 'gst uom' || val === 'gst') colMap['gstUom'] = colNumber;
                 if (val === 'full name' || val === 'full name of measurement') colMap['fullName'] = colNumber;

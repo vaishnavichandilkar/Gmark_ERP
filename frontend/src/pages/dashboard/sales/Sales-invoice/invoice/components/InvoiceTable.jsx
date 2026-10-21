@@ -94,14 +94,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             const taxPct = parseFloat(field === 'taxPercent' ? finalValue : item.taxPercent) || 0;
 
             const totalSO = parseFloat(item.totalSoQty) || 0;
-            if (totalSO > 0 && qty > totalSO) {
-                toast.error(`Quantity cannot exceed remaining SO quantity of ${totalSO}`);
-                qty = totalSO;
-                if (field === 'quantity') {
-                    finalValue = qty;
-                }
-                item.quantity = qty;
-            }
+            const givenSO = parseFloat(item.givenSoQty) || 0;
 
             let discPct = parseFloat(field === 'discountPercent' ? finalValue : item.discountPercent) || 0;
             let discAmt = parseFloat(field === 'discountAmount' ? finalValue : item.discountAmount) || 0;
@@ -127,6 +120,9 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             item.taxPercent = taxPct;
             item.discountPercent = parseFloat(discPct.toFixed(2));
             item.discountAmount = parseFloat(discAmt.toFixed(2));
+            item.remainingQty = totalSO > 0
+                ? parseFloat(Math.max(0, totalSO - givenSO - qty).toFixed(2))
+                : 0;
         }
 
         newItems[index] = item;
@@ -278,7 +274,7 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
             </div>
 
             <div className="overflow-x-auto border border-[#E5E7EB] rounded-[16px] shadow-sm bg-white custom-scrollbar">
-                <table className="w-full min-w-[1500px] border-collapse">
+                <table className="w-full min-w-[1800px] border-collapse">
                     <thead>
                         <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
                             <th className="px-4 py-4 w-[50px] text-center text-[13px] font-bold text-[#4B5563]">#</th>
@@ -286,7 +282,10 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                             <th className="px-4 py-4 w-[160px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:product_code_col')}</th>
                             <th className="px-4 py-4 w-[350px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:product_name_col')}</th>
                             <th className="px-4 py-4 w-[250px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:print_description_col')}</th>
-                            <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:qty_col')}</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:total_so_qty', 'total so qty')}</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:given_so_qty', 'given so qty')}</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:qty_col', 'qty')}</th>
+                            <th className="px-4 py-4 w-[110px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:remaining_qty', 'remaining qty')}</th>
                             <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:rate_col')}</th>
                             <th className="px-4 py-4 w-[120px] text-left text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:uom_col')}</th>
                             <th className="px-4 py-4 w-[120px] text-right text-[13px] font-bold text-[#6B7280] border-l border-[#F3F4F6]">{t('modules:discount_rs_col')}</th>
@@ -353,22 +352,55 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                             className="w-full h-[36px] bg-white border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold outline-none focus:border-[#073318]"
                                         />
                                     </td>
+
+                                    {/* Total SO Qty */}
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                        <input
+                                            type="number"
+                                            value={item.totalSoQty || 0}
+                                            readOnly
+                                            className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed"
+                                        />
+                                    </td>
+
+                                    {/* Given SO Qty */}
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={item.givenSoQty || 0}
+                                            readOnly
+                                            className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-gray-500 outline-none cursor-not-allowed"
+                                        />
+                                    </td>
+
+                                    {/* Qty */}
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <div className="flex flex-col gap-1">
                                             <input
                                                 type="number"
                                                 min="0"
-                                                value={item.quantity === 0 ? '' : item.quantity}
+                                                value={item.quantity === 0 || item.quantity === '0' ? '' : (item.quantity ?? '')}
                                                 onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                                readOnly={isLinked}
-                                                className={`w-full h-[36px] border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none transition-all shadow-sm ${isLinked ? 'bg-gray-50 text-gray-500 cursor-not-allowed border-[#E5E7EB]' : 'bg-white text-[#111827] focus:border-[#073318] border-[#E5E7EB]'} ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : ''}`}
+                                                readOnly={false}
+                                                className={`w-full h-[36px] bg-white text-[#111827] focus:border-[#073318] border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
                                             />
-                                            {/* Max quantity label removed for unlimited entry */}
                                         </div>
                                         {errors?.itemErrors?.[index]?.quantity && (
                                             <p className="text-[10px] text-red-500 font-bold mt-1">{errors.itemErrors[index].quantity}</p>
                                         )}
                                     </td>
+
+                                    {/* Remaining Qty */}
+                                    <td className="px-2 py-2 border-l border-[#F3F4F6]">
+                                        <input
+                                            type="text"
+                                            value={item.remainingQty || 0}
+                                            readOnly
+                                            className="w-full h-[36px] bg-[#F9FAFB] border border-[#E5E7EB] rounded-[8px] px-2 text-[13px] font-bold text-right text-emerald-700 outline-none"
+                                        />
+                                    </td>
+
                                     <td className="px-2 py-2 border-l border-[#F3F4F6]">
                                         <input
                                             type="number"
@@ -478,12 +510,12 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                                 <td className="px-4 py-3 border-l border-white/10 text-center font-bold uppercase text-[12px] text-white/90">
                                                     {getStandardGstUom(p.uom)}
                                                 </td>
-                                                <td colSpan={9} className="px-4 py-3 border-l border-white/10 text-right font-black text-white">₹{p.sale_rate || 0}</td>
+                                                <td colSpan={12} className="px-4 py-3 border-l border-white/10 text-right font-black text-white">₹{p.sale_rate || 0}</td>
                                                 <td className="sticky right-0 bg-transparent"></td>
                                             </tr>
                                         ))}
                                         <tr className="bg-white border-t border-gray-100 text-center">
-                                            <td colSpan={15} className="px-4 py-4 bg-emerald-50/10">
+                                            <td colSpan={18} className="px-4 py-4 bg-emerald-50/10">
                                                 <button
                                                     onClick={handleAddNewProduct}
                                                     className="inline-flex h-[40px] px-8 bg-[#073318] text-white text-[13px] font-bold rounded-[8px] hover:bg-[#052611] transition-all items-center gap-3 shadow-lg"
@@ -503,9 +535,12 @@ const InvoiceTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
+                            <td className="border-l border-[#F3F4F6]"></td>
+                            <td className="border-l border-[#F3F4F6]"></td>
                             <td className="px-4 py-4 text-right text-[14px] font-black text-[#111827] border-l border-[#F3F4F6]">
                                 {items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0).toFixed(2)}
                             </td>
+                            <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>
                             <td className="border-l border-[#F3F4F6]"></td>

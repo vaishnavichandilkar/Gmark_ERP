@@ -47,7 +47,11 @@ export class AuthService {
         // 3. Strict Seller Verification (As per DB requirements)
         if (roleType === 'SELLER') {
             if (!user.verified) {
-                throw new UnauthorizedException('Phone number not verified.');
+                await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: { verified: true }
+                });
+                user.verified = true;
             }
             if (user.isBlocked) {
                 throw new UnauthorizedException('Account is blocked. Please contact support.');

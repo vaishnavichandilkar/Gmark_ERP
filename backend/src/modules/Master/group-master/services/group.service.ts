@@ -352,10 +352,6 @@ export class GroupMasterService {
             throw new BadRequestException('No data found to import');
         }
 
-        let importedRows = 0;
-        let failed = 0;
-        const errors: string[] = [];
-
         let headerRowIndex = -1;
         const colMap: Record<string, number> = {};
 
@@ -364,7 +360,7 @@ export class GroupMasterService {
             const row = worksheet.getRow(r);
             let found = false;
             row.eachCell((cell, colNumber) => {
-                const val = String(cell.value || '').trim().toLowerCase();
+                const val = String(cell.value || '').trim().toLowerCase().replace(/[*]/g, '');
                 if (val === 'group name') { colMap['groupName'] = colNumber; found = true; }
                 if (val === 'group under' || val === 'under') colMap['under'] = colNumber;
                 if (val === 'opening balance' || val === 'opening' || val === 'opening_balance') colMap['openingBalance'] = colNumber;
@@ -381,6 +377,13 @@ export class GroupMasterService {
             throw new BadRequestException('Could not find "group name" column in the provided Excel file.');
         }
 
+        // Get original headers
+        const originalHeaders: string[] = [];
+        const headerRow = worksheet.getRow(headerRowIndex);
+        headerRow.eachCell((cell) => {
+            originalHeaders.push(String(cell.value || '').trim());
+        });
+
         const getVal = (row: ExcelJS.Row, key: string) => {
             const colIdx = colMap[key];
             if (!colIdx) return '';
@@ -390,13 +393,28 @@ export class GroupMasterService {
 
         const prisma = (this.groupRepository as any).prisma;
 
+        const successRows: { values: string[] }[] = [];
+        const failedRows: { values: string[], error: string }[] = [];
+        const rowErrors: { row: number, error: string }[] = [];
+
         for (let i = headerRowIndex + 1; i <= rowCount; i++) {
             const row = worksheet.getRow(i);
+            const rowValues: string[] = [];
+            row.eachCell({ includeEmpty: true }, (cell) => {
+                rowValues.push(String(cell.value || '').trim());
+            });
+
             const groupName = getVal(row, 'groupName');
             const underName = getVal(row, 'under');
             const statusStr = getVal(row, 'status').toLowerCase();
 
-            if (!groupName || groupName === '-') continue;
+            if (!groupName || groupName === '-') {
+                if (rowValues.some(v => v !== '')) {
+                   failedRows.push({ values: rowValues, error: 'Group Name is required' });
+                   rowErrors.push({ row: i, error: 'Group Name is required' });
+                }
+                continue;
+            }
 
             try {
                 const status = (statusStr === 'inactive') ? MasterStatus.INACTIVE : MasterStatus.ACTIVE;
@@ -415,7 +433,7 @@ export class GroupMasterService {
 
                 const isExpense = (groupName === 'Direct Expense' || groupName === 'Indirect Expense');
                 if (isExpense && (openingBalance !== null || balTypeStr)) {
-                    throw new BadRequestException('Direct and Indirect Expenses cannot have an opening balance or balance type.');
+                    throw new BadRequestException('Direct and Indirect Expenses cannot have an opening balance or balance type. Please remove both to import.');
                 }
                 const finalOpeningBalance = isExpense ? null : openingBalance;
                 const finalBalanceType = isExpense ? null : balanceType;
@@ -427,10 +445,10 @@ export class GroupMasterService {
                     });
                     if (!existing) {
                         await this.groupRepository.createPrimaryGroup({ group_name: groupName, userId, opening_balance: finalOpeningBalance, balance_type: finalBalanceType });
-                        importedRows++;
-                    } else if (existing.userId === userId) {
-                        await prisma.group.update({ where: { id: existing.id }, data: { status, opening_balance: finalOpeningBalance, balance_type: finalBalanceType } });
+                    } else {
+                        throw new BadRequestException(`Group "${groupName}" already exists.`);
                     }
+                    successRows.push({ values: rowValues });
                 } else {
                     // Find parent group by name (searching levels 1 to 4)
                     let parentInfo = null;
@@ -486,33 +504,88 @@ export class GroupMasterService {
                                 await this.repositoryHelper(prisma.subSubSubSubGroup, { name: groupName, sub_sub_sub_group_id: parentInfo.id, userId, status, opening_balance: finalOpeningBalanceParent, balance_type: finalBalanceTypeParent });
                                 break;
                         }
-                        importedRows++;
                     } else {
-                        // Update status, opening balance, and balance type
-                        await this.groupRepository.updateGroupStatus(existing.id, targetLevel, status, userId, finalOpeningBalanceParent, finalBalanceTypeParent);
+                        throw new BadRequestException(`Group "${groupName}" already exists at this level.`);
                     }
+                    successRows.push({ values: rowValues });
                 }
             } catch (error) {
-                failed++;
-                errors.push(`Row ${i} (${groupName}): ${error.message}`);
+                const errMsg = error.message;
+                failedRows.push({ values: rowValues, error: errMsg });
+                rowErrors.push({ row: i, error: errMsg });
             }
         }
 
-        if (importedRows === 0 && failed > 0) {
-            const hasExpenseError = errors.some(e => e.includes('Expenses cannot have'));
+        let errorFileBase64: string | undefined = undefined;
+        if (failedRows.length > 0) {
+            const failedWb = new ExcelJS.Workbook();
+            const failedWs = failedWb.addWorksheet('Error Report');
+            const exportHeaders = originalHeaders.length > 0 ? originalHeaders : ['Group Name', 'Group Under', 'Opening Balance', 'Balance Type', 'Status'];
+            failedWs.addRow([...exportHeaders, 'Error Description']);
+            failedWs.getRow(1).font = { bold: true };
+            failedWs.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+            
+            failedRows.forEach(r => {
+                const rowVals = [...r.values];
+                while (rowVals.length < exportHeaders.length) rowVals.push('');
+                rowVals[exportHeaders.length] = r.error;
+                failedWs.addRow(rowVals);
+            });
+            const failedBuffer = await failedWb.xlsx.writeBuffer();
+            errorFileBase64 = Buffer.from(failedBuffer).toString('base64');
+        }
+
+        let successFileBase64: string | undefined = undefined;
+        if (successRows.length > 0) {
+            const successWb = new ExcelJS.Workbook();
+            const successWs = successWb.addWorksheet('Success Report');
+            const exportHeaders = originalHeaders.length > 0 ? originalHeaders : ['Group Name', 'Group Under', 'Opening Balance', 'Balance Type', 'Status'];
+            successWs.addRow([...exportHeaders, 'Status']);
+            successWs.getRow(1).font = { bold: true };
+            successWs.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+
+            successRows.forEach(r => {
+                const rowVals = [...r.values];
+                while (rowVals.length < exportHeaders.length) rowVals.push('');
+                rowVals[exportHeaders.length] = 'Imported Successfully';
+                successWs.addRow(rowVals);
+            });
+            const successBuffer = await successWb.xlsx.writeBuffer();
+            successFileBase64 = Buffer.from(successBuffer).toString('base64');
+        }
+
+        const totalCount = successRows.length + failedRows.length;
+        
+        if (successRows.length === 0 && failedRows.length > 0) {
+            const hasExpenseError = rowErrors.some(e => e.error.includes('Expenses cannot have'));
             if (hasExpenseError) {
-                throw new BadRequestException('Direct and Indirect Expenses cannot have an opening balance or balance type. Please remove both to import.');
+                throw new BadRequestException({
+                    message: 'Direct and Indirect Expenses cannot have an opening balance or balance type. Please remove both to import.',
+                    summary: { totalRows: totalCount, successful: 0, failed: failedRows.length },
+                    errors: rowErrors,
+                    errorFile: errorFileBase64
+                });
             }
-            throw new BadRequestException(errors[0]);
         }
 
         return {
-            success: true,
-            message: `Imported/Updated ${importedRows} groups. ${failed > 0 ? failed + ' rows failed.' : ''}`,
-            errors: failed > 0 ? errors : undefined,
+            success: failedRows.length === 0,
+            message: failedRows.length === 0 
+                ? `Successfully imported all ${successRows.length} group(s)!`
+                : `Import completed: ${successRows.length} successful, ${failedRows.length} failed.`,
+            summary: {
+                totalRows: totalCount,
+                successful: successRows.length,
+                failed: failedRows.length
+            },
+            totalRows: totalCount,
+            successful: successRows.length,
+            failed: failedRows.length,
+            errors: rowErrors,
+            errorFile: errorFileBase64,
+            successFile: successFileBase64
         };
     }
-
     private async repositoryHelper(model: any, data: any) {
         return model.create({ data });
     }

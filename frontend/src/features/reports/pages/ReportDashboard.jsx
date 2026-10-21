@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
+import html2pdf from 'html2pdf.js';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import {
@@ -8,9 +10,12 @@ import {
 } from 'recharts';
 import { fetchReportsStart } from '../reportSlice';
 import Card, { CardContent, CardHeader } from '../../../components/common/Card';
-import { FileText, ShoppingCart, TrendingUp, IndianRupee, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent, Package, Search, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus } from 'lucide-react';
+import { FileText, ShoppingCart, TrendingUp, IndianRupee, Activity, FileCheck, Clock, AlertTriangle, XCircle, Trash2, CheckCircle2, Scale, Percent, Package, Search, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Plus, Minus, Landmark, Maximize2, Minimize2, Upload, FileSpreadsheet, Download, Users, RotateCcw, Receipt } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import Loader from '../../../components/common/Loader';
 import ReportTable from '../components/ReportTable';
+import BalanceSheetView from '../components/BalanceSheetView';
+import CustomerSalesReportView from '../components/CustomerSalesReportView';
 import reportService from '../../../services/reportService';
 
 const toLocalISOString = (d) => {
@@ -30,9 +35,180 @@ const formatDisplayDateDDMMYYYY = (dStr) => {
     return dStr;
 };
 
+const CustomCombobox = ({ value, options, onChange, placeholder, maxLength, className }) => {
+    const [isOpen, setIsOpen] = React.useState(false);
+    const wrapperRef = React.useRef(null);
+
+    React.useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    return (
+        <div ref={wrapperRef} className="relative flex items-center">
+            <input 
+                type="text" 
+                value={value}
+                placeholder={placeholder}
+                maxLength={maxLength}
+                onChange={onChange}
+                onFocus={() => setIsOpen(true)}
+                className={`${className} pr-4`}
+            />
+            <button 
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="absolute right-1 text-gray-400 hover:text-gray-600 focus:outline-none"
+            >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            {isOpen && (
+                <ul className="absolute top-full left-0 mt-1 max-h-48 overflow-y-auto w-full bg-white border border-gray-200 rounded-md shadow-xl z-50 py-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                    {options.map(opt => (
+                        <li 
+                            key={opt}
+                            onMouseDown={(e) => { e.preventDefault(); }} 
+                            onClick={() => {
+                                onChange({ target: { value: String(opt) } });
+                                setIsOpen(false);
+                            }}
+                            className={`px-1 py-1.5 text-xs hover:bg-emerald-50 cursor-pointer text-center ${String(value) === String(opt) ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-gray-700 font-medium'}`}
+                        >
+                            {opt}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+};
+
+const CustomDateSelect = ({ value, onChange }) => {
+    const [year, month, day] = value ? value.split('-') : ['', '', ''];
+
+    const handleDayChange = (e) => {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val.length > 2) val = val.slice(0, 2);
+        onChange(`${year || new Date().getFullYear()}-${month || '01'}-${val}`);
+    };
+    
+    const handleMonthChange = (e) => {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val.length > 2) val = val.slice(0, 2);
+        onChange(`${year || new Date().getFullYear()}-${val}-${day || '01'}`);
+    };
+    
+    const handleYearChange = (e) => {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val.length > 4) val = val.slice(0, 4);
+        onChange(`${val}-${month || '01'}-${day || '01'}`);
+    };
+
+    const days = Array.from({length: 31}, (_, i) => String(i + 1).padStart(2, '0'));
+    const months = Array.from({length: 12}, (_, i) => String(i + 1).padStart(2, '0'));
+    const years = Array.from({length: 15}, (_, i) => String(2020 + i));
+
+    return (
+        <div className="flex gap-2 items-center">
+            <CustomCombobox 
+                value={day} 
+                options={days}
+                placeholder="DD"
+                maxLength={2}
+                onChange={handleDayChange}
+                className="w-[3.5rem] px-2 py-1.5 text-xs text-center border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs font-medium text-gray-700 bg-white transition-all"
+            />
+            <CustomCombobox 
+                value={month} 
+                options={months}
+                placeholder="MM"
+                maxLength={2}
+                onChange={handleMonthChange}
+                className="w-[3.5rem] px-2 py-1.5 text-xs text-center border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs font-medium text-gray-700 bg-white transition-all"
+            />
+            <CustomCombobox 
+                value={year} 
+                options={years}
+                placeholder="YYYY"
+                maxLength={4}
+                onChange={handleYearChange}
+                className="w-[4.2rem] px-2 py-1.5 text-xs text-center border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs font-medium text-gray-700 bg-white transition-all"
+            />
+        </div>
+    );
+};
+
+const parseLocalDateStart = (dStr) => {
+    if (!dStr) return null;
+    if (typeof dStr === 'string' && dStr.includes('-')) {
+        const parts = dStr.split('-').map(Number);
+        if (parts.length === 3 && parts[0] > 1000) {
+            return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0).getTime();
+        }
+    }
+    const dt = new Date(dStr);
+    return isNaN(dt.getTime()) ? null : new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 0, 0, 0, 0).getTime();
+};
+
+const parseLocalDateEnd = (dStr) => {
+    if (!dStr) return null;
+    if (typeof dStr === 'string' && dStr.includes('-')) {
+        const parts = dStr.split('-').map(Number);
+        if (parts.length === 3 && parts[0] > 1000) {
+            return new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999).getTime();
+        }
+    }
+    const dt = new Date(dStr);
+    return isNaN(dt.getTime()) ? null : new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 23, 59, 59, 999).getTime();
+};
+
+const isItemInDateRange = (item, fromDateStr, toDateStr) => {
+    const fromTime = parseLocalDateStart(fromDateStr);
+    const toTime = parseLocalDateEnd(toDateStr);
+    if (!fromTime && !toTime) return true;
+
+    const rawDate = item.supplierInvoiceDate || item.customerInvoiceDate || item.invoiceDate || item.bookingDate || item.grnDate || item.poDate || item.soDate || item.createdAt;
+    if (!rawDate) return true;
+
+    const itemDt = new Date(rawDate);
+    if (isNaN(itemDt.getTime())) return true;
+    const itemTime = itemDt.getTime();
+
+    if (fromTime && itemTime < fromTime) return false;
+    if (toTime && itemTime > toTime) return false;
+    return true;
+};
+
+const getCurrentFYBounds = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const fyStartYear = month >= 3 ? year : year - 1;
+    const fyEndYear = fyStartYear + 1;
+    const fromDate = `${fyStartYear}-04-01`;
+    const toDate = `${fyEndYear}-03-31`;
+    const label = `FY ${fyStartYear}-${String(fyEndYear).slice(-2)}`;
+    return { fromDate, toDate, label };
+};
+
+const getCurrentMonthBounds = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const firstDay = toLocalISOString(new Date(year, month, 1));
+    const lastDay = toLocalISOString(new Date(year, month + 1, 0));
+    return { fromDate: firstDay, toDate: lastDay };
+};
+
 const ReportDashboard = () => {
     const { t } = useTranslation(['reports', 'common']);
     const dispatch = useDispatch();
+    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { purchaseData, salesData, salesInvoicesData, poData, loading, error, grnData, challanData } = useSelector(state => state.reports);
 
@@ -40,7 +216,7 @@ const ReportDashboard = () => {
         const tabParam = searchParams.get('tab');
         if (tabParam) {
             const upper = tabParam.toUpperCase();
-            if (['ALL', 'PURCHASE', 'SALES', 'INVENTORY', 'PROFIT_LOSS'].includes(upper)) {
+            if (['ALL', 'PURCHASE', 'SALES', 'INVENTORY', 'PROFIT_LOSS', 'BALANCE_SHEET'].includes(upper)) {
                 return upper;
             }
         }
@@ -48,31 +224,32 @@ const ReportDashboard = () => {
     }, [searchParams]);
 
     const [activeTab, setActiveTab] = useState(initialTab); // Default to 'PROFIT_LOSS'
+    const [salesReportTab, setSalesReportTab] = useState('OVERALL'); // 'OVERALL' | 'CUSTOMER'
     const [timeFilter, setTimeFilter] = useState('MONTHLY'); // 'DAILY', 'WEEKLY', 'MONTHLY'
     const [detailView, setDetailView] = useState(null); // { type: 'PO', status: 'Created', data: [] }
     const [profitLossData, setProfitLossData] = useState(null);
     const [plLoading, setPlLoading] = useState(false);
-    const [plFromDate, setPlFromDate] = useState('2026-04-01');
-    const [plToDate, setPlToDate] = useState('2027-03-31');
+    const defaultFy = useMemo(() => getCurrentFYBounds(), []);
+    const [plFromDate, setPlFromDate] = useState(defaultFy.fromDate);
+    const [plToDate, setPlToDate] = useState(defaultFy.toDate);
+
+    const customerDateRange = useMemo(() => ({
+        dateFrom: plFromDate,
+        dateTo: plToDate
+    }), [plFromDate, plToDate]);
 
     const [isPurchaseExpanded, setIsPurchaseExpanded] = useState(false);
     const [isSalesExpanded, setIsSalesExpanded] = useState(false);
+    const [showPLExportMenu, setShowPLExportMenu] = useState(false);
+    const plReportRef = useRef(null);
 
     const supplierBreakdown = useMemo(() => {
         const groups = {};
-        const fromTime = plFromDate ? new Date(plFromDate).getTime() : null;
-        const toTime = plToDate ? new Date(plToDate + 'T23:59:59.999').getTime() : null;
 
         (purchaseData || []).forEach(item => {
             if (item.status === 'DELETED') return;
-            if (fromTime || toTime) {
-                const bDateStr = item.bookingDate || item.supplierInvoiceDate || item.createdAt;
-                if (bDateStr) {
-                    const itemTime = new Date(bDateStr).getTime();
-                    if (fromTime && itemTime < fromTime) return;
-                    if (toTime && itemTime > toTime) return;
-                }
-            }
+            if (!isItemInDateRange(item, plFromDate, plToDate)) return;
+
             const name = item.supplierName || item.vendorName || item.supplier_name || 'Unknown Supplier';
             if (!groups[name]) {
                 groups[name] = { name, basicAmount: 0, count: 0, items: [] };
@@ -92,18 +269,11 @@ const ReportDashboard = () => {
 
     const customerBreakdown = useMemo(() => {
         const groups = {};
-        const fromTime = plFromDate ? new Date(plFromDate).getTime() : null;
-        const toTime = plToDate ? new Date(plToDate + 'T23:59:59.999').getTime() : null;
 
-        (salesInvoicesData || []).filter(s => s.status === 'GENERATED' || s.status === 'INVOICE_GENERATED').forEach(item => {
-            if (fromTime || toTime) {
-                const bDateStr = item.bookingDate || item.customerInvoiceDate || item.createdAt;
-                if (bDateStr) {
-                    const itemTime = new Date(bDateStr).getTime();
-                    if (fromTime && itemTime < fromTime) return;
-                    if (toTime && itemTime > toTime) return;
-                }
-            }
+        (salesInvoicesData || []).forEach(item => {
+            if (item.status === 'DELETED') return;
+            if (!isItemInDateRange(item, plFromDate, plToDate)) return;
+
             const name = item.customerName || item.customer_name || item.customer?.customerName || 'Unknown Customer';
             if (!groups[name]) {
                 groups[name] = { name, basicAmount: 0, count: 0, items: [] };
@@ -136,9 +306,9 @@ const ReportDashboard = () => {
         setInvError(null);
         try {
             const params = {
-                page: invPage,
-                limit: invLimit,
-                search: invSearch,
+                page: 1,
+                limit: 1000,
+                search: invSearch || undefined,
                 sortBy: invSortBy || undefined,
                 sortOrder: invSortBy ? invSortOrder : undefined,
             };
@@ -150,7 +320,9 @@ const ReportDashboard = () => {
         } finally {
             setInvLoading(false);
         }
-    }, [invPage, invLimit, invSearch, invSortBy, invSortOrder]);
+    }, [invSearch, invSortBy, invSortOrder]);
+
+    const [balanceSheetData, setBalanceSheetData] = useState(null);
 
     const fetchPL = useCallback(async () => {
         setPlLoading(true);
@@ -167,8 +339,23 @@ const ReportDashboard = () => {
         }
     }, [plFromDate, plToDate]);
 
+    const fetchBS = useCallback(async () => {
+        setPlLoading(true);
+        try {
+            const params = {};
+            if (plFromDate) params.dateFrom = plFromDate;
+            if (plToDate) params.dateTo = plToDate;
+            const data = await reportService.getBalanceSheet(params);
+            setBalanceSheetData(data);
+        } catch (err) {
+            console.error("Error loading Balance Sheet report:", err);
+        } finally {
+            setPlLoading(false);
+        }
+    }, [plFromDate, plToDate]);
+
     useEffect(() => {
-        if (activeTab === 'INVENTORY' || activeTab === 'PROFIT_LOSS' || activeTab === 'ALL') {
+        if (activeTab === 'INVENTORY' || activeTab === 'PROFIT_LOSS' || activeTab === 'BALANCE_SHEET' || activeTab === 'ALL') {
             fetchInventory();
         }
     }, [activeTab, fetchInventory]);
@@ -177,39 +364,19 @@ const ReportDashboard = () => {
         if (activeTab === 'PROFIT_LOSS' || activeTab === 'ALL') {
             fetchPL();
         }
-    }, [activeTab, fetchPL]);
+        if (activeTab === 'BALANCE_SHEET' || activeTab === 'ALL') {
+            fetchBS();
+        }
+    }, [activeTab, fetchPL, fetchBS]);
 
     useEffect(() => {
         dispatch(fetchReportsStart());
     }, [dispatch]);
 
-    useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (detailView) {
-                const clickedCard = e.target.closest('.status-card-element');
-                const clickedTable = e.target.closest('.report-table-element');
-                if (!clickedCard && !clickedTable) {
-                    setDetailView(null);
-                }
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [detailView]);
+
 
     const metrics = useMemo(() => {
-        const fromTime = plFromDate ? new Date(plFromDate).getTime() : null;
-        const toTime = plToDate ? new Date(plToDate + 'T23:59:59.999').getTime() : null;
-
-        const filterByDate = (item) => {
-            if (!fromTime && !toTime) return true;
-            const bDateStr = item.bookingDate || item.supplierInvoiceDate || item.customerInvoiceDate || item.grnDate || item.poDate || item.soDate || item.createdAt;
-            if (!bDateStr) return true;
-            const itemTime = new Date(bDateStr).getTime();
-            if (fromTime && itemTime < fromTime) return false;
-            if (toTime && itemTime > toTime) return false;
-            return true;
-        };
+        const filterByDate = (item) => isItemInDateRange(item, plFromDate, plToDate);
 
         const filteredSalesInvoices = (salesInvoicesData || []).filter(filterByDate);
         const filteredPurchaseInvoices = (purchaseData || []).filter(filterByDate);
@@ -218,8 +385,8 @@ const ReportDashboard = () => {
         const filteredGrnData = (grnData || []).filter(filterByDate);
         const filteredChallanData = (challanData || []).filter(filterByDate);
 
-        const completedSales = filteredSalesInvoices.filter(s => s.status === 'GENERATED' || s.status === 'INVOICE_GENERATED');
-        const validPurchases = filteredPurchaseInvoices.filter(p => p.status === 'GENERATED' || p.status === 'COMPLETED' || p.status === 'INVOICE_GENERATED');
+        const completedSales = filteredSalesInvoices.filter(s => s.status !== 'DELETED');
+        const validPurchases = filteredPurchaseInvoices.filter(p => p.status !== 'DELETED');
 
         const totalPurchases = validPurchases.reduce((sum, item) => sum + (item.grandTotal || item.totalAmount || 0), 0);
         const purchaseExpenses = validPurchases.reduce((sum, item) => {
@@ -231,6 +398,20 @@ const ReportDashboard = () => {
         const totalSales = completedSales.reduce((sum, item) => sum + (item.grandTotal || item.totalAmount || 0), 0);
         const totalPurchaseTax = validPurchases.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
         const totalSalesTax = completedSales.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
+        const totalDiscounts = completedSales.reduce((sum, item) => sum + (item.discountAmount || item.discount || 0), 0);
+        const grossSales = completedSales.reduce((sum, item) => {
+            if (item.subTotal) return sum + (item.subTotal || 0);
+            const net = item.grandTotal || item.totalAmount || 0;
+            const tax = item.taxAmount || 0;
+            const disc = item.discountAmount || item.discount || 0;
+            return sum + (net - tax + disc);
+        }, 0);
+        const netSales = totalSales;
+        const returnsRefunds = 0;
+        const completedSalesCount = completedSales.length;
+        const validSalesOrders = (filteredSalesData || []).filter(so => so.status !== 'DELETED');
+        const totalSalesOrdersCount = validSalesOrders.length;
+        const averageOrderValue = completedSalesCount > 0 ? (netSales / completedSalesCount) : 0;
         const profit = totalSales - totalPurchases;
 
         const parseSafeDate = (d) => {
@@ -373,7 +554,7 @@ const ReportDashboard = () => {
                 if (item.status === 'DELETED') {
                     deleted++;
                     deletedAmt += amt;
-                } else if (item.status === 'GENERATED' || item.status === 'INVOICE_GENERATED') {
+                } else if (item.status !== 'DELETED') {
                     generated++;
                     generatedAmt += amt;
                 }
@@ -390,6 +571,13 @@ const ReportDashboard = () => {
             materialPurchases,
             purchaseExpenses,
             totalSales,
+            grossSales,
+            netSales,
+            totalDiscounts,
+            returnsRefunds,
+            completedSalesCount,
+            totalSalesOrdersCount,
+            averageOrderValue,
             totalPurchaseTax,
             totalSalesTax,
             profit,
@@ -502,7 +690,7 @@ const ReportDashboard = () => {
             }
         };
 
-        const validPurchasesForChart = (purchaseData || []).filter(p => p.status === 'GENERATED');
+        const validPurchasesForChart = (purchaseData || []).filter(p => p.status !== 'DELETED');
         validPurchasesForChart.forEach(item => {
             const rawDate = item.invoiceDate || item.createdAt || item.bookingDate || new Date();
             const date = new Date(rawDate);
@@ -521,7 +709,7 @@ const ReportDashboard = () => {
             aggregated[key].Purchases += (item.grandTotal || 0);
         });
 
-        const completedSalesForChart = (salesInvoicesData || []).filter(s => s.status === 'GENERATED' || s.status === 'INVOICE_GENERATED');
+        const completedSalesForChart = (salesInvoicesData || []).filter(s => s.status !== 'DELETED');
         completedSalesForChart.forEach(item => {
             const rawDate = item.invoiceDate || item.createdAt || item.soCreationDate || new Date();
             const date = new Date(rawDate);
@@ -553,7 +741,88 @@ const ReportDashboard = () => {
         { id: 'SALES', label: 'Sales Reports', icon: TrendingUp },
         { id: 'INVENTORY', label: 'Inventory', icon: Package },
         { id: 'PROFIT_LOSS', label: 'Profit & Loss', icon: Scale },
+        // { id: 'BALANCE_SHEET', label: 'Balance Sheet', icon: Landmark },
     ];
+
+    const renderPeriodFilterBar = () => {
+        const fy = getCurrentFYBounds();
+        const m = getCurrentMonthBounds();
+
+        const isFyActive = plFromDate === fy.fromDate && plToDate === fy.toDate;
+        const isMonthActive = plFromDate === m.fromDate && plToDate === m.toDate;
+        const isAllTimeActive = !plFromDate && !plToDate;
+
+        return (
+            <div className="bg-gray-50/90 p-4 md:p-5 rounded-[20px] border border-gray-200/80 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
+                <div>
+                    <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                        <Scale size={18} className="text-emerald-700" />
+                        Report Financial Period
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                        Period: <span className="font-semibold text-gray-800">{plFromDate ? formatDisplayDateDDMMYYYY(plFromDate) : 'Beginning'}</span> to <span className="font-semibold text-gray-800">{plToDate ? formatDisplayDateDDMMYYYY(plToDate) : 'Current Date'}</span>
+                    </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs font-semibold text-gray-600">From:</label>
+                        <CustomDateSelect
+                            value={plFromDate}
+                            onChange={(val) => setPlFromDate(val)}
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs font-semibold text-gray-600">To:</label>
+                        <CustomDateSelect
+                            value={plToDate}
+                            onChange={(val) => setPlToDate(val)}
+                        />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            onClick={() => {
+                                setPlFromDate(fy.fromDate);
+                                setPlToDate(fy.toDate);
+                            }}
+                            className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-all ${
+                                isFyActive
+                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                            }`}
+                        >
+                            {fy.label}
+                        </button>
+                        <button
+                            onClick={() => {
+                                setPlFromDate(m.fromDate);
+                                setPlToDate(m.toDate);
+                            }}
+                            className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-all ${
+                                isMonthActive
+                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                            }`}
+                        >
+                            This Month
+                        </button>
+                        <button
+                            onClick={() => {
+                                setPlFromDate('');
+                                setPlToDate('');
+                            }}
+                            className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-all ${
+                                isAllTimeActive
+                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                            }`}
+                        >
+                            All Time
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     if (loading) {
         return <div className="flex justify-center items-center h-screen"><Loader /></div>;
@@ -565,7 +834,8 @@ const ReportDashboard = () => {
 
     const formatCurrency = (amount) => {
         return Number(amount || 0).toLocaleString('en-IN', {
-            maximumFractionDigits: 0
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
         });
     };
 
@@ -682,44 +952,141 @@ const ReportDashboard = () => {
             );
         }
         if (activeTab === 'SALES') {
+            if (salesReportTab === 'CUSTOMER') {
+                const pLabel = `${plFromDate ? formatDisplayDateDDMMYYYY(plFromDate) : 'Beginning'} - ${plToDate ? formatDisplayDateDDMMYYYY(plToDate) : 'Current Date'}`;
+                return (
+                    <CustomerSalesReportView
+                        fromDate={plFromDate}
+                        toDate={plToDate}
+                        onFromDateChange={setPlFromDate}
+                        onToDateChange={setPlToDate}
+                        periodLabel={pLabel}
+                    />
+                );
+            }
+
             return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    {/* 1. Gross Sales */}
                     <Card
                         className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100 hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => handleCardClick('SI', 'Total Invoices', salesInvoicesData)}
+                        onClick={() => handleCardClick('SI', 'Gross Sales Invoices', salesInvoicesData)}
                     >
-                        <CardContent className="flex items-center p-6">
-                            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mr-4">
-                                <TrendingUp className="text-blue-700" size={24} />
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <TrendingUp className="text-blue-700" size={22} />
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-blue-800/70 mb-1">Gross Sales</p>
-                                <h4 className="text-2xl font-bold text-blue-900">{formatCurrency(metrics.totalSales)}</h4>
+                                <p className="text-xs font-semibold text-blue-800/70 mb-1 uppercase tracking-wider">Gross Sales</p>
+                                <h4 className="text-xl font-bold text-blue-900">{formatCurrency(metrics.grossSales)}</h4>
+                                <p className="text-[11px] text-blue-600 mt-1">Pre-discount & taxes</p>
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100">
-                        <CardContent className="flex items-center p-6">
-                            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mr-4">
-                                <IndianRupee className="text-blue-700" size={24} />
+
+                    {/* 2. Net Sales */}
+                    <Card
+                        className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleCardClick('SI', 'Net Sales Invoices', salesInvoicesData)}
+                    >
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <IndianRupee className="text-emerald-700" size={22} />
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-blue-800/70 mb-1">Total Tax Collected</p>
-                                <h4 className="text-2xl font-bold text-blue-900">{formatCurrency(metrics.totalSalesTax)}</h4>
+                                <p className="text-xs font-semibold text-emerald-800/70 mb-1 uppercase tracking-wider">Net Sales</p>
+                                <h4 className="text-xl font-bold text-emerald-900">{formatCurrency(metrics.netSales)}</h4>
+                                <p className="text-[11px] text-emerald-600 mt-1">Final billed amount</p>
                             </div>
                         </CardContent>
                     </Card>
-                    <Card
-                        className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-100 hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => handleCardClick('SI', 'Total Invoices', salesInvoicesData)}
-                    >
-                        <CardContent className="flex items-center p-6">
-                            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mr-4">
-                                <FileCheck className="text-blue-700" size={24} />
+
+                    {/* 3. Total Tax Collected */}
+                    <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border-indigo-100 hover:shadow-md transition-shadow">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <Receipt className="text-indigo-700" size={22} />
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-blue-800/70 mb-1">Completed Sales</p>
-                                <h4 className="text-2xl font-bold text-blue-900">{metrics.salesCount}</h4>
+                                <p className="text-xs font-semibold text-indigo-800/70 mb-1 uppercase tracking-wider">Total Tax Collected</p>
+                                <h4 className="text-xl font-bold text-indigo-900">{formatCurrency(metrics.totalSalesTax)}</h4>
+                                <p className="text-[11px] text-indigo-600 mt-1">GST / Output Tax</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 4. Total Discounts */}
+                    <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-100 hover:shadow-md transition-shadow">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <Percent className="text-purple-700" size={22} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-purple-800/70 mb-1 uppercase tracking-wider">Total Discounts</p>
+                                <h4 className="text-xl font-bold text-purple-900">{formatCurrency(metrics.totalDiscounts)}</h4>
+                                <p className="text-[11px] text-purple-600 mt-1">Special price deductions</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 5. Returns and Refunds */}
+                    <Card className="bg-gradient-to-br from-rose-50 to-rose-100/50 border-rose-100 hover:shadow-md transition-shadow">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-rose-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <RotateCcw className="text-rose-700" size={22} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-rose-800/70 mb-1 uppercase tracking-wider">Returns & Refunds</p>
+                                <h4 className="text-xl font-bold text-rose-900">{formatCurrency(metrics.returnsRefunds)}</h4>
+                                <p className="text-[11px] text-rose-600 mt-1">Credit notes / returns</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 6. Completed Sales */}
+                    <Card
+                        className="bg-gradient-to-br from-teal-50 to-teal-100/50 border-teal-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleCardClick('SI', 'Completed Invoices', salesInvoicesData)}
+                    >
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-teal-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <FileCheck className="text-teal-700" size={22} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-teal-800/70 mb-1 uppercase tracking-wider">Completed Sales</p>
+                                <h4 className="text-xl font-bold text-teal-900">{metrics.completedSalesCount}</h4>
+                                <p className="text-[11px] text-teal-600 mt-1">Active finalized invoices</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 7. Total Sales Orders */}
+                    <Card
+                        className="bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleCardClick('SO', 'Sales Orders', salesData)}
+                    >
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <ShoppingCart className="text-amber-700" size={22} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-amber-800/70 mb-1 uppercase tracking-wider">Total Sales Orders</p>
+                                <h4 className="text-xl font-bold text-amber-900">{metrics.totalSalesOrdersCount}</h4>
+                                <p className="text-[11px] text-amber-600 mt-1">Orders booked</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 8. Average Order Value */}
+                    <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100/50 border-cyan-100 hover:shadow-md transition-shadow">
+                        <CardContent className="flex items-center p-5">
+                            <div className="w-12 h-12 rounded-full bg-cyan-500/20 flex items-center justify-center mr-4 shrink-0">
+                                <Activity className="text-cyan-700" size={22} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-cyan-800/70 mb-1 uppercase tracking-wider">Average Order Value</p>
+                                <h4 className="text-xl font-bold text-cyan-900">{formatCurrency(metrics.averageOrderValue)}</h4>
+                                <p className="text-[11px] text-cyan-600 mt-1">Net sales / invoice count</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -1020,67 +1387,172 @@ const ReportDashboard = () => {
                 <CardContent className="p-0 md:p-8 bg-white">
                     {/* Period Filter Bar */}
                     <div className="bg-gray-50/80 p-4 md:p-6 rounded-[16px] border border-gray-200/60 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-900">Profit & Loss Financial Statement</h3>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                                Period: {plFromDate ? formatDisplayDateDDMMYYYY(plFromDate) : 'Beginning'} to {plToDate ? formatDisplayDateDDMMYYYY(plToDate) : 'Current Date'}
-                            </p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex flex-wrap items-center justify-between w-full gap-3">
                             <div className="flex items-center gap-2">
                                 <label className="text-xs font-semibold text-gray-600">From:</label>
-                                <input
-                                    type="date"
+                                <CustomDateSelect
                                     value={plFromDate}
-                                    onChange={(e) => setPlFromDate(e.target.value)}
-                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                    onChange={(val) => {
+                                        if (plToDate && new Date(val) > new Date(plToDate)) {
+                                            toast.error("From date cannot be greater than To date");
+                                            return;
+                                        }
+                                        setPlFromDate(val);
+                                    }}
                                 />
                             </div>
                             <div className="flex items-center gap-2">
                                 <label className="text-xs font-semibold text-gray-600">To:</label>
-                                <input
-                                    type="date"
+                                <CustomDateSelect
                                     value={plToDate}
-                                    onChange={(e) => setPlToDate(e.target.value)}
-                                    className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                    onChange={(val) => {
+                                        if (plFromDate && new Date(val) < new Date(plFromDate)) {
+                                            toast.error("To date cannot be smaller than From date");
+                                            return;
+                                        }
+                                        setPlToDate(val);
+                                    }}
                                 />
                             </div>
                             <div className="flex items-center gap-1">
+                                {(() => {
+                                    const now = new Date();
+                                    const firstDayThisMonth = toLocalISOString(new Date(now.getFullYear(), now.getMonth(), 1));
+                                    const todayDate = toLocalISOString(now);
+                                    const isFY = plFromDate === '2026-04-01' && plToDate === '2027-03-31';
+                                    const isThisMonth = plFromDate === firstDayThisMonth && plToDate === todayDate;
+                                    const isAllTime = plFromDate === '' && plToDate === '';
+                                    return (
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    setPlFromDate('2026-04-01');
+                                                    setPlToDate('2027-03-31');
+                                                }}
+                                                className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-colors outline-none focus:ring-2 focus:ring-emerald-500/40 ${isFY ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                                            >
+                                                FY 2026-27
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setPlFromDate(firstDayThisMonth);
+                                                    setPlToDate(todayDate);
+                                                }}
+                                                className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-colors outline-none focus:ring-2 focus:ring-emerald-500/40 ${isThisMonth ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                                            >
+                                                This Month
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setPlFromDate('');
+                                                    setPlToDate('');
+                                                }}
+                                                className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-colors outline-none focus:ring-2 focus:ring-emerald-500/40 ${isAllTime ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                                            >
+                                                All Time
+                                            </button>
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                            <div className="flex items-center gap-2 border-l border-gray-300 pl-2 ml-1">
                                 <button
                                     onClick={() => {
-                                        setPlFromDate('2026-04-01');
-                                        setPlToDate('2027-03-31');
+                                        const isAllExp = isPurchaseExpanded && isSalesExpanded;
+                                        setIsPurchaseExpanded(!isAllExp);
+                                        setIsSalesExpanded(!isAllExp);
                                     }}
-                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 transition-colors"
+                                    className="px-4 py-1.5 text-xs font-semibold text-[#0f4a3c] bg-white border border-[#0f4a3c]/30 rounded-2xl hover:bg-emerald-50/60 hover:border-[#0f4a3c]/60 shadow-2xs transition-all flex items-center gap-2 cursor-pointer"
+                                    title={(isPurchaseExpanded && isSalesExpanded) ? "Collapse All Sections" : "Expand All Sections"}
                                 >
-                                    FY 2026-27
+                                    {(isPurchaseExpanded && isSalesExpanded) ? (
+                                        <Minimize2 size={15} className="text-[#0f4a3c]" />
+                                    ) : (
+                                        <Maximize2 size={15} className="text-[#0f4a3c]" />
+                                    )}
+                                    <span>{(isPurchaseExpanded && isSalesExpanded) ? 'Collapse All' : 'Expand All'}</span>
                                 </button>
-                                <button
-                                    onClick={() => {
-                                        const now = new Date();
-                                        const firstDay = toLocalISOString(new Date(now.getFullYear(), now.getMonth(), 1));
-                                        const today = toLocalISOString(now);
-                                        setPlFromDate(firstDay);
-                                        setPlToDate(today);
-                                    }}
-                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-                                >
-                                    This Month
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setPlFromDate('');
-                                        setPlToDate('');
-                                    }}
-                                    className="px-2.5 py-1.5 text-[11px] font-medium bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-                                >
-                                    All Time
-                                </button>
+
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowPLExportMenu(!showPLExportMenu)}
+                                        className="px-4 py-1.5 text-xs font-semibold text-[#0f4a3c] bg-white border border-[#0f4a3c]/30 rounded-2xl hover:bg-emerald-50/60 hover:border-[#0f4a3c]/60 shadow-2xs transition-all flex items-center gap-2 cursor-pointer"
+                                        title="Export Options"
+                                    >
+                                        <Upload size={15} className="text-[#0f4a3c]" />
+                                        <span>Export</span>
+                                        <ChevronDown size={12} className={`text-[#0f4a3c] transition-transform ${showPLExportMenu ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {showPLExportMenu && (
+                                        <div 
+                                            className="absolute right-0 mt-1.5 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1 overflow-hidden"
+                                            onMouseLeave={() => setShowPLExportMenu(false)}
+                                        >
+                                            <button
+                                                onClick={() => {
+                                                    const rows = [
+                                                        ['EXPENDITURE', 'AMOUNT (INR)', 'INCOME', 'AMOUNT (INR)'],
+                                                        ['Opening Balance', openingStock, 'Sales', sale],
+                                                        ['Purchase', purchase, 'Direct Income', directIncome],
+                                                        ['Direct Expenses', directExpenses, 'Closing Balance', closingStock],
+                                                        ['Gross Profit', grossProfit, 'Gross Loss', grossLoss],
+                                                        ['Indirect Expenses', indirectExpenses, 'Indirect Income', indirectIncome],
+                                                        ['Net Profit', netProfit, 'Net Loss', netLoss],
+                                                        [],
+                                                        ['TOTAL EXPENDITURE', totalExpenditure, 'TOTAL INCOME', totalIncome]
+                                                    ];
+                                                    const ws = XLSX.utils.aoa_to_sheet(rows);
+                                                    ws['!cols'] = [
+                                                        { wch: 30 },
+                                                        { wch: 20 },
+                                                        { wch: 30 },
+                                                        { wch: 20 }
+                                                    ];
+                                                    const wb = XLSX.utils.book_new();
+                                                    XLSX.utils.book_append_sheet(wb, ws, 'Profit and Loss');
+                                                    XLSX.writeFile(wb, `Profit_and_Loss_Statement_${plToDate || 'current'}.xlsx`);
+                                                    setShowPLExportMenu(false);
+                                                }}
+                                                className="w-full px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition-colors text-left cursor-pointer"
+                                            >
+                                                <FileSpreadsheet size={14} className="text-emerald-700" />
+                                                <span>Export to Excel</span>
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    setShowPLExportMenu(false);
+                                                    if (plReportRef.current) {
+                                                        const element = plReportRef.current;
+                                                        const opt = {
+                                                            margin: [6, 6, 6, 6],
+                                                            filename: `Profit_and_Loss_${plToDate || 'current'}.pdf`,
+                                                            image: { type: 'jpeg', quality: 0.98 },
+                                                            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                                                            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                                                        };
+                                                        try {
+                                                            await html2pdf().set(opt).from(element).save();
+                                                            return;
+                                                        } catch (err) {
+                                                            console.error('P&L PDF error:', err);
+                                                        }
+                                                    }
+                                                    window.print();
+                                                }}
+                                                className="w-full px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition-colors text-left cursor-pointer"
+                                            >
+                                                <Download size={14} className="text-[#0f4a3c]" />
+                                                <span>Export to PDF</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="w-full border border-gray-200/60 rounded-[16px] shadow-sm bg-gray-50/10 overflow-hidden">
+                    <div ref={plReportRef} className="w-full border border-gray-200/60 rounded-[16px] shadow-sm bg-gray-50/10 overflow-hidden bg-white p-2">
                         {/* 2-Column Trading Account Layout */}
                         <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-200 bg-white">
                             {/* EXPENDITURE COLUMN */}
@@ -1090,14 +1562,14 @@ const ReportDashboard = () => {
                                     EXPENDITURE
                                 </div>
                                 <div className="divide-y divide-gray-100 flex-1">
-                                    {/* Opening Balance */}
+                                    {/* Opening Stock */}
                                     <div
-                                        onClick={() => handleCardClick('STOCK', 'Opening Balance Breakdown', openingStock > 0 ? (inventoryData?.items || []) : [])}
+                                        onClick={() => handleCardClick('STOCK', 'Opening Stock Breakdown', openingStock > 0 ? (inventoryData?.items || []) : [])}
                                         className="flex items-center justify-between px-6 py-4 hover:bg-emerald-50/30 transition-colors cursor-pointer group font-semibold text-gray-700"
                                     >
                                         <div className="flex items-center gap-2">
                                             <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                                            <span className="group-hover:translate-x-0.5 transition-transform">Opening Balance</span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Opening Stock</span>
                                         </div>
                                         <span className="text-gray-900 font-bold">{formatCurrency(openingStock)}</span>
                                     </div>
@@ -1209,14 +1681,14 @@ const ReportDashboard = () => {
                                         <span className="text-gray-900 font-bold">{formatCurrency(directIncome)}</span>
                                     </div>
 
-                                    {/* Closing Balance */}
+                                    {/* Closing Stock */}
                                     <div
-                                        onClick={() => handleCardClick('STOCK', 'Closing Balance Breakdown', closingStock > 0 ? (inventoryData?.items || []) : [])}
+                                        onClick={() => handleCardClick('STOCK', 'Closing Stock Breakdown', inventoryData?.data || [])}
                                         className="flex items-center justify-between px-6 py-4 hover:bg-emerald-50/30 transition-colors cursor-pointer group font-semibold text-gray-700"
                                     >
                                         <div className="flex items-center gap-2">
                                             <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                                            <span className="group-hover:translate-x-0.5 transition-transform">Closing Balance</span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Closing Stock</span>
                                         </div>
                                         <span className="text-gray-900 font-bold">{formatCurrency(closingStock)}</span>
                                     </div>
@@ -1354,6 +1826,243 @@ const ReportDashboard = () => {
         );
     };
 
+    const renderBalanceSheetStatement = () => {
+        const trading = profitLossData?.trading || {};
+        const pl = profitLossData?.profitLoss || {};
+
+        const openingStock = trading.openingStock ?? profitLossData?.openingStock ?? 0;
+        const purchase = trading.netPurchase ?? trading.purchase ?? profitLossData?.purchase ?? 0;
+        const directExpenses = trading.directExpenses ?? profitLossData?.directExpenses ?? 0;
+        const directIncome = trading.directIncome ?? profitLossData?.directIncome ?? 0;
+        const sale = trading.netSales ?? trading.sales ?? profitLossData?.sales ?? 0;
+        const closingStock = trading.closingStock ?? profitLossData?.closingStock ?? 0;
+
+        const indirectExpenses = pl.indirectExpenses ?? profitLossData?.indirectExpenses ?? 0;
+        const indirectIncome = pl.indirectIncome ?? profitLossData?.indirectIncome ?? 0;
+
+        const totalTradingExpenditure = trading.totalExpenditure ?? (openingStock + purchase + directExpenses);
+        const totalTradingIncome = trading.totalIncome ?? (sale + directIncome + closingStock + indirectIncome);
+
+        const isGrossProfit = trading.isGrossProfit ?? (totalTradingIncome >= totalTradingExpenditure);
+        const grossProfit = isGrossProfit ? (trading.grossProfit ?? (totalTradingIncome - totalTradingExpenditure)) : 0;
+        const grossLoss = !isGrossProfit ? (trading.grossLoss ?? (totalTradingExpenditure - totalTradingIncome)) : 0;
+
+        const netProfitVal = grossProfit - grossLoss - indirectExpenses;
+
+        // Balance sheet items derived from metrics & data
+        const sundryCreditors = metrics.totalPurchases || 0;
+        const taxPayable = metrics.totalSalesTax || 0;
+        const capitalAccount = Math.max(0, netProfitVal);
+
+        const sundryDebtors = metrics.totalSales || 0;
+        const closingInventoryVal = closingStock;
+        const inputTaxCredit = metrics.totalPurchaseTax || 0;
+        const cashBankBalance = Math.max(0, sundryDebtors - sundryCreditors);
+
+        const totalLiabilities = capitalAccount + sundryCreditors + taxPayable;
+        const totalAssets = closingInventoryVal + sundryDebtors + inputTaxCredit + cashBankBalance;
+
+        return (
+            <Card className="mb-8 border border-gray-100 shadow-xl overflow-hidden rounded-[24px]">
+                <CardHeader title="Balance Sheet Statement" />
+                <CardContent className="p-0 md:p-8 bg-white">
+                    {/* Period Filter Bar */}
+                    <div className="bg-gray-50/80 p-4 md:p-6 rounded-[16px] border border-gray-200/60 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900">Balance Sheet (Financial Position)</h3>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                As of Date: {plToDate ? formatDisplayDateDDMMYYYY(plToDate) : 'Current Date'}
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-semibold text-gray-600">From:</label>
+                                <CustomDateSelect
+                                    value={plFromDate}
+                                    onChange={(val) => {
+                                        if (plToDate && new Date(val) > new Date(plToDate)) {
+                                            toast.error("From date cannot be greater than To date");
+                                            return;
+                                        }
+                                        setPlFromDate(val);
+                                    }}
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-semibold text-gray-600">To:</label>
+                                <CustomDateSelect
+                                    value={plToDate}
+                                    onChange={(val) => {
+                                        if (plFromDate && new Date(val) < new Date(plFromDate)) {
+                                            toast.error("To date cannot be smaller than From date");
+                                            return;
+                                        }
+                                        setPlToDate(val);
+                                    }}
+                                />
+                            </div>
+                            <div className="flex items-center gap-1">
+                                {(() => {
+                                    const now = new Date();
+                                    const firstDayThisMonth = toLocalISOString(new Date(now.getFullYear(), now.getMonth(), 1));
+                                    const todayDate = toLocalISOString(now);
+                                    const isFY = plFromDate === '2026-04-01' && plToDate === '2027-03-31';
+                                    const isThisMonth = plFromDate === firstDayThisMonth && plToDate === todayDate;
+                                    const isAllTime = plFromDate === '' && plToDate === '';
+                                    return (
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    setPlFromDate('2026-04-01');
+                                                    setPlToDate('2027-03-31');
+                                                }}
+                                                className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-colors outline-none focus:ring-2 focus:ring-emerald-500/40 ${isFY ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                                            >
+                                                FY 2026-27
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setPlFromDate(firstDayThisMonth);
+                                                    setPlToDate(todayDate);
+                                                }}
+                                                className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-colors outline-none focus:ring-2 focus:ring-emerald-500/40 ${isThisMonth ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                                            >
+                                                This Month
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setPlFromDate('');
+                                                    setPlToDate('');
+                                                }}
+                                                className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-colors outline-none focus:ring-2 focus:ring-emerald-500/40 ${isAllTime ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+                                            >
+                                                All Time
+                                            </button>
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="w-full border border-gray-200/60 rounded-[16px] shadow-sm bg-gray-50/10 overflow-hidden">
+                        {/* 2-Column Balance Sheet Layout */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-200 bg-white">
+                            {/* LIABILITIES COLUMN */}
+                            <div className="flex flex-col">
+                                <div className="px-6 py-4 bg-[#004f3b] text-white font-bold text-sm uppercase tracking-widest text-center flex items-center justify-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-white"></span>
+                                    LIABILITIES
+                                </div>
+                                <div className="divide-y divide-gray-100 flex-1">
+                                    {/* Capital Account / Net Profit */}
+                                    <div className="flex items-center justify-between px-6 py-4 hover:bg-emerald-50/30 transition-colors font-semibold text-gray-700">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span>Capital Account (Net Earnings)</span>
+                                        </div>
+                                        <span className="text-gray-900 font-bold">{formatCurrency(capitalAccount)}</span>
+                                    </div>
+
+                                    {/* Sundry Creditors */}
+                                    <div
+                                        onClick={() => handleCardClick('PI', 'Sundry Creditors (Purchases)', purchaseData)}
+                                        className="flex items-center justify-between px-6 py-4 hover:bg-emerald-50/30 transition-colors cursor-pointer group font-semibold text-gray-700"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Sundry Creditors (Accounts Payable)</span>
+                                        </div>
+                                        <span className="text-gray-900 font-bold">{formatCurrency(sundryCreditors)}</span>
+                                    </div>
+
+                                    {/* Tax Payable */}
+                                    <div className="flex items-center justify-between px-6 py-4 hover:bg-emerald-50/30 transition-colors font-semibold text-gray-700">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                                            <span>Duties & Taxes Payable (Output GST)</span>
+                                        </div>
+                                        <span className="text-gray-900 font-bold">{formatCurrency(taxPayable)}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ASSETS COLUMN */}
+                            <div className="flex flex-col">
+                                <div className="px-6 py-4 bg-[#004f3b] text-white font-bold text-sm uppercase tracking-widest text-center flex items-center justify-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-white"></span>
+                                    ASSETS
+                                </div>
+                                <div className="divide-y divide-gray-100 flex-1">
+                                    {/* Sundry Debtors */}
+                                    <div
+                                        onClick={() => handleCardClick('SI', 'Sundry Debtors (Sales)', salesInvoicesData)}
+                                        className="flex items-center justify-between px-6 py-4 hover:bg-blue-50/30 transition-colors cursor-pointer group font-semibold text-gray-700"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Sundry Debtors (Accounts Receivable)</span>
+                                        </div>
+                                        <span className="text-gray-900 font-bold">{formatCurrency(sundryDebtors)}</span>
+                                    </div>
+
+                                    {/* Closing Stock */}
+                                    <div
+                                        onClick={() => handleCardClick('STOCK', 'Closing Stock Valuation', closingStock > 0 ? (inventoryData?.items || []) : [])}
+                                        className="flex items-center justify-between px-6 py-4 hover:bg-blue-50/30 transition-colors cursor-pointer group font-semibold text-gray-700"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
+                                            <span className="group-hover:translate-x-0.5 transition-transform">Closing Stock / Inventory</span>
+                                        </div>
+                                        <span className="text-gray-900 font-bold">{formatCurrency(closingInventoryVal)}</span>
+                                    </div>
+
+                                    {/* Input Tax Credit */}
+                                    <div className="flex items-center justify-between px-6 py-4 hover:bg-blue-50/30 transition-colors font-semibold text-gray-700">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
+                                            <span>Input Tax Credit (Input GST)</span>
+                                        </div>
+                                        <span className="text-gray-900 font-bold">{formatCurrency(inputTaxCredit)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Totals Row */}
+                        <table className="w-full border-collapse text-sm border-t-2 border-gray-300">
+                            <tbody>
+                                <tr className="bg-emerald-100/80 font-bold border-b-2 border-gray-300">
+                                    <td className="px-6 py-4 text-emerald-955 font-extrabold text-sm uppercase tracking-wider w-1/4">Total Liabilities</td>
+                                    <td className="px-6 py-4 text-right text-emerald-955 font-black border-r-2 border-gray-300 text-base w-1/4">
+                                        {formatCurrency(totalLiabilities)}
+                                    </td>
+                                    <td className="px-6 py-4 text-emerald-955 font-extrabold text-sm uppercase tracking-wider w-1/4">Total Assets</td>
+                                    <td className="px-6 py-4 text-right text-emerald-955 font-black text-base w-1/4">
+                                        {formatCurrency(totalAssets)}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Interactive Report Detail Table for Balance Sheet */}
+                    {detailView && (
+                        <div className="report-table-element w-full animate-in fade-in slide-in-from-top-4 duration-500 mt-6 mb-4" id="status-section-PI">
+                            <ReportTable
+                                type={detailView.type}
+                                status={detailView.status}
+                                data={detailView.data}
+                                onClose={() => setDetailView(null)}
+                            />
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        );
+    };
+
     const renderSelectedStatusCards = () => {
         if (activeTab === 'ALL') {
             return (
@@ -1373,6 +2082,9 @@ const ReportDashboard = () => {
             );
         }
         if (activeTab === 'SALES') {
+            if (salesReportTab === 'CUSTOMER') {
+                return null;
+            }
             return (
                 <div className="mb-2">
                     {renderStatusCards('Sales Orders Status', metrics.soStatuses, 'SO', salesData)}
@@ -1389,16 +2101,95 @@ const ReportDashboard = () => {
             );
         }
         if (activeTab === 'PROFIT_LOSS') {
-            if (plLoading) {
-                return (
-                    <div className="flex justify-center items-center py-20 bg-white rounded-[20px] border border-gray-100 shadow-md mb-8">
-                        <Loader />
-                    </div>
-                );
-            }
             return (
-                <div className="mb-2 animate-in fade-in duration-300">
+                <div className="mb-2 relative animate-in fade-in duration-300">
                     {renderProfitLossStatement()}
+                </div>
+            );
+        }
+        if (activeTab === 'BALANCE_SHEET') {
+            return (
+                <div className="mb-2 relative animate-in fade-in duration-300">
+                    <BalanceSheetView
+                        balanceData={balanceSheetData}
+                        fromDate={plFromDate}
+                        toDate={plToDate}
+                        onFromDateChange={setPlFromDate}
+                        onToDateChange={setPlToDate}
+                        supplierBreakdown={supplierBreakdown}
+                        customerBreakdown={customerBreakdown}
+                        onItemClick={(item) => {
+                            const rawName = item?.name || '';
+                            const nameLower = rawName.trim().toLowerCase();
+
+                            // 1. Inventories / Stock -> Show Product Stock item breakdown
+                            if (nameLower.includes('inventor') || nameLower.includes('stock')) {
+                                handleCardClick('STOCK', 'Product Inventories', inventoryData?.data || []);
+                                return;
+                            }
+
+                            // 2. Main Customers / Debtors Header -> Show customer breakdown summary
+                            if (nameLower === 'customers' || nameLower === 'sundry debtors' || nameLower === 'trade receivables' || nameLower === 'trade receivable') {
+                                handleCardClick('SI', 'Customers', salesInvoicesData);
+                                return;
+                            }
+
+                            // 3. Main Suppliers / Creditors Header -> Show supplier breakdown summary
+                            if (nameLower === 'suppliers' || nameLower === 'sundry creditors' || nameLower === 'trade payables' || nameLower === 'trade payable') {
+                                handleCardClick('PI', 'Suppliers', purchaseData);
+                                return;
+                            }
+
+                            // 4. Specific Customer Name Clicked (e.g. "Jitendra Kothavale") -> Filter invoices for this customer
+                            if (item?.isUnderDebtors) {
+                                const custMatches = (salesInvoicesData || []).filter(inv => {
+                                    const cName = (inv.customerName || inv.customer_name || inv.customer?.customerName || '').trim().toLowerCase();
+                                    if (!cName) return false;
+                                    return cName === nameLower || cName.includes(nameLower) || nameLower.includes(cName);
+                                });
+                                if (custMatches.length > 0) {
+                                    handleCardClick('SI', `${rawName} Invoices`, custMatches);
+                                    return;
+                                }
+                            }
+
+                            // 5. Specific Supplier Name Clicked (e.g. "Gurudas Bhikale") -> Filter invoices for this supplier
+                            if (item?.isUnderCreditors) {
+                                const suppMatches = (purchaseData || []).filter(inv => {
+                                    const sName = (inv.supplierName || inv.vendorName || inv.supplier_name || '').trim().toLowerCase();
+                                    if (!sName) return false;
+                                    return sName === nameLower || sName.includes(nameLower) || nameLower.includes(sName);
+                                });
+                                if (suppMatches.length > 0) {
+                                    handleCardClick('PI', `${rawName} Invoices`, suppMatches);
+                                    return;
+                                }
+                            }
+
+                            // 6. Generic Account -> Navigate to Ledger View
+                            if (item?.id?.startsWith('acc_') || item?.id?.startsWith('cust_') || item?.id?.startsWith('supp_')) {
+                                const idStr = item.id.replace('acc_', '').replace('cust_', '').replace('supp_', '');
+                                const accountId = parseInt(idStr, 10);
+                                if (!isNaN(accountId)) {
+                                    navigate(`/seller/finance/ledger/${accountId}?startDate=${plFromDate || ''}&endDate=${plToDate || ''}`);
+                                    return;
+                                }
+                            }
+
+                            handleCardClick(item.category === 'ASSET' ? 'SI' : 'PI', item.name, item.category === 'ASSET' ? salesInvoicesData : purchaseData);
+                        }}
+                        loading={plLoading}
+                    />
+                    {detailView && (
+                        <div className="report-table-element w-full animate-in fade-in slide-in-from-top-4 duration-500 mt-6 mb-4" id={`status-section-${detailView.type}`}>
+                            <ReportTable
+                                type={detailView.type}
+                                status={detailView.status}
+                                data={detailView.data}
+                                onClose={() => setDetailView(null)}
+                            />
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -1415,8 +2206,11 @@ const ReportDashboard = () => {
     };
 
     const renderInventoryTable = () => {
-        const items = inventoryData?.data || [];
-        const meta = inventoryData?.meta || { total: 0, page: 1, limit: 10, totalPages: 1 };
+        const allRawItems = inventoryData?.data || [];
+        const totalItems = allRawItems.length;
+        const totalPages = Math.ceil(totalItems / invLimit) || 1;
+        const items = allRawItems.slice((invPage - 1) * invLimit, invPage * invLimit);
+        const meta = { total: totalItems, page: invPage, limit: invLimit, totalPages };
 
         return (
             <Card className="mb-8 border border-gray-100 shadow-xl overflow-hidden rounded-[24px]">
@@ -1531,7 +2325,16 @@ const ReportDashboard = () => {
                                 <div className="flex items-center gap-2">
                                     <button
                                         disabled={meta.page <= 1}
+                                        onClick={() => setInvPage(1)}
+                                        title="First Page"
+                                        className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                                    >
+                                        <ChevronsLeft size={16} />
+                                    </button>
+                                    <button
+                                        disabled={meta.page <= 1}
                                         onClick={() => setInvPage(p => Math.max(1, p - 1))}
+                                        title="Previous Page"
                                         className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
                                     >
                                         <ChevronLeft size={16} />
@@ -1542,9 +2345,18 @@ const ReportDashboard = () => {
                                     <button
                                         disabled={meta.page >= meta.totalPages}
                                         onClick={() => setInvPage(p => Math.min(meta.totalPages, p + 1))}
+                                        title="Next Page"
                                         className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
                                     >
                                         <ChevronRight size={16} />
+                                    </button>
+                                    <button
+                                        disabled={meta.page >= meta.totalPages}
+                                        onClick={() => setInvPage(meta.totalPages)}
+                                        title="Last Page"
+                                        className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                                    >
+                                        <ChevronsRight size={16} />
                                     </button>
                                 </div>
                             </div>
@@ -1556,6 +2368,10 @@ const ReportDashboard = () => {
     };
 
     const renderGraphs = () => {
+        if (activeTab === 'SALES' && salesReportTab === 'CUSTOMER') {
+            return null;
+        }
+
         const timeFilterControl = (
             <div className="inline-flex bg-gray-100 rounded-lg p-1">
                 {['DAILY', 'WEEKLY', 'MONTHLY'].map(filter => (
@@ -1683,16 +2499,16 @@ const ReportDashboard = () => {
     }
 
     return (
-        <div className="flex flex-col w-full max-w-[1400px] mx-auto pb-10 px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col w-full max-w-[1400px] mx-auto pt-0 pb-8 px-4 sm:px-6 lg:px-8">
             {/* Header */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between mt-4 md:mt-6 mb-6 md:mb-8 gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between mt-1 md:mt-2 mb-4 md:mb-6 gap-4">
                 <div>
                     <h1 className="text-[28px] md:text-[35px] font-bold text-gray-900 leading-tight">Reports</h1>
                     <p className="text-[14px] md:text-[16px] text-gray-500 mt-1">Detailed financial breakdowns and analytical graphs</p>
                 </div>
 
                 {/* Custom Premium Tabs */}
-                <div className="flex max-w-full overflow-x-auto bg-gray-100/80 p-1.5 rounded-xl no-scrollbar w-full md:w-auto">
+                <div className="flex flex-wrap sm:flex-nowrap max-w-full overflow-x-auto bg-gray-100/80 p-1 md:p-1.5 rounded-xl no-scrollbar gap-1 w-full lg:w-auto">
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = activeTab === tab.id;
@@ -1704,14 +2520,14 @@ const ReportDashboard = () => {
                                     e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
                                 }}
                                 className={`
-                  relative flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 text-xs md:text-sm whitespace-nowrap font-medium rounded-lg transition-all duration-300 ease-out shrink-0
+                  relative flex items-center justify-center gap-1.5 px-3 md:px-4 py-2 text-xs md:text-xs lg:text-sm whitespace-nowrap font-medium rounded-lg transition-all duration-300 ease-out shrink-0 sm:shrink
                   ${isActive
                                         ? 'text-[#073318] bg-white shadow-sm ring-1 ring-black/5'
                                         : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'
                                     }
                 `}
                             >
-                                <Icon size={16} className={isActive ? 'text-[#10B981]' : ''} />
+                                <Icon size={15} className={isActive ? 'text-[#10B981]' : ''} />
                                 {tab.label}
                             </button>
                         );
@@ -1719,6 +2535,35 @@ const ReportDashboard = () => {
                 </div>
             </div>
 
+            {activeTab === 'SALES' && (
+                <div className="flex items-center gap-2 mb-6">
+                    <button
+                        type="button"
+                        onClick={() => setSalesReportTab('OVERALL')}
+                        className={`flex items-center gap-2 px-4 py-2 text-xs md:text-sm font-semibold rounded-xl transition-all duration-200 cursor-pointer ${
+                            salesReportTab === 'OVERALL'
+                                ? 'bg-[#073318] text-white shadow-sm ring-2 ring-[#073318]/20'
+                                : 'bg-white text-gray-700 hover:text-[#073318] hover:bg-emerald-50/50 border border-gray-200'
+                        }`}
+                    >
+                        <TrendingUp size={16} className={salesReportTab === 'OVERALL' ? 'text-[#10B981]' : 'text-gray-500'} />
+                        Overall Sales Report
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSalesReportTab('CUSTOMER')}
+                        className={`flex items-center gap-2 px-4 py-2 text-xs md:text-sm font-semibold rounded-xl transition-all duration-200 cursor-pointer ${
+                            salesReportTab === 'CUSTOMER'
+                                ? 'bg-[#073318] text-white shadow-sm ring-2 ring-[#073318]/20'
+                                : 'bg-white text-gray-700 hover:text-[#073318] hover:bg-emerald-50/50 border border-gray-200'
+                        }`}
+                    >
+                        <Users size={16} className={salesReportTab === 'CUSTOMER' ? 'text-[#10B981]' : 'text-gray-500'} />
+                        Customer Sales Report
+                    </button>
+                </div>
+            )}
+            {activeTab !== 'PROFIT_LOSS' && activeTab !== 'BALANCE_SHEET' && !(activeTab === 'SALES' && salesReportTab === 'CUSTOMER') && renderPeriodFilterBar()}
             {renderSummaryCards()}
             {renderSelectedStatusCards()}
             {activeTab !== 'INVENTORY' && renderGraphs()}

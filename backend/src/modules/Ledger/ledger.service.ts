@@ -49,34 +49,50 @@ export class LedgerService {
     const accountMapByName = new Map<string, number>();
     realAccounts.forEach(a => accountMapByName.set(a.accountName.trim().toLowerCase(), a.id));
 
-    const existingTxSet = new Set(
-      realAccounts.flatMap(a => a.transactions.map(t => `${t.accountId}_${t.invoiceNumber}`))
-    );
+    // Fetch ALL existing Purchase transactions for this user across all accounts to build complete existingTxSet
+    const allExistingPurchTx = await this.prisma.transaction.findMany({
+      where: {
+        userId,
+        transactionType: TransactionType.Purchase,
+      },
+      select: { accountId: true, invoiceNumber: true }
+    });
+
+    const existingTxSet = new Set<string>();
+    allExistingPurchTx.forEach(t => {
+      if (t.invoiceNumber) existingTxSet.add(`${t.accountId}_${t.invoiceNumber.trim()}`);
+    });
 
     const missingTxs: any[] = [];
     for (const inv of purchInvoices) {
-      const invNo = inv.supplierInvoiceNumber || inv.invoiceNumber;
+      const invNo = inv.invoiceNumber || inv.supplierInvoiceNumber;
       let suppId = inv.supplierId;
       if (!suppId && inv.supplierName) {
         suppId = accountMapByName.get(inv.supplierName.trim().toLowerCase());
       }
-      if (suppId && invNo && !existingTxSet.has(`${suppId}_${invNo}`)) {
+      if (!suppId) continue;
+
+      const hasInvNo = inv.invoiceNumber && existingTxSet.has(`${suppId}_${inv.invoiceNumber.trim()}`);
+      const hasSuppNo = inv.supplierInvoiceNumber && existingTxSet.has(`${suppId}_${inv.supplierInvoiceNumber.trim()}`);
+
+      if (!hasInvNo && !hasSuppNo && invNo) {
+        const targetInv = inv.invoiceNumber || invNo;
         missingTxs.push({
           accountId: suppId,
           userId,
           bookingDate: new Date(inv.bookingDate || inv.invoiceDate),
-          invoiceNumber: invNo,
+          invoiceNumber: targetInv,
           transactionType: TransactionType.Purchase,
           amount: inv.grandTotal,
           entryType: BalanceType.Cr,
         });
+        existingTxSet.add(`${suppId}_${targetInv.trim()}`);
       }
     }
 
     if (missingTxs.length > 0) {
       await this.prisma.transaction.createMany({
         data: missingTxs,
-        skipDuplicates: true,
       });
       // Re-fetch transactions for these accounts
       const allTx = await this.prisma.transaction.findMany({
@@ -102,12 +118,20 @@ export class LedgerService {
         ? -Number(account.supplierOpeningBalance || 0) 
         : Number(account.supplierOpeningBalance || 0);
 
+      // Deduplicate transactions by (transactionType, invoiceNumber)
+      const txMap = new Map<string, any>();
+      for (const t of account.transactions) {
+        const key = t.invoiceNumber ? `${t.transactionType}_${t.invoiceNumber.trim()}` : `id_${t.id}`;
+        if (!txMap.has(key)) txMap.set(key, t);
+      }
+      const uniqueTransactions = Array.from(txMap.values());
+
       let priorCredit = 0;
       let priorDebit = 0;
       let periodCredit = 0;
       let periodDebit = 0;
 
-      for (const t of account.transactions) {
+      for (const t of uniqueTransactions) {
         const tDate = new Date(t.bookingDate);
         if (startDate && tDate < startDate) {
           if (t.entryType === BalanceType.Cr) priorCredit += Number(t.amount);
@@ -176,34 +200,50 @@ export class LedgerService {
     const accountMapByName = new Map<string, number>();
     realAccounts.forEach(a => accountMapByName.set(a.accountName.trim().toLowerCase(), a.id));
 
-    const existingTxSet = new Set(
-      realAccounts.flatMap(a => a.transactions.map(t => `${t.accountId}_${t.invoiceNumber}`))
-    );
+    // Fetch ALL existing Sales transactions for this user across all accounts to build complete existingTxSet
+    const allExistingSalesTx = await this.prisma.transaction.findMany({
+      where: {
+        userId,
+        transactionType: TransactionType.Sales,
+      },
+      select: { accountId: true, invoiceNumber: true }
+    });
+
+    const existingTxSet = new Set<string>();
+    allExistingSalesTx.forEach(t => {
+      if (t.invoiceNumber) existingTxSet.add(`${t.accountId}_${t.invoiceNumber.trim()}`);
+    });
 
     const missingTxs: any[] = [];
     for (const inv of salesInvoices) {
-      const invNo = inv.customerInvoiceNumber || inv.invoiceNumber;
+      const invNo = inv.invoiceNumber || inv.customerInvoiceNumber;
       let custId = inv.customerId;
       if (!custId && inv.customerName) {
         custId = accountMapByName.get(inv.customerName.trim().toLowerCase());
       }
-      if (custId && invNo && !existingTxSet.has(`${custId}_${invNo}`)) {
+      if (!custId) continue;
+
+      const hasInvNo = inv.invoiceNumber && existingTxSet.has(`${custId}_${inv.invoiceNumber.trim()}`);
+      const hasCustNo = inv.customerInvoiceNumber && existingTxSet.has(`${custId}_${inv.customerInvoiceNumber.trim()}`);
+
+      if (!hasInvNo && !hasCustNo && invNo) {
+        const targetInv = inv.invoiceNumber || invNo;
         missingTxs.push({
           accountId: custId,
           userId,
           bookingDate: new Date(inv.bookingDate || inv.invoiceDate),
-          invoiceNumber: invNo,
+          invoiceNumber: targetInv,
           transactionType: TransactionType.Sales,
           amount: inv.grandTotal,
           entryType: BalanceType.Dr,
         });
+        existingTxSet.add(`${custId}_${targetInv.trim()}`);
       }
     }
 
     if (missingTxs.length > 0) {
       await this.prisma.transaction.createMany({
         data: missingTxs,
-        skipDuplicates: true,
       });
       // Re-fetch transactions for these accounts
       const allTx = await this.prisma.transaction.findMany({
@@ -229,12 +269,20 @@ export class LedgerService {
         ? -Number(account.customerOpeningBalance || 0) 
         : Number(account.customerOpeningBalance || 0);
 
+      // Deduplicate transactions by (transactionType, invoiceNumber)
+      const txMap = new Map<string, any>();
+      for (const t of account.transactions) {
+        const key = t.invoiceNumber ? `${t.transactionType}_${t.invoiceNumber.trim()}` : `id_${t.id}`;
+        if (!txMap.has(key)) txMap.set(key, t);
+      }
+      const uniqueTransactions = Array.from(txMap.values());
+
       let priorCredit = 0;
       let priorDebit = 0;
       let periodCredit = 0;
       let periodDebit = 0;
 
-      for (const t of account.transactions) {
+      for (const t of uniqueTransactions) {
         const tDate = new Date(t.bookingDate);
         if (startDate && tDate < startDate) {
           if (t.entryType === BalanceType.Cr) priorCredit += Number(t.amount);
@@ -354,15 +402,23 @@ export class LedgerService {
     const mapped = realAccounts.map((account) => {
       const opBal = Number(account.supplierOpeningBalance || account.customerOpeningBalance || 0);
       const opType = account.supplierBalanceType || account.customerBalanceType || 'Dr';
-      const openingBalance = opType === 'Cr' ? opBal : -opBal;
+      const openingBalance = opType === 'Cr' ? -opBal : opBal;
 
-      const debit = account.transactions
+      // Deduplicate transactions by (transactionType, invoiceNumber)
+      const txMap = new Map<string, any>();
+      for (const t of account.transactions) {
+        const key = t.invoiceNumber ? `${t.transactionType}_${t.invoiceNumber.trim()}` : `id_${t.id}`;
+        if (!txMap.has(key)) txMap.set(key, t);
+      }
+      const uniqueTransactions = Array.from(txMap.values());
+
+      const debit = uniqueTransactions
         .filter((t) => t.entryType === BalanceType.Dr)
         .reduce((sum, t) => sum + Number(t.amount), 0);
-      const credit = account.transactions
+      const credit = uniqueTransactions
         .filter((t) => t.entryType === BalanceType.Cr)
         .reduce((sum, t) => sum + Number(t.amount), 0);
-      const closingBalance = openingBalance + credit - debit;
+      const closingBalance = openingBalance + debit - credit;
 
       const rawGroupList = Array.isArray(account.groupName) ? account.groupName : [account.groupName || 'General'];
       let groupList: string[] = [];
@@ -642,15 +698,19 @@ export class LedgerService {
       });
 
       for (const inv of purchInvoices) {
-        const invNum = inv.supplierInvoiceNumber || inv.invoiceNumber;
+        const invNum = inv.invoiceNumber || inv.supplierInvoiceNumber;
         if (!invNum) continue;
+
+        const orConditions: any[] = [];
+        if (inv.invoiceNumber) orConditions.push({ invoiceNumber: inv.invoiceNumber.trim() });
+        if (inv.supplierInvoiceNumber) orConditions.push({ invoiceNumber: inv.supplierInvoiceNumber.trim() });
 
         const existingTx = await this.prisma.transaction.findFirst({
           where: {
             accountId,
             userId,
-            invoiceNumber: invNum,
             transactionType: TransactionType.Purchase,
+            OR: orConditions,
           },
         });
 
@@ -660,7 +720,7 @@ export class LedgerService {
               accountId,
               userId,
               bookingDate: new Date(inv.bookingDate || inv.createdAt),
-              invoiceNumber: invNum,
+              invoiceNumber: inv.invoiceNumber || invNum,
               transactionType: TransactionType.Purchase,
               amount: inv.grandTotal,
               entryType: BalanceType.Cr,
@@ -678,15 +738,19 @@ export class LedgerService {
       });
 
       for (const inv of salesInvoices) {
-        const invNum = inv.customerInvoiceNumber || inv.invoiceNumber;
+        const invNum = inv.invoiceNumber || inv.customerInvoiceNumber;
         if (!invNum) continue;
+
+        const orConditions: any[] = [];
+        if (inv.invoiceNumber) orConditions.push({ invoiceNumber: inv.invoiceNumber.trim() });
+        if (inv.customerInvoiceNumber) orConditions.push({ invoiceNumber: inv.customerInvoiceNumber.trim() });
 
         const existingTx = await this.prisma.transaction.findFirst({
           where: {
             accountId,
             userId,
-            invoiceNumber: invNum,
             transactionType: TransactionType.Sales,
+            OR: orConditions,
           },
         });
 
@@ -696,7 +760,7 @@ export class LedgerService {
               accountId,
               userId,
               bookingDate: new Date(inv.bookingDate || inv.createdAt),
-              invoiceNumber: invNum,
+              invoiceNumber: inv.invoiceNumber || invNum,
               transactionType: TransactionType.Sales,
               amount: inv.grandTotal,
               entryType: BalanceType.Dr,
@@ -789,6 +853,15 @@ export class LedgerService {
 
       transactionsBefore = await this.filterTransactions(transactionsBefore, isCreditorLedger, isBankOrCash);
 
+      // Deduplicate transactionsBefore in memory
+      const seenBefore = new Set<string>();
+      transactionsBefore = transactionsBefore.filter(t => {
+        const key = t.invoiceNumber ? `${t.transactionType}_${t.invoiceNumber.trim()}` : `id_${t.id}`;
+        if (seenBefore.has(key)) return false;
+        seenBefore.add(key);
+        return true;
+      });
+
       for (const t of transactionsBefore) {
         const amount = Number(t.amount);
         
@@ -818,6 +891,15 @@ export class LedgerService {
     });
 
     transactionsInRange = await this.filterTransactions(transactionsInRange, isCreditorLedger, isBankOrCash);
+
+    // Deduplicate transactionsInRange in memory
+    const seenInRange = new Set<string>();
+    transactionsInRange = transactionsInRange.filter(t => {
+      const key = t.invoiceNumber ? `${t.transactionType}_${t.invoiceNumber.trim()}` : `id_${t.id}`;
+      if (seenInRange.has(key)) return false;
+      seenInRange.add(key);
+      return true;
+    });
 
     const totalTransactionsInRange = transactionsInRange.length;
     const paginatedTransactions = transactionsInRange.slice(skip, skip + limit);

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchAllAccounts, toggleAccountStatus } from '../../../redux/account/accountSlice';
-import { Search, Download, Upload, Filter, MoreVertical, Eye, Edit3, CheckCircle2, ChevronDown, RefreshCw, ArrowLeft, ArrowRight, ChevronsUpDown, X, FileText, FileSpreadsheet, Plus, Database, Check, Trash2 } from 'lucide-react';
+import { Search, Download, Upload, Filter, MoreVertical, Eye, Edit3, CheckCircle2, ChevronDown, RefreshCw, ArrowLeft, ArrowRight, ChevronsLeft, ChevronsRight, ChevronsUpDown, X, FileText, FileSpreadsheet, Plus, Database, Check, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import accountService from '../../../services/accountService';
 import AddAccount from './components/AddAccount';
@@ -897,8 +897,17 @@ const AccountMaster = () => {
                         </span>
                         <div className="flex items-center justify-center gap-1.5 w-full sm:w-auto">
                             <button 
+                                onClick={() => setCurrentPage(1)}
+                                disabled={currentPage === 1}
+                                title="First Page"
+                                className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
+                            >
+                                <ChevronsLeft size={18} />
+                            </button>
+                            <button 
                                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                                 disabled={currentPage === 1}
+                                title="Previous Page"
                                 className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
                             >
                                 <ArrowLeft size={18} />
@@ -921,9 +930,18 @@ const AccountMaster = () => {
                             <button 
                                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                 disabled={currentPage === totalPages || totalPages === 0}
+                                title="Next Page"
                                 className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
                             >
                                 <ArrowRight size={18} />
+                            </button>
+                            <button 
+                                onClick={() => setCurrentPage(totalPages)}
+                                disabled={currentPage === totalPages || totalPages === 0}
+                                title="Last Page"
+                                className="flex-1 sm:flex-none w-10 h-10 flex items-center justify-center text-[#6B7280] bg-gray-50/50 sm:bg-transparent hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-[10px] border border-transparent hover:border-gray-100"
+                            >
+                                <ChevronsRight size={18} />
                             </button>
                         </div>
                     </div>

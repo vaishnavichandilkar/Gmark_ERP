@@ -30,12 +30,16 @@ async function bootstrap() {
     app.setGlobalPrefix('api/v1');
     
     // Secure CORS
-    const corsOrigin = process.env.CORS_ORIGIN;
     app.enableCors({
-        origin: corsOrigin ? corsOrigin.split(',') : true,
-        credentials: true,
+        origin: [
+            'http://opstream-erp.s3-website.ap-south-1.amazonaws.com',
+            'http://localhost:3000',
+            'http://localhost:5173',
+            // or true to allow all origins during testing:
+            // true
+        ],
         methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-        allowedHeaders: 'Content-Type,Accept,Authorization,x-session-id,ngrok-skip-browser-warning',
+        credentials: true,
     });
 
     app.use((req, res, next) => {
@@ -62,7 +66,7 @@ async function bootstrap() {
 
     const configService = app.get(ConfigService);
     const port = configService.get('PORT') || configService.get('port') || 3001;
-    await app.listen(port);
+    await app.listen(port, '0.0.0.0');
     console.log(`Application is running on: http://localhost:${port}`);
     console.log(`Swagger Docs available at: http://localhost:${port}${process.env.SWAGGER_PATH || '/api/docs'}`);
 }

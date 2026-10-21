@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import logo from '../../assets/images/ERP_Logo2.png';
+import logo from '../../assets/images/bizdrona_logo.png';
 
 const ChangePasswordModal = ({ isOpen, onClose, onSuccess }) => {
     const { t } = useTranslation(['auth', 'common']);

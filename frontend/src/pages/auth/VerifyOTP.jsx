@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import AuthLayout from '../../layout/auth/AuthLayout';
 import Button from '../../components/common/Button';
 import { ArrowLeft } from 'lucide-react';
-import logo from '../../assets/images/ERP_Logo2.png';
+import logo from '../../assets/images/bizdrona_logo.png';
 
 const VerifyOTP = () => {
     const { t } = useTranslation('auth');
@@ -262,8 +262,8 @@ const VerifyOTP = () => {
                 <div className="flex justify-between items-center mb-12 w-full">
                     <img
                         src={logo}
-                        alt="WeighPro Logo"
-                        className="h-18 w-auto block object-contain self-start"
+                        alt="BizDrona Logo"
+                        className="h-16 md:h-20 w-auto block object-contain self-start"
                         onError={(e) => { e.target.style.display = 'none' }}
                     />
                     {mode === 'signup' && (

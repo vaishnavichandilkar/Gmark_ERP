@@ -24,6 +24,6 @@ dist-ssr
 *.sw?
 backend/dist
 frontend/.env
-backend/dist
-frontend/.env
+backend/.env
+.env
 backend/src/prisma/migrations

@@ -13,6 +13,8 @@ import {
   Eye,
   ArrowLeft,
   ArrowRight,
+  ChevronsLeft,
+  ChevronsRight,
   RefreshCw,
   Trash2,
   FileEdit,
@@ -554,8 +556,10 @@ const GRN = () => {
                     <div className="flex items-center gap-4">
                         <span className="text-[14px]">{t('common:page_of', { current: currentPage, total: totalPages || 1 })}</span>
                         <div className="flex gap-2">
-                            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowLeft size={18} /></button>
-                            <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowRight size={18} /></button>
+                            <button disabled={currentPage === 1} onClick={() => setCurrentPage(1)} title="First Page" className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ChevronsLeft size={18} /></button>
+                            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} title="Previous Page" className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowLeft size={18} /></button>
+                            <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} title="Next Page" className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowRight size={18} /></button>
+                            <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(totalPages)} title="Last Page" className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ChevronsRight size={18} /></button>
                         </div>
                     </div>
                 </div>

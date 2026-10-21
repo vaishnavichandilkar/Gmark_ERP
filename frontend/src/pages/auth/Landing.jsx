@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import AuthLayout from '../../layout/auth/AuthLayout';
 import Button from '../../components/common/Button';
 import { CheckCircle2, X, ArrowLeft } from 'lucide-react';
-import logo from '../../assets/images/ERP_Logo2.png';
+import logo from '../../assets/images/bizdrona_logo.png';
 
 const Landing = () => {
     const { t } = useTranslation('auth');
@@ -77,9 +77,8 @@ const Landing = () => {
                 <div className="mb-6 md:mb-4">
                     <img
                         src={logo}
-                        alt="ERP Logo"
-                        className="h-18 w-auto mb-3 block pl-0 ml-0 object-contain self-start"
-                        style={{ paddingLeft: '0px', marginLeft: '0px' }}
+                        alt="BizDrona Logo"
+                        className="h-16 md:h-20 w-auto mb-3 block object-contain self-start"
                         onError={(e) => { e.target.style.display = 'none' }}
                     />
 

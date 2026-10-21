@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getSafeUser } from '../../utils/user';
 import { Menu, User, Globe, ChevronDown, LayoutDashboard, FileBarChart, Database, ShoppingCart, TrendingUp, Settings as SettingsIcon, IndianRupee, Plus } from 'lucide-react';
-import logo from '../../assets/images/ERP_Logo2.png';
+import logo from '../../assets/images/bizdrona_logo.png';
 import ProfilePopup from '../../components/common/ProfilePopup';
 import LogoutModal from '../../components/common/LogoutModal';
 import StatusPopup from '../../components/common/StatusPopup';

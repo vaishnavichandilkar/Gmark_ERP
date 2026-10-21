@@ -587,7 +587,7 @@ export class HsnMasterService {
             const row = worksheet.getRow(r);
             let foundHeaders = false;
             row.eachCell((cell, colNumber) => {
-                const val = String(cell.value || '').trim().toLowerCase();
+                const val = String(cell.value || '').trim().toLowerCase().replace(/[*]/g, '');
                 if (val.includes('code')) { colMap['code'] = colNumber; foundHeaders = true; }
                 if (val.includes('type')) colMap['type'] = colNumber;
                 if (val.includes('tax rate') || val.includes('tax_rate') || val.includes('tax')) colMap['taxRate'] = colNumber;

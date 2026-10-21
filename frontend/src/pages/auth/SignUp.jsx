@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import AuthLayout from '../../layout/auth/AuthLayout';
 import { Upload, FileText, Trash2, ChevronDown, CloudUpload, ArrowLeft, Search } from 'lucide-react';
-import logo from '../../assets/images/ERP_Logo2.png';
+import logo from '../../assets/images/bizdrona_logo.png';
 import { useTranslation } from 'react-i18next';
 import { getImageUrl } from '../../utils/url';
 import { sanitizePanInput, validatePan } from '../../utils/panUtils';
@@ -809,8 +809,8 @@ const SignUp = () => {
                     <div className="flex justify-between items-center mb-6 w-full -mt-2">
                         <img
                             src={logo}
-                            alt="WeighPro Logo"
-                            className="h-18 block"
+                            alt="BizDrona Logo"
+                            className="h-16 md:h-20 w-auto block object-contain self-start"
                             onError={(e) => { e.target.style.display = 'none' }}
                         />
                         <div className="bg-[#F3F4F6] text-[#374151] px-[12px] py-[6px] rounded-full text-[12px] font-medium">

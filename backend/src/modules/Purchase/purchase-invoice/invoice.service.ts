@@ -5,7 +5,7 @@ import { Prisma, PIStatus, TransactionType, BalanceType } from '@prisma/client';
 import { PurchaseOrderService } from '../purchase-order/purchase-order.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
-import { formatDate } from '../../../utils/dateFormatter';
+import { formatDate, parseDDMMYYYY } from '../../../utils/dateFormatter';
 import { isValidGst, determinePurchaseGst } from '../../../common/utils/gst.helper';
 import { generatePISampleExcel } from '../../../common/utils/procurement-bulk-import.processor';
 import { TransactionService } from '../../Finance/transaction.service';
@@ -222,19 +222,25 @@ export class PurchaseInvoiceService {
   }
 
   async generateInvoiceNumber(userId: number): Promise<string> {
-    const lastInvoice = await this.prisma.purchaseInvoice.findFirst({
-      where: { userId, invoiceNumber: { startsWith: 'INV-' } },
-      orderBy: { invoiceNumber: 'desc' },
+    const invoices = await this.prisma.purchaseInvoice.findMany({
+      where: { userId },
       select: { invoiceNumber: true },
     });
 
-    if (!lastInvoice) {
-      return 'INV-0001';
+    let maxNum = 0;
+    for (const inv of invoices) {
+      if (!inv.invoiceNumber) continue;
+      const matches = inv.invoiceNumber.match(/\d+/g);
+      if (matches) {
+        const num = parseInt(matches[matches.length - 1], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
     }
 
-    const lastNumber = parseInt(lastInvoice.invoiceNumber.replace('INV-', ''), 10);
-    if (isNaN(lastNumber)) return 'INV-0001';
-    return `INV-${(lastNumber + 1).toString().padStart(4, '0')}`;
+    const nextNum = maxNum + 1;
+    return `INV-${nextNum.toString().padStart(4, '0')}`;
   }
 
   private async validateInvoiceDate(invoiceDate: Date, poIds: string[] | undefined, challanNumbers: string[] | undefined, userId: number) {
@@ -370,7 +376,18 @@ export class PurchaseInvoiceService {
   }
 
   async create(createDto: CreatePurchaseInvoiceDto, userId: number, uploadedFilePath?: string) {
-    const invoiceNumber = await this.generateInvoiceNumber(userId);
+    let invoiceNumber = createDto.invoiceNumber ? createDto.invoiceNumber.trim() : '';
+
+    if (invoiceNumber) {
+      const existing = await this.prisma.purchaseInvoice.findFirst({
+        where: { userId, invoiceNumber },
+      });
+      if (existing) {
+        invoiceNumber = await this.generateInvoiceNumber(userId);
+      }
+    } else {
+      invoiceNumber = await this.generateInvoiceNumber(userId);
+    }
 
     const bookingDate = new Date(); // Enforced (Condition 1, 2, 3)
     const invoiceDate = new Date(createDto.invoiceDate || new Date());
@@ -589,11 +606,11 @@ export class PurchaseInvoiceService {
     const invoice = await this.prisma.$transaction(async (tx) => {
       const inv = await tx.purchaseInvoice.create({
         data: {
-          invoiceNumber: createDto.invoiceNumber || invoiceNumber,
-          bookingDate: createDto.bookingDate ? new Date(createDto.bookingDate) : new Date(),
-          invoiceDate: createDto.invoiceDate ? new Date(createDto.invoiceDate) : new Date(),
+          invoiceNumber: invoiceNumber,
+          bookingDate: parseDDMMYYYY(createDto.bookingDate) || new Date(),
+          invoiceDate: parseDDMMYYYY(createDto.invoiceDate) || new Date(),
           supplierInvoiceNumber: createDto.supplierInvoiceNumber,
-          supplierInvoiceDate: createDto.invoiceDate ? new Date(createDto.invoiceDate) : new Date(),
+          supplierInvoiceDate: parseDDMMYYYY(createDto.invoiceDate) || new Date(),
           supplierId: supplier.id,
           supplierName: supplier.accountName,
           address: createDto.address,
