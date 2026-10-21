@@ -23,6 +23,8 @@ const UnitMaster = lazy(() => import("../pages/dashboard/masters/UnitMaster"));
 const CategoryMaster = lazy(() => import("../pages/dashboard/masters/CategoryMaster"));
 const ProductMaster = lazy(() => import("../pages/dashboard/masters/ProductMaster"));
 const HSNMasterPage = lazy(() => import("../pages/dashboard/masters/HSNMasterPage"));
+const ManufacturerMaster = lazy(() => import("../pages/dashboard/masters/ManufacturerMaster"));
+const ManufacturerDashboard = lazy(() => import("../pages/dashboard/manufacturer/ManufacturerDashboard"));
 
 // Purchase Pages
 const PurchaseLayout = lazy(() => import("../pages/dashboard/purchase/PurchaseLayout"));
@@ -198,6 +200,22 @@ export const router = createBrowserRouter([
                       { path: "edit/:id", element: <HSNMasterPage /> },
                     ],
                   },
+                  {
+                    path: "manufacturer",
+                    element: <Navigate to="/seller/manufacturer" replace />,
+                  },
+                  {
+                    path: "manufacturer/*",
+                    element: <Navigate to="/seller/manufacturer" replace />,
+                  },
+                ],
+              },
+              {
+                path: "manufacturer",
+                children: [
+                  { index: true, element: <ManufacturerDashboard /> },
+                  { path: "add", element: <ManufacturerDashboard /> },
+                  { path: "view/:id", element: <ManufacturerDashboard /> },
                 ],
               },
               {

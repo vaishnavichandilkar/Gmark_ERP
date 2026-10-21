@@ -19,6 +19,7 @@ import { SalesModule } from './modules/Sales/sales.module';
 import { ReportsModule } from './modules/Reports/reports.module';
 import { FinanceModule } from './modules/Finance/finance.module';
 import { LedgerModule } from './modules/Ledger/ledger.module';
+import { ManufacturerModule } from './modules/manufacturer/manufacturer.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { QueueModule } from './infrastructure/queue/queue.module';
 import { AppController } from './app.controller';
@@ -47,6 +48,7 @@ import { ImportValidationModule } from './common/services/import-validation.modu
         ReportsModule,
         FinanceModule,
         LedgerModule,
+        ManufacturerModule,
     ],
     controllers: [AppController],
     providers: [],

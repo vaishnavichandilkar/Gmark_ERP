@@ -13,6 +13,8 @@ export const ROUTES = {
     MASTERS: '/seller/masters',
     ACCOUNT_MASTER: '/seller/masters/account-master',
     PRODUCT_MASTER: '/seller/masters/product-master',
+    MANUFACTURER: '/seller/manufacturer',
+    MANUFACTURER_MASTER: '/seller/masters/manufacturer',
     PURCHASE: '/seller/purchase',
     PURCHASE_ORDER: '/seller/purchase/order',
     PURCHASE_ORDER_ADD: '/seller/purchase/order/add',

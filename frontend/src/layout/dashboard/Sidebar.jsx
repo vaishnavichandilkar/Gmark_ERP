@@ -8,7 +8,8 @@ import {
     TrendingUp,
     Settings,
     X,
-    Wallet
+    Wallet,
+    Factory
 } from 'lucide-react';
 import logo from '../../assets/images/ERP_Logo1.png';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +25,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
         { path: '/seller/purchase', label: t('purchase'), icon: ShoppingCart },
         { path: '/seller/sales', label: t('sales'), icon: TrendingUp },
         { path: '/seller/finance', label: t('finance'), icon: Wallet },
+        { path: '/seller/manufacturer', label: 'Manufacturer', icon: Factory },
         { path: '/seller/settings', label: t('settings'), icon: Settings },
     ];
 

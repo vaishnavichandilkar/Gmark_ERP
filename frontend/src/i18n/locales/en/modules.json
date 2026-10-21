@@ -1,6 +1,7 @@
 {
     "reports": "Reports",
     "masters": "Masters",
+    "manufacturer": "Manufacturer",
     "purchase": "Purchase",
     "purchase_description": "Create and monitor purchase orders, supplier invoices, and stock procurement activities.",
     "sales": "Sales",
@@ -50,6 +51,8 @@
     "category_master_desc": "View, verify, and manage product categories and sub-categories to keep your inventory organized.",
     "product_master": "Product Master",
     "product_master_desc": "View, verify, and manage all products in your inventory, including HSN codes and tax configurations.",
+    "manufacturer_master": "Manufacturer",
+    "manufacturer_master_desc": "Register packages, capture live weights from weighing stations, generate barcode labels, and monitor plant output.",
     "product_information": "Product Information",
     "product_code": "Product Code",
     "service_code": "Service Code",
