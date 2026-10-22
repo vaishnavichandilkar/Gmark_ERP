@@ -1054,7 +1054,7 @@ enum PaymentMode {
 
 model ReceiptVoucher {
   id               Int                  @id @default(autoincrement())
-  voucherNumber    String               @unique
+  voucherNumber    String
   voucherDate      DateTime
   bankCashLedgerId Int
   paymentMode      PaymentMode
@@ -1067,6 +1067,7 @@ model ReceiptVoucher {
   bankCashLedger   AccountMaster        @relation("BankCashReceipt", fields: [bankCashLedgerId], references: [id])
   items            ReceiptVoucherItem[]
 
+  @@unique([voucherNumber, createdBy])
   @@index([createdBy])
   @@index([bankCashLedgerId])
   @@map("receipt_vouchers")
@@ -1087,7 +1088,7 @@ model ReceiptVoucherItem {
 
 model PaymentVoucher {
   id               Int                  @id @default(autoincrement())
-  voucherNumber    String               @unique
+  voucherNumber    String
   voucherDate      DateTime
   bankCashLedgerId Int
   paymentMode      PaymentMode
@@ -1100,6 +1101,7 @@ model PaymentVoucher {
   bankCashLedger   AccountMaster        @relation("BankCashPayment", fields: [bankCashLedgerId], references: [id])
   items            PaymentVoucherItem[]
 
+  @@unique([voucherNumber, createdBy])
   @@index([createdBy])
   @@index([bankCashLedgerId])
   @@map("payment_vouchers")
@@ -1129,7 +1131,7 @@ enum TransactionType {
 
 model JournalVoucher {
   id               Int                  @id @default(autoincrement())
-  voucherNumber    String               @unique
+  voucherNumber    String
   voucherDate      DateTime
   bankCashLedgerId Int
   paymentMode      PaymentMode
@@ -1142,6 +1144,7 @@ model JournalVoucher {
   bankCashLedger   AccountMaster        @relation("BankCashJournal", fields: [bankCashLedgerId], references: [id])
   items            JournalVoucherItem[]
 
+  @@unique([voucherNumber, createdBy])
   @@index([createdBy])
   @@index([bankCashLedgerId])
   @@map("journal_vouchers")
@@ -1162,7 +1165,7 @@ model JournalVoucherItem {
 
 model ContraVoucher {
   id               Int                  @id @default(autoincrement())
-  voucherNumber    String               @unique
+  voucherNumber    String
   voucherDate      DateTime
   bankCashLedgerId Int
   paymentMode      PaymentMode
@@ -1175,6 +1178,7 @@ model ContraVoucher {
   bankCashLedger   AccountMaster        @relation("BankCashContraGiver", fields: [bankCashLedgerId], references: [id])
   items            ContraVoucherItem[]
 
+  @@unique([voucherNumber, createdBy])
   @@index([createdBy])
   @@index([bankCashLedgerId])
   @@map("contra_vouchers")
@@ -1205,6 +1209,9 @@ model VoucherSettlement {
   settled_amount  Decimal
   created_at      DateTime @default(now())
 
+  @@index([voucher_id, voucher_type])
+  @@index([ledger_id])
+  @@index([invoice_id])
   @@map("voucher_settlements")
 }
 

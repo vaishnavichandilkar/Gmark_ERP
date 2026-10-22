@@ -23,7 +23,15 @@ export class PurchaseOrderController {
   @Get('next-number')
   @ApiOperation({ summary: 'Generate next available PO Number' })
   async getNextNumber(@Request() req) {
-    return this.service.getNextNumber(req.user.userId);
+    const documentNumber = await this.service.getNextNumber(req.user.userId || req.user.id);
+    return {
+      success: true,
+      data: {
+        documentNumber,
+        poNumber: documentNumber,
+      },
+      poNumber: documentNumber,
+    };
   }
 
   @Get('sample-excel')

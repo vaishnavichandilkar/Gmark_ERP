@@ -95,10 +95,13 @@ const AddSalesInvoice = () => {
                 });
 
                 if (nextNumRes && !isEditMode) {
-                    setFormData(prev => ({
-                        ...prev,
-                        customerInvoiceNumber: nextNumRes.nextCustomerInvoiceNumber || prev.customerInvoiceNumber
-                    }));
+                    const custInvNumber = nextNumRes?.data?.customerInvoiceNumber || nextNumRes?.data?.nextCustomerInvoiceNumber || nextNumRes?.nextCustomerInvoiceNumber;
+                    if (custInvNumber) {
+                        setFormData(prev => ({
+                            ...prev,
+                            customerInvoiceNumber: custInvNumber
+                        }));
+                    }
                 }
 
                 if (isEditMode) {

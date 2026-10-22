@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from './dto/purchase-order.dto';
+import { Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { formatDate, parseDDMMYYYY } from '../../../utils/dateFormatter';
@@ -26,17 +27,29 @@ export class PurchaseOrderService {
     private importValidator: ImportValidationService,
   ) {}
 
-  async getNextNumber(userId: number): Promise<string> {
-    const last = await this.prisma.purchaseOrder.findFirst({
-      where: { userId, poNumber: { startsWith: 'PO-' } },
-      orderBy: { poNumber: 'desc' },
-      select: { poNumber: true },
-    });
-
-    if (!last) return 'PO-0001';
-    const num = parseInt(last.poNumber.replace('PO-', ''), 10);
-    if (isNaN(num)) return 'PO-0001';
-    return `PO-${(num + 1).toString().padStart(4, '0')}`;
+  async getNextNumber(userId: number, tx?: Prisma.TransactionClient): Promise<string> {
+    const client = tx || this.prisma;
+    try {
+      const res = await client.$queryRaw<Array<{ max_num: number | null }>>`
+        SELECT COALESCE(MAX(NULLIF(regexp_replace("poNumber", '^PO-', ''), '')::INTEGER), 0) AS max_num
+        FROM "purchase_orders"
+        WHERE "userId" = ${userId} AND "poNumber" ~ '^PO-[0-9]+$'
+      `;
+      const max = res && res[0] && res[0].max_num !== null ? Number(res[0].max_num) : 0;
+      return `PO-${(max + 1).toString().padStart(4, '0')}`;
+    } catch {
+      // Robust fallback for non-Postgres or test environments
+      const records = await client.purchaseOrder.findMany({
+        where: { userId, poNumber: { startsWith: 'PO-' } },
+        select: { poNumber: true },
+      });
+      let max = 0;
+      for (const r of records) {
+        const num = parseInt(r.poNumber.replace(/^PO-/, ''), 10);
+        if (!isNaN(num) && num > max) max = num;
+      }
+      return `PO-${(max + 1).toString().padStart(4, '0')}`;
+    }
   }
 
   async getSupplierDetails(supplierId: number, userId: number) {
@@ -60,8 +73,6 @@ export class PurchaseOrderService {
   }
 
   async create(createDto: CreatePurchaseOrderDto, userId: number) {
-    const poNumber = await this.getNextNumber(userId);
-
     const supplier = await this.prisma.accountMaster.findFirst({
       where: { id: createDto.supplierId, userId },
     });
@@ -98,24 +109,44 @@ export class PurchaseOrderService {
     const totalTax = items.reduce((sum, item) => sum + item.taxAmount, 0);
     const totalAmt = items.reduce((sum, item) => sum + item.totalAmount, 0);
 
-    const po = await this.prisma.purchaseOrder.create({
-      data: {
-        poNumber: createDto.poNumber || poNumber,
-        supplierName: supplier.accountName,
-        address: createDto.address || '',
-        gstNumber: createDto.gstNo,
-        creditDays: createDto.creditDays,
-        poCreationDate: createDto.poCreationDate ? new Date(createDto.poCreationDate) : new Date(),
-        expiryDate: new Date(createDto.expiryDate),
-        taxAmount: totalTax,
-        totalAmount: totalAmt,
-        userId,
-        items: { create: items },
-      },
-      include: { items: true },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      // Concurrency lock scoped to tenant/user
+      try {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('po_' || ${userId}::text))`;
+      } catch {
+        // Fallback gracefully if mock or unsupported
+      }
 
-    return po;
+      const poNumber = createDto.poNumber?.trim()
+        ? createDto.poNumber.trim()
+        : await this.getNextNumber(userId, tx);
+
+      try {
+        const po = await tx.purchaseOrder.create({
+          data: {
+            poNumber,
+            supplierName: supplier.accountName,
+            address: createDto.address || '',
+            gstNumber: createDto.gstNo,
+            creditDays: createDto.creditDays,
+            poCreationDate: createDto.poCreationDate ? new Date(createDto.poCreationDate) : new Date(),
+            expiryDate: new Date(createDto.expiryDate),
+            taxAmount: totalTax,
+            totalAmount: totalAmt,
+            userId,
+            items: { create: items },
+          },
+          include: { items: true },
+        });
+
+        return po;
+      } catch (err: any) {
+        if (err.code === 'P2002') {
+          throw new BadRequestException(`Purchase order number "${poNumber}" already exists.`);
+        }
+        throw err;
+      }
+    });
   }
 
   async findAll(

@@ -39,7 +39,18 @@ export class SalesOrderController {
     @Get('next-number')
     @ApiOperation({ summary: 'Generate next available SO Number' })
     async getNextNumber(@Request() req) {
-        return this.service.getNextNumber(req.user.userId);
+        const res = await this.service.getNextNumber(req.user.userId || req.user.id);
+        const documentNumber = res.soNumber;
+        return {
+            success: true,
+            data: {
+                documentNumber,
+                soNumber: documentNumber,
+                salesNumber: documentNumber,
+            },
+            soNumber: documentNumber,
+            salesNumber: documentNumber,
+        };
     }
 
     @Get('export')

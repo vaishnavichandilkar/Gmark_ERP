@@ -1,5 +1,5 @@
 // Trigger restart 2
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CreateSalesOrderDto, UpdateSalesOrderDto } from './dto/sales-order.dto';
 import { Prisma } from '@prisma/client';
@@ -10,6 +10,8 @@ import { ImportValidationService } from '../../../common/services/import-validat
 
 @Injectable()
 export class SalesOrderService {
+    private readonly logger = new Logger(SalesOrderService.name);
+
     constructor(
         private prisma: PrismaService,
         private importValidator: ImportValidationService
@@ -400,9 +402,8 @@ export class SalesOrderService {
                     include: { items: true },
                 });
             });
-        } catch (e) {
-            const fs = require('fs');
-            fs.appendFileSync('D:\\USERS\\vaishnavi\\Desktop\\weighting_scale\\backend\\service_error.log', `[${new Date().toISOString()}] SO CREATE ERROR: ${e.message}\n${e.stack}\n\n`);
+        } catch (e: any) {
+            this.logger.error(`Failed to create sales order: ${e?.message || e}`, e?.stack);
             throw e;
         }
     }

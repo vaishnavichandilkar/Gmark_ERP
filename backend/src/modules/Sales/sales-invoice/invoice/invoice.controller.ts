@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Request, ParseIntPipe, UseInterceptors, UploadedFile, Res, Delete, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Request, ParseIntPipe, UseInterceptors, UploadedFile, Res, Delete, BadRequestException, HttpException, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { SalesInvoiceService } from './invoice.service';
 import { CreateSalesInvoiceDto, UpdateSalesInvoiceDto } from './dto/invoice.dto';
@@ -12,6 +12,8 @@ import { Response } from 'express';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class SalesInvoiceController {
+  private readonly logger = new Logger(SalesInvoiceController.name);
+
   constructor(private readonly service: SalesInvoiceService) { }
 
   @Get('customers')
@@ -23,7 +25,18 @@ export class SalesInvoiceController {
   @Get('next-number')
   @ApiOperation({ summary: 'Generate next available Sales Invoice number' })
   async getNextNumber(@Request() req) {
-    return this.service.generateNextNumber(req.user.id);
+    const res = await this.service.generateNextNumber(req.user.id || req.user.userId);
+    return {
+      success: true,
+      data: {
+        documentNumber: res.nextNumber,
+        nextNumber: res.nextNumber,
+        customerInvoiceNumber: res.nextCustomerInvoiceNumber,
+        nextCustomerInvoiceNumber: res.nextCustomerInvoiceNumber,
+      },
+      nextNumber: res.nextNumber,
+      nextCustomerInvoiceNumber: res.nextCustomerInvoiceNumber,
+    };
   }
 
   @Get('customer-sos')
@@ -198,9 +211,11 @@ export class SalesInvoiceController {
 
       return await this.service.update(id, updateDto, req.user.id, file?.path);
     } catch (e: any) {
-      const fs = require('fs');
-      fs.appendFileSync('./service_error.log', `[${new Date().toISOString()}] CONTROLLER UPDATE ERROR: ${e.message}\n${e.stack}\n\n`);
-      throw new BadRequestException("Controller failed: " + e.message);
+      this.logger.error(`Controller failed to update sales invoice: ${e?.message || e}`, e?.stack);
+      if (e instanceof HttpException) {
+        throw e;
+      }
+      throw new BadRequestException("Controller failed: " + (e?.message || 'Unknown error'));
     }
   }
 

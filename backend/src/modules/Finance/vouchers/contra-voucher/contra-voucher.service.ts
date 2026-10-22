@@ -12,37 +12,35 @@ export class ContraVoucherService {
     private transactionService: TransactionService,
   ) {}
 
-  async generateVoucherNumber(userId: number): Promise<string> {
+  async generateVoucherNumber(userId: number, tx?: any): Promise<string> {
+    const client = tx || this.prisma;
     const prefix = 'CV-';
-    const lastVoucher = await this.prisma.contraVoucher.findFirst({
-      orderBy: { id: 'desc' },
-      select: { voucherNumber: true },
-    });
-
-    let nextNumber = 1;
-    if (lastVoucher) {
-      const lastNumberStr = lastVoucher.voucherNumber.replace(prefix, '');
-      const lastNumber = parseInt(lastNumberStr, 10);
-      nextNumber = isNaN(lastNumber) ? 1 : lastNumber + 1;
-    }
-
-    while (true) {
-      const candidate = `${prefix}${nextNumber.toString().padStart(4, '0')}`;
-      const existing = await this.prisma.contraVoucher.findUnique({
-        where: { voucherNumber: candidate },
-        select: { id: true },
+    try {
+      const res = await client.$queryRaw`
+        SELECT COALESCE(MAX(NULLIF(regexp_replace("voucherNumber", '^CV-', ''), '')::INTEGER), 0) AS max_num
+        FROM "contra_vouchers"
+        WHERE "createdBy" = ${userId} AND "voucherNumber" ~ '^CV-[0-9]+$'
+      `;
+      const max = res && res[0] && res[0].max_num !== null ? Number(res[0].max_num) : 0;
+      return `${prefix}${(max + 1).toString().padStart(4, '0')}`;
+    } catch {
+      const records = await client.contraVoucher.findMany({
+        where: { createdBy: userId, voucherNumber: { startsWith: prefix } },
+        select: { voucherNumber: true },
       });
-      if (!existing) {
-        return candidate;
+      let max = 0;
+      for (const r of records) {
+        const num = parseInt(r.voucherNumber.replace(/^CV-/, ''), 10);
+        if (!isNaN(num) && num > max) max = num;
       }
-      nextNumber++;
+      return `${prefix}${(max + 1).toString().padStart(4, '0')}`;
     }
   }
 
   async create(createDto: CreateVoucherDto, userId: number) {
     return this.prisma.$transaction(async (tx) => {
       // 1. Generate Voucher Number
-      const voucherNumber = await this.generateVoucherNumber(userId);
+      const voucherNumber = await this.generateVoucherNumber(userId, tx);
 
       // 2. Validate Bank/Cash Giver Ledger
       const bankCashLedger = await tx.accountMaster.findFirst({

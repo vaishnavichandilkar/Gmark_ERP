@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 @Injectable()
@@ -6,31 +6,39 @@ export class DashboardAccessGuard implements CanActivate {
     constructor(private reflector: Reflector) { }
 
     canActivate(context: ExecutionContext): boolean {
-        const { user } = context.switchToHttp().getRequest();
+        const req = context.switchToHttp().getRequest();
+        const user = req?.user;
 
         if (!user) {
-            return false;
+            throw new UnauthorizedException('Authentication required');
         }
 
-        // Only enforce for ADMIN (Business/System)
-        // System Admin bypasses because seed sets true.
-        // Business Admin starts false.
+        const role = (user.role || '').toUpperCase();
 
-        if (user.role === 'ADMIN') {
-            if (!user.isOtpVerified) {
-                throw new ForbiddenException('OTP verification required');
-            }
-            if (!user.isProfileCompleted) {
-                // Allow access to business-details endpoint?
-                // This Guard should be applied to Dashboard routes, NOT business details creation.
-                // So if we are here, we are accessing a protected dashboard route.
-                throw new ForbiddenException('Business profile completion required');
-            }
-            if (!user.isApprovedBySuperAdmin) {
-                throw new ForbiddenException('Account pending Super Admin approval');
-            }
+        // 1. Superadmin has full bypass access
+        if (role === 'SUPERADMIN') {
+            return true;
+        }
+
+        // 2. Reject roles that do not have ERP dashboard access (e.g. BUYER)
+        const allowedRoles = ['SELLER', 'ADMINISTRATOR', 'OPERATOR', 'ADMIN'];
+        if (!allowedRoles.includes(role)) {
+            throw new ForbiddenException(`Role ${role} is not authorized to access dashboard`);
+        }
+
+        // 3. Check Account Approval Status
+        const isApproved = user.isApproved === true || user.approvalStatus === 'APPROVED';
+        if (!isApproved) {
+            throw new ForbiddenException('Account pending approval');
+        }
+
+        // 4. Check Business Profile Completion (onboarded or shopDetail present)
+        const isProfileComplete = user.onboarded === true || !!user.shopDetail;
+        if (!isProfileComplete) {
+            throw new ForbiddenException('Business profile completion required');
         }
 
         return true;
     }
 }
+

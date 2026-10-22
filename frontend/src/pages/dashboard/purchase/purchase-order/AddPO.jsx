@@ -281,7 +281,8 @@ const AddPO = () => {
                 if (!formData.po_number) {
                     try {
                         const response = await purchaseOrderService.getNextNumber();
-                        setFormData(prev => ({ ...prev, po_number: typeof response === 'string' ? response : response?.poNumber || '' }));
+                        const nextPoNumber = response?.data?.documentNumber || response?.data?.poNumber || response?.poNumber || (typeof response === 'string' ? response : '');
+                        setFormData(prev => ({ ...prev, po_number: nextPoNumber }));
                     } catch (error) {
                         console.error("Error fetching next PO number:", error);
                     }

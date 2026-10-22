@@ -29,4 +29,27 @@ export default defineConfig({
       },
     },
   },
-})
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('xlsx') || id.includes('exceljs')) {
+              return 'vendor-excel';
+            }
+            if (id.includes('jspdf') || id.includes('html2pdf') || id.includes('html2canvas')) {
+              return 'vendor-pdf';
+            }
+            if (id.includes('recharts') || id.includes('d3-')) {
+              return 'vendor-charts';
+            }
+            if (id.includes('lucide-react') || id.includes('framer-motion')) {
+              return 'vendor-ui';
+            }
+          }
+        },
+      },
+    },
+  },
+})

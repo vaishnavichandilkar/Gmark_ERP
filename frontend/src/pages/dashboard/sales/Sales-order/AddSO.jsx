@@ -332,9 +332,10 @@ const AddSO = () => {
             } else {
                 try {
                     const response = await salesOrderService.getNextNumber();
+                    const nextSoNumber = response?.data?.documentNumber || response?.data?.soNumber || response?.soNumber || response?.salesNumber || '';
                     setFormData(prev => ({
                         ...prev,
-                        so_number: response.soNumber || response.salesNumber,
+                        so_number: nextSoNumber,
                         expiry_date: '' // Explicitly clear on fresh load
                     }));
                 } catch (error) {
