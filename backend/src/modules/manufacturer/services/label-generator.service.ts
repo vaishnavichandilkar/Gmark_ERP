@@ -81,6 +81,7 @@ export class LabelGeneratorService {
             weightStr = `${weightStr} kg`;
         }
 
+        const isLarge = config.id === '150x100' || config.id === '200x100' || config.id === '250x100';
         const isStandard = config.id === '100x50';
 
         // -------------------------------------------------------------
@@ -95,7 +96,7 @@ export class LabelGeneratorService {
                 align: 'center',
             });
 
-        currentY += isStandard ? 14 : 12;
+        currentY += isLarge ? 20 : (isStandard ? 12 : 11);
 
         // -------------------------------------------------------------
         // 2. Product Name
@@ -107,11 +108,10 @@ export class LabelGeneratorService {
             .font('Helvetica')
             .text(product, {
                 width: usableWidth,
-                lineGap: 1,
+                lineGap: 0,
             });
 
-        // Use actual post-text Y position to prevent overlap on multiline product names
-        currentY = Math.max(doc.y + 2, currentY + (isStandard ? 14 : 12));
+        currentY = Math.max(doc.y + 2, currentY + (isLarge ? 20 : (isStandard ? 11 : 10)));
 
         // -------------------------------------------------------------
         // 3. Net Weight (Prominent, Bold, Substantially Larger)
@@ -124,7 +124,7 @@ export class LabelGeneratorService {
                 align: 'left',
             });
 
-        currentY = Math.max(doc.y + 2, currentY + (isStandard ? 22 : 19));
+        currentY = Math.max(doc.y + 3, currentY + (isLarge ? 34 : (isStandard ? 16 : 14)));
 
         // -------------------------------------------------------------
         // 4. Complete Serial Number (including Machine ID)
@@ -138,7 +138,7 @@ export class LabelGeneratorService {
                 width: usableWidth,
             });
 
-        currentY = Math.max(doc.y + 2, currentY + (isStandard ? 12 : 11));
+        currentY = Math.max(doc.y + 2, currentY + (isLarge ? 18 : (isStandard ? 10 : 9)));
 
         // -------------------------------------------------------------
         // 5. Date & Time (Asia/Kolkata)
@@ -152,7 +152,7 @@ export class LabelGeneratorService {
                 width: usableWidth,
             });
 
-        currentY = Math.max(doc.y + 2, currentY + (isStandard ? 13 : 11));
+        currentY = Math.max(doc.y + 2, currentY + (isLarge ? 18 : (isStandard ? 10 : 9)));
 
         // -------------------------------------------------------------
         // 6. Horizontal Separator
@@ -163,41 +163,49 @@ export class LabelGeneratorService {
             .lineTo(right, currentY)
             .stroke();
 
-        currentY += isStandard ? 4 : 3;
+        currentY += isLarge ? 8 : 2;
 
         // -------------------------------------------------------------
-        // 7. Standards-Compliant ISO/IEC 15417 Code 128 Vector Barcode
+        // 7. Standards-Compliant Single 1D Code 128 Barcode (ISO/IEC 15417)
+        //    Encodes: Full Product Name | Actual Weight with Unit | Serial Number
         // -------------------------------------------------------------
-        const boxWidth = config.barcodeBox.widthPt;
-        const boxHeight = config.barcodeBox.heightPt;
-        const boxX = (config.widthPt - boxWidth) / 2;
-        const boxY = currentY;
+        const numWeight = typeof item.netWeight === 'number'
+            ? Number(item.netWeight.toFixed(2))
+            : parseFloat(String(item.netWeight)) || 0;
 
-        const watermarkY = config.heightPt - config.margins.bottom - 7;
-        // Dynamically constrain barcode height to guarantee zero overlap with watermark
-        const availableBarcodeHeight = Math.max(16, watermarkY - boxY - 3);
-        const effectiveBarcodeHeight = Math.min(boxHeight, availableBarcodeHeight);
+        const safeProduct = product.replace(/\|/g, '\\|');
+        const unitFormatted = (weightStr.split(' ')[1] || 'kg').toLowerCase();
 
-        renderCode128Vector(doc, serial, {
-            x: boxX,
-            y: boxY,
-            maxWidth: boxWidth,
-            maxHeight: effectiveBarcodeHeight,
-            quietZoneModules: 10,
+        const singleBarcodePayload = item.barcodePayload || `${safeProduct} | ${numWeight.toFixed(2)} ${unitFormatted} | ${serial}`;
+
+        const barcodeBox = config.barcodeBox;
+        const barcodeX = left + (usableWidth - barcodeBox.widthPt) / 2;
+        const barcodeY = currentY;
+
+        renderCode128Vector(doc, singleBarcodePayload, {
+            x: barcodeX,
+            y: barcodeY,
+            maxWidth: barcodeBox.widthPt,
+            maxHeight: barcodeBox.heightPt,
             includeText: true,
-            textFontSize: isStandard ? 7.5 : 6.5,
+            displayText: serial, // Displays ONLY the Serial Number under the barcode lines (omits weight)
+            textFontSize: isLarge ? 9.5 : (isStandard ? 6.5 : 5.5),
+            quietZoneModules: 10,
         });
 
         // -------------------------------------------------------------
-        // 8. Synthetic Watermark Notice (Unobtrusive)
+        // 8. Watermark Notice (Omitted for official production labels)
         // -------------------------------------------------------------
-        doc.font('Helvetica')
-            .fontSize(config.typography.syntheticNotice)
-            .fillColor('#777777')
-            .text('SYNTHETIC TEST LABEL - NOT REGISTERED IN PRODUCTION', left, watermarkY, {
-                width: usableWidth,
-                align: 'center',
-            });
+        if (!item.isProduction) {
+            const watermarkY = config.heightPt - (isLarge ? 12 : 8);
+            doc.font('Helvetica')
+                .fontSize(isLarge ? 7 : 5.5)
+                .fillColor('#777777')
+                .text('SYNTHETIC TEST LABEL - NOT REGISTERED IN PRODUCTION', left, watermarkY, {
+                    width: usableWidth,
+                    align: 'center',
+                });
+        }
     }
 
     /**

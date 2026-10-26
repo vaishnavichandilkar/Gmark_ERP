@@ -27,13 +27,20 @@ export class SyntheticLabelItem {
     dateTimeStr?: string;
 
     @IsOptional()
-    @IsIn(['100x50', '75x50'])
-    labelSizeOverride?: '100x50' | '75x50';
+    @IsString()
+    labelSizeOverride?: string;
+
+    @IsOptional()
+    @IsString()
+    barcodePayload?: string;
+
+    @IsOptional()
+    isProduction?: boolean;
 }
 
 export class SyntheticBatchPreviewDto {
-    @IsIn(['100x50', '75x50'])
-    labelSize: '100x50' | '75x50';
+    @IsString()
+    labelSize: string;
 
     @IsArray()
     @ValidateNested({ each: true })

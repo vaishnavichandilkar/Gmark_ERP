@@ -25,6 +25,9 @@ const ProductMaster = lazy(() => import("../pages/dashboard/masters/ProductMaste
 const HSNMasterPage = lazy(() => import("../pages/dashboard/masters/HSNMasterPage"));
 const ManufacturerMaster = lazy(() => import("../pages/dashboard/masters/ManufacturerMaster"));
 const ManufacturerDashboard = lazy(() => import("../pages/dashboard/manufacturer/ManufacturerDashboard"));
+const ManufacturerLayout = lazy(() => import("../pages/dashboard/manufacturer/ManufacturerLayout"));
+const MachineManagement = lazy(() => import("../pages/dashboard/manufacturer/MachineManagement"));
+const InventoryLandingRedirect = lazy(() => import("../pages/dashboard/manufacturer/components/InventoryLandingRedirect"));
 
 // Purchase Pages
 const PurchaseLayout = lazy(() => import("../pages/dashboard/purchase/PurchaseLayout"));
@@ -201,20 +204,42 @@ export const router = createBrowserRouter([
                     ],
                   },
                   {
+                    path: "inventory",
+                    element: <Navigate to="/seller/inventory" replace />,
+                  },
+                  {
                     path: "manufacturer",
-                    element: <Navigate to="/seller/manufacturer" replace />,
+                    element: <Navigate to="/seller/inventory" replace />,
                   },
                   {
                     path: "manufacturer/*",
-                    element: <Navigate to="/seller/manufacturer" replace />,
+                    element: <Navigate to="/seller/inventory" replace />,
                   },
                 ],
               },
               {
-                path: "manufacturer",
+                path: "inventory",
+                element: <ManufacturerLayout />,
                 children: [
-                  { index: true, element: <ManufacturerDashboard /> },
+                  { index: true, element: <InventoryLandingRedirect /> },
+                  { path: "machines", element: <MachineManagement /> },
+                  { path: "packaging", element: <ManufacturerDashboard /> },
+                  { path: "packaging/add", element: <ManufacturerDashboard /> },
+                  { path: "packaging/view/:id", element: <ManufacturerDashboard /> },
                   { path: "add", element: <ManufacturerDashboard /> },
+                  { path: "view/:id", element: <ManufacturerDashboard /> },
+                ],
+              },
+              {
+                path: "manufacturer",
+                element: <ManufacturerLayout />,
+                children: [
+                  { index: true, element: <InventoryLandingRedirect /> },
+                  { path: "machines", element: <Navigate to="/seller/inventory/machines" replace /> },
+                  { path: "packaging", element: <Navigate to="/seller/inventory/packaging" replace /> },
+                  { path: "packaging/add", element: <Navigate to="/seller/inventory/packaging/add" replace /> },
+                  { path: "packaging/view/:id", element: <ManufacturerDashboard /> },
+                  { path: "add", element: <Navigate to="/seller/inventory/packaging/add" replace /> },
                   { path: "view/:id", element: <ManufacturerDashboard /> },
                 ],
               },

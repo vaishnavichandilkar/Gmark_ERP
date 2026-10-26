@@ -1,7 +1,8 @@
 {
     "reports": "अहवाल",
     "masters": "मास्टर्स",
-    "manufacturer": "उत्पादक (मॅन्युफॅक्चरर)",
+    "manufacturer": "इन्व्हेंटरी (Inventory)",
+    "inventory": "इन्व्हेंटरी (Inventory)",
     "purchase": "खरेदी",
     "purchase_description": "खरेदी ऑर्डर, पुरवठादार इनव्हॉइस आणि स्टॉक खरेदी क्रियाकलाप तयार करा आणि त्यांचे निरीक्षण करा.",
     "sales": "विक्री",

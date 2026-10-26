@@ -72,6 +72,7 @@ export interface Code128RenderOptions {
     quietZoneModules?: number; // Minimum quiet zone per side (default: 10 modules)
     includeText?: boolean;   // Whether to draw human-readable text below bars (default: true)
     textFontSize?: number;   // Font size for human-readable text (default: 7pt)
+    displayText?: string;    // Custom human-readable string below barcode (defaults to encoded text)
 }
 
 export interface Code128RenderMetrics {
@@ -97,12 +98,22 @@ export function encodeCode128(text: string): Code128Encoded {
         throw new Error('Code 128 input error: Barcode text must be a non-empty string.');
     }
 
+    // Normalize common unicode punctuation (em-dash, en-dash, smart quotes, etc.) to safe ASCII
+    const normalizedText = text
+        .replace(/[\u2014\u2013]/g, '-')
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/\u00A0/g, ' ')
+        .replace(/[^\x20-\x7E]/g, '');
+
+    const textToEncode = normalizedText.length > 0 ? normalizedText : 'ITEM';
+
     // Validate ASCII characters (Code 128 supports standard printable ASCII 32 to 126)
-    for (let i = 0; i < text.length; i++) {
-        const code = text.charCodeAt(i);
+    for (let i = 0; i < textToEncode.length; i++) {
+        const code = textToEncode.charCodeAt(i);
         if (code < 32 || code > 126) {
             throw new Error(
-                `Code 128 input error: Character "${text[i]}" (ASCII ${code}) is outside supported Code 128 printable range (32-126).`
+                `Code 128 input error: Character "${textToEncode[i]}" (ASCII ${code}) is outside supported Code 128 printable range (32-126).`
             );
         }
     }
@@ -113,7 +124,11 @@ export function encodeCode128(text: string): Code128Encoded {
     // Helper: count consecutive digits from position i
     const countDigits = (startIndex: number): number => {
         let count = 0;
-        while (startIndex + count < text.length && /^\d$/.test(text[startIndex + count])) {
+        while (
+            startIndex + count < textToEncode.length &&
+            textToEncode.charCodeAt(startIndex + count) >= 48 &&
+            textToEncode.charCodeAt(startIndex + count) <= 57
+        ) {
             count++;
         }
         return count;
@@ -131,19 +146,19 @@ export function encodeCode128(text: string): Code128Encoded {
         symbols.push(CODE128_CONSTANTS.START_B);
     }
 
-    while (i < text.length) {
+    while (i < textToEncode.length) {
         if (currentSet === 'C') {
             const digitsRemaining = countDigits(i);
             if (digitsRemaining >= 2) {
                 // Encode 2 digits as a single Code C value
-                const pairStr = text.slice(i, i + 2);
+                const pairStr = textToEncode.slice(i, i + 2);
                 symbols.push(parseInt(pairStr, 10));
                 i += 2;
             } else {
                 // Odd digit or non-digit encountered; switch to Code B
                 symbols.push(CODE128_CONSTANTS.CODE_B);
                 currentSet = 'B';
-                symbols.push(text.charCodeAt(i) - 32);
+                symbols.push(textToEncode.charCodeAt(i) - 32);
                 i += 1;
             }
         } else {
@@ -153,12 +168,12 @@ export function encodeCode128(text: string): Code128Encoded {
                 // Switch to Code C
                 symbols.push(CODE128_CONSTANTS.CODE_C);
                 currentSet = 'C';
-                const pairStr = text.slice(i, i + 2);
+                const pairStr = textToEncode.slice(i, i + 2);
                 symbols.push(parseInt(pairStr, 10));
                 i += 2;
             } else {
                 // Standard Code B character (ASCII value - 32)
-                symbols.push(text.charCodeAt(i) - 32);
+                symbols.push(textToEncode.charCodeAt(i) - 32);
                 i += 1;
             }
         }
@@ -256,10 +271,11 @@ export function renderCode128Vector(doc: any, text: string, options: Code128Rend
     // -------------------------------------------------------------
     if (includeText) {
         const textY = options.y + barHeight + textGap;
+        const labelText = options.displayText || text;
         doc.font('Helvetica')
             .fontSize(fontSize)
             .fillColor('#000000')
-            .text(text, options.x, textY, {
+            .text(labelText, options.x, textY, {
                 width: options.maxWidth,
                 align: 'center',
             });

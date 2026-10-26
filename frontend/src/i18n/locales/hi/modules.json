@@ -1,7 +1,8 @@
 {
     "reports": "रिपोर्ट",
     "masters": "मास्टर्स",
-    "manufacturer": "निर्माता (मैन्युफैक्चरर)",
+    "manufacturer": "इन्वेंटरी (Inventory)",
+    "inventory": "इन्वेंटरी (Inventory)",
     "purchase": "खरीद",
     "purchase_description": "खरीद ऑर्डर, आपूर्तिकर्ता इनवॉइस और स्टॉक खरीद गतिविधियों का निर्माण और निगरानी करें।",
     "sales": "बिक्री",

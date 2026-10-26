@@ -125,3 +125,20 @@ export function parsePackageNumber(packageNumber: string): ParsedPackageNumber |
         raw: packageNumber.trim().toUpperCase(),
     };
 }
+
+/**
+ * Standardizes packaging timestamp to Indian Standard Time (Asia/Kolkata).
+ * Output format: "23 Oct 2026, 03:15:30 PM"
+ */
+export function formatPackagingTimestamp(date: Date = new Date()): string {
+    return new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+    }).format(date);
+}

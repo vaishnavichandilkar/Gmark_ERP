@@ -2352,21 +2352,37 @@ export class ReportsService {
   ): Promise<InventoryReportResponseDto> {
     const { search, dateFrom, dateTo, page = 1, limit = 10, sortBy, sortOrder = 'asc' } = query;
 
-    // 1. Fetch user's active products
+    // 1. Fetch user's active products with UOM details
     const userProducts = await this.prisma.product.findMany({
       where: { created_by: userId, is_deleted: false },
       select: {
         id: true,
         product_name: true,
         product_code: true,
+        uom: {
+          select: {
+            unit_name: true,
+            gst_uom: true,
+          },
+        },
       },
     });
 
+    const isWeightUnit = (unitName?: string, gstUom?: string) => {
+      const u = (unitName || '').toLowerCase().trim();
+      const g = (gstUom || '').toUpperCase().trim();
+      return u === 'kg' || u === 'kgs' || u === 'kilogram' || u === 'gm' || u === 'grams' || g === 'KGS' || g === 'GMS';
+    };
+
+    const productUomMap: Record<string, boolean> = {};
     const productMap: Record<string, { id: number | string; name: string; code: string }> = {};
     userProducts.forEach((p) => {
+      const weightBased = isWeightUnit(p.uom?.unit_name, p.uom?.gst_uom);
+      productUomMap[String(p.id)] = weightBased;
       productMap[String(p.id)] = { id: p.id, name: p.product_name, code: p.product_code };
       if (p.product_code) {
         productMap[`code:${p.product_code.toLowerCase()}`] = { id: p.id, name: p.product_name, code: p.product_code };
+        productUomMap[`code:${p.product_code.toLowerCase()}`] = weightBased;
       }
     });
 
@@ -2380,12 +2396,14 @@ export class ReportsService {
       status: { in: ['GENERATED', 'COMPLETED'] as any },
     };
 
+    const pkgDateCond: any = {};
     if (dateFrom || dateTo) {
       const piCond: any = {};
       const siCond: any = {};
       if (dateFrom) {
         piCond.gte = new Date(dateFrom);
         siCond.gte = new Date(dateFrom);
+        pkgDateCond.gte = new Date(dateFrom);
       }
       if (dateTo) {
         const dTo = new Date(dateTo);
@@ -2394,6 +2412,7 @@ export class ReportsService {
         }
         piCond.lte = dTo;
         siCond.lte = dTo;
+        pkgDateCond.lte = dTo;
       }
       piWhere.OR = [
         { supplierInvoiceDate: piCond },
@@ -2405,8 +2424,8 @@ export class ReportsService {
       ];
     }
 
-    // 2. Fetch purchase items and sales items
-    const [purchaseItems, salesItems] = await Promise.all([
+    // 2. Fetch purchase items, sales items, and manufactured packages
+    const [purchaseItems, salesItems, manufacturedPackages] = await Promise.all([
       this.prisma.purchaseInvoiceItem.findMany({
         where: { purchaseInvoice: piWhere },
         select: {
@@ -2428,6 +2447,23 @@ export class ReportsService {
           quantity: true,
         },
       }),
+      this.prisma.manufacturedPackage.findMany({
+        where: {
+          product: { created_by: userId },
+          labelStatus: { not: 'CANCELLED' },
+          ...(dateFrom || dateTo ? { createdAt: pkgDateCond } : {}),
+        },
+        select: {
+          productId: true,
+          productCode: true,
+          productName: true,
+          netWeight: true,
+          weightUnit: true,
+          inventoryStatus: true,
+          createdAt: true,
+          dispatchedAt: true,
+        },
+      }),
     ]);
 
     const inventoryMap: Record<
@@ -2438,6 +2474,8 @@ export class ReportsService {
         productCode: string;
         purchaseQty: number;
         totalPurchaseValue: number;
+        commercialPurchaseQty: number;
+        commercialPurchaseValue: number;
         salesQty: number;
       }
     > = {};
@@ -2467,6 +2505,8 @@ export class ReportsService {
           productCode: matchedInfo ? matchedInfo.code : (pCode || ''),
           purchaseQty: 0,
           totalPurchaseValue: 0,
+          commercialPurchaseQty: 0,
+          commercialPurchaseValue: 0,
           salesQty: 0,
         };
       }
@@ -2477,6 +2517,7 @@ export class ReportsService {
       getOrCreateEntry(p.id, p.product_code, p.product_name);
     });
 
+    // 3. Aggregate commercial purchases
     purchaseItems.forEach((pi) => {
       const entry = getOrCreateEntry(pi.productId, pi.productCode, pi.productName);
       const qty = Number(pi.quantity || 0);
@@ -2485,12 +2526,51 @@ export class ReportsService {
 
       entry.purchaseQty += qty;
       entry.totalPurchaseValue += Number(value || 0);
+      entry.commercialPurchaseQty += qty;
+      entry.commercialPurchaseValue += Number(value || 0);
     });
 
+    // 4. Aggregate commercial sales
     salesItems.forEach((si) => {
       const entry = getOrCreateEntry(si.productId, si.productCode, si.productName);
       const qty = Number(si.quantity || 0);
       entry.salesQty += qty;
+    });
+
+    // 5. Aggregate production packages (Inventory In & Inventory Out)
+    manufacturedPackages.forEach((pkg) => {
+      const entry = getOrCreateEntry(pkg.productId, pkg.productCode, pkg.productName);
+      const isWeight = productUomMap[String(pkg.productId)] || false;
+      const pkgQty = isWeight ? Number(pkg.netWeight) : 1;
+
+      // Inbound Inventory Movement from Production Registration
+      entry.purchaseQty += pkgQty;
+
+      // Preserve purchasing valuation rate if commercial purchase rate exists
+      if (entry.commercialPurchaseQty > 0) {
+        const unitRate = entry.commercialPurchaseValue / entry.commercialPurchaseQty;
+        entry.totalPurchaseValue += pkgQty * unitRate;
+      }
+
+      // Outbound Inventory Movement from Barcode Scan-Out Dispatch
+      if (pkg.inventoryStatus === 'INVENTORY_OUT') {
+        let isDispatchedInPeriod = true;
+        if (dateFrom || dateTo) {
+          const dTime = new Date(pkg.dispatchedAt || pkg.createdAt).getTime();
+          const fromOk = !dateFrom || dTime >= new Date(dateFrom).getTime();
+          let toOk = true;
+          if (dateTo) {
+            const dTo = new Date(dateTo);
+            if (typeof dateTo === 'string' && dateTo.length === 10) dTo.setUTCHours(23, 59, 59, 999);
+            toOk = dTime <= dTo.getTime();
+          }
+          isDispatchedInPeriod = fromOk && toOk;
+        }
+
+        if (isDispatchedInPeriod) {
+          entry.salesQty += pkgQty;
+        }
+      }
     });
 
     let items: InventoryReportItemDto[] = Object.values(inventoryMap).map((item) => {

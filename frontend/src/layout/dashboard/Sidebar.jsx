@@ -9,7 +9,7 @@ import {
     Settings,
     X,
     Wallet,
-    Factory
+    Boxes
 } from 'lucide-react';
 import logo from '../../assets/images/ERP_Logo1.png';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +25,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
         { path: '/seller/purchase', label: t('purchase'), icon: ShoppingCart },
         { path: '/seller/sales', label: t('sales'), icon: TrendingUp },
         { path: '/seller/finance', label: t('finance'), icon: Wallet },
-        { path: '/seller/manufacturer', label: 'Manufacturer', icon: Factory },
+        { path: '/seller/inventory', label: t('modules:inventory', 'Inventory'), icon: Boxes },
         { path: '/seller/settings', label: t('settings'), icon: Settings },
     ];
 
@@ -41,10 +41,10 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
             )}
 
             {/* Sidebar Container */}
-            <aside 
+            <aside
                 className={`fixed lg:relative inset-y-0 left-0 z-50 bg-[#073318] border-r border-[#031d0d] transform transition-all duration-300 ease-in-out flex flex-col shrink-0 overflow-hidden lg:overflow-visible
-                    ${isOpen 
-                        ? 'w-[280px] translate-x-0 shadow-2xl' 
+                    ${isOpen
+                        ? 'w-[280px] translate-x-0 shadow-2xl'
                         : '-translate-x-full lg:translate-x-0 w-[280px] lg:w-[80px]'
                     }`}
             >
@@ -78,9 +78,12 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
                         {menuItems.map((item, index) => {
                             const Icon = item.icon;
                             const isDashboard = item.path === '/seller/dashboard';
+                            const isInventory = item.path === '/seller/inventory';
                             const isActive = isDashboard
                                 ? (location.pathname === '/seller/dashboard' || location.pathname === '/seller/dashboard/')
-                                : location.pathname.startsWith(item.path);
+                                : isInventory
+                                    ? (location.pathname.startsWith('/seller/inventory') || location.pathname.startsWith('/seller/manufacturer'))
+                                    : location.pathname.startsWith(item.path);
 
                             return (
                                 <NavLink

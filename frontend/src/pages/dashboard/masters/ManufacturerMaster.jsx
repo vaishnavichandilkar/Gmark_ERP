@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import ScrollableTable from '../../../components/common/ScrollableTable';
 import toast from 'react-hot-toast';
 import { getProducts } from '../../../services/productService';
+import { getPackageHistory } from '../../../services/manufacturerService';
 
 const ManufacturerMaster = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -29,8 +30,9 @@ const ManufacturerMaster = () => {
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
-    // Table Data (Packages) - Clean empty state until database model is approved
-    const [packages] = useState([]);
+    // Table Data (Packages) loaded from persistent database API
+    const [packages, setPackages] = useState([]);
+    const [loadingPackages, setLoadingPackages] = useState(false);
 
     // Active products loaded from existing verified ProductMaster API
     const [productsList, setProductsList] = useState([]);
@@ -69,9 +71,43 @@ const ManufacturerMaster = () => {
         }
     }, [t]);
 
+    const fetchPackages = useCallback(async () => {
+        setLoadingPackages(true);
+        try {
+            const res = await getPackageHistory({ limit: 100 });
+            const list = Array.isArray(res) ? res : res?.packages || res?.data || [];
+            const mapped = list.map((p) => {
+                let barcodeDisplay = p.barcode_data || p.serial_number;
+                if (barcodeDisplay && barcodeDisplay.startsWith('{')) {
+                    try {
+                        const parsed = JSON.parse(barcodeDisplay);
+                        barcodeDisplay = parsed.serial || barcodeDisplay;
+                    } catch (_) {}
+                }
+                return {
+                    id: p.id,
+                    package_number: p.package_number || p.serial_number,
+                    product_name: p.product_name,
+                    product_code: p.product_code,
+                    weight: p.net_weight,
+                    plant_code: p.plant_code,
+                    captured_at: p.created_at ? new Date(p.created_at).toLocaleString('en-IN') : '—',
+                    barcode_data: barcodeDisplay,
+                    print_count: p.reprint_count ? p.reprint_count + 1 : 1,
+                };
+            });
+            setPackages(mapped);
+        } catch (err) {
+            console.error('Failed to load packages in master', err);
+        } finally {
+            setLoadingPackages(false);
+        }
+    }, []);
+
     useEffect(() => {
         fetchActiveProducts();
-    }, [fetchActiveProducts]);
+        fetchPackages();
+    }, [fetchActiveProducts, fetchPackages]);
 
     // Derive currentView directly from URL location to prevent cascading renders
     const currentView = useMemo(() => {
@@ -112,12 +148,29 @@ const ManufacturerMaster = () => {
     const filteredPackages = useMemo(() => {
         let result = packages || [];
         if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
+            let q = searchQuery.trim();
+            // If barcode scanner scanned a full 3-field Code 128 barcode: Product | Weight | Serial
+            if (q.includes('|')) {
+                const parts = q.split('|').map((s) => s.trim());
+                if (parts.length >= 2) {
+                    q = parts[parts.length - 1]; // Extracted serial number
+                }
+            } else if (q.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(q);
+                    if (parsed.serial) q = parsed.serial;
+                } catch {
+                    // ignore JSON parse error
+                }
+            }
+
+            const qLower = q.toLowerCase();
             result = result.filter(
                 (p) =>
-                    p.package_number?.toLowerCase().includes(q) ||
-                    p.product_name?.toLowerCase().includes(q) ||
-                    p.product_code?.toLowerCase().includes(q)
+                    p.package_number?.toLowerCase().includes(qLower) ||
+                    p.serial_number?.toLowerCase().includes(qLower) ||
+                    p.product_name?.toLowerCase().includes(qLower) ||
+                    p.product_code?.toLowerCase().includes(qLower)
             );
         }
         return result;
@@ -140,12 +193,12 @@ const ManufacturerMaster = () => {
                 <div className="flex flex-row items-center justify-between gap-4">
                     <div>
                         <h2 className="text-[20px] md:text-[24px] font-bold text-[#111827] tracking-tight">
-                            {t('modules:manufacturer_master', 'Manufacturer Master')}
+                            {t('modules:inventory_master', 'Inventory Packaging Master')}
                         </h2>
                         <p className="text-[#6B7280] text-[13px] md:text-[14px] font-medium mt-1">
                             {t(
-                                'modules:manufacturer_master_desc',
-                                'Weigh packages, generate thermal barcode labels, and monitor plant output.'
+                                'modules:inventory_master_desc',
+                                'Weigh packages, generate thermal barcode labels, and monitor inventory output.'
                             )}
                         </p>
                     </div>
@@ -248,7 +301,7 @@ const ManufacturerMaster = () => {
                     <div className="bg-[#F8FAF0] border-b border-[#E5E7EB] px-4 py-3 flex items-center gap-3">
                         <Scale size={18} className="text-[#073318] shrink-0" />
                         <span className="text-[13px] font-semibold text-[#073318]">
-                            Manufacturer Packaging Station
+                            Inventory Packaging Station
                         </span>
                         <span className="ml-auto text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
                             Awaiting Schema Approval
@@ -561,7 +614,7 @@ const ManufacturerMaster = () => {
                             onClick={() => navigate('/seller/masters/manufacturer')}
                             className="inline-flex items-center gap-2 bg-[#073318] hover:bg-[#04200f] text-white px-5 h-[40px] rounded-[10px] text-[14px] font-bold transition-all shadow-sm hover:shadow"
                         >
-                            Back to Manufacturer Master
+                            Back to Inventory Packaging Master
                         </button>
                     </div>
                 </div>

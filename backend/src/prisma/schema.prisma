@@ -51,6 +51,11 @@ model User {
   paymentVouchers      PaymentVoucher[]
   journalVouchers      JournalVoucher[]
   contraVouchers       ContraVoucher[]
+  weighingMachines     WeighingMachine[]
+  packagesCreated      ManufacturedPackage[] @relation("PackagesCreated")
+  serialSequences      DailySerialSequence[] @relation("UserSerialSequences")
+  reprintLogs          LabelReprintLog[]     @relation("ReprintLogsCreated")
+  weighmentLogs        WeighmentTransaction[] @relation("WeighmentLogsCreated")
 
   @@map("User")
 }
@@ -430,7 +435,8 @@ model Product {
   creator         User         @relation(fields: [created_by], references: [id])
   hsnMasterId     String?      @db.Uuid @map("hsn_master_id")
   hsnMaster       HsnMaster?   @relation(fields: [hsnMasterId], references: [id])
-  uom             UnitMaster   @relation(fields: [uom_id], references: [id])
+  uom             UnitMaster            @relation(fields: [uom_id], references: [id])
+  packages        ManufacturedPackage[]
 
   @@unique([product_code, created_by])
   @@index([created_by, category_id, uom_id])
@@ -1231,4 +1237,123 @@ model HsnMaster {
   @@map("hsn_master")
 }
 
+model WeighingMachine {
+  id              String    @id @default(uuid())
+  stationId       String?   @map("station_id")
+  plantCode       String?   @default("AB") @map("plant_code")
+  deviceName      String    @map("device_name")
+  location        String?
+  manufacturer    String
+  modelNumber     String?   @map("model_number")
+  connectionType  String    @default("USB_SERIAL") @map("connection_type")
+  serialPort      String    @default("COM3") @map("serial_port")
+  baudRate        Int       @default(9600) @map("baud_rate")
+  protocol        String    @default("GENERIC_ASCII")
+  defaultUnit     String    @default("kg") @map("default_unit")
+  maxCapacity     Decimal   @default(150.00) @map("max_capacity") @db.Decimal(10, 3)
+  minDivision     Decimal   @default(0.005) @map("min_division") @db.Decimal(10, 4)
+  isOnline        Boolean   @default(true) @map("is_online")
+  lastConnectedAt DateTime? @map("last_connected_at")
+  createdBy       Int?      @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  user            User?     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
 
+  @@index([createdBy])
+  @@map("weighing_machines")
+}
+
+// ==========================================
+// MANUFACTURER MODULE ENTITIES
+// ==========================================
+
+model ManufacturedPackage {
+  id              Int                 @id @default(autoincrement())
+  serialNumber    String              @unique @map("serial_number")
+  packageNumber   String              @map("package_number")
+  productId       Int                 @map("product_id")
+  productName     String              @map("product_name")
+  productCode     String              @map("product_code")
+  companyName     String              @map("company_name")
+  netWeight       Decimal             @map("net_weight") @db.Decimal(10, 3)
+  grossWeight     Decimal?            @map("gross_weight") @db.Decimal(10, 3)
+  tareWeight      Decimal?            @map("tare_weight") @db.Decimal(10, 3)
+  weightUnit      String              @default("kg") @map("weight_unit")
+  weightSource    String              @default("HARDWARE_SCALE") @map("weight_source") // HARDWARE_SCALE | SCALE_SIMULATOR | MANUAL_ENTRY
+  rawPayload      String?             @map("raw_payload")
+  plantCode       String              @default("AB") @map("plant_code")
+  machineId       String              @default("M01") @map("machine_id")
+  labelSize       String              @default("100x50") @map("label_size")
+  labelStatus     String              @default("PRINTED") @map("label_status") // CREATED | PRINTED | CANCELLED
+  printStatus     String              @default("SUCCESS") @map("print_status")
+  reprintCount    Int                 @default(0) @map("reprint_count")
+  barcodeData     String?             @map("barcode_data")
+  inventoryStatus String              @default("IN_STOCK") @map("inventory_status") // IN_STOCK | INVENTORY_OUT
+  dispatchedAt    DateTime?           @map("dispatched_at")
+  dispatchedBy    Int?                @map("dispatched_by")
+  createdBy       Int?                @map("created_by")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  product         Product             @relation(fields: [productId], references: [id])
+  creator         User?               @relation("PackagesCreated", fields: [createdBy], references: [id])
+  reprintLogs     LabelReprintLog[]
+
+  @@index([productId])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@index([packageNumber])
+  @@index([inventoryStatus])
+  @@map("manufactured_packages")
+}
+
+model DailySerialSequence {
+  id          Int      @id @default(autoincrement())
+  datePrefix  String   @map("date_prefix") // YYMMDD
+  plantCode   String   @map("plant_code")  // e.g. "AB"
+  userId      Int      @map("user_id")
+  lastNumber  Int      @default(0) @map("last_number")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user        User     @relation("UserSerialSequences", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([datePrefix, plantCode, userId], name: "unique_daily_sequence")
+  @@index([datePrefix, plantCode])
+  @@map("daily_serial_sequences")
+}
+
+model LabelReprintLog {
+  id          Int                 @id @default(autoincrement())
+  packageId   Int                 @map("package_id")
+  reason      String
+  reprintedBy Int?                @map("reprinted_by")
+  reprintedAt DateTime            @default(now()) @map("reprinted_at")
+
+  package     ManufacturedPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  user        User?               @relation("ReprintLogsCreated", fields: [reprintedBy], references: [id])
+
+  @@index([packageId])
+  @@index([reprintedBy])
+  @@map("label_reprint_logs")
+}
+
+model WeighmentTransaction {
+  id              String    @id @default(uuid())
+  machineId       String?   @map("machine_id")
+  grossWeight     Decimal   @map("gross_weight") @db.Decimal(10, 3)
+  tareWeight      Decimal?  @map("tare_weight") @db.Decimal(10, 3)
+  netWeight       Decimal   @map("net_weight") @db.Decimal(10, 3)
+  unit            String    @default("kg")
+  isStable        Boolean   @default(true) @map("is_stable")
+  weightSource    String    @map("weight_source")
+  rawPayload      String?   @map("raw_payload")
+  operatorId      Int?      @map("operator_id")
+  timestamp       DateTime  @default(now())
+
+  operator        User?     @relation("WeighmentLogsCreated", fields: [operatorId], references: [id])
+
+  @@index([machineId])
+  @@index([timestamp])
+  @@map("weighment_transactions")
+}

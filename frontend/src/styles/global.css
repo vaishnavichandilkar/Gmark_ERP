@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 body {
-  font-family: 'Geist Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  background-color: #F8FAF0;
-  color: #111827;
+    font-family: 'Geist Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background-color: #F8FAF0;
+    color: #111827;
 }
 
 /* Master Table Global Styles */
@@ -27,13 +27,16 @@ body {
 .master-table-wrapper::-webkit-scrollbar {
     height: 6px;
 }
+
 .master-table-wrapper::-webkit-scrollbar-track {
     background: #E5E7EB;
 }
+
 .master-table-wrapper::-webkit-scrollbar-thumb {
     background: #A7C0B8;
     border-radius: 4px;
 }
+
 .master-table-wrapper::-webkit-scrollbar-thumb:hover {
     background: #014A36;
 }
@@ -48,20 +51,24 @@ body {
 /* Standard Master Table Header Style */
 .master-table thead tr,
 .master-table-header {
-    background-color: #064E3B; /* emerald-900 */
-    border-bottom: 1px solid #064E3B; /* emerald-950 */
+    background-color: #064E3B;
+    /* emerald-900 */
+    border-bottom: 1px solid #064E3B;
+    /* emerald-950 */
     font-size: 11px !important;
     font-weight: 700;
     color: white;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    height: 38px; /* Standardize height - scaled down from 44px */
+    height: 38px;
+    /* Standardize height - scaled down from 44px */
 }
 
 .master-table th {
     font-size: 11px !important;
     padding: 0 0.5rem;
-    height: 38px; /* Scaled down from 44px */
+    height: 38px;
+    /* Scaled down from 44px */
     white-space: nowrap;
     border-right: 1px solid rgba(255, 255, 255, 0.1);
     vertical-align: middle;
@@ -73,7 +80,7 @@ body {
     align-items: stretch;
 }
 
-.master-table-header > div {
+.master-table-header>div {
     padding: 0 0.5rem;
     white-space: nowrap;
     border-right: 1px solid rgba(255, 255, 255, 0.1);
@@ -102,10 +109,11 @@ body {
         margin-bottom: 1.5rem;
     }
 
-    .master-table th, .master-table td {
+    .master-table th,
+    .master-table td {
         padding: 1rem 0.75rem;
     }
-    
+
     .master-table-wrapper {
         min-height: 300px;
     }
@@ -131,7 +139,8 @@ body {
 }
 
 .master-table td {
-    padding: 0.5rem 0.5rem; /* Standardized cell padding */
+    padding: 0.5rem 0.5rem;
+    /* Standardized cell padding */
     vertical-align: middle;
     border-bottom: 1px solid #F3F4F6;
     font-size: 12px !important;
@@ -156,6 +165,7 @@ input::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
+
 input[type=number] {
     -moz-appearance: textfield;
     appearance: textfield;
@@ -192,8 +202,10 @@ div[class*="table-wrapper"] table thead tr {
     font-size: 11px !important;
     font-weight: 700 !important;
     letter-spacing: 0.05em !important;
-    height: 38px !important; /* Scaled down from 44px */
-    background-color: #064E3B !important; /* Standardized deep green */
+    height: 38px !important;
+    /* Scaled down from 44px */
+    background-color: #064E3B !important;
+    /* Standardized deep green */
     color: white !important;
     text-transform: uppercase !important;
 }
@@ -211,7 +223,8 @@ div[class*="scrollbar"] table th,
 div[class*="table-wrapper"] table th {
     font-size: 11px !important;
     padding: 0 0.5rem !important;
-    height: 38px !important; /* Scaled down from 44px */
+    height: 38px !important;
+    /* Scaled down from 44px */
     white-space: nowrap !important;
     vertical-align: middle !important;
     text-align: left !important;
@@ -288,7 +301,8 @@ div[class*="table-wrapper"] table thead input {
 .custom-scrollbar table td,
 div[class*="scrollbar"] table td,
 div[class*="table-wrapper"] table td {
-    padding: 0.5rem 0.5rem !important; /* Standardized compact padding */
+    padding: 0.5rem 0.5rem !important;
+    /* Standardized compact padding */
     vertical-align: middle !important;
     border-bottom: 1px solid #F3F4F6 !important;
     font-size: 12px !important;
@@ -341,32 +355,70 @@ div[class*="table-wrapper"] table td {
 
 /* Global Typography Scaling Overrides */
 html {
-    font-size: 14.5px !important; /* Scales all rem-based sizes (spacing, padding, margins, relative text) */
+    font-size: 14.5px !important;
+    /* Scales all rem-based sizes (spacing, padding, margins, relative text) */
 }
 
 body {
-    font-size: 13.5px !important; /* Scales inherited typography */
+    font-size: 13.5px !important;
+    /* Scales inherited typography */
 }
 
 /* Scale down Tailwind custom pixel-based classes proportionally */
-.text-\[32px\] { font-size: 28px !important; }
-.text-\[28px\] { font-size: 24px !important; }
-.text-\[24px\] { font-size: 21px !important; }
-.text-\[20px\] { font-size: 18px !important; }
-.text-\[18px\] { font-size: 16px !important; }
-.text-\[16px\] { font-size: 14.5px !important; }
-.text-\[15px\] { font-size: 13.5px !important; }
-.text-\[14px\] { font-size: 12.5px !important; }
-.text-\[13px\] { font-size: 11.5px !important; }
-.text-\[12px\] { font-size: 11px !important; }
-.text-\[11px\] { font-size: 10px !important; }
-.text-\[10px\] { font-size: 9px !important; }
+.text-\[32px\] {
+    font-size: 28px !important;
+}
+
+.text-\[28px\] {
+    font-size: 24px !important;
+}
+
+.text-\[24px\] {
+    font-size: 21px !important;
+}
+
+.text-\[20px\] {
+    font-size: 18px !important;
+}
+
+.text-\[18px\] {
+    font-size: 16px !important;
+}
+
+.text-\[16px\] {
+    font-size: 14.5px !important;
+}
+
+.text-\[15px\] {
+    font-size: 13.5px !important;
+}
+
+.text-\[14px\] {
+    font-size: 12.5px !important;
+}
+
+.text-\[13px\] {
+    font-size: 11.5px !important;
+}
+
+.text-\[12px\] {
+    font-size: 11px !important;
+}
+
+.text-\[11px\] {
+    font-size: 10px !important;
+}
+
+.text-\[10px\] {
+    font-size: 9px !important;
+}
 
 /* Media Print Optimizations - Clean PDF Export */
 @media print {
+
     /* Hide navigation, sidebars, buttons, and control elements */
-    nav, 
-    aside, 
+    nav,
+    aside,
     header,
     .no-print,
     button,
@@ -385,7 +437,8 @@ body {
         margin: 8mm 8mm 8mm 8mm;
     }
 
-    body, html {
+    body,
+    html {
         background: #ffffff !important;
         color: #000000 !important;
         margin: 0 !important;
@@ -396,8 +449,8 @@ body {
         font-size: 12px !important;
     }
 
-    main, 
-    #root, 
+    main,
+    #root,
     .flex-1,
     .container {
         margin: 0 !important;
@@ -411,8 +464,9 @@ body {
         width: 100% !important;
     }
 
-    div, section, article {
+    div,
+    section,
+    article {
         box-shadow: none !important;
     }
 }
-

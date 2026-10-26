@@ -38,7 +38,7 @@ async function runVerification() {
     // 2. Controller & PDF Generation Unit Verification (Stateless & DB-Safe)
     console.log('\nStep 2: Testing Controller PDF Stream Delivery');
     const labelService = new LabelGeneratorService();
-    const controller = new ManufacturerController(labelService);
+    const controller = new ManufacturerController(labelService, {} as any, {} as any);
 
     const testDto: SyntheticBatchPreviewDto = {
         labelSize: '100x50',
