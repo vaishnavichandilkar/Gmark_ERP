@@ -3,6 +3,7 @@ import { X, UploadCloud, Trash2, Check, Image as ImageIcon, RotateCcw, AlertCirc
 import { toast } from 'react-hot-toast';
 import { uploadInvoiceLogo, removeInvoiceLogo, getLocalLogoSettings, saveLocalLogoSettings } from '@/services/businessService';
 import { getImageUrl } from '@/utils/url';
+import defaultInvoiceLogo from '@/assets/images/bizdrona_logo.png';
 
 const CustomizeLogoModal = ({
     isOpen,
@@ -210,19 +211,13 @@ const CustomizeLogoModal = ({
                         <div className="p-4 border-2 border-black rounded-lg bg-white shadow-sm">
                             <div className="border border-black p-3 relative flex items-center justify-center min-h-[75px]">
                                 <div className="absolute left-4 flex items-center justify-center">
-                                    <div className={getLogoContainerClass()}>
-                                        {previewUrl ? (
+                                        <div className={getLogoContainerClass()}>
                                             <img
-                                                src={previewUrl}
+                                                src={previewUrl || defaultInvoiceLogo}
                                                 alt="Invoice Logo"
                                                 className={`w-full h-full ${shape === 'contain' ? 'object-contain' : 'object-cover'}`}
                                             />
-                                        ) : (
-                                            <div className="w-14 h-14 bg-[#014A36] rounded-full flex items-center justify-center text-white text-xs font-bold shadow-inner">
-                                                LOGO
-                                            </div>
-                                        )}
-                                    </div>
+                                        </div>
                                 </div>
                                 <h3 className="text-[18px] font-black uppercase text-center tracking-wide text-gray-900 ml-16 truncate max-w-[280px]">
                                     {shopName || "COMPANY NAME"}

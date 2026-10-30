@@ -10,6 +10,7 @@ import { formatDate } from '@/utils/dateUtils';
 import CustomizeLogoModal from '@/components/common/CustomizeLogoModal';
 import { getImageUrl } from '@/utils/url';
 import { getLocalLogoSettings } from '@/services/businessService';
+import defaultLogo from '@/assets/images/bizdrona_logo.png';
 
 const SIPrintPreview = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -546,26 +547,20 @@ const SIPrintPreview = () => {
                                                 className={`absolute left-6 flex items-center justify-center ${!isDownloading ? 'cursor-pointer group' : ''}`}
                                                 title={!isDownloading ? "Click to customize logo" : undefined}
                                             >
-                                                {sellerInfo?.logoUrl ? (
-                                                    <div className={`flex items-center justify-center transition-all ${
-                                                        logoSettings?.size === 'sm' ? 'w-[44px] h-[44px]' : logoSettings?.size === 'lg' ? 'w-[68px] h-[68px]' : 'w-[56px] h-[56px]'
-                                                    } ${
-                                                        logoSettings?.shape === 'circle' ? 'rounded-full overflow-hidden border border-gray-300 bg-white' : 
-                                                        logoSettings?.shape === 'rounded' ? 'rounded-xl overflow-hidden border border-gray-300 bg-white' : 
-                                                        'bg-transparent'
-                                                    }`}>
-                                                        <img 
-                                                            src={sellerInfo.logoUrl} 
-                                                            alt="Logo" 
-                                                            className={`w-full h-full ${logoSettings?.shape === 'contain' ? 'object-contain' : 'object-cover'}`}
-                                                            crossOrigin="anonymous"
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <div className="w-14 h-14 bg-[#014A36] rounded-full flex items-center justify-center text-white text-[11px] font-black uppercase shadow-inner">
-                                                        LOGO
-                                                    </div>
-                                                )}
+                                                <div className={`flex items-center justify-center transition-all ${
+                                                    logoSettings?.size === 'sm' ? 'w-[44px] h-[44px]' : logoSettings?.size === 'lg' ? 'w-[68px] h-[68px]' : 'w-[56px] h-[56px]'
+                                                } ${
+                                                    logoSettings?.shape === 'circle' ? 'rounded-full overflow-hidden border border-gray-300 bg-white shadow-sm' : 
+                                                    logoSettings?.shape === 'rounded' ? 'rounded-xl overflow-hidden border border-gray-300 bg-white shadow-sm' : 
+                                                    'bg-transparent'
+                                                }`}>
+                                                    <img 
+                                                        src={sellerInfo?.logoUrl || defaultLogo} 
+                                                        alt="Invoice Logo" 
+                                                        className={`w-full h-full ${logoSettings?.shape === 'contain' ? 'object-contain' : 'object-cover'}`}
+                                                        crossOrigin="anonymous"
+                                                    />
+                                                </div>
                                                 {!isDownloading && (
                                                     <span className="no-print absolute -bottom-1 -right-1 w-5 h-5 bg-[#073318] text-white rounded-full flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <Edit2 size={10} />
