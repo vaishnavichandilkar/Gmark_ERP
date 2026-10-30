@@ -12,6 +12,7 @@ import {
   BalanceSheetQueryDto,
   OverallSalesReportQueryDto,
   CustomerSalesReportQueryDto,
+  SalesOutstandingReportQueryDto,
 } from './dto/reports.dto';
 
 @ApiTags('Reports')
@@ -126,5 +127,15 @@ export class ReportsController {
       subCategoryIds,
       subSubCategoryIds,
     });
+  }
+
+  @Get('sales-outstanding')
+  @ApiOperation({ summary: 'Get Sales Outstanding Aging Report with configurable slabs' })
+  async getSalesOutstanding(
+    @Query() query: SalesOutstandingReportQueryDto,
+    @Request() req,
+  ) {
+    const userId = req.user.userId || req.user.id;
+    return this.reportsService.getSalesOutstandingReport(userId, query);
   }
 }

@@ -34,6 +34,10 @@ import {
   CustomerTypeGroupDto,
   CustomerSalesItemDto,
   PeriodComparisonDto,
+  SalesOutstandingReportQueryDto,
+  SalesOutstandingReportResponseDto,
+  SalesOutstandingCustomerItemDto,
+  SalesOutstandingInvoiceItemDto,
 } from './dto/reports.dto';
 import { Prisma } from '@prisma/client';
 
@@ -432,12 +436,23 @@ export class ReportsService {
   async getCustomerSalesFilterOptions(userId: number): Promise<CustomerSalesFilterOptionsResponseDto> {
     const [accounts, products, allCategories] = await Promise.all([
       this.prisma.accountMaster.findMany({
-        where: { userId },
+        where: {
+          userId,
+          status: 'ACTIVE',
+          customerStatus: 'ACTIVE',
+          OR: [
+            { customerCode: { not: null } },
+            { groupName: { hasSome: ['SUNDRY_DEBTORS', 'Sundry Debtors', 'Customers', 'Customer', 'Debtor'] } },
+            { accountType: 'Debtor' },
+          ],
+        },
         select: {
           id: true,
           accountName: true,
           customerCode: true,
           customerType: true,
+          groupName: true,
+          accountType: true,
         },
         orderBy: { accountName: 'asc' },
       }),
@@ -486,12 +501,28 @@ export class ReportsService {
       { id: 'retailer', label: 'Retailer' },
     ];
 
-    const customers = accounts.map(a => ({
-      id: a.id,
-      name: a.accountName,
-      code: a.customerCode || `CUST-${a.id}`,
-      type: a.customerType || 'other',
-    }));
+    const customers = accounts
+      .filter((a) => {
+        const groupArr = Array.isArray(a.groupName) ? a.groupName : [];
+        if (a.accountType === 'Bank' || groupArr.some((g) => ['Bank & Cash', 'BANK', 'Cash'].includes(g))) {
+          return false;
+        }
+        if (groupArr.includes('SUNDRY_CREDITORS') && !groupArr.includes('SUNDRY_DEBTORS')) {
+          return false;
+        }
+        const hasCode = !!(a.customerCode && a.customerCode.trim() !== '');
+        const hasDebtorGroup = groupArr.some((g) =>
+          ['SUNDRY_DEBTORS', 'Sundry Debtors', 'Customers', 'Customer', 'Debtor'].includes(g)
+        );
+        const isDebtorType = a.accountType === 'Debtor' || a.accountType === 'CUSTOMER';
+        return hasCode || hasDebtorGroup || isDebtorType;
+      })
+      .map(a => ({
+        id: a.id,
+        name: a.accountName,
+        code: a.customerCode || `CUST-${a.id}`,
+        type: a.customerType || 'other',
+      }));
 
     // Partition categories into level 1 (Category), level 2 (SubCategory), level 3 (SubSubCategory)
     const level1Cats = allCategories.filter(c => !c.parent_id);
@@ -2711,6 +2742,361 @@ export class ReportsService {
           ],
         },
       },
+    };
+  }
+
+  async getSalesOutstandingReport(
+    userId: number,
+    query: SalesOutstandingReportQueryDto,
+  ): Promise<SalesOutstandingReportResponseDto> {
+    const asOnDateStr = query.asOnDate || new Date().toISOString().split('T')[0];
+    const asOnDate = new Date(asOnDateStr);
+    asOnDate.setHours(23, 59, 59, 999);
+
+    // Slabs configuration
+    const belowDays = Number(query.belowDays) > 0 ? Number(query.belowDays) : 30;
+    const slab1Min = Number(query.slab1Min) > 0 ? Number(query.slab1Min) : 30;
+    const slab1Max = Number(query.slab1Max) > 0 ? Number(query.slab1Max) : 44;
+    const slab2Min = Number(query.slab2Min) > 0 ? Number(query.slab2Min) : 45;
+    const slab2Max = Number(query.slab2Max) > 0 ? Number(query.slab2Max) : 59;
+    const slab3Min = Number(query.slab3Min) > 0 ? Number(query.slab3Min) : 60;
+    const slab3Max = Number(query.slab3Max) > 0 ? Number(query.slab3Max) : 89;
+    const aboveDays = Number(query.aboveDays) > 0 ? Number(query.aboveDays) : 90;
+
+    // 1. Fetch active customer accounts for user
+    const accountWhere: Prisma.AccountMasterWhereInput = {
+      userId,
+      status: 'ACTIVE',
+      customerStatus: 'ACTIVE',
+      OR: [
+        { customerCode: { not: null } },
+        { groupName: { hasSome: ['SUNDRY_DEBTORS', 'Sundry Debtors', 'Customers', 'Customer', 'Debtor'] } },
+        { accountType: 'Debtor' },
+      ],
+    };
+
+    if (query.customerIds) {
+      const ids = query.customerIds.split(',').map((id) => parseInt(id.trim(), 10)).filter((n) => !isNaN(n));
+      if (ids.length > 0) {
+        accountWhere.id = { in: ids };
+      }
+    }
+
+    if (query.msmeStatus && query.msmeStatus.toUpperCase() !== 'ALL') {
+      accountWhere.msmeEnabled = query.msmeStatus.toUpperCase() === 'YES';
+    }
+
+    const accounts = await this.prisma.accountMaster.findMany({
+      where: accountWhere,
+      select: {
+        id: true,
+        accountName: true,
+        customerCode: true,
+        groupName: true,
+        accountType: true,
+        msmeEnabled: true,
+        msmeId: true,
+        regType: true,
+        customerType: true,
+        customerCreditDays: true,
+      },
+      orderBy: { accountName: 'asc' },
+    });
+
+    const customerAccounts = accounts.filter((a) => {
+      const groupArr = Array.isArray(a.groupName) ? a.groupName : [];
+      if (a.accountType === 'Bank' || groupArr.some((g) => ['Bank & Cash', 'BANK', 'Cash'].includes(g))) {
+        return false;
+      }
+      if (groupArr.includes('SUNDRY_CREDITORS') && !groupArr.includes('SUNDRY_DEBTORS')) {
+        return false;
+      }
+      const hasCode = !!(a.customerCode && a.customerCode.trim() !== '');
+      const hasDebtorGroup = groupArr.some((g) =>
+        ['SUNDRY_DEBTORS', 'Sundry Debtors', 'Customers', 'Customer', 'Debtor'].includes(g)
+      );
+      const isDebtorType = a.accountType === 'Debtor' || a.accountType === 'CUSTOMER';
+      return hasCode || hasDebtorGroup || isDebtorType;
+    });
+
+    const accountGroupsSet = new Set<string>();
+    customerAccounts.forEach((a) => {
+      if (Array.isArray(a.groupName)) {
+        a.groupName.forEach((g) => g && accountGroupsSet.add(g));
+      }
+    });
+
+    // 2. Fetch sales invoices up to asOnDate
+    const salesInvoices = await this.prisma.salesInvoice.findMany({
+      where: {
+        userId,
+        status: { not: 'DELETED' as any },
+        invoiceDate: { lte: asOnDate },
+      },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        customerInvoiceNumber: true,
+        invoiceDate: true,
+        bookingDate: true,
+        creditDays: true,
+        grandTotal: true,
+        customerId: true,
+        customerName: true,
+        status: true,
+      },
+      orderBy: { invoiceDate: 'asc' },
+    });
+
+    // Fetch user shop/company profile
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { shopDetail: true },
+    });
+    const companyName = user?.shopDetail?.shopName || 'A G CORPORATION';
+
+    // 3. Fetch receipt settlements up to asOnDate
+    const settlements = await this.prisma.voucherSettlement.findMany({
+      where: {
+        voucher_type: 'RECEIPT',
+        created_at: { lte: asOnDate },
+      },
+      select: {
+        invoice_id: true,
+        ledger_id: true,
+        settled_amount: true,
+      },
+    });
+
+    const invoicePaidMap = new Map<number, number>();
+    const ledgerPaidMap = new Map<number, number>();
+
+    settlements.forEach((s) => {
+      const amt = Number(s.settled_amount || 0);
+      if (s.invoice_id) {
+        invoicePaidMap.set(s.invoice_id, (invoicePaidMap.get(s.invoice_id) || 0) + amt);
+      }
+      if (s.ledger_id) {
+        ledgerPaidMap.set(s.ledger_id, (ledgerPaidMap.get(s.ledger_id) || 0) + amt);
+      }
+    });
+
+    // Also fetch receipt vouchers for this user up to asOnDate to catch direct/on-account receipts
+    const receiptItems = await this.prisma.receiptVoucherItem.findMany({
+      where: {
+        receiptVoucher: {
+          createdBy: userId,
+          voucherDate: { lte: asOnDate },
+        },
+      },
+      select: {
+        accountId: true,
+        amount: true,
+      },
+    });
+
+    const accountReceiptMap = new Map<number, number>();
+    receiptItems.forEach((ri) => {
+      accountReceiptMap.set(
+        ri.accountId,
+        (accountReceiptMap.get(ri.accountId) || 0) + Number(ri.amount || 0),
+      );
+    });
+
+    const accById = new Map<number, typeof customerAccounts[0]>();
+    const accByName = new Map<string, typeof customerAccounts[0]>();
+    customerAccounts.forEach((a) => {
+      accById.set(a.id, a);
+      accByName.set(a.accountName.trim().toLowerCase(), a);
+    });
+
+    // Group invoices by account
+    const invoicesByAccount = new Map<number, typeof salesInvoices>();
+    salesInvoices.forEach((inv) => {
+      let accId = inv.customerId;
+      if (!accId && inv.customerName) {
+        const found = accByName.get(inv.customerName.trim().toLowerCase());
+        if (found) accId = found.id;
+      }
+      if (accId) {
+        if (!invoicesByAccount.has(accId)) invoicesByAccount.set(accId, []);
+        invoicesByAccount.get(accId)!.push(inv);
+      }
+    });
+
+    // 4. Compute customer rows
+    let customerRows: SalesOutstandingCustomerItemDto[] = customerAccounts.map((account) => {
+      const invs = invoicesByAccount.get(account.id) || [];
+      let totalInvAmt = 0;
+      let totalInvoicePaid = 0;
+
+      let belowDaysAmt = 0;
+      let slab1Amt = 0;
+      let slab2Amt = 0;
+      let slab3Amt = 0;
+      let aboveDaysAmt = 0;
+
+      const invoiceItems: SalesOutstandingInvoiceItemDto[] = invs.map((inv) => {
+        const invTotal = Number(inv.grandTotal || 0);
+        const paid = Number(invoicePaidMap.get(inv.id) || 0);
+        const outstanding = invTotal - paid; // Can be negative if overpaid
+
+        const invDateObj = new Date(inv.invoiceDate);
+        const creditDays = Number(inv.creditDays ?? account.customerCreditDays ?? 0);
+        const dueDateObj = new Date(invDateObj);
+        dueDateObj.setDate(dueDateObj.getDate() + creditDays);
+
+        const diffTime = asOnDate.getTime() - dueDateObj.getTime();
+        const daysOverdue = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+
+        let agingBucket = '';
+        if (daysOverdue < belowDays) {
+          agingBucket = `< ${belowDays} Days`;
+          belowDaysAmt += outstanding;
+        } else if (daysOverdue >= slab1Min && daysOverdue <= slab1Max) {
+          agingBucket = `${slab1Min} to ${slab1Max} Days`;
+          slab1Amt += outstanding;
+        } else if (daysOverdue >= slab2Min && daysOverdue <= slab2Max) {
+          agingBucket = `${slab2Min} to ${slab2Max} Days`;
+          slab2Amt += outstanding;
+        } else if (daysOverdue >= slab3Min && daysOverdue <= slab3Max) {
+          agingBucket = `${slab3Min} to ${slab3Max} Days`;
+          slab3Amt += outstanding;
+        } else {
+          agingBucket = `≥ ${aboveDays} Days`;
+          aboveDaysAmt += outstanding;
+        }
+
+        totalInvAmt += invTotal;
+        totalInvoicePaid += paid;
+
+        return {
+          id: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          customerInvoiceNumber: inv.customerInvoiceNumber || undefined,
+          invoiceDate: inv.invoiceDate.toISOString().split('T')[0],
+          dueDate: dueDateObj.toISOString().split('T')[0],
+          creditDays,
+          grandTotal: Number(invTotal.toFixed(2)),
+          paidAmount: Number(paid.toFixed(2)),
+          outstandingAmount: Number(outstanding.toFixed(2)),
+          daysOverdue,
+          agingBucket,
+          status: inv.status,
+        };
+      });
+
+      // Total customer payments from receipts or settlements
+      const totalPaidAmt = Math.max(
+        totalInvoicePaid,
+        accountReceiptMap.get(account.id) || 0,
+        ledgerPaidMap.get(account.id) || 0,
+      );
+
+      // Net customer outstanding (can be negative if paid > invoice total)
+      const totalOutstandingAmt = totalInvAmt - totalPaidAmt;
+
+      // Handle unallocated payments / excess payments across aging slabs
+      const excessPaid = totalPaidAmt - totalInvoicePaid;
+      if (excessPaid > 0.001) {
+        // Offset excess payment from the oldest aging bucket (or proportionally)
+        aboveDaysAmt -= excessPaid;
+      } else if (invs.length === 0 && totalPaidAmt > 0.001) {
+        // Customer with only advance receipts and no invoices
+        aboveDaysAmt = -totalPaidAmt;
+      }
+
+      // Ensure buckets cleanly sum up to totalOutstandingAmt
+      const currentAgingSum = belowDaysAmt + slab1Amt + slab2Amt + slab3Amt + aboveDaysAmt;
+      const roundingDiff = totalOutstandingAmt - currentAgingSum;
+      if (Math.abs(roundingDiff) > 0.0001) {
+        aboveDaysAmt += roundingDiff;
+      }
+
+      const isMsme = Boolean(account.msmeEnabled);
+      const regDisplay = isMsme ? (account.msmeId || (account.regType ? String(account.regType) : 'Registered')) : '—';
+      const displayName = account.customerCode ? `${account.accountName} (${account.customerCode})` : `${account.accountName} (customer)`;
+
+      return {
+        accountId: account.id,
+        accountName: account.accountName,
+        customerCode: account.customerCode || '',
+        displayName,
+        groupName: account.groupName || [],
+        msmeEnabled: isMsme,
+        msmeStatus: isMsme ? 'Yes' : 'No',
+        customerType: account.customerType ? String(account.customerType) : null,
+        regType: account.regType ? String(account.regType) : null,
+        msmeId: account.msmeId || null,
+        regDisplay,
+        invoiceAmount: Number(totalInvAmt.toFixed(2)),
+        paidAmount: Number(totalPaidAmt.toFixed(2)),
+        outstandingAmount: Number(totalOutstandingAmt.toFixed(2)),
+        belowDaysAmount: Number(belowDaysAmt.toFixed(2)),
+        slab1Amount: Number(slab1Amt.toFixed(2)),
+        slab2Amount: Number(slab2Amt.toFixed(2)),
+        slab3Amount: Number(slab3Amt.toFixed(2)),
+        aboveDaysAmount: Number(aboveDaysAmt.toFixed(2)),
+        totalAgingOutstanding: Number((belowDaysAmt + slab1Amt + slab2Amt + slab3Amt + aboveDaysAmt).toFixed(2)),
+        invoicesCount: invoiceItems.length,
+        invoices: invoiceItems,
+      };
+    });
+
+    // Search filter
+    if (query.search && query.search.trim()) {
+      const q = query.search.trim().toLowerCase();
+      customerRows = customerRows.filter((c) =>
+        c.accountName.toLowerCase().includes(q) ||
+        c.customerCode.toLowerCase().includes(q) ||
+        c.displayName.toLowerCase().includes(q),
+      );
+    }
+
+    // Account group filter
+    if (query.accountGroup && query.accountGroup !== 'ALL') {
+      customerRows = customerRows.filter((c) =>
+        c.groupName.some((g) => g.toLowerCase() === query.accountGroup!.toLowerCase()),
+      );
+    }
+
+    // Summary calculation
+    const totalAccounts = customerRows.length;
+    const totalInvoiced = Number(customerRows.reduce((sum, c) => sum + c.invoiceAmount, 0).toFixed(2));
+    const totalPaid = Number(customerRows.reduce((sum, c) => sum + c.paidAmount, 0).toFixed(2));
+    const totalOutstanding = Number(customerRows.reduce((sum, c) => sum + c.outstandingAmount, 0).toFixed(2));
+
+    const agingTotals = {
+      belowDays: Number(customerRows.reduce((sum, c) => sum + c.belowDaysAmount, 0).toFixed(2)),
+      slab1: Number(customerRows.reduce((sum, c) => sum + c.slab1Amount, 0).toFixed(2)),
+      slab2: Number(customerRows.reduce((sum, c) => sum + c.slab2Amount, 0).toFixed(2)),
+      slab3: Number(customerRows.reduce((sum, c) => sum + c.slab3Amount, 0).toFixed(2)),
+      aboveDays: Number(customerRows.reduce((sum, c) => sum + c.aboveDaysAmount, 0).toFixed(2)),
+      grandTotal: Number(customerRows.reduce((sum, c) => sum + c.totalAgingOutstanding, 0).toFixed(2)),
+    };
+
+    return {
+      companyName,
+      asOnDate: asOnDateStr,
+      slabs: {
+        belowDays,
+        slab1Min,
+        slab1Max,
+        slab2Min,
+        slab2Max,
+        slab3Min,
+        slab3Max,
+        aboveDays,
+      },
+      summary: {
+        totalAccounts,
+        totalInvoiced,
+        totalPaid,
+        totalOutstanding,
+        agingTotals,
+      },
+      data: customerRows,
+      accountGroups: Array.from(accountGroupsSet),
     };
   }
 }

@@ -57,6 +57,10 @@ const reportService = {
     getCustomerMonthlySales: async (customerId, params) => {
         const response = await axiosInstance.get(`/reports/customer-sales/customer/${customerId}/monthly`, { params });
         return response.data;
+    },
+    getSalesOutstandingReport: async (params) => {
+        const response = await axiosInstance.get('/reports/sales-outstanding', { params });
+        return response.data;
     }
 };
 

@@ -741,7 +741,7 @@ const SignUp = () => {
                 setIsSuccessModalOpen(true);
             }
         } catch (err) {
-            const apiMsg = err.response?.data?.message || 'An error occurred while saving your data. Please try again.';
+            const apiMsg = err.response?.data?.message || (!err.response || err.message === 'Network Error' ? 'Unable to connect to the server. Please verify backend is running on port 3001.' : 'An error occurred while saving your data. Please try again.');
             const msgStr = typeof apiMsg === 'string' ? apiMsg : JSON.stringify(apiMsg);
 
             const newFieldErrors = {};

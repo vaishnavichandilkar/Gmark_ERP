@@ -16,6 +16,7 @@ import Loader from '../../../components/common/Loader';
 import ReportTable from '../components/ReportTable';
 import BalanceSheetView from '../components/BalanceSheetView';
 import CustomerSalesReportView from '../components/CustomerSalesReportView';
+import SalesOutstandingReportView from '../components/SalesOutstandingReportView';
 import reportService from '../../../services/reportService';
 
 const toLocalISOString = (d) => {
@@ -224,7 +225,17 @@ const ReportDashboard = () => {
     }, [searchParams]);
 
     const [activeTab, setActiveTab] = useState(initialTab); // Default to 'PROFIT_LOSS'
-    const [salesReportTab, setSalesReportTab] = useState('OVERALL'); // 'OVERALL' | 'CUSTOMER'
+    const initialSalesSubTab = useMemo(() => {
+        const sub = searchParams.get('subTab') || searchParams.get('salesTab');
+        if (sub) {
+            const upper = sub.toUpperCase();
+            if (['OVERALL', 'CUSTOMER', 'OUTSTANDING'].includes(upper)) {
+                return upper;
+            }
+        }
+        return 'OVERALL';
+    }, [searchParams]);
+    const [salesReportTab, setSalesReportTab] = useState(initialSalesSubTab); // 'OVERALL' | 'CUSTOMER' | 'OUTSTANDING'
     const [timeFilter, setTimeFilter] = useState('MONTHLY'); // 'DAILY', 'WEEKLY', 'MONTHLY'
     const [detailView, setDetailView] = useState(null); // { type: 'PO', status: 'Created', data: [] }
     const [profitLossData, setProfitLossData] = useState(null);
@@ -963,6 +974,9 @@ const ReportDashboard = () => {
                         periodLabel={pLabel}
                     />
                 );
+            }
+            if (salesReportTab === 'OUTSTANDING') {
+                return <SalesOutstandingReportView />;
             }
 
             return (
@@ -2082,7 +2096,7 @@ const ReportDashboard = () => {
             );
         }
         if (activeTab === 'SALES') {
-            if (salesReportTab === 'CUSTOMER') {
+            if (salesReportTab === 'CUSTOMER' || salesReportTab === 'OUTSTANDING') {
                 return null;
             }
             return (
@@ -2368,7 +2382,7 @@ const ReportDashboard = () => {
     };
 
     const renderGraphs = () => {
-        if (activeTab === 'SALES' && salesReportTab === 'CUSTOMER') {
+        if (activeTab === 'SALES' && (salesReportTab === 'CUSTOMER' || salesReportTab === 'OUTSTANDING')) {
             return null;
         }
 
@@ -2499,9 +2513,9 @@ const ReportDashboard = () => {
     }
 
     return (
-        <div className="flex flex-col w-full max-w-[1400px] mx-auto pt-0 pb-8 px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col w-full mx-auto pt-0 pb-8 px-2 sm:px-4 lg:px-6">
             {/* Header */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between mt-1 md:mt-2 mb-4 md:mb-6 gap-4">
+            <div className="no-print flex flex-col lg:flex-row lg:items-center justify-between mt-1 md:mt-2 mb-4 md:mb-6 gap-4">
                 <div>
                     <h1 className="text-[28px] md:text-[35px] font-bold text-gray-900 leading-tight">Reports</h1>
                     <p className="text-[14px] md:text-[16px] text-gray-500 mt-1">Detailed financial breakdowns and analytical graphs</p>
@@ -2536,7 +2550,7 @@ const ReportDashboard = () => {
             </div>
 
             {activeTab === 'SALES' && (
-                <div className="flex items-center gap-2 mb-6">
+                <div className="no-print flex items-center gap-2 mb-6">
                     <button
                         type="button"
                         onClick={() => setSalesReportTab('OVERALL')}
@@ -2561,9 +2575,21 @@ const ReportDashboard = () => {
                         <Users size={16} className={salesReportTab === 'CUSTOMER' ? 'text-[#10B981]' : 'text-gray-500'} />
                         Customer Sales Report
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => setSalesReportTab('OUTSTANDING')}
+                        className={`flex items-center gap-2 px-4 py-2 text-xs md:text-sm font-semibold rounded-xl transition-all duration-200 cursor-pointer ${
+                            salesReportTab === 'OUTSTANDING'
+                                ? 'bg-[#073318] text-white shadow-sm ring-2 ring-[#073318]/20'
+                                : 'bg-white text-gray-700 hover:text-[#073318] hover:bg-emerald-50/50 border border-gray-200'
+                        }`}
+                    >
+                        <Clock size={16} className={salesReportTab === 'OUTSTANDING' ? 'text-[#10B981]' : 'text-gray-500'} />
+                        Sales Outstanding Report
+                    </button>
                 </div>
             )}
-            {activeTab !== 'PROFIT_LOSS' && activeTab !== 'BALANCE_SHEET' && !(activeTab === 'SALES' && salesReportTab === 'CUSTOMER') && renderPeriodFilterBar()}
+            {activeTab !== 'PROFIT_LOSS' && activeTab !== 'BALANCE_SHEET' && !(activeTab === 'SALES' && (salesReportTab === 'CUSTOMER' || salesReportTab === 'OUTSTANDING')) && renderPeriodFilterBar()}
             {renderSummaryCards()}
             {renderSelectedStatusCards()}
             {activeTab !== 'INVENTORY' && activeTab !== 'BALANCE_SHEET' && renderGraphs()}

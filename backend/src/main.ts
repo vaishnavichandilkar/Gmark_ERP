@@ -31,13 +31,7 @@ async function bootstrap() {
     
     // Secure CORS
     app.enableCors({
-        origin: [
-            'http://opstream-erp.s3-website.ap-south-1.amazonaws.com',
-            'http://localhost:3000',
-            'http://localhost:5173',
-            // or true to allow all origins during testing:
-            // true
-        ],
+        origin: true,
         methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
         credentials: true,
     });

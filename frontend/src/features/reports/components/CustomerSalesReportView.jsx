@@ -35,6 +35,7 @@ import Loader from '../../../components/common/Loader';
 import reportService from '../../../services/reportService';
 import categoryService from '../../../services/masters/categoryService';
 import CustomerMonthlySalesModal from './CustomerMonthlySalesModal';
+import MetricInfoModal from './MetricInfoModal';
 import { CustomDateSelect, toLocalISOString } from './CustomDateSelect';
 import {
   exportCustomerSalesToExcel,
@@ -385,6 +386,9 @@ const CustomerSalesReportView = ({
   // Monthly Sales Modal State
   const [monthlyModalCustomer, setMonthlyModalCustomer] = useState(null);
 
+  // Metric Info Modal State (for clickable summary cards)
+  const [activeMetricModal, setActiveMetricModal] = useState(null);
+
   // Export Dropdown State
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
@@ -467,7 +471,13 @@ const CustomerSalesReportView = ({
               { id: 'dealer', label: 'Dealer' },
               { id: 'retailer', label: 'Retailer' },
             ],
-            customers: opts?.customers || [],
+            customers: (opts?.customers || []).filter((c) => {
+              const code = String(c?.code || '').trim();
+              const type = String(c?.type || '').toLowerCase();
+              const isExcludedType = ['bank', 'cash', 'supplier'].includes(type);
+              const isSyntheticNonCustomer = code.startsWith('CUST-') && !['industrial', 'institutional', 'dealer', 'retailer'].includes(type);
+              return !isExcludedType && !isSyntheticNonCustomer;
+            }),
             products: opts?.products || [],
             categories: parsedCategories,
             subCategories: parsedSubCategories,
@@ -800,8 +810,17 @@ const CustomerSalesReportView = ({
   }) => {
     return (
       <Card
-        className={`bg-gradient-to-br ${gradient} ${border} shadow-2xs hover:shadow-md transition-all duration-200 rounded-2xl cursor-pointer group`}
+        className={`bg-gradient-to-br ${gradient} ${border} shadow-2xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 rounded-2xl cursor-pointer group relative overflow-hidden`}
         onClick={onClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onClick && onClick();
+          }
+        }}
+        title={`Click to view ${title} details & customer breakdown`}
       >
         <CardContent className="p-3.5 sm:p-4 flex items-center gap-3 h-full">
           {/* Symbol First (on Left) */}
@@ -811,9 +830,14 @@ const CustomerSalesReportView = ({
 
           {/* Words Clear & Visible (on Right) */}
           <div className="min-w-0 flex-1">
-            <p className={`text-[11px] font-bold uppercase tracking-wider ${titleColor} leading-snug break-words`}>
-              {title}
-            </p>
+            <div className="flex items-center justify-between gap-1">
+              <p className={`text-[11px] font-bold uppercase tracking-wider ${titleColor} leading-snug break-words`}>
+                {title}
+              </p>
+              <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-white/80 border border-gray-200/60 text-gray-500 group-hover:bg-white group-hover:text-gray-900 transition-colors shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+                View <ChevronRight size={9} />
+              </span>
+            </div>
             <div className={`text-base sm:text-lg font-black ${valueColor} tracking-tight mt-0.5 whitespace-nowrap`}>
               {formatAsCurrency ? `₹${formatCurrency(value)}` : Number(value || 0).toLocaleString('en-IN')}
             </div>
@@ -893,7 +917,7 @@ const CustomerSalesReportView = ({
       </div>
 
       <div className="space-y-6">
-        {/* Section A: Customer Sales Summary (5 Cards in Proper Manner) */}
+        {/* Section A: Customer Sales Summary (5 Clickable Cards with Rich Info Modal) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {renderSummaryCard({
             title: 'Customers with Sales',
@@ -906,6 +930,7 @@ const CustomerSalesReportView = ({
             iconColor: 'text-blue-700',
             titleColor: 'text-blue-800/70',
             valueColor: 'text-blue-900',
+            onClick: () => setActiveMetricModal('CUSTOMERS_WITH_SALES'),
           })}
           {renderSummaryCard({
             title: 'Total Sales (Net)',
@@ -918,6 +943,7 @@ const CustomerSalesReportView = ({
             iconColor: 'text-emerald-700',
             titleColor: 'text-emerald-800/70',
             valueColor: 'text-emerald-900',
+            onClick: () => setActiveMetricModal('TOTAL_SALES'),
           })}
           {renderSummaryCard({
             title: 'Total Orders',
@@ -930,6 +956,7 @@ const CustomerSalesReportView = ({
             iconColor: 'text-amber-700',
             titleColor: 'text-amber-800/70',
             valueColor: 'text-amber-900',
+            onClick: () => setActiveMetricModal('TOTAL_ORDERS'),
           })}
           {renderSummaryCard({
             title: 'Avg Order Value',
@@ -942,6 +969,7 @@ const CustomerSalesReportView = ({
             iconColor: 'text-indigo-700',
             titleColor: 'text-indigo-800/70',
             valueColor: 'text-indigo-900',
+            onClick: () => setActiveMetricModal('AVG_ORDER_VALUE'),
           })}
           {renderSummaryCard({
             title: 'Repeat Customers',
@@ -954,6 +982,7 @@ const CustomerSalesReportView = ({
             iconColor: 'text-purple-700',
             titleColor: 'text-purple-800/70',
             valueColor: 'text-purple-900',
+            onClick: () => setActiveMetricModal('REPEAT_CUSTOMERS'),
           })}
         </div>
 
@@ -1515,6 +1544,22 @@ const CustomerSalesReportView = ({
                 : undefined,
           }}
           onClose={() => setMonthlyModalCustomer(null)}
+        />
+      )}
+
+      {/* Metric Info Breakdown Modal */}
+      {activeMetricModal && (
+        <MetricInfoModal
+          isOpen={Boolean(activeMetricModal)}
+          initialMetricKey={activeMetricModal}
+          summaryData={summaryData}
+          groupsData={groupsData}
+          periodLabel={periodLabel || (fromDate && toDate ? `${formatDateDDMMYYYY(fromDate)} to ${formatDateDDMMYYYY(toDate)}` : 'All Time')}
+          onSelectCustomer={(cust) => {
+            setActiveMetricModal(null);
+            setMonthlyModalCustomer(cust);
+          }}
+          onClose={() => setActiveMetricModal(null)}
         />
       )}
     </div>

@@ -372,12 +372,20 @@ body {
     button,
     input,
     label,
-    select,
+    select {
+        display: none !important;
+    }
+
+    /* Remove box-shadows for print without hiding elements */
+    .shadow-2xl,
     .shadow-xl,
     .shadow-lg,
     .shadow-md,
-    .shadow-sm {
-        display: none !important;
+    .shadow-sm,
+    .shadow-xs,
+    .shadow-2xs,
+    .shadow {
+        box-shadow: none !important;
     }
 
     @page {

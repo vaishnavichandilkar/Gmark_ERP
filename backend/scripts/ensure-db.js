@@ -7,6 +7,7 @@ const DB_PORT = 5432;
 const DB_HOST = '127.0.0.1';
 const PG_DATA = 'C:\\Users\\DELL\\Downloads\\PostgreSQL\\18\\data';
 const PG_BIN = 'D:\\pgsql\\bin\\postgres.exe';
+const PG_CTL = 'D:\\pgsql\\bin\\pg_ctl.exe';
 const PID_FILE = path.join(PG_DATA, 'postmaster.pid');
 
 function isPortOpen(host, port, timeoutMs = 800) {
@@ -63,6 +64,17 @@ function cleanStalePid() {
 function startPostgresServer() {
     console.log('[PostgreSQL] Database is offline. Starting PostgreSQL server...');
     cleanStalePid();
+
+    // Prefer pg_ctl start if available because it spawns postgres as a detached daemon
+    // that won't be killed by Ctrl+C console signals (0xC000013A)
+    if (fs.existsSync(PG_CTL)) {
+        try {
+            execSync(`"${PG_CTL}" start -D "${PG_DATA}" -w`, { stdio: 'inherit' });
+            return;
+        } catch (err) {
+            console.warn('[PostgreSQL] pg_ctl start returned a non-zero exit, trying fallback...', err.message);
+        }
+    }
 
     const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = '${PG_BIN} -D ${PG_DATA}' }"`;
     try {

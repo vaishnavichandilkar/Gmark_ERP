@@ -575,6 +575,127 @@ export interface CustomerMonthlySalesResponseDto {
   invoices?: CustomerSalesInvoiceItemDto[];
 }
 
+export class SalesOutstandingReportQueryDto {
+  @IsOptional()
+  @IsString()
+  asOnDate?: string;
 
+  @IsOptional()
+  @IsString()
+  search?: string;
 
+  @IsOptional()
+  @IsString()
+  msmeStatus?: string;
 
+  @IsOptional()
+  @IsString()
+  accountGroup?: string;
+
+  @IsOptional()
+  @IsString()
+  customerIds?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  belowDays?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  slab1Min?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  slab1Max?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  slab2Min?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  slab2Max?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  slab3Min?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  slab3Max?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  aboveDays?: number;
+}
+
+export interface SalesOutstandingInvoiceItemDto {
+  id: number;
+  invoiceNumber: string;
+  customerInvoiceNumber?: string;
+  invoiceDate: string;
+  dueDate: string;
+  creditDays: number;
+  grandTotal: number;
+  paidAmount: number;
+  outstandingAmount: number;
+  daysOverdue: number;
+  agingBucket: string;
+  status: string;
+}
+
+export interface SalesOutstandingCustomerItemDto {
+  accountId: number;
+  accountName: string;
+  customerCode: string;
+  displayName: string;
+  groupName: string[];
+  msmeEnabled: boolean;
+  msmeStatus: 'Yes' | 'No';
+  customerType?: string | null;
+  regType?: string | null;
+  msmeId?: string | null;
+  regDisplay: string;
+  invoiceAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+  belowDaysAmount: number;
+  slab1Amount: number;
+  slab2Amount: number;
+  slab3Amount: number;
+  aboveDaysAmount: number;
+  totalAgingOutstanding: number;
+  invoicesCount: number;
+  invoices: SalesOutstandingInvoiceItemDto[];
+}
+
+export interface SalesOutstandingReportResponseDto {
+  companyName?: string;
+  asOnDate: string;
+  slabs: {
+    belowDays: number;
+    slab1Min: number;
+    slab1Max: number;
+    slab2Min: number;
+    slab2Max: number;
+    slab3Min: number;
+    slab3Max: number;
+    aboveDays: number;
+  };
+  summary: {
+    totalAccounts: number;
+    totalInvoiced: number;
+    totalPaid: number;
+    totalOutstanding: number;
+    agingTotals: {
+      belowDays: number;
+      slab1: number;
+      slab2: number;
+      slab3: number;
+      aboveDays: number;
+      grandTotal: number;
+    };
+  };
+  data: SalesOutstandingCustomerItemDto[];
+  accountGroups: string[];
+}
