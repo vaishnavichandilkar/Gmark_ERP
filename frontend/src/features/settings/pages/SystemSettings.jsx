@@ -197,6 +197,7 @@ const SystemSettings = () => {
                 onClose={() => setIsLogoModalOpen(false)}
                 currentLogoUrl={logoUrl}
                 shopName={shopName}
+                allowSingleDocument={false}
                 onLogoUpdated={(data) => {
                     const resolved = data.logoUrl ? (data.logoUrl.startsWith('data:') ? data.logoUrl : getImageUrl(data.logoUrl)) : null;
                     setLogoUrl(resolved);

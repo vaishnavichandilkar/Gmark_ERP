@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, UploadCloud, Trash2, Check, Image as ImageIcon, RotateCcw, AlertCircle, Sparkles, ShieldCheck, Lock } from 'lucide-react';
+import { X, UploadCloud, Trash2, Check, Image as ImageIcon, RotateCcw, AlertCircle, Sparkles, ShieldCheck, Lock, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { 
     uploadInvoiceLogo, 
@@ -16,7 +16,10 @@ const CustomizeLogoModal = ({
     onClose,
     currentLogoUrl,
     shopName = "ARDHYA AGRO SERVICE",
-    onLogoUpdated
+    onLogoUpdated,
+    documentType = "Invoice",
+    documentId = null,
+    allowSingleDocument = true
 }) => {
     const fileInputRef = useRef(null);
     const [selectedFile, setSelectedFile] = useState(null);
@@ -28,6 +31,9 @@ const CustomizeLogoModal = ({
     const initialSettings = getLocalLogoSettings();
     const [shape, setShape] = useState(initialSettings.shape || 'contain'); // 'contain' | 'circle' | 'rounded'
     const [size, setSize] = useState(initialSettings.size || 'md'); // 'sm' | 'md' | 'lg'
+    const [applyScope, setApplyScope] = useState(allowSingleDocument ? 'single' : 'permanent'); // 'single' | 'permanent'
+
+    const isDocOverridden = Boolean(documentId && typeof window !== 'undefined' && sessionStorage.getItem(`doc_logo_${documentId}`));
 
     useEffect(() => {
         if (isOpen) {
@@ -35,6 +41,7 @@ const CustomizeLogoModal = ({
             const savedSettings = getLocalLogoSettings();
             setShape(savedSettings.shape || 'contain');
             setSize(savedSettings.size || 'md');
+            setApplyScope(allowSingleDocument ? 'single' : 'permanent');
 
             if (currentLogoUrl) {
                 setPreviewUrl(currentLogoUrl.startsWith('data:') ? currentLogoUrl : getImageUrl(currentLogoUrl));
@@ -43,7 +50,7 @@ const CustomizeLogoModal = ({
                 setPreviewUrl(cached ? (cached.startsWith('data:') ? cached : getImageUrl(cached)) : null);
             }
         }
-    }, [isOpen, currentLogoUrl]);
+    }, [isOpen, currentLogoUrl, allowSingleDocument]);
 
     if (!isOpen) return null;
 
@@ -78,7 +85,49 @@ const CustomizeLogoModal = ({
         }
     };
 
-    const handleSave = async () => {
+    // Apply only to this invoice/document
+    const handleApplyThisDocumentOnly = async () => {
+        let finalLogoUrl = previewUrl;
+        if (!finalLogoUrl && selectedFile) {
+            finalLogoUrl = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(selectedFile);
+            });
+            setPreviewUrl(finalLogoUrl);
+        }
+
+        if (!finalLogoUrl) {
+            toast.error('Please upload or select a logo first.');
+            return;
+        }
+
+        const docSettings = { shape, size, isFixedDefault: false };
+
+        if (documentId) {
+            try {
+                sessionStorage.setItem(`doc_logo_${documentId}`, JSON.stringify({
+                    logoUrl: finalLogoUrl,
+                    settings: docSettings
+                }));
+            } catch (err) {
+                console.warn('Could not cache document logo in sessionStorage:', err);
+            }
+        }
+
+        toast.success(`Logo applied to this ${documentType || 'invoice'} only!`);
+        if (onLogoUpdated) {
+            onLogoUpdated({
+                logoUrl: finalLogoUrl,
+                settings: docSettings,
+                isPermanent: false
+            });
+        }
+        onClose();
+    };
+
+    // Save as permanent default across system
+    const handleSavePermanent = async () => {
         setIsSaving(true);
         try {
             let finalUrl = previewUrl;
@@ -105,12 +154,18 @@ const CustomizeLogoModal = ({
                 setFixedCompanyLogo(previewUrl);
             }
 
-            toast.success('Logo saved and permanently fixed as default for all invoices!');
+            // Clear any document-specific override so this document now uses the permanent default
+            if (documentId) {
+                sessionStorage.removeItem(`doc_logo_${documentId}`);
+            }
+
+            toast.success(`Logo saved and permanently fixed as default for all invoices & orders!`);
             if (onLogoUpdated) {
                 onLogoUpdated({
                     logoUrl: previewUrl,
                     serverUrl: finalUrl,
-                    settings: newSettings
+                    settings: newSettings,
+                    isPermanent: true
                 });
             }
             onClose();
@@ -121,16 +176,20 @@ const CustomizeLogoModal = ({
                 const newSettings = { shape, size, isFixedDefault: true };
                 setFixedCompanyLogo(previewUrl);
                 saveLocalLogoSettings(newSettings);
+                if (documentId) {
+                    sessionStorage.removeItem(`doc_logo_${documentId}`);
+                }
                 toast.success('Logo permanently fixed as default for your invoices!');
                 if (onLogoUpdated) {
                     onLogoUpdated({
                         logoUrl: previewUrl,
-                        settings: newSettings
+                        settings: newSettings,
+                        isPermanent: true
                     });
                 }
                 onClose();
             } else {
-                toast.error(error.response?.data?.message || 'Failed to update invoice logo');
+                toast.error(error.response?.data?.message || 'Failed to update logo');
             }
         } finally {
             setIsSaving(false);
@@ -140,6 +199,24 @@ const CustomizeLogoModal = ({
     const handleRemove = async () => {
         setIsRemoving(true);
         try {
+            if (isDocOverridden) {
+                // Reset this document's override back to company default
+                sessionStorage.removeItem(`doc_logo_${documentId}`);
+                const defaultLogo = getFixedCompanyLogo();
+                const defaultSettings = getLocalLogoSettings();
+                toast.success(`Restored company default logo for this ${documentType || 'document'}.`);
+                if (onLogoUpdated) {
+                    onLogoUpdated({
+                        logoUrl: defaultLogo,
+                        settings: defaultSettings,
+                        isPermanent: false
+                    });
+                }
+                setIsRemoving(false);
+                onClose();
+                return;
+            }
+
             await removeInvoiceLogo();
         } catch (err) {
             console.warn('Backend removal warning (proceeding with local reset):', err);
@@ -149,21 +226,16 @@ const CustomizeLogoModal = ({
         saveLocalLogoSettings(defaultSettings);
         setSelectedFile(null);
         setPreviewUrl(null);
-        toast.success('Fixed logo removed. Restored default placeholder.');
+        toast.success('Company logo removed. Restored default placeholder.');
         if (onLogoUpdated) {
             onLogoUpdated({
                 logoUrl: null,
-                settings: defaultSettings
+                settings: defaultSettings,
+                isPermanent: true
             });
         }
         setIsRemoving(false);
         onClose();
-    };
-
-    const getSizePx = () => {
-        if (size === 'sm') return 44;
-        if (size === 'lg') return 68;
-        return 56; // md (default)
     };
 
     const getLogoContainerClass = () => {
@@ -183,7 +255,7 @@ const CustomizeLogoModal = ({
     return (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
             <div 
-                className="bg-white rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border border-gray-100 flex flex-col max-h-[92vh]"
+                className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-gray-100 flex flex-col max-h-[92vh]"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
@@ -194,12 +266,24 @@ const CustomizeLogoModal = ({
                         </div>
                         <div>
                             <div className="flex items-center gap-2">
-                                <h2 className="text-[17px] font-bold leading-tight">Customize Invoice Logo</h2>
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-200 text-[11px] font-semibold border border-emerald-400/30">
-                                    <ShieldCheck size={12} /> Fixed Default
-                                </span>
+                                <h2 className="text-[17px] font-bold leading-tight">
+                                    Customize {documentType ? `${documentType} Logo` : 'Invoice Logo'}
+                                </h2>
+                                {allowSingleDocument ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-200 text-[11px] font-semibold border border-emerald-400/30">
+                                        <Sparkles size={12} /> Custom & Default
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-200 text-[11px] font-semibold border border-emerald-400/30">
+                                        <ShieldCheck size={12} /> Fixed Default
+                                    </span>
+                                )}
                             </div>
-                            <p className="text-[12px] text-emerald-100/80">Sets the permanent company logo on all invoices & orders</p>
+                            <p className="text-[12px] text-emerald-100/80">
+                                {allowSingleDocument 
+                                    ? `Apply for this ${documentType?.toLowerCase() || 'invoice'} only or set as permanent company default`
+                                    : 'Sets the permanent company logo on all invoices & orders'}
+                            </p>
                         </div>
                     </div>
                     <button 
@@ -211,13 +295,13 @@ const CustomizeLogoModal = ({
                 </div>
 
                 {/* Body */}
-                <div className="p-6 overflow-y-auto space-y-6 text-gray-800">
+                <div className="p-6 overflow-y-auto space-y-5 text-gray-800">
 
                     {/* Live Preview Card */}
                     <div>
                         <div className="flex items-center justify-between mb-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                                <Sparkles size={13} className="text-[#073318]" /> Live Invoice Header Preview
+                                <Sparkles size={13} className="text-[#073318]" /> Live Header Preview
                             </label>
                             <span className="text-[11px] text-gray-400">Shows exactly how it appears on printed PDF</span>
                         </div>
@@ -229,7 +313,7 @@ const CustomizeLogoModal = ({
                                         {previewUrl ? (
                                             <img
                                                 src={previewUrl}
-                                                alt="Invoice Logo"
+                                                alt="Document Logo"
                                                 className={`w-full h-full ${shape === 'contain' ? 'object-contain' : 'object-cover'}`}
                                             />
                                         ) : (
@@ -239,7 +323,7 @@ const CustomizeLogoModal = ({
                                         )}
                                     </div>
                                 </div>
-                                <h3 className="text-[18px] font-black uppercase text-center tracking-wide text-gray-900 ml-16 truncate max-w-[280px]">
+                                <h3 className="text-[18px] font-black uppercase text-center tracking-wide text-gray-900 ml-16 truncate max-w-[320px]">
                                     {shopName || "COMPANY NAME"}
                                 </h3>
                             </div>
@@ -261,31 +345,31 @@ const CustomizeLogoModal = ({
                             onDragLeave={() => setIsDragging(false)}
                             onDrop={handleDrop}
                             onClick={() => fileInputRef.current?.click()}
-                            className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2
+                            className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2
                                 ${isDragging ? 'border-[#073318] bg-emerald-50/50 scale-[0.99]' : 'border-gray-200 hover:border-[#073318] hover:bg-gray-50/60 bg-gray-50/30'}
                             `}
                         >
-                            <div className="w-12 h-12 rounded-full bg-emerald-100/60 text-[#073318] flex items-center justify-center mb-1">
-                                <UploadCloud size={24} />
+                            <div className="w-11 h-11 rounded-full bg-emerald-100/60 text-[#073318] flex items-center justify-center mb-0.5">
+                                <UploadCloud size={22} />
                             </div>
-                            <div className="text-[14px] font-semibold text-gray-800">
+                            <div className="text-[13px] font-semibold text-gray-800">
                                 Click or drag & drop your logo here
                             </div>
-                            <p className="text-[12px] text-gray-500">
+                            <p className="text-[11px] text-gray-500">
                                 Supports PNG, JPG, WEBP, or SVG (Transparent PNG recommended, Max 5MB)
                             </p>
                             {selectedFile && (
-                                <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 rounded-full text-xs font-bold border border-emerald-200">
+                                <div className="mt-1 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 rounded-full text-xs font-bold border border-emerald-200">
                                     <Check size={13} /> {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Customization Options */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    {/* Customization Options: Shape & Size */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {/* Shape Selector */}
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
                                 Logo Display Shape
                             </label>
@@ -299,7 +383,7 @@ const CustomizeLogoModal = ({
                                         key={item.id}
                                         type="button"
                                         onClick={() => setShape(item.id)}
-                                        className={`px-3 py-2 rounded-xl text-center border-2 transition-all text-xs font-bold
+                                        className={`px-2.5 py-2 rounded-xl text-center border-2 transition-all text-xs font-bold
                                             ${shape === item.id 
                                                 ? 'border-[#073318] bg-emerald-50 text-[#073318]' 
                                                 : 'border-gray-200 hover:border-gray-300 text-gray-700 bg-white'}
@@ -313,7 +397,7 @@ const CustomizeLogoModal = ({
                         </div>
 
                         {/* Size Selector */}
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
                                 Logo Size
                             </label>
@@ -327,7 +411,7 @@ const CustomizeLogoModal = ({
                                         key={item.id}
                                         type="button"
                                         onClick={() => setSize(item.id)}
-                                        className={`px-3 py-2 rounded-xl text-center border-2 transition-all text-xs font-bold
+                                        className={`px-2.5 py-2 rounded-xl text-center border-2 transition-all text-xs font-bold
                                             ${size === item.id 
                                                 ? 'border-[#073318] bg-emerald-50 text-[#073318]' 
                                                 : 'border-gray-200 hover:border-gray-300 text-gray-700 bg-white'}
@@ -341,32 +425,107 @@ const CustomizeLogoModal = ({
                         </div>
                     </div>
 
-                    {/* Information Note */}
-                    <div className="p-3.5 bg-emerald-50 border border-emerald-200/90 rounded-xl flex items-start gap-3 text-[12px] text-emerald-950 leading-relaxed shadow-sm">
-                        <ShieldCheck size={20} className="shrink-0 mt-0.5 text-emerald-700" />
-                        <div>
-                            <strong>Permanent Fixed Default:</strong> Once added and saved, this logo is automatically fixed as the permanent default on all your future <strong>Invoices</strong>, <strong>Sales Orders</strong>, and <strong>Purchase Orders</strong> across the system.
+                    {/* Scope Selector: Single Invoice vs Permanent Default */}
+                    {allowSingleDocument ? (
+                        <div className="space-y-2 pt-1">
+                            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
+                                Choose Where to Apply Logo
+                            </label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {/* Option 1: This document only */}
+                                <div
+                                    onClick={() => setApplyScope('single')}
+                                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                                        applyScope === 'single'
+                                            ? 'border-[#073318] bg-emerald-50/70 shadow-sm ring-1 ring-[#073318]/20'
+                                            : 'border-gray-200 hover:border-gray-300 bg-gray-50/40 text-gray-600'
+                                    }`}
+                                >
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                        applyScope === 'single' ? 'bg-[#073318] text-white' : 'bg-gray-200 text-gray-600'
+                                    }`}>
+                                        <FileText size={16} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-0.5">
+                                            <span className={`text-[13px] font-bold ${applyScope === 'single' ? 'text-[#073318]' : 'text-gray-800'}`}>
+                                                This {documentType} Only
+                                            </span>
+                                            <input
+                                                type="radio"
+                                                name="applyScope"
+                                                checked={applyScope === 'single'}
+                                                onChange={() => setApplyScope('single')}
+                                                className="accent-[#073318] w-4 h-4 cursor-pointer"
+                                            />
+                                        </div>
+                                        <p className="text-[11px] text-gray-500 leading-snug">
+                                            Applies only to this specific {documentType.toLowerCase()}. Your general company default logo stays unchanged.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Option 2: Permanent company default */}
+                                <div
+                                    onClick={() => setApplyScope('permanent')}
+                                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                                        applyScope === 'permanent'
+                                            ? 'border-[#073318] bg-emerald-50/70 shadow-sm ring-1 ring-[#073318]/20'
+                                            : 'border-gray-200 hover:border-gray-300 bg-gray-50/40 text-gray-600'
+                                    }`}
+                                >
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                        applyScope === 'permanent' ? 'bg-[#073318] text-white' : 'bg-gray-200 text-gray-600'
+                                    }`}>
+                                        <ShieldCheck size={16} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-0.5">
+                                            <span className={`text-[13px] font-bold ${applyScope === 'permanent' ? 'text-[#073318]' : 'text-gray-800'}`}>
+                                                Permanent Default
+                                            </span>
+                                            <input
+                                                type="radio"
+                                                name="applyScope"
+                                                checked={applyScope === 'permanent'}
+                                                onChange={() => setApplyScope('permanent')}
+                                                className="accent-[#073318] w-4 h-4 cursor-pointer"
+                                            />
+                                        </div>
+                                        <p className="text-[11px] text-gray-500 leading-snug">
+                                            Fixes permanently as the default on all current & future Invoices, Sales Orders, and Purchase Orders.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="p-3.5 bg-emerald-50 border border-emerald-200/90 rounded-xl flex items-start gap-3 text-[12px] text-emerald-950 leading-relaxed shadow-sm">
+                            <ShieldCheck size={20} className="shrink-0 mt-0.5 text-emerald-700" />
+                            <div>
+                                <strong>Permanent Fixed Default:</strong> Once added and saved, this logo is automatically fixed as the permanent default on all your future <strong>Invoices</strong>, <strong>Sales Orders</strong>, and <strong>Purchase Orders</strong> across the system.
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer Buttons */}
-                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     <div>
                         {previewUrl && (
                             <button
                                 type="button"
                                 onClick={handleRemove}
                                 disabled={isRemoving || isSaving}
-                                className="px-3.5 py-2 text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                                className="w-full sm:w-auto px-3.5 py-2 text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                             >
                                 <Trash2 size={14} />
-                                {isRemoving ? 'Resetting...' : 'Reset to Default'}
+                                {isRemoving ? 'Resetting...' : isDocOverridden ? `Reset to Company Default` : 'Reset to Default'}
                             </button>
                         )}
                     </div>
                     
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex flex-wrap items-center justify-end gap-2.5">
                         <button
                             type="button"
                             onClick={onClose}
@@ -374,21 +533,42 @@ const CustomizeLogoModal = ({
                         >
                             Cancel
                         </button>
+
+                        {allowSingleDocument && (
+                            <button
+                                type="button"
+                                onClick={handleApplyThisDocumentOnly}
+                                disabled={isSaving || isRemoving || (!selectedFile && !previewUrl)}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+                                    applyScope === 'single'
+                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-600/30'
+                                        : 'bg-white hover:bg-emerald-50 text-[#073318] border-2 border-[#073318]'
+                                }`}
+                            >
+                                <FileText size={14} />
+                                Apply to This {documentType} Only
+                            </button>
+                        )}
+
                         <button
                             type="button"
-                            onClick={handleSave}
+                            onClick={handleSavePermanent}
                             disabled={isSaving || isRemoving || (!selectedFile && !previewUrl)}
-                            className="px-5 py-2 bg-[#073318] hover:bg-[#062913] text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+                                applyScope === 'permanent' || !allowSingleDocument
+                                    ? 'bg-[#073318] hover:bg-[#062913] text-white ring-2 ring-[#073318]/30'
+                                    : 'bg-white hover:bg-gray-50 text-gray-800 border border-gray-300'
+                            }`}
                         >
                             {isSaving ? (
                                 <>
                                     <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    Saving & Fixing as Default...
+                                    Saving Default...
                                 </>
                             ) : (
                                 <>
-                                    <Check size={14} />
-                                    Save as Permanent Default Logo
+                                    <ShieldCheck size={14} className={applyScope === 'permanent' || !allowSingleDocument ? 'text-emerald-300' : 'text-gray-600'} />
+                                    Save as Permanent Default
                                 </>
                             )}
                         </button>

@@ -114,9 +114,26 @@ const POPrintPreview = () => {
         return stateName;
     };
 
+    const poKey = useMemo(() => {
+        return poData?.poNumber || poData?.po_number || poData?._id || poData?.id || 'current_po';
+    }, [poData]);
+
     useEffect(() => {
         const fetchSellerInfo = async () => {
             try {
+                // Check if this purchase order has a session-specific logo override
+                let docOverride = null;
+                if (poKey && typeof window !== 'undefined') {
+                    try {
+                        const saved = sessionStorage.getItem(`doc_logo_${poKey}`);
+                        if (saved) {
+                            docOverride = JSON.parse(saved);
+                        }
+                    } catch (e) {
+                        console.warn('Failed to parse doc_logo from sessionStorage', e);
+                    }
+                }
+
                 const response = await axiosInstance.get('/business/profile');
                 if (response.data) {
                     const { shopDetail, phone, email, websiteUrl, gstNumber, logoUrl: serverLogoUrl, logoSettings: serverSettings } = response.data;
@@ -134,6 +151,12 @@ const POPrintPreview = () => {
                         saveLocalLogoSettings(serverSettings);
                     }
 
+                    // If order-specific logo exists, override for this purchase order
+                    const activeLogo = docOverride?.logoUrl || finalLogo;
+                    if (docOverride?.settings) {
+                        setLogoSettings(docOverride.settings);
+                    }
+
                     setSellerInfo({
                         shopName: shopDetail?.shopName || "ARDHYA AGRO SERVICE",
                         address: shopDetail ? `${shopDetail.address}, ${shopDetail.village || ''}, ${shopDetail.district}, ${shopDetail.state} - ${shopDetail.pinCode}` : "Near Mahalaxmi Temple, Hitani",
@@ -143,7 +166,7 @@ const POPrintPreview = () => {
                         gstNumber: fullGst || t('common:not_available', "Not Available"),
                         panNumber: fullGst.length >= 12 ? fullGst.substring(2, 12) : t('common:not_available', "Not Available"),
                         stateInfo: fullGst.length >= 2 ? `${fullGst.substring(0, 2)} - ${getStateName(fullGst)}` : t('common:not_available', "Not Available"),
-                        logoUrl: finalLogo
+                        logoUrl: activeLogo
                     });
                 }
             } catch (error) {
@@ -155,7 +178,7 @@ const POPrintPreview = () => {
             }
         };
         fetchSellerInfo();
-    }, []);
+    }, [poKey]);
 
     const handleLogoUpdated = (data) => {
         const resolved = data.logoUrl ? (data.logoUrl.startsWith('data:') ? data.logoUrl : getImageUrl(data.logoUrl)) : null;
@@ -165,6 +188,18 @@ const POPrintPreview = () => {
         }));
         if (data.settings) {
             setLogoSettings(data.settings);
+        }
+        if (!data.isPermanent && poKey) {
+            try {
+                sessionStorage.setItem(`doc_logo_${poKey}`, JSON.stringify({
+                    logoUrl: resolved,
+                    settings: data.settings
+                }));
+            } catch (e) {
+                console.warn('Failed to save doc logo to sessionStorage:', e);
+            }
+        } else if (data.isPermanent && poKey) {
+            sessionStorage.removeItem(`doc_logo_${poKey}`);
         }
     };
 
@@ -901,6 +936,9 @@ const POPrintPreview = () => {
                 currentLogoUrl={sellerInfo?.logoUrl}
                 shopName={sellerInfo?.shopName}
                 onLogoUpdated={handleLogoUpdated}
+                documentType="Purchase Order"
+                documentId={poKey}
+                allowSingleDocument={true}
             />
         </div>
     );
