@@ -33,10 +33,23 @@ export class BusinessService {
             doc => doc.category === 'INVOICE_LOGO'
         );
 
+        let logoSettings = { shape: 'contain', size: 'md', isFixedDefault: true };
+        if (logoDoc?.name) {
+            try {
+                const parsed = JSON.parse(logoDoc.name);
+                if (parsed && typeof parsed === 'object') {
+                    logoSettings = { ...logoSettings, ...parsed };
+                }
+            } catch {
+                // Keep default if name is not JSON
+            }
+        }
+
         return {
             ...user,
             gstNumber: gstDoc ? gstDoc.name : null,
-            logoUrl: logoDoc ? logoDoc.url : null
+            logoUrl: logoDoc ? logoDoc.url : null,
+            logoSettings: logoDoc ? logoSettings : null
         };
     }
 
@@ -119,7 +132,7 @@ export class BusinessService {
         });
     }
 
-    async updateInvoiceLogo(userId: number, file?: Express.Multer.File, customUrl?: string) {
+    async updateInvoiceLogo(userId: number, file?: Express.Multer.File, customUrl?: string, settings?: any) {
         const sellerProfile = await this.prisma.sellerProfile.findUnique({ where: { userId } });
         
         let logoUrl = customUrl;
@@ -135,6 +148,14 @@ export class BusinessService {
         if (!logoUrl) {
             throw new BadRequestException('Logo file or URL is required');
         }
+
+        const metadata = JSON.stringify({
+            originalName,
+            shape: settings?.shape || 'contain',
+            size: settings?.size || 'md',
+            isFixedDefault: true,
+            updatedAt: new Date().toISOString()
+        });
 
         // Delete existing logo document if any
         await this.prisma.sellerDocument.deleteMany({
@@ -152,14 +173,19 @@ export class BusinessService {
                 type: 'OTHER',
                 category: 'INVOICE_LOGO',
                 url: logoUrl,
-                name: originalName,
+                name: metadata,
                 size: BigInt(fileSize)
             }
         });
 
         return {
-            message: 'Invoice logo updated successfully',
-            logoUrl: doc.url
+            message: 'Invoice logo updated and permanently fixed as default',
+            logoUrl: doc.url,
+            logoSettings: {
+                shape: settings?.shape || 'contain',
+                size: settings?.size || 'md',
+                isFixedDefault: true
+            }
         };
     }
 

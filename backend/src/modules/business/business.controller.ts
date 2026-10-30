@@ -39,9 +39,16 @@ export class BusinessController {
     uploadLogo(
         @UploadedFile() file: Express.Multer.File,
         @Body('logoUrl') logoUrl: string,
+        @Body('settings') settingsStr: string,
         @Request() req
     ) {
-        return this.businessService.updateInvoiceLogo(req.user.userId, file, logoUrl);
+        let settings = null;
+        if (settingsStr) {
+            try {
+                settings = typeof settingsStr === 'string' ? JSON.parse(settingsStr) : settingsStr;
+            } catch {}
+        }
+        return this.businessService.updateInvoiceLogo(req.user.userId, file, logoUrl, settings);
     }
 
     @Delete('logo')

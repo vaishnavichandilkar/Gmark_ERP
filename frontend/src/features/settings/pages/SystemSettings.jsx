@@ -3,9 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Globe, Check, Image as ImageIcon, Sparkles, Building, Settings2 } from 'lucide-react';
 import { updateLanguageApi } from '../../../services/authService';
 import CustomizeLogoModal from '../../../components/common/CustomizeLogoModal';
-import { getBusinessProfile, getLocalLogoSettings } from '../../../services/businessService';
+import { getBusinessProfile, getLocalLogoSettings, getFixedCompanyLogo, setFixedCompanyLogo, saveLocalLogoSettings } from '../../../services/businessService';
 import { getImageUrl } from '../../../utils/url';
-import defaultInvoiceLogo from '../../../assets/images/bizdrona_logo.png';
 
 const SystemSettings = () => {
     const { t, i18n } = useTranslation(['modules', 'common']);
@@ -22,12 +21,18 @@ const SystemSettings = () => {
             try {
                 const data = await getBusinessProfile();
                 if (data) {
-                    const raw = data.logoUrl || localStorage.getItem('custom_invoice_logo');
-                    setLogoUrl(raw ? (raw.startsWith('data:') ? raw : getImageUrl(raw)) : null);
+                    const raw = data.logoUrl || getFixedCompanyLogo();
+                    const finalLogo = raw ? (raw.startsWith('data:') ? raw : getImageUrl(raw)) : null;
+                    setLogoUrl(finalLogo);
+                    if (finalLogo) setFixedCompanyLogo(finalLogo);
+                    if (data.logoSettings) {
+                        setLogoSettings(data.logoSettings);
+                        saveLocalLogoSettings(data.logoSettings);
+                    }
                     setShopName(data.shopDetail?.shopName || 'ARDHYA AGRO SERVICE');
                 }
             } catch (err) {
-                const cached = localStorage.getItem('custom_invoice_logo');
+                const cached = getFixedCompanyLogo();
                 if (cached) setLogoUrl(cached.startsWith('data:') ? cached : getImageUrl(cached));
             }
         };
@@ -149,11 +154,17 @@ const SystemSettings = () => {
                     <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-xl border border-gray-100 bg-gray-50/50">
                         {/* Logo Preview */}
                         <div className="w-20 h-20 shrink-0 flex items-center justify-center p-1 bg-white rounded-xl border border-gray-200 shadow-sm">
-                            <img
-                                src={logoUrl || defaultInvoiceLogo}
-                                alt="Invoice Logo"
-                                className={`max-w-full max-h-full ${logoSettings.shape === 'circle' ? 'rounded-full object-cover' : 'object-contain'}`}
-                            />
+                            {logoUrl ? (
+                                <img
+                                    src={logoUrl}
+                                    alt="Invoice Logo"
+                                    className={`max-w-full max-h-full ${logoSettings.shape === 'circle' ? 'rounded-full object-cover' : 'object-contain'}`}
+                                />
+                            ) : (
+                                <div className="w-14 h-14 bg-[#014A36] rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                    LOGO
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex-1 text-center sm:text-left">
@@ -161,11 +172,11 @@ const SystemSettings = () => {
                             <p className="text-xs text-gray-500 mb-2">
                                 {logoUrl 
                                     ? `Custom logo active (${logoSettings.shape} style, ${logoSettings.size} size)` 
-                                    : 'Default permanent system logo active'}
+                                    : 'Default dark green circle placeholder currently in use'}
                             </p>
-                            <div className="inline-flex items-center gap-2 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md">
-                                <Sparkles size={12} />
-                                Synchronized with Sales Invoices, Sales Orders & Purchase Orders
+                            <div className="inline-flex items-center gap-2 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                                <Sparkles size={12} className="text-emerald-600" />
+                                {logoUrl ? "Fixed Permanent Default: Automatically applied to all Invoices, SOs & POs" : "Synchronized with Sales Invoices, Sales Orders & Purchase Orders"}
                             </div>
                         </div>
 
@@ -189,7 +200,11 @@ const SystemSettings = () => {
                 onLogoUpdated={(data) => {
                     const resolved = data.logoUrl ? (data.logoUrl.startsWith('data:') ? data.logoUrl : getImageUrl(data.logoUrl)) : null;
                     setLogoUrl(resolved);
-                    if (data.settings) setLogoSettings(data.settings);
+                    setFixedCompanyLogo(resolved);
+                    if (data.settings) {
+                        setLogoSettings(data.settings);
+                        saveLocalLogoSettings(data.settings);
+                    }
                 }}
             />
         </div>

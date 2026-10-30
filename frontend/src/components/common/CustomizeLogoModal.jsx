@@ -1,9 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, UploadCloud, Trash2, Check, Image as ImageIcon, RotateCcw, AlertCircle, Sparkles } from 'lucide-react';
+import { X, UploadCloud, Trash2, Check, Image as ImageIcon, RotateCcw, AlertCircle, Sparkles, ShieldCheck, Lock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { uploadInvoiceLogo, removeInvoiceLogo, getLocalLogoSettings, saveLocalLogoSettings } from '@/services/businessService';
+import { 
+    uploadInvoiceLogo, 
+    removeInvoiceLogo, 
+    getLocalLogoSettings, 
+    saveLocalLogoSettings,
+    setFixedCompanyLogo,
+    getFixedCompanyLogo
+} from '@/services/businessService';
 import { getImageUrl } from '@/utils/url';
-import defaultInvoiceLogo from '@/assets/images/bizdrona_logo.png';
 
 const CustomizeLogoModal = ({
     isOpen,
@@ -33,7 +39,7 @@ const CustomizeLogoModal = ({
             if (currentLogoUrl) {
                 setPreviewUrl(currentLogoUrl.startsWith('data:') ? currentLogoUrl : getImageUrl(currentLogoUrl));
             } else {
-                const cached = localStorage.getItem('custom_invoice_logo');
+                const cached = getFixedCompanyLogo();
                 setPreviewUrl(cached ? (cached.startsWith('data:') ? cached : getImageUrl(cached)) : null);
             }
         }
@@ -76,27 +82,30 @@ const CustomizeLogoModal = ({
         setIsSaving(true);
         try {
             let finalUrl = previewUrl;
+            const newSettings = { shape, size, isFixedDefault: true };
 
             if (selectedFile) {
-                const res = await uploadInvoiceLogo(selectedFile);
+                const res = await uploadInvoiceLogo(selectedFile, null, newSettings);
                 if (res?.logoUrl) {
                     finalUrl = res.logoUrl;
                 }
             } else if (previewUrl && previewUrl.startsWith('data:')) {
-                const res = await uploadInvoiceLogo(null, previewUrl);
+                const res = await uploadInvoiceLogo(null, previewUrl, newSettings);
                 if (res?.logoUrl) {
                     finalUrl = res.logoUrl;
                 }
+            } else {
+                // Settings update on existing logo
+                await uploadInvoiceLogo(null, previewUrl, newSettings);
             }
 
-            // Save settings locally
-            const newSettings = { shape, size };
+            // Save settings locally as permanent default
             saveLocalLogoSettings(newSettings);
             if (previewUrl) {
-                localStorage.setItem('custom_invoice_logo', previewUrl);
+                setFixedCompanyLogo(previewUrl);
             }
 
-            toast.success('Invoice logo customized successfully!');
+            toast.success('Logo saved and permanently fixed as default for all invoices!');
             if (onLogoUpdated) {
                 onLogoUpdated({
                     logoUrl: previewUrl,
@@ -107,12 +116,12 @@ const CustomizeLogoModal = ({
             onClose();
         } catch (error) {
             console.error('Failed to save logo:', error);
-            // If API fails due to network, save locally anyway for instant invoice customization
+            // Even if network fails, permanently lock locally
             if (previewUrl) {
-                localStorage.setItem('custom_invoice_logo', previewUrl);
-                const newSettings = { shape, size };
+                const newSettings = { shape, size, isFixedDefault: true };
+                setFixedCompanyLogo(previewUrl);
                 saveLocalLogoSettings(newSettings);
-                toast.success('Logo applied to your invoices locally!');
+                toast.success('Logo permanently fixed as default for your invoices!');
                 if (onLogoUpdated) {
                     onLogoUpdated({
                         logoUrl: previewUrl,
@@ -135,12 +144,12 @@ const CustomizeLogoModal = ({
         } catch (err) {
             console.warn('Backend removal warning (proceeding with local reset):', err);
         }
-        localStorage.removeItem('custom_invoice_logo');
-        const defaultSettings = { shape: 'contain', size: 'md' };
+        setFixedCompanyLogo(null);
+        const defaultSettings = { shape: 'contain', size: 'md', isFixedDefault: false };
         saveLocalLogoSettings(defaultSettings);
         setSelectedFile(null);
         setPreviewUrl(null);
-        toast.success('Invoice logo reset to default placeholder.');
+        toast.success('Fixed logo removed. Restored default placeholder.');
         if (onLogoUpdated) {
             onLogoUpdated({
                 logoUrl: null,
@@ -184,8 +193,13 @@ const CustomizeLogoModal = ({
                             <ImageIcon size={18} className="text-emerald-300" />
                         </div>
                         <div>
-                            <h2 className="text-[17px] font-bold leading-tight">Customize Invoice Logo</h2>
-                            <p className="text-[12px] text-emerald-100/80">Personalize the header logo printed on your invoices</p>
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-[17px] font-bold leading-tight">Customize Invoice Logo</h2>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-200 text-[11px] font-semibold border border-emerald-400/30">
+                                    <ShieldCheck size={12} /> Fixed Default
+                                </span>
+                            </div>
+                            <p className="text-[12px] text-emerald-100/80">Sets the permanent company logo on all invoices & orders</p>
                         </div>
                     </div>
                     <button 
@@ -211,13 +225,19 @@ const CustomizeLogoModal = ({
                         <div className="p-4 border-2 border-black rounded-lg bg-white shadow-sm">
                             <div className="border border-black p-3 relative flex items-center justify-center min-h-[75px]">
                                 <div className="absolute left-4 flex items-center justify-center">
-                                        <div className={getLogoContainerClass()}>
+                                    <div className={getLogoContainerClass()}>
+                                        {previewUrl ? (
                                             <img
-                                                src={previewUrl || defaultInvoiceLogo}
+                                                src={previewUrl}
                                                 alt="Invoice Logo"
                                                 className={`w-full h-full ${shape === 'contain' ? 'object-contain' : 'object-cover'}`}
                                             />
-                                        </div>
+                                        ) : (
+                                            <div className="w-14 h-14 bg-[#014A36] rounded-full flex items-center justify-center text-white text-xs font-bold shadow-inner">
+                                                LOGO
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <h3 className="text-[18px] font-black uppercase text-center tracking-wide text-gray-900 ml-16 truncate max-w-[280px]">
                                     {shopName || "COMPANY NAME"}
@@ -322,10 +342,10 @@ const CustomizeLogoModal = ({
                     </div>
 
                     {/* Information Note */}
-                    <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-start gap-2.5 text-[12px] text-amber-800">
-                        <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-600" />
+                    <div className="p-3.5 bg-emerald-50 border border-emerald-200/90 rounded-xl flex items-start gap-3 text-[12px] text-emerald-950 leading-relaxed shadow-sm">
+                        <ShieldCheck size={20} className="shrink-0 mt-0.5 text-emerald-700" />
                         <div>
-                            This custom logo will be automatically applied to all your generated <strong>Invoices</strong>, <strong>Sales Orders</strong>, and <strong>Purchase Orders</strong>.
+                            <strong>Permanent Fixed Default:</strong> Once added and saved, this logo is automatically fixed as the permanent default on all your future <strong>Invoices</strong>, <strong>Sales Orders</strong>, and <strong>Purchase Orders</strong> across the system.
                         </div>
                     </div>
                 </div>
@@ -363,12 +383,12 @@ const CustomizeLogoModal = ({
                             {isSaving ? (
                                 <>
                                     <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    Saving...
+                                    Saving & Fixing as Default...
                                 </>
                             ) : (
                                 <>
                                     <Check size={14} />
-                                    Apply & Save Logo
+                                    Save as Permanent Default Logo
                                 </>
                             )}
                         </button>

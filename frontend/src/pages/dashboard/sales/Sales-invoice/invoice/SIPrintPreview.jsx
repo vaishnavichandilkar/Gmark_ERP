@@ -9,8 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { formatDate } from '@/utils/dateUtils';
 import CustomizeLogoModal from '@/components/common/CustomizeLogoModal';
 import { getImageUrl } from '@/utils/url';
-import { getLocalLogoSettings } from '@/services/businessService';
-import defaultLogo from '@/assets/images/bizdrona_logo.png';
+import { getLocalLogoSettings, getFixedCompanyLogo, setFixedCompanyLogo, saveLocalLogoSettings } from '@/services/businessService';
 
 const SIPrintPreview = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -44,10 +43,21 @@ const SIPrintPreview = () => {
             try {
                 const response = await axiosInstance.get('/business/profile');
                 if (response.data) {
-                    const { shopDetail, phone, email, websiteUrl, gstNumber, logoUrl: serverLogoUrl } = response.data;
+                    const { shopDetail, phone, email, websiteUrl, gstNumber, logoUrl: serverLogoUrl, logoSettings: serverSettings } = response.data;
                     const fullGst = gstNumber || shopDetail?.gstNumber || "";
-                    const rawLogo = serverLogoUrl || localStorage.getItem('custom_invoice_logo') || null;
+                    const rawLogo = serverLogoUrl || getFixedCompanyLogo() || null;
                     const finalLogo = rawLogo ? (rawLogo.startsWith('data:') ? rawLogo : getImageUrl(rawLogo)) : null;
+
+                    if (finalLogo) {
+                        setFixedCompanyLogo(finalLogo);
+                        // Preload logo image
+                        const img = new Image();
+                        img.src = finalLogo;
+                    }
+                    if (serverSettings) {
+                        setLogoSettings(serverSettings);
+                        saveLocalLogoSettings(serverSettings);
+                    }
 
                     setSellerInfo({
                         shopName: shopDetail?.shopName || "ARDHYA AGRO SERVICE",
@@ -63,7 +73,7 @@ const SIPrintPreview = () => {
                 }
             } catch (error) {
                 console.error("Error fetching seller profile:", error);
-                const cachedLogo = localStorage.getItem('custom_invoice_logo');
+                const cachedLogo = getFixedCompanyLogo();
                 if (cachedLogo) {
                     setSellerInfo(prev => prev ? { ...prev, logoUrl: cachedLogo.startsWith('data:') ? cachedLogo : getImageUrl(cachedLogo) } : prev);
                 }
@@ -547,20 +557,26 @@ const SIPrintPreview = () => {
                                                 className={`absolute left-6 flex items-center justify-center ${!isDownloading ? 'cursor-pointer group' : ''}`}
                                                 title={!isDownloading ? "Click to customize logo" : undefined}
                                             >
-                                                <div className={`flex items-center justify-center transition-all ${
-                                                    logoSettings?.size === 'sm' ? 'w-[44px] h-[44px]' : logoSettings?.size === 'lg' ? 'w-[68px] h-[68px]' : 'w-[56px] h-[56px]'
-                                                } ${
-                                                    logoSettings?.shape === 'circle' ? 'rounded-full overflow-hidden border border-gray-300 bg-white shadow-sm' : 
-                                                    logoSettings?.shape === 'rounded' ? 'rounded-xl overflow-hidden border border-gray-300 bg-white shadow-sm' : 
-                                                    'bg-transparent'
-                                                }`}>
-                                                    <img 
-                                                        src={sellerInfo?.logoUrl || defaultLogo} 
-                                                        alt="Invoice Logo" 
-                                                        className={`w-full h-full ${logoSettings?.shape === 'contain' ? 'object-contain' : 'object-cover'}`}
-                                                        crossOrigin="anonymous"
-                                                    />
-                                                </div>
+                                                {sellerInfo?.logoUrl ? (
+                                                    <div className={`flex items-center justify-center transition-all ${
+                                                        logoSettings?.size === 'sm' ? 'w-[44px] h-[44px]' : logoSettings?.size === 'lg' ? 'w-[68px] h-[68px]' : 'w-[56px] h-[56px]'
+                                                    } ${
+                                                        logoSettings?.shape === 'circle' ? 'rounded-full overflow-hidden border border-gray-300 bg-white' : 
+                                                        logoSettings?.shape === 'rounded' ? 'rounded-xl overflow-hidden border border-gray-300 bg-white' : 
+                                                        'bg-transparent'
+                                                    }`}>
+                                                        <img 
+                                                            src={sellerInfo.logoUrl} 
+                                                            alt="Logo" 
+                                                            className={`w-full h-full ${logoSettings?.shape === 'contain' ? 'object-contain' : 'object-cover'}`}
+                                                            crossOrigin="anonymous"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-14 h-14 bg-[#014A36] rounded-full flex items-center justify-center text-white text-[11px] font-black uppercase shadow-inner">
+                                                        LOGO
+                                                    </div>
+                                                )}
                                                 {!isDownloading && (
                                                     <span className="no-print absolute -bottom-1 -right-1 w-5 h-5 bg-[#073318] text-white rounded-full flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <Edit2 size={10} />
