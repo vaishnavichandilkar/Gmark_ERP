@@ -18,11 +18,16 @@ async function bootstrap() {
     const app = await NestFactory.create(AppModule);
 
     // Static Assets
-    app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
+    app.use('/uploads', (req, res, next) => {
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        next();
+    }, express.static(join(process.cwd(), 'uploads')));
 
     // Secure HTTP Headers
     app.use(helmet({
         crossOriginEmbedderPolicy: false,
+        crossOriginResourcePolicy: { policy: "cross-origin" },
         contentSecurityPolicy: false, // Turn off CSP if swagger docs are served
     }));
 

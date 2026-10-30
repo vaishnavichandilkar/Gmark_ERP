@@ -29,9 +29,14 @@ export class BusinessService {
             doc => doc.type === 'GST' && doc.url === 'N/A' && isValidGst(doc.name)
         );
         
+        const logoDoc = user.sellerDocuments.find(
+            doc => doc.category === 'INVOICE_LOGO'
+        );
+
         return {
             ...user,
-            gstNumber: gstDoc ? gstDoc.name : null
+            gstNumber: gstDoc ? gstDoc.name : null,
+            logoUrl: logoDoc ? logoDoc.url : null
         };
     }
 
@@ -112,5 +117,62 @@ export class BusinessService {
                 isApproved: isApproved
             }
         });
+    }
+
+    async updateInvoiceLogo(userId: number, file?: Express.Multer.File, customUrl?: string) {
+        const sellerProfile = await this.prisma.sellerProfile.findUnique({ where: { userId } });
+        
+        let logoUrl = customUrl;
+        let originalName = 'Invoice Logo';
+        let fileSize = 0;
+
+        if (file) {
+            logoUrl = file.path.replace(/\\/g, '/');
+            originalName = file.originalname;
+            fileSize = file.size;
+        }
+
+        if (!logoUrl) {
+            throw new BadRequestException('Logo file or URL is required');
+        }
+
+        // Delete existing logo document if any
+        await this.prisma.sellerDocument.deleteMany({
+            where: {
+                uploadedByUserId: userId,
+                category: 'INVOICE_LOGO'
+            }
+        });
+
+        // Create new seller document
+        const doc = await this.prisma.sellerDocument.create({
+            data: {
+                profileId: sellerProfile?.id || null,
+                uploadedByUserId: userId,
+                type: 'OTHER',
+                category: 'INVOICE_LOGO',
+                url: logoUrl,
+                name: originalName,
+                size: BigInt(fileSize)
+            }
+        });
+
+        return {
+            message: 'Invoice logo updated successfully',
+            logoUrl: doc.url
+        };
+    }
+
+    async removeInvoiceLogo(userId: number) {
+        await this.prisma.sellerDocument.deleteMany({
+            where: {
+                uploadedByUserId: userId,
+                category: 'INVOICE_LOGO'
+            }
+        });
+
+        return {
+            message: 'Invoice logo removed successfully'
+        };
     }
 }

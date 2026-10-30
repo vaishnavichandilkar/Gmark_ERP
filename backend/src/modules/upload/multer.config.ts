@@ -27,6 +27,8 @@ export const multerConfig = {
                 finalPath = join(uploadBase, 'purchase-invoices');
             } else if (req.url.includes('/sales-orders')) {
                 finalPath = join(uploadBase, 'sales-orders');
+            } else if (req.url.includes('/business')) {
+                finalPath = join(uploadBase, 'business');
             } else {
                 // Fallback or other upload paths
                 finalPath = uploadBase;
@@ -49,7 +51,7 @@ export const multerConfig = {
     }),
     fileFilter: (req, file, cb) => {
         // Accept images and PDFs
-        if (file.mimetype.match(/\/(jpg|jpeg|png|pdf)$/)) {
+        if (file.mimetype.match(/\/(jpg|jpeg|png|pdf|webp|svg\+xml)$/)) {
             cb(null, true);
         } else {
             cb(new HttpException('Unsupported file type. Only PDF and Image files are allowed.', HttpStatus.BAD_REQUEST), false);
