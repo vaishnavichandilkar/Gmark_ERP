@@ -3,35 +3,76 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AuthLayout from '../../layout/auth/AuthLayout';
 import Button from '../../components/common/Button';
+import { ArrowLeft } from 'lucide-react';
 import logo from '../../assets/images/bizdrona_logo.png';
+import { getSafeUser } from '../../utils/user';
 
 const LanguageSelection = () => {
     const { t, i18n } = useTranslation('auth');
     const navigate = useNavigate();
-    const [selectedLang, setSelectedLang] = useState('hi');
+
+    // If already logged in, redirect to appropriate dashboard
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        const refreshToken = localStorage.getItem('refreshToken');
+        const user = getSafeUser();
+
+        if ((token || refreshToken) && user?.role) {
+            const role = (user.role || '').toString().toUpperCase();
+            if (role === 'SUPERADMIN') {
+                navigate('/superadmin/dashboard', { replace: true });
+                return;
+            }
+            if (role === 'SELLER') {
+                if (user.approvalStatus !== 'APPROVED' || user.isFirstApprovalLogin) {
+                    navigate('/application-status', { replace: true });
+                    return;
+                }
+                navigate('/seller/reports', { replace: true });
+                return;
+            }
+        }
+    }, [navigate]);
+
+    // Default to 'en' (English), or previously chosen language
+    const [selectedLang, setSelectedLang] = useState(() => {
+        return localStorage.getItem('selectedLanguage') || 'en';
+    });
+
+    useEffect(() => {
+        const initialLang = localStorage.getItem('selectedLanguage') || 'en';
+        if (i18n.language !== initialLang) {
+            i18n.changeLanguage(initialLang);
+        }
+    }, [i18n]);
 
     const languages = [
-        { code: 'mr', name: t('language_selection.marathi.name'), desc: t('language_selection.marathi.description') },
-        { code: 'hi', name: t('language_selection.hindi.name'), desc: t('language_selection.hindi.description') },
-        { code: 'en', name: t('language_selection.english.name'), desc: t('language_selection.english.description') }
+        { code: 'en', name: t('language_selection.english.name') || 'English', desc: t('language_selection.english.description') || 'Simplify business management, improve efficiency' },
+        { code: 'hi', name: t('language_selection.hindi.name') || 'हिंदी', desc: t('language_selection.hindi.description') || 'व्यवसाय प्रबंधन को सरल बनाएं, कार्यक्षमता बढ़ाएं' },
+        { code: 'mr', name: t('language_selection.marathi.name') || 'मराठी', desc: t('language_selection.marathi.description') || 'व्यवसाय व्यवस्थापन सुलभ, कार्यक्षमतेला नवी दिशा' }
     ];
 
     const handleAccept = () => {
-        if (selectedLang) {
-            i18n.changeLanguage(selectedLang);
-            localStorage.setItem('selectedLanguage', selectedLang);
-            localStorage.setItem('i18nextLng', selectedLang);
-            // We set a flag to indicate language is confirmed for this "session"
-            // To handle "clear on server restart", we would ideally check a server-side timestamp.
-            // For now, we'll store it in localStorage as requested for persistence across browser closes.
-            localStorage.setItem('languageConfirmed', 'true');
-            navigate('/landing');
-        }
+        const lang = selectedLang || 'en';
+        i18n.changeLanguage(lang);
+        localStorage.setItem('selectedLanguage', lang);
+        localStorage.setItem('i18nextLng', lang);
+        localStorage.setItem('languageConfirmed', 'true');
+        navigate('/landing');
     };
 
     return (
         <AuthLayout maxWidth="max-w-[550px]">
             <div className="flex flex-col items-start w-full">
+                {/* Back button to landing */}
+                <button
+                    onClick={() => navigate('/landing')}
+                    aria-label="Back to landing"
+                    className="p-2 -ml-2 mb-2 text-gray-900 rounded-full hover:bg-gray-100 transition-colors cursor-pointer border-none bg-transparent flex items-center justify-center self-start focus:outline-none"
+                >
+                    <ArrowLeft size={20} />
+                </button>
+
                 <img
                     src={logo}
                     alt="ERP Logo"

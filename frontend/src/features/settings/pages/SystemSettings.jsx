@@ -55,6 +55,7 @@ const SystemSettings = () => {
             // 2. Update LocalStorage
             localStorage.setItem('selectedLanguage', langCode);
             localStorage.setItem('i18nextLng', langCode);
+            localStorage.setItem('languageConfirmed', 'true');
 
             // 3. Update UI
             i18n.changeLanguage(langCode);

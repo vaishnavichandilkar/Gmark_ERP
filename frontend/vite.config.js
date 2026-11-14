@@ -19,6 +19,7 @@ export default defineConfig({
     },
   },
   server: {
+    port: 5174,
     host: true,
     allowedHosts: true,
     proxy: {
@@ -28,6 +29,9 @@ export default defineConfig({
         secure: false,
       },
     },
+  },
+  preview: {
+    port: 5174,
   },
   build: {
     chunkSizeWarningLimit: 600,

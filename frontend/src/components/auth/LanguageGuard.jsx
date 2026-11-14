@@ -1,36 +1,15 @@
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { getSafeUser } from '../../utils/user';
+import { Outlet } from 'react-router-dom';
 
 const LanguageGuard = () => {
-    const location = useLocation();
-
-    const isLanguageSelected = localStorage.getItem('languageConfirmed') === 'true';
-    const isSelectionPage = location.pathname === '/language-selection';
-
-    const user = getSafeUser();
-    console.log('LanguageGuard: Status', { 
-        isLanguageSelected, 
-        isSelectionPage, 
-        path: location.pathname,
-        token: localStorage.getItem('token') ? 'PRESENT' : 'MISSING',
-        refreshToken: localStorage.getItem('refreshToken') ? 'PRESENT' : 'MISSING',
-        userRole: user.role,
-        userApprovalStatus: user.approvalStatus,
-        isFirstApprovalLogin: user.isFirstApprovalLogin,
-        userStringified: JSON.stringify(user)
-    });
-
-    // If language is not selected and we're not on the selection page, redirect to selection
-    if (!isLanguageSelected && !isSelectionPage) {
-        return <Navigate to="/language-selection" replace />;
+    // Default to English and mark language confirmed if not present
+    if (!localStorage.getItem('languageConfirmed')) {
+        localStorage.setItem('languageConfirmed', 'true');
+    }
+    if (!localStorage.getItem('selectedLanguage')) {
+        localStorage.setItem('selectedLanguage', 'en');
     }
 
-    // If language is already selected and we try to go to selection page, go to landing
-    if (isLanguageSelected && isSelectionPage) {
-        return <Navigate to="/landing" replace />;
-    }
-
-    return <Outlet context={{ isLanguageSelected }} />;
+    return <Outlet context={{ isLanguageSelected: true }} />;
 };
 
 export default LanguageGuard;

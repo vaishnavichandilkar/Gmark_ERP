@@ -28,8 +28,12 @@ const SuperAdminLayout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
-        localStorage.removeItem('languageConfirmed');
-        navigate('/login', { replace: true });
+        localStorage.removeItem('sessionId');
+        localStorage.setItem('languageConfirmed', 'true');
+        if (!localStorage.getItem('selectedLanguage')) {
+            localStorage.setItem('selectedLanguage', 'en');
+        }
+        navigate('/landing', { replace: true });
     };
 
     const handleNavigation = (path) => {

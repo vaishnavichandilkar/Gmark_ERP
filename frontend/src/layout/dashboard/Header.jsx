@@ -292,13 +292,17 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
                 onClose={() => setIsLogoutOpen(false)}
                 onConfirm={() => {
                     setIsLogoutOpen(false);
-                    // Clear tokens and user data
+                    // Clear tokens and user data (preserve chosen language)
                     localStorage.removeItem('token');
                     localStorage.removeItem('refreshToken');
                     localStorage.removeItem('user');
-                    localStorage.removeItem('languageConfirmed');
-                    // Redirect to landing page
-                    navigate('/');
+                    localStorage.removeItem('sessionId');
+                    localStorage.setItem('languageConfirmed', 'true');
+                    if (!localStorage.getItem('selectedLanguage')) {
+                        localStorage.setItem('selectedLanguage', 'en');
+                    }
+                    // Redirect directly to landing page
+                    navigate('/landing', { replace: true });
                 }}
             />
 

@@ -24,11 +24,6 @@ const Landing = () => {
         }
     }, [location]);
 
-    const handleBackToLanguage = () => {
-        localStorage.removeItem('languageConfirmed');
-        navigate('/language-selection');
-    };
-
     return (
         <AuthLayout>
             {/* Success Popup */}
@@ -66,9 +61,10 @@ const Landing = () => {
             )}
 
             <div className="text-left w-full min-h-0 flex flex-col box-border pt-0">
-                {/* Back Button */}
+                {/* Back button to choose language again */}
                 <button
-                    onClick={handleBackToLanguage}
+                    onClick={() => navigate('/language-selection')}
+                    aria-label="Change Language"
                     className="p-2 -ml-2 mb-2 text-gray-900 rounded-full hover:bg-gray-100 transition-colors cursor-pointer border-none bg-transparent flex items-center justify-center self-start focus:outline-none"
                 >
                     <ArrowLeft size={20} />
