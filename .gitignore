@@ -27,3 +27,4 @@ frontend/.env
 backend/.env
 .env
 backend/src/prisma/migrations
+uploads/

@@ -48,18 +48,68 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
         return '';
     };
 
-    const getRowOptions = (filterMode) => {
-        if (filterMode === 'Customer' || filterMode === 'Supplier') {
-            return [...customers, ...suppliers];
+    const isDirectOrIndirectExpense = (acc) => {
+        if (!acc) return false;
+        const groups = Array.isArray(acc.groupName) ? acc.groupName : (acc.groupName ? [acc.groupName] : []);
+        const hasExpenseGroup = groups.some(g => {
+            const lower = String(g).trim().toLowerCase().replace(/_/g, ' ');
+            return lower === 'direct expense' || 
+                   lower === 'direct expenses' || 
+                   lower === 'indirect expense' || 
+                   lower === 'indirect expenses';
+        });
+        if (hasExpenseGroup) return true;
+
+        const nameLower = String(acc.accountName || acc.ledgerName || '').trim().toLowerCase().replace(/_/g, ' ');
+        if (nameLower === 'direct expense' || nameLower === 'direct expenses' ||
+            nameLower === 'indirect expense' || nameLower === 'indirect expenses') {
+            return true;
         }
-        if (filterMode === 'BankCash') {
-            if (type === 'Contra' && formData.bankCashLedgerId) {
+
+        const typeLower = String(acc.accountType || '').trim().toLowerCase().replace(/_/g, ' ');
+        if (typeLower === 'direct expense' || typeLower === 'indirect expense') {
+            return true;
+        }
+
+        return false;
+    };
+
+    const getRowOptions = (filterMode) => {
+        if (type === 'Contra' || filterMode === 'BankCash') {
+            if (formData.bankCashLedgerId) {
                 return bankCashOptions.filter(opt => Number(opt.id) !== Number(formData.bankCashLedgerId));
             }
             return bankCashOptions;
         }
-        if (filterMode === 'All') return allActiveAccounts;
-        return [...customers, ...suppliers];
+
+        if (type === 'Journal') {
+            return allActiveAccounts;
+        }
+
+        // For Receipt and Payment vouchers:
+        // Show all account groups EXCEPT Direct Expense and Indirect Expense
+        const combined = [...allActiveAccounts, ...customers, ...suppliers];
+        const seen = new Set();
+        const result = [];
+
+        for (const opt of combined) {
+            if (!opt) continue;
+            const uniqueKey = `${opt.id}-${opt.accountType || 'LEDGER'}`;
+            if (seen.has(uniqueKey)) continue;
+            seen.add(uniqueKey);
+
+            // Exclude Direct Expense and Indirect Expense
+            if (isDirectOrIndirectExpense(opt)) continue;
+
+            // Exclude currently selected Bank/Cash account
+            if (formData.bankCashLedgerId && Number(opt.id) === Number(formData.bankCashLedgerId)) {
+                continue;
+            }
+
+            result.push(opt);
+        }
+
+        return result;
     };
 
     const paymentModeOptions = [
@@ -74,25 +124,24 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Fetch Bank/Cash accounts
-                const bankCashRes = await voucherService.getBankCashAccounts();
+                // Fetch Bank/Cash accounts and all active accounts concurrently
+                const [bankCashRes, allActiveRes, customersRes, suppliersRes] = await Promise.all([
+                    voucherService.getBankCashAccounts(),
+                    voucherService.getActiveAccounts(),
+                    voucherService.getCustomers(),
+                    voucherService.getSuppliers()
+                ]);
                 setBankCashOptions(bankCashRes || []);
-                
+                setAllActiveAccounts(allActiveRes || []);
+                setCustomers(customersRes || []);
+                setSuppliers(suppliersRes || []);
+
                 let initialLedgerId = '';
                 if (type === 'Journal') {
-                    const allActiveRes = await voucherService.getActiveAccounts();
-                    setAllActiveAccounts(allActiveRes || []);
                     if (allActiveRes?.length > 0) {
                         initialLedgerId = allActiveRes[0].id;
                     }
                 } else {
-                    // Fetch both Customer and Supplier accounts concurrently
-                    const [customersRes, suppliersRes] = await Promise.all([
-                        voucherService.getCustomers(),
-                        voucherService.getSuppliers()
-                    ]);
-                    setCustomers(customersRes || []);
-                    setSuppliers(suppliersRes || []);
                     if (bankCashRes?.length > 0) {
                         initialLedgerId = bankCashRes[0].id;
                     }
@@ -301,7 +350,7 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
     const handleAmountClick = (entry) => {
         if (type === 'Contra' || type === 'Journal') return;
         if (!entry.accountId) {
-            toast.error(`Please select a ${type === 'Receipt' ? 'Customer' : 'Supplier'} first`);
+            toast.error('Please select an account first');
             return;
         }
         setActiveEntryId(entry.id);
@@ -561,42 +610,52 @@ const PaymentModal = ({ isOpen, onClose, type = 'Payment', initialData = null })
                                                         value={entry.accountId}
                                                         options={getRowOptions(entry.filterMode)}
                                                         onChange={(id, name) => handleEntryChange(entry.id, 'accountId', id, { accountName: name })}
-                                                        placeholder={type === 'Contra' ? "Search Bank/Cash Account..." : (type === 'Journal' ? "Search Account (2nd Party)..." : "Search Customer/Supplier...")}
+                                                        placeholder={type === 'Contra' ? "Search Bank/Cash Account..." : (type === 'Journal' ? "Search Account (2nd Party)..." : "Search Account...")}
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <input 
-                                                        type="number"
-                                                        placeholder="0.00"
-                                                        value={entry.amount}
-                                                        readOnly={type !== 'Contra' && type !== 'Journal' && entry.settlementType === 'AGAINST_REFERENCE'}
-                                                        onClick={(type !== 'Contra' && type !== 'Journal' && (!entry.settlementType || entry.settlementType === 'AGAINST_REFERENCE')) ? () => handleAmountClick(entry) : undefined}
-                                                        onChange={(e) => handleEntryChange(entry.id, 'amount', e.target.value)}
-                                                        className={`w-full h-10 px-3 border border-transparent rounded-lg outline-none text-[14px] text-right font-bold text-[#073318] transition-all ${
-                                                            (type === 'Contra' || type === 'Journal')
-                                                            ? 'bg-[#F9FAFB] focus:bg-white focus:border-[#073318]'
-                                                            : entry.settlementType === 'AGAINST_REFERENCE'
-                                                            ? 'bg-[#073318]/5 border-[#073318]/20 cursor-pointer hover:bg-[#073318]/10' 
-                                                            : entry.settlementType
-                                                            ? 'bg-[#073318]/5 border-[#073318]/20 focus:bg-white focus:border-[#073318]'
-                                                            : 'bg-[#F9FAFB] focus:bg-white focus:border-[#073318]'
-                                                        }`}
-                                                        required
-                                                    />
-                                                    {type !== 'Contra' && type !== 'Journal' && entry.settlementType && (
-                                                        <div 
-                                                            onClick={() => handleAmountClick(entry)}
-                                                            className="text-[10px] text-gray-500 mt-1 font-semibold text-right leading-tight max-w-[200px] ml-auto cursor-pointer hover:text-[#073318] transition-colors"
-                                                            title="Click to edit settlement details"
-                                                        >
-                                                            <span className="text-[#073318] capitalize font-bold block">
-                                                                {entry.settlementType.toLowerCase().replace('_', ' ')}
-                                                            </span>
-                                                            <span className="block truncate" title={entry.settlementSummary}>
-                                                                {entry.settlementSummary}
-                                                            </span>
-                                                        </div>
-                                                    )}
+                                                    {(() => {
+                                                        const accType = entry.accountId ? String(entry.accountId).split('-')[1] : '';
+                                                        const isPartyWithInvoices = accType === 'CUSTOMER' || accType === 'SUPPLIER';
+                                                        const isAgRef = entry.settlementType === 'AGAINST_REFERENCE';
+
+                                                        return (
+                                                            <>
+                                                                <input 
+                                                                    type="number"
+                                                                    placeholder="0.00"
+                                                                    value={entry.amount}
+                                                                    readOnly={type !== 'Contra' && type !== 'Journal' && isPartyWithInvoices && isAgRef}
+                                                                    onClick={(type !== 'Contra' && type !== 'Journal' && isPartyWithInvoices && (!entry.settlementType || isAgRef)) ? () => handleAmountClick(entry) : undefined}
+                                                                    onChange={(e) => handleEntryChange(entry.id, 'amount', e.target.value)}
+                                                                    className={`w-full h-10 px-3 border border-transparent rounded-lg outline-none text-[14px] text-right font-bold text-[#073318] transition-all ${
+                                                                        (type === 'Contra' || type === 'Journal' || !isPartyWithInvoices)
+                                                                        ? 'bg-[#F9FAFB] focus:bg-white focus:border-[#073318]'
+                                                                        : isAgRef
+                                                                        ? 'bg-[#073318]/5 border-[#073318]/20 cursor-pointer hover:bg-[#073318]/10' 
+                                                                        : entry.settlementType
+                                                                        ? 'bg-[#073318]/5 border-[#073318]/20 focus:bg-white focus:border-[#073318]'
+                                                                        : 'bg-[#F9FAFB] focus:bg-white focus:border-[#073318]'
+                                                                    }`}
+                                                                    required
+                                                                />
+                                                                {type !== 'Contra' && type !== 'Journal' && entry.settlementType && (
+                                                                    <div 
+                                                                        onClick={() => handleAmountClick(entry)}
+                                                                        className="text-[10px] text-gray-500 mt-1 font-semibold text-right leading-tight max-w-[200px] ml-auto cursor-pointer hover:text-[#073318] transition-colors"
+                                                                        title="Click to edit settlement details"
+                                                                    >
+                                                                        <span className="text-[#073318] capitalize font-bold block">
+                                                                            {entry.settlementType.toLowerCase().replace('_', ' ')}
+                                                                        </span>
+                                                                        <span className="block truncate" title={entry.settlementSummary}>
+                                                                            {entry.settlementSummary}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        );
+                                                    })()}
                                                 </td>
                                                 <td className="px-2 text-center">
                                                     {formData.entries.length > 1 && (
