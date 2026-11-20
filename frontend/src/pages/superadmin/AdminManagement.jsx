@@ -31,7 +31,9 @@ const AdminManagement = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
+  const [newPassword, setNewPassword] = useState('Admin@123');
   
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -160,6 +162,31 @@ const AdminManagement = () => {
       fetchAdmins();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to activate admin');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!selectedAdmin) return;
+    if (!newPassword.trim()) {
+      toast.error('Please enter a new password');
+      return;
+    }
+    try {
+      setActionLoading(true);
+      await axios.post(
+        `${API_BASE_URL}/superadmin/admins/${selectedAdmin.id}/reset-password`,
+        { password: newPassword.trim() },
+        getHeaders()
+      );
+      toast.success(`Password updated for ${selectedAdmin.name || selectedAdmin.username || 'Admin'}!`);
+      setShowResetPasswordModal(false);
+      setSelectedAdmin(null);
+      setNewPassword('Admin@123');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to reset password');
     } finally {
       setActionLoading(false);
     }
@@ -315,6 +342,7 @@ const AdminManagement = () => {
                         </div>
                         <div>
                           <div className="font-bold text-[#111827]">{admin.name || 'N/A'}</div>
+                          <div className="text-xs text-[#15803D] font-medium">Username: <span className="font-bold text-[#111827]">{admin.username || admin.phone || 'admin'}</span></div>
                           <div className="text-xs text-[#6B7280]">ID: #{admin.id}</div>
                         </div>
                       </div>
@@ -399,6 +427,20 @@ const AdminManagement = () => {
                           Activate
                         </button>
                       )}
+
+                      <button
+                        onClick={() => {
+                          setSelectedAdmin(admin);
+                          setNewPassword('Admin@123');
+                          setShowResetPasswordModal(true);
+                        }}
+                        disabled={actionLoading}
+                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1 cursor-pointer"
+                        title="Reset Admin Password"
+                      >
+                        <Lock size={12} />
+                        Password
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -540,6 +582,59 @@ const AdminManagement = () => {
                 {actionLoading ? 'Rejecting...' : 'Reject Application'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Modal: Reset Password */}
+      {showResetPasswordModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#E5E7EB]">
+            <h2 className="text-xl font-bold text-[#073318] mb-2 flex items-center gap-2">
+              <Lock className="text-[#073318]" />
+              Reset Admin Password
+            </h2>
+            <div className="p-3 bg-gray-50 rounded-xl mb-4 text-xs space-y-1">
+              <div><span className="text-[#6B7280]">Admin:</span> <span className="font-bold text-[#111827]">{selectedAdmin?.name}</span></div>
+              <div><span className="text-[#6B7280]">Username:</span> <span className="font-bold text-[#073318]">{selectedAdmin?.username || selectedAdmin?.phone || 'admin'}</span></div>
+              <div><span className="text-[#6B7280]">Email / Phone:</span> <span className="font-medium text-[#111827]">{selectedAdmin?.email} / {selectedAdmin?.phone}</span></div>
+            </div>
+
+            <form onSubmit={handleResetPassword}>
+              <div>
+                <label className="block text-xs font-bold text-[#374151] uppercase mb-1">New Password *</label>
+                <input
+                  type="text"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password (e.g. Admin@123)"
+                  className="w-full p-3 bg-[#F9FAFB] border border-[#D1D5DB] rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#073318] focus:outline-none"
+                />
+                <p className="text-[11px] text-[#6B7280] mt-1.5">
+                  The admin will be able to log in immediately with their username and this password.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 mt-4 border-t border-[#E5E7EB]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResetPasswordModal(false);
+                    setSelectedAdmin(null);
+                  }}
+                  className="px-4 py-2 text-sm font-bold text-[#4B5563] hover:bg-[#F3F4F6] rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading || !newPassword.trim()}
+                  className="px-5 py-2 bg-[#073318] hover:bg-[#0b4d24] text-white rounded-xl text-sm font-bold transition-all shadow-md disabled:opacity-50"
+                >
+                  {actionLoading ? 'Saving...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

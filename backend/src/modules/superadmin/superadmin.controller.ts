@@ -99,4 +99,11 @@ export class SuperAdminController {
         if (req.user.role !== 'SUPERADMIN') throw new ForbiddenException('Only Super Admin can access this resource');
         return this.superAdminService.getAdminUsers(Number(id));
     }
+
+    @Post('admins/:id/reset-password')
+    @ApiOperation({ summary: 'Reset password of an Admin' })
+    async resetAdminPassword(@Request() req, @Param('id') id: string, @Body() body: { password?: string }) {
+        if (req.user.role !== 'SUPERADMIN') throw new ForbiddenException('Only Super Admin can access this resource');
+        return this.superAdminService.resetAdminPassword(Number(id), body?.password);
+    }
 }

@@ -32,7 +32,19 @@ async function bootstrap() {
     // Secure CORS
     const corsOrigin = process.env.CORS_ORIGIN;
     app.enableCors({
-        origin: corsOrigin ? corsOrigin.split(',') : true,
+        origin: (origin, callback) => {
+            // Allow requests with no origin or any localhost / 127.0.0.1 port
+            if (!origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+                return callback(null, true);
+            }
+            if (corsOrigin) {
+                const allowed = corsOrigin.split(',').map((o) => o.trim());
+                if (allowed.includes(origin) || allowed.includes('*')) {
+                    return callback(null, true);
+                }
+            }
+            callback(null, true);
+        },
         credentials: true,
         methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
         allowedHeaders: 'Content-Type,Accept,Authorization,x-session-id,ngrok-skip-browser-warning',
@@ -61,7 +73,7 @@ async function bootstrap() {
     setupSwagger(app);
 
     const configService = app.get(ConfigService);
-    const port = configService.get('PORT') || configService.get('port') || 3002;
+    const port = configService.get('PORT') || configService.get('port') || 3003;
     await app.listen(port);
     console.log(`Application is running on: http://localhost:${port}`);
     console.log(`Swagger Docs available at: http://localhost:${port}${process.env.SWAGGER_PATH || '/api/docs'}`);

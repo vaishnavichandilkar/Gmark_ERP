@@ -1,10 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
 
     // 2. Seed System Admin (Superadmin)
     const adminPhone = '1111111111';
+    const superadminPassword = await bcrypt.hash('Admin@123', 10);
     const existingAdmin = await prisma.user.findUnique({
         where: { phone: adminPhone }
     });
@@ -15,6 +17,8 @@ async function main() {
                 first_name: 'System',
                 last_name: 'Admin',
                 phone: adminPhone,
+                username: 'superadmin',
+                passwordHash: superadminPassword,
                 email: 'admin@weighpro.com',
                 role: 'superadmin',
                 isApproved: true,
@@ -29,6 +33,8 @@ async function main() {
             where: { phone: adminPhone },
             data: {
                 role: 'superadmin',
+                username: 'superadmin',
+                passwordHash: superadminPassword,
                 isApproved: true,
                 approvalStatus: 'APPROVED',
                 isFirstApprovalLogin: false,

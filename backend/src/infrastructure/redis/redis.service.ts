@@ -4,11 +4,17 @@ import Redis from 'ioredis';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
-    private client: Redis;
+    private client: Redis | null = null;
 
     constructor(private configService: ConfigService) {}
 
     onModuleInit() {
+        const enableRedis = this.configService.get<string>('ENABLE_REDIS');
+        if (enableRedis === 'false') {
+            console.log('[Redis] ENABLE_REDIS is false. Running in offline fallback mode.');
+            return;
+        }
+
         const host = this.configService.get<string>('REDIS_HOST') || '127.0.0.1';
         const port = this.configService.get<number>('REDIS_PORT') || 6379;
         const password = this.configService.get<string>('REDIS_PASSWORD') || undefined;
@@ -20,25 +26,30 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
             maxRetriesPerRequest: null,
             lazyConnect: true,
             retryStrategy(times) {
-                // Limit retries to 3 times to prevent log spam in local development
-                if (times > 3) {
+                // If Redis is offline, avoid repeated connection attempts in development
+                if (times > 1) {
                     return null; 
                 }
-                return Math.min(times * 1000, 3000);
+                return 1000;
             }
         });
 
-        this.client.on('error', (err) => {
-            // Silence ECONNREFUSED to prevent console pollution when Redis is offline
-            if (err.message && err.message.includes('ECONNREFUSED')) {
+        this.client.on('error', (err: any) => {
+            // Silence ECONNREFUSED and AggregateError to prevent console pollution when Redis is offline
+            const isConnRefused = 
+                err?.code === 'ECONNREFUSED' ||
+                err?.message?.includes('ECONNREFUSED') ||
+                (Array.isArray(err?.errors) && err.errors.some((e: any) => e?.code === 'ECONNREFUSED' || e?.message?.includes('ECONNREFUSED')));
+
+            if (isConnRefused) {
                 return;
             }
             console.error('Redis connection error:', err);
         });
 
-        this.client.connect().catch((err) => {
+        this.client.connect().catch(() => {
             // Soft warning, offline mode fallback
-            console.warn('Redis failed to connect. Running in offline fallback mode.');
+            console.warn('[Redis] Redis not connected. Running in offline fallback mode.');
         });
     }
 
@@ -48,7 +59,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
-    getClient(): Redis {
+    getClient(): Redis | null {
         return this.client;
     }
 

@@ -340,6 +340,7 @@ export class SuperAdminService {
         return admins.map(admin => ({
             id: admin.id,
             name: `${admin.first_name || ''} ${admin.last_name || ''}`.trim() || admin.phone || admin.username || 'Admin',
+            username: admin.username,
             email: admin.email,
             phone: admin.phone,
             shopName: admin.shopDetail?.shopName || 'N/A',
@@ -427,6 +428,17 @@ export class SuperAdminService {
             data: { approvalStatus: 'APPROVED', status: 'ACTIVE', isApproved: true }
         });
         return { message: 'Admin account activated successfully' };
+    }
+
+    async resetAdminPassword(adminId: number, newPassword?: string) {
+        const passwordToSet = newPassword?.trim() || 'Admin@123';
+        const bcrypt = await import('bcrypt');
+        const passwordHash = await bcrypt.hash(passwordToSet, 10);
+        await this.prisma.user.update({
+            where: { id: adminId },
+            data: { passwordHash }
+        });
+        return { message: 'Password reset successfully', newPassword: passwordToSet };
     }
 
     async deactivateAdmin(adminId: number) {
