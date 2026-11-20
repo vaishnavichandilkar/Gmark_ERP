@@ -344,7 +344,6 @@ export class SalesInvoiceService {
       return candidate;
     }
   }
-  }
 
   async generateCustomerInvoiceNumber(userId: number, tx?: any): Promise<string> {
     const client = tx || this.prisma;

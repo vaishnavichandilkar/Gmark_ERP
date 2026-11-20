@@ -1892,60 +1892,6 @@ export class ReportsService {
 
     const hasDateFilter = Boolean(fromDateObj || toDateObj);
 
-    const [l1Groups, l2SubGroups, l3SubSubGroups, l4SubSubSubGroups, l5SubSubSubSubGroups] = await Promise.all([
-      this.prisma.group.findMany({ select: { id: true, group_name: true, parent_id: true } }),
-      this.prisma.subGroup.findMany({ select: { id: true, subgroup_name: true, group_id: true } }),
-      this.prisma.subSubGroup.findMany({ select: { id: true, name: true, sub_group_id: true } }),
-      this.prisma.subSubSubGroup.findMany({ select: { id: true, name: true, sub_sub_group_id: true } }),
-      this.prisma.subSubSubSubGroup.findMany({ select: { id: true, name: true, sub_sub_sub_group_id: true } }),
-    ]);
-
-    const groupParentMap = new Map<string, string>();
-    const l1Map = new Map<number, any>(l1Groups.map((g) => [g.id, g]));
-    for (const g of l1Groups) {
-      if (g.parent_id && l1Map.has(g.parent_id)) {
-        groupParentMap.set(g.group_name.trim().toLowerCase(), l1Map.get(g.parent_id).group_name);
-      }
-    }
-    for (const sg of l2SubGroups) {
-      if (l1Map.has(sg.group_id)) {
-        groupParentMap.set(sg.subgroup_name.trim().toLowerCase(), l1Map.get(sg.group_id).group_name);
-      }
-    }
-    const l2Map = new Map<number, any>(l2SubGroups.map((sg) => [sg.id, sg]));
-    for (const ssg of l3SubSubGroups) {
-      if (l2Map.has(ssg.sub_group_id)) {
-        groupParentMap.set(ssg.name.trim().toLowerCase(), l2Map.get(ssg.sub_group_id).subgroup_name);
-      }
-    }
-    const l3Map = new Map<number, any>(l3SubSubGroups.map((sssg) => [sssg.id, sssg]));
-    for (const sssg of l4SubSubSubGroups) {
-      if (l3Map.has(sssg.sub_sub_group_id)) {
-        groupParentMap.set(sssg.name.trim().toLowerCase(), l3Map.get(sssg.sub_sub_group_id).name);
-      }
-    }
-    const l4Map = new Map<number, any>(l4SubSubSubGroups.map((sssg) => [sssg.id, sssg]));
-    for (const sssssg of l5SubSubSubSubGroups) {
-      if (l4Map.has(sssssg.sub_sub_sub_group_id)) {
-        groupParentMap.set(sssssg.name.trim().toLowerCase(), l4Map.get(sssssg.sub_sub_sub_group_id).name);
-      }
-    }
-
-    const resolveAncestors = (groupNameStr: string): string[] => {
-      const ancestors: string[] = [groupNameStr];
-      let curr = groupNameStr.trim().toLowerCase();
-      const visited = new Set<string>([curr]);
-      while (groupParentMap.has(curr)) {
-        const parentName = groupParentMap.get(curr)!;
-        const parentLower = parentName.trim().toLowerCase();
-        if (visited.has(parentLower)) break;
-        visited.add(parentLower);
-        ancestors.unshift(parentName);
-        curr = parentLower;
-      }
-      return ancestors;
-    };
-
     accounts.forEach((account) => {
       const rawGroups = account.groupName || [];
       const expandedGroups = new Set<string>();

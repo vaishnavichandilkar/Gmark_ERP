@@ -63,7 +63,6 @@ export class PurchaseOrderService {
       return candidate;
     }
   }
-  }
 
   async getSupplierDetails(supplierId: number, userId: number) {
     const supplier = await this.prisma.accountMaster.findFirst({
