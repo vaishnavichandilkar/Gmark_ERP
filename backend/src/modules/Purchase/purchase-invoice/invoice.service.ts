@@ -5,7 +5,7 @@ import { Prisma, PIStatus, TransactionType, BalanceType } from '@prisma/client';
 import { PurchaseOrderService } from '../purchase-order/purchase-order.service';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
-import { formatDate } from '../../../utils/dateFormatter';
+import { formatDate, parseDDMMYYYY } from '../../../utils/dateFormatter';
 import { isValidGst, determinePurchaseGst } from '../../../common/utils/gst.helper';
 import { generatePISampleExcel } from '../../../common/utils/procurement-bulk-import.processor';
 import { TransactionService } from '../../Finance/transaction.service';
@@ -223,22 +223,23 @@ export class PurchaseInvoiceService {
 
   async generateInvoiceNumber(userId: number): Promise<string> {
     const invoices = await this.prisma.purchaseInvoice.findMany({
-      where: { userId, invoiceNumber: { startsWith: 'INV-' } },
+      where: { userId },
       select: { invoiceNumber: true },
     });
 
-    let maxNumber = 0;
+    let maxNum = 0;
     for (const inv of invoices) {
-      const match = inv.invoiceNumber.match(/(\d+)$/);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > maxNumber) {
-          maxNumber = num;
+      if (!inv.invoiceNumber) continue;
+      const matches = inv.invoiceNumber.match(/\d+/g);
+      if (matches) {
+        const num = parseInt(matches[matches.length - 1], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
         }
       }
     }
 
-    let nextNumber = maxNumber + 1;
+    let nextNumber = maxNum + 1;
     let candidate = `INV-${nextNumber.toString().padStart(4, '0')}`;
 
     while (await this.prisma.purchaseInvoice.findFirst({ where: { userId, invoiceNumber: candidate } })) {
@@ -382,8 +383,16 @@ export class PurchaseInvoiceService {
   }
 
   async create(createDto: CreatePurchaseInvoiceDto, userId: number, uploadedFilePath?: string) {
-    let invoiceNumber = createDto.invoiceNumber;
-    if (!invoiceNumber || await this.prisma.purchaseInvoice.findFirst({ where: { userId, invoiceNumber } })) {
+    let invoiceNumber = createDto.invoiceNumber ? createDto.invoiceNumber.trim() : '';
+
+    if (invoiceNumber) {
+      const existing = await this.prisma.purchaseInvoice.findFirst({
+        where: { userId, invoiceNumber },
+      });
+      if (existing) {
+        invoiceNumber = await this.generateInvoiceNumber(userId);
+      }
+    } else {
       invoiceNumber = await this.generateInvoiceNumber(userId);
     }
 
@@ -605,10 +614,10 @@ export class PurchaseInvoiceService {
       const inv = await tx.purchaseInvoice.create({
         data: {
           invoiceNumber: invoiceNumber,
-          bookingDate: createDto.bookingDate ? new Date(createDto.bookingDate) : new Date(),
-          invoiceDate: createDto.invoiceDate ? new Date(createDto.invoiceDate) : new Date(),
+          bookingDate: parseDDMMYYYY(createDto.bookingDate) || new Date(),
+          invoiceDate: parseDDMMYYYY(createDto.invoiceDate) || new Date(),
           supplierInvoiceNumber: createDto.supplierInvoiceNumber,
-          supplierInvoiceDate: createDto.invoiceDate ? new Date(createDto.invoiceDate) : new Date(),
+          supplierInvoiceDate: parseDDMMYYYY(createDto.invoiceDate) || new Date(),
           supplierId: supplier.id,
           supplierName: supplier.accountName,
           address: createDto.address,

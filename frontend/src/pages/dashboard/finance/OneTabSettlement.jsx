@@ -324,8 +324,7 @@ const OneTabSettlement = ({ activeSubTab }) => {
         for (const [idStr, val] of Object.entries(invoiceSelections)) {
             if (!val.checked) continue;
             const amt = parseFloat(val.amount);
-            const id = Number(idStr);
-            const originalInv = invoiceList.find(i => i.id === id);
+            const originalInv = invoiceList.find(i => String(i.id) === String(idStr));
             const maxVal = originalInv ? originalInv.balanceAmt : 0;
 
             if (isNaN(amt) || amt <= 0) {
@@ -333,7 +332,7 @@ const OneTabSettlement = ({ activeSubTab }) => {
                 return;
             }
             if (amt > maxVal) {
-                toast.error(`Settle amount for invoice ${originalInv?.refNo || id} cannot exceed outstanding balance of ₹${maxVal}`);
+                toast.error(`Settle amount for invoice ${originalInv?.refNo || idStr} cannot exceed outstanding balance of ₹${maxVal}`);
                 return;
             }
 
@@ -353,8 +352,7 @@ const OneTabSettlement = ({ activeSubTab }) => {
         for (const [idStr, val] of Object.entries(matchingSelections)) {
             if (!val.checked) continue;
             const amt = parseFloat(val.amount);
-            const id = Number(idStr);
-            const originalMatch = matchingList.find(m => m.id === id);
+            const originalMatch = matchingList.find(m => String(m.id) === String(idStr));
             const maxVal = originalMatch ? originalMatch.balanceAmt : 0;
 
             if (isNaN(amt) || amt <= 0) {
@@ -362,14 +360,14 @@ const OneTabSettlement = ({ activeSubTab }) => {
                 return;
             }
             if (amt > maxVal) {
-                toast.error(`Settle amount for unapplied record ${originalMatch?.refNo || id} cannot exceed balance of ₹${maxVal}`);
+                toast.error(`Settle amount for unapplied record ${originalMatch?.refNo || idStr} cannot exceed balance of ₹${maxVal}`);
                 return;
             }
 
-            if (originalMatch && originalMatch.settlementId) {
+            if (originalMatch && (originalMatch.settlementId || originalMatch.voucherId)) {
                 invoiceSettlements.push({
                     voucherId: originalMatch.voucherId,
-                    settlementId: originalMatch.settlementId,
+                    settlementId: originalMatch.settlementId || null,
                     settlementType: 'ABSORB_VOUCHER',
                     settledAmount: amt
                 });

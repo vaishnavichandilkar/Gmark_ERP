@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AuthLayout from '../../layout/auth/AuthLayout';
-import logo from '../../assets/images/ERP_Logo2.png';
+import logo from '../../assets/images/bizdrona_logo.png';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { loginWithPasswordApi } from '../../services/authService';
 import { handleLoginSuccess } from '../../utils/authUtils';
@@ -112,7 +112,7 @@ const SignIn = () => {
 
                 <img
                     src={logo}
-                    alt="ERP Logo"
+                    alt="BizDrona ERP Logo"
                     className="h-18 w-auto mb-2 md:mb-4 block object-contain self-start"
                     onError={(e) => { e.target.style.display = 'none'; }}
                 />

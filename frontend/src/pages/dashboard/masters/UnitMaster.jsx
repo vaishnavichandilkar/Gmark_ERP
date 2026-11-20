@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Search, Download, Upload, Plus, Filter, MoreVertical, X, FileText, FileSpreadsheet, Eye, FileEdit, ArrowLeft, ArrowRight, ChevronsUpDown, CheckCircle2, RefreshCw, ChevronDown, Database } from 'lucide-react';
+import { Search, Download, Upload, Plus, Filter, MoreVertical, X, FileText, FileSpreadsheet, Eye, FileEdit, ArrowLeft, ArrowRight, ChevronsLeft, ChevronsRight, ChevronsUpDown, CheckCircle2, RefreshCw, ChevronDown, Database } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import UnitForm from './components/UnitForm';
 import unitService from '../../../services/masters/unitService';
@@ -643,8 +643,17 @@ const UnitMaster = () => {
                                 </span>
                                 <div className="flex items-center gap-1">
                                     <button
+                                        onClick={() => handlePageChange(1)}
+                                        disabled={currentPage === 1}
+                                        title="First Page"
+                                        className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+                                    >
+                                        <ChevronsLeft size={16} />
+                                    </button>
+                                    <button
                                         onClick={() => handlePageChange(currentPage - 1)}
                                         disabled={currentPage === 1}
+                                        title="Previous Page"
                                         className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
                                     >
                                         <ArrowLeft size={16} />
@@ -667,9 +676,18 @@ const UnitMaster = () => {
                                     <button
                                         onClick={() => handlePageChange(currentPage + 1)}
                                         disabled={currentPage === totalPages || totalPages === 0}
+                                        title="Next Page"
                                         className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
                                     >
                                         <ArrowRight size={16} />
+                                    </button>
+                                    <button
+                                        onClick={() => handlePageChange(totalPages)}
+                                        disabled={currentPage === totalPages || totalPages === 0}
+                                        title="Last Page"
+                                        className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+                                    >
+                                        <ChevronsRight size={16} />
                                     </button>
                                 </div>
                             </div>

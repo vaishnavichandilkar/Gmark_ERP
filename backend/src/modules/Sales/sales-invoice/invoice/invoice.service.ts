@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, HttpException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
 import { CreateSalesInvoiceDto, UpdateSalesInvoiceDto, SalesInvoiceStatus } from './dto/invoice.dto';
 import { TransactionType, BalanceType } from '@prisma/client';
@@ -13,6 +13,8 @@ import { ImportValidationService } from '../../../../common/services/import-vali
 
 @Injectable()
 export class SalesInvoiceService {
+  private readonly logger = new Logger(SalesInvoiceService.name);
+
   constructor(
     private prisma: PrismaService,
     private soService: SalesOrderService,
@@ -303,38 +305,49 @@ export class SalesInvoiceService {
     });
   }
 
-  async generateInvoiceNumber(userId: number): Promise<string> {
-    const invoices = await this.prisma.salesInvoice.findMany({
-      where: { 
-        userId,
-        invoiceNumber: { startsWith: 'SINV-' } 
-      },
-      select: { invoiceNumber: true },
-    });
-
-    let maxNumber = 0;
-    for (const inv of invoices) {
-      const match = inv.invoiceNumber.match(/(\d+)$/);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > maxNumber) {
-          maxNumber = num;
+  async generateInvoiceNumber(userId: number, tx?: any): Promise<string> {
+    const client = tx || this.prisma;
+    try {
+      const res = await client.$queryRaw`
+        SELECT COALESCE(MAX(NULLIF(regexp_replace("invoiceNumber", '^SINV-', ''), '')::INTEGER), 0) AS max_num
+        FROM "sales_invoices"
+        WHERE "userId" = ${userId} AND "invoiceNumber" ~ '^SINV-[0-9]+$'
+      `;
+      const max = res && res[0] && res[0].max_num !== null ? Number(res[0].max_num) : 0;
+      let nextNumber = max + 1;
+      let candidate = `SINV-${nextNumber.toString().padStart(4, '0')}`;
+      while (await client.salesInvoice.findFirst({ where: { userId, invoiceNumber: candidate } })) {
+        nextNumber++;
+        candidate = `SINV-${nextNumber.toString().padStart(4, '0')}`;
+      }
+      return candidate;
+    } catch {
+      // Fallback for non-postgres or test environments
+      const invoices = await client.salesInvoice.findMany({
+        where: { userId, invoiceNumber: { startsWith: 'SINV-' } },
+        select: { invoiceNumber: true },
+      });
+      let maxNum = 0;
+      for (const inv of invoices) {
+        if (!inv.invoiceNumber) continue;
+        const num = parseInt(inv.invoiceNumber.replace(/^SINV-/, ''), 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
         }
       }
+      let nextNumber = maxNum + 1;
+      let candidate = `SINV-${nextNumber.toString().padStart(4, '0')}`;
+      while (await client.salesInvoice.findFirst({ where: { userId, invoiceNumber: candidate } })) {
+        nextNumber++;
+        candidate = `SINV-${nextNumber.toString().padStart(4, '0')}`;
+      }
+      return candidate;
     }
-
-    let nextNumber = maxNumber + 1;
-    let candidate = `SINV-${nextNumber.toString().padStart(4, '0')}`;
-
-    while (await this.prisma.salesInvoice.findFirst({ where: { userId, invoiceNumber: candidate } })) {
-      nextNumber++;
-      candidate = `SINV-${nextNumber.toString().padStart(4, '0')}`;
-    }
-
-    return candidate;
+  }
   }
 
-  async generateCustomerInvoiceNumber(userId: number): Promise<string> {
+  async generateCustomerInvoiceNumber(userId: number, tx?: any): Promise<string> {
+    const client = tx || this.prisma;
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1; // 1-12
@@ -349,35 +362,48 @@ export class SalesInvoiceService {
     }
     const fyString = `${startYear}-${endYear.toString().slice(-2)}`;
 
-    const invoices = await this.prisma.salesInvoice.findMany({
-      where: {
-        userId,
-        customerInvoiceNumber: { startsWith: `${fyString}/` }
-      },
-      select: { customerInvoiceNumber: true }
-    });
-
-    let maxNumber = 0;
-    for (const inv of invoices) {
-      if (inv.customerInvoiceNumber) {
+    try {
+      const pattern = `^${fyString}/[0-9]+$`;
+      const prefix = `${fyString}/`;
+      const res = await client.$queryRaw`
+        SELECT COALESCE(MAX(NULLIF(regexp_replace("customerInvoiceNumber", '^' || ${prefix}, ''), '')::INTEGER), 0) AS max_num
+        FROM "sales_invoices"
+        WHERE "userId" = ${userId} AND "customerInvoiceNumber" ~ ${pattern}
+      `;
+      const max = res && res[0] && res[0].max_num !== null ? Number(res[0].max_num) : 0;
+      let nextNumber = max + 1;
+      let candidate = `${fyString}/${nextNumber.toString().padStart(4, '0')}`;
+      while (await client.salesInvoice.findFirst({ where: { userId, customerInvoiceNumber: candidate } })) {
+        nextNumber++;
+        candidate = `${fyString}/${nextNumber.toString().padStart(4, '0')}`;
+      }
+      return candidate;
+    } catch {
+      // Fallback for non-postgres or test environments
+      const invoices = await client.salesInvoice.findMany({
+        where: {
+          userId,
+          customerInvoiceNumber: { startsWith: `${fyString}/` }
+        },
+        select: { customerInvoiceNumber: true }
+      });
+      let maxNum = 0;
+      for (const inv of invoices) {
+        if (!inv.customerInvoiceNumber) continue;
         const parts = inv.customerInvoiceNumber.split('/');
-        const lastNumStr = parts[parts.length - 1];
-        const num = parseInt(lastNumStr, 10);
-        if (!isNaN(num) && num > maxNumber) {
-          maxNumber = num;
+        const num = parseInt(parts[parts.length - 1], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
         }
       }
+      let nextNumber = maxNum + 1;
+      let candidate = `${fyString}/${nextNumber.toString().padStart(4, '0')}`;
+      while (await client.salesInvoice.findFirst({ where: { userId, customerInvoiceNumber: candidate } })) {
+        nextNumber++;
+        candidate = `${fyString}/${nextNumber.toString().padStart(4, '0')}`;
+      }
+      return candidate;
     }
-
-    let nextNumber = maxNumber + 1;
-    let candidate = `${fyString}/${nextNumber.toString().padStart(4, '0')}`;
-
-    while (await this.prisma.salesInvoice.findFirst({ where: { userId, customerInvoiceNumber: candidate } })) {
-      nextNumber++;
-      candidate = `${fyString}/${nextNumber.toString().padStart(4, '0')}`;
-    }
-
-    return candidate;
   }
 
   private async validateInvoiceDate(
@@ -722,11 +748,9 @@ export class SalesInvoiceService {
         await this.updateCompletionStatusesAfterInvoice(inv.id, tx);
         return inv;
       });
-    } catch (e) {
-      const fs = require('fs');
-      fs.appendFileSync('D:\\USERS\\vaishnavi\\Desktop\\weighting_scale\\backend\\service_error.log', `[${new Date().toISOString()}] CREATE ERROR: ${e.message}\n${e.stack}\n\n`);
-      if (e.code === 'P2002' && e.meta && e.meta.target.includes('invoiceNumber')) {
-        const { BadRequestException } = require('@nestjs/common');
+    } catch (e: any) {
+      this.logger.error(`Failed to create sales invoice: ${e?.message || e}`, e?.stack);
+      if (e.code === 'P2002' && e.meta && (Array.isArray(e.meta.target) ? e.meta.target.includes('invoiceNumber') : (typeof e.meta.target === 'string' && e.meta.target.includes('invoiceNumber')))) {
         throw new BadRequestException('Invoice number already exists. Please generate a new invoice number.');
       }
       throw e;
@@ -1113,10 +1137,11 @@ export class SalesInvoiceService {
       return inv;
     });
     } catch (e: any) {
-      const fs = require('fs');
-      fs.appendFileSync('./service_error.log', `[${new Date().toISOString()}] UPDATE ERROR: ${e.message}\n${e.stack}\n\n`);
-      console.error("Error in updateSalesInvoice:", e);
-      throw new BadRequestException("Failed to update Sales Invoice: " + e.message);
+      this.logger.error(`Failed to update sales invoice: ${e?.message || e}`, e?.stack);
+      if (e instanceof HttpException) {
+        throw e;
+      }
+      throw new BadRequestException("Failed to update Sales Invoice: " + (e?.message || 'Unknown error'));
     }
   }
 
@@ -1124,7 +1149,7 @@ export class SalesInvoiceService {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.salesInvoice.findUnique({
         where: { id, userId },
-        select: { invoiceNumber: true }
+        select: { invoiceNumber: true, customerInvoiceNumber: true }
       });
       if (!existing) {
         throw new BadRequestException("Sales Invoice not found");
@@ -1139,13 +1164,16 @@ export class SalesInvoiceService {
       });
 
       // Synchronize with Ledger: Remove transaction on deletion
-      await tx.transaction.deleteMany({
-        where: {
-          userId,
-          invoiceNumber: invoice.customerInvoiceNumber || invoice.invoiceNumber,
-          transactionType: TransactionType.Sales,
-        }
-      });
+      const deleteNumbers = [existing.invoiceNumber, existing.customerInvoiceNumber].filter(Boolean) as string[];
+      if (deleteNumbers.length > 0) {
+        await tx.transaction.deleteMany({
+          where: {
+            userId,
+            invoiceNumber: { in: deleteNumbers },
+            transactionType: TransactionType.Sales,
+          }
+        });
+      }
 
       await this.updateCompletionStatusesAfterInvoice(id, tx);
       return invoice;
@@ -2019,14 +2047,14 @@ export class SalesInvoiceService {
   }
 
   private async syncLedgerTransactions(invoice: any, userId: number, tx: any) {
-    const invNo = invoice.customerInvoiceNumber || invoice.invoiceNumber;
-    if (!invNo) return;
+    const invNumbers = [invoice.invoiceNumber, invoice.customerInvoiceNumber].filter(Boolean) as string[];
+    if (invNumbers.length === 0) return;
 
     // 1. Delete all existing transactions for this sales invoice
     await tx.transaction.deleteMany({
       where: {
         userId,
-        invoiceNumber: invNo,
+        invoiceNumber: { in: invNumbers },
         transactionType: TransactionType.Sales,
       }
     });
@@ -2044,6 +2072,7 @@ export class SalesInvoiceService {
 
     // 2. Debit Customer (if customerId or matched customer account exists)
     if (custId) {
+      const invNo = invoice.customerInvoiceNumber || invoice.invoiceNumber;
       await tx.transaction.create({
         data: {
           accountId: custId,

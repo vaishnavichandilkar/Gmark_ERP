@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { MoreVertical, X, Eye, Users, BookOpen, Download, Search, FileText, FileSpreadsheet, RotateCcw, ChevronLeft, ChevronRight, Plus, Minus, Landmark, Trash2, ChevronDown, XSquare, Upload, UploadCloud, Check, Maximize2, Minimize2 } from 'lucide-react';
+import { MoreVertical, X, Eye, Users, BookOpen, Download, Search, FileText, FileSpreadsheet, RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Minus, Landmark, Trash2, ChevronDown, XSquare, Upload, UploadCloud, Check, Maximize2, Minimize2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import CustomSelect from '../../../components/common/CustomSelect';
 import jsPDF from 'jspdf';
@@ -17,6 +17,7 @@ import ledgerService from '../../../services/ledgerService';
 import voucherService from '../../../services/voucherService';
 import masterService from '../../../services/masterService';
 import PaymentModal from '../../../components/common/PaymentModal';
+import ImportModal from '@/pages/dashboard/masters/components/ImportModal';
 import OneTabSettlement from './OneTabSettlement';
 import DateInput from '@/components/common/DateInput';
 import { toDisplayDate, toIsoDate, formatDate } from '@/utils/dateUtils';
@@ -1377,41 +1378,205 @@ const Finance = () => {
         throw new Error(`Invalid Date '${dateStr}'. Date must follow DD/MM/YYYY format.`);
     };
 
-    const downloadBase64File = (base64Data, fileName) => {
-        if (!base64Data) return;
-        const link = document.createElement('a');
-        link.href = base64Data;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
+const handleSubmitImport = async (formData) => {
+        const file = formData.get('file');
+        if (!file) throw new Error("No file selected.");
 
-    const handleSubmitImport = async () => {
-        if (!selectedImportFile) return;
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const data = evt.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
 
-        setLoading(true);
-        setImportResult(null);
-        try {
-            const res = await voucherService.importBankReconciliation(selectedImportFile, activeSubTab);
-            setImportResult(res);
+                    if (activeSubTab === 'Receipts' && sheetName === 'Payments Template') {
+                        return reject(new Error("You are attempting to import a Payments template under the Receipts section. Please upload the Receipts template."));
+                    }
 
-            if (res.successCount > 0 && res.errorCount === 0) {
-                toast.success(`Successfully imported ${res.successCount} bank reconciliation entries!`);
-                fetchVouchers();
-            } else if (res.successCount > 0 && res.errorCount > 0) {
-                toast.success(`Import completed: ${res.successCount} successful (On Account), ${res.errorCount} failed.`);
-                fetchVouchers();
-            } else if (res.errorCount > 0) {
-                toast.error(`Import completed with errors. Download Error File for details.`);
-            }
-        } catch (err) {
-            console.error("Failed to import bank reconciliation entries:", err);
-            const errMsg = err.response?.data?.message || err.message || "Failed to process import file.";
-            toast.error(Array.isArray(errMsg) ? errMsg[0] : errMsg);
-        } finally {
-            setLoading(false);
-        }
+                    if (activeSubTab === 'Payments' && sheetName === 'Receipts Template') {
+                        return reject(new Error("You are attempting to import a Receipts template under the Payments section. Please upload the Payments template."));
+                    }
+
+                    if (json.length === 0) {
+                        return reject(new Error("Excel sheet is empty."));
+                    }
+
+                    const [bankCashRes, customersRes, suppliersRes, activeAccountsRes] = await Promise.all([
+                        voucherService.getBankCashAccounts(),
+                        voucherService.getCustomers(),
+                        voucherService.getSuppliers(),
+                        voucherService.getActiveAccounts()
+                    ]);
+
+                    const allAccounts = [...customersRes, ...suppliersRes];
+
+                    let successCount = 0;
+                    let errorCount = 0;
+                    const errorsList = [];
+                    const errorRows = [];
+                    const successRows = [];
+
+                    for (let i = 0; i < json.length; i++) {
+                        const row = json[i];
+                        const dateVal = row['Date (DD/MM/YYYY)*'] || row['Date (DD/MM/YYYY)'] || row['date (dd/mm/yyyy)'] || row['Date'] || row['date'];
+                        const accountNameVal = row['Account Name*'] || row['Account Name'] || row['account name'] || row['Account'] || row['account'] || row['Account (2nd Party)*'] || row['Account (2nd Party)'];
+                        const bankCashNameVal = row['Bank/Cash Account*'] || row['Bank/Cash Account'] || row['bank/cash account'] || row['Bank/Cash'] || row['bank/cash'] || row['Bank'] || row['bank'] || row['Cash'] || row['cash'] || row['Account (First Party)*'] || row['Account (First Party)'] || row['Bank/Cash (Receiver)*'] || row['Bank/Cash (Receiver)'] || row['Account (1st Party)*'] || row['Account (1st Party)'];
+                        const amountVal = row['Amount*'] || row['Amount'] || row['amount'];
+                        const paymentModeVal = row['Payment Mode*'] || row['Payment Mode'] || row['payment mode'] || row['Mode'] || row['mode'];
+                        const narrationVal = row['Narration'] || row['narration'] || '';
+
+                        let rowError = null;
+                        const isReceiptOrPayment = activeSubTab === 'Receipts' || activeSubTab === 'Payments';
+
+                        if (isReceiptOrPayment) {
+                            if (!dateVal || !accountNameVal || !bankCashNameVal || !amountVal || !paymentModeVal) {
+                                rowError = "Missing required fields. Date, Account Name, Bank/Cash Account, Amount, and Payment Mode are compulsory.";
+                            }
+                        } else {
+                            if (!dateVal || !accountNameVal || !bankCashNameVal || !amountVal) {
+                                rowError = "Missing required fields (Date, Accounts, or Amount).";
+                            }
+                        }
+
+                        if (rowError) {
+                            errorCount++;
+                            errorsList.push({ row: i + 2, error: rowError });
+                            errorRows.push({ ...row, 'Error Message': rowError });
+                            continue;
+                        }
+
+                        const bankCashList = activeSubTab === 'JV' ? (activeAccountsRes || []) : bankCashRes;
+                        const matchedBank = bankCashList.find(b => 
+                            (b.ledgerName || b.accountName || b.name || '').toLowerCase().trim() === String(bankCashNameVal).toLowerCase().trim()
+                        );
+                        if (!matchedBank) {
+                            rowError = `${activeSubTab === 'JV' ? 'First party account' : 'Bank/Cash account'} '${bankCashNameVal}' not found`;
+                            errorCount++;
+                            errorsList.push({ row: i + 2, error: rowError });
+                            errorRows.push({ ...row, 'Error Message': rowError });
+                            continue;
+                        }
+
+                        const targetAccounts = activeSubTab === 'JV' ? (activeAccountsRes || []) : allAccounts;
+                        const matchedAccount = targetAccounts.find(a => 
+                            (a.accountName || a.ledgerName || a.name || '').toLowerCase().trim() === String(accountNameVal).toLowerCase().trim()
+                        );
+                        if (!matchedAccount) {
+                            rowError = `Account '${accountNameVal}' not found`;
+                            errorCount++;
+                            errorsList.push({ row: i + 2, error: rowError });
+                            errorRows.push({ ...row, 'Error Message': rowError });
+                            continue;
+                        }
+
+                        let formattedDate;
+                        try {
+                            formattedDate = parseExcelDate(dateVal);
+                        } catch {
+                            rowError = `Invalid date format '${dateVal}'`;
+                            errorCount++;
+                            errorsList.push({ row: i + 2, error: rowError });
+                            errorRows.push({ ...row, 'Error Message': rowError });
+                            continue;
+                        }
+
+                        const amt = parseFloat(amountVal);
+                        if (isNaN(amt) || amt <= 0) {
+                            rowError = "Amount must be a positive number";
+                            errorCount++;
+                            errorsList.push({ row: i + 2, error: rowError });
+                            errorRows.push({ ...row, 'Error Message': rowError });
+                            continue;
+                        }
+
+                        let mode = 'NET_BANKING';
+                        if (paymentModeVal) {
+                            const rawMode = String(paymentModeVal || '').toUpperCase().trim().replace(/[\s_\-]+/g, '_');
+                            if (['CASH', 'NET_BANKING', 'DEBIT_CARD', 'CREDIT_CARD', 'CHEQUE', 'UPI'].includes(rawMode)) {
+                                mode = rawMode;
+                            } else if (rawMode === 'NETBANKING' || rawMode === 'NET_BANK') {
+                                mode = 'NET_BANKING';
+                            } else if (rawMode === 'CREDITCARD') {
+                                mode = 'CREDIT_CARD';
+                            } else if (rawMode === 'DEBITCARD') {
+                                mode = 'DEBIT_CARD';
+                            } else if (rawMode === 'CHECK') {
+                                mode = 'CHEQUE';
+                            } else if (isReceiptOrPayment) {
+                                rowError = `Invalid Payment Mode '${paymentModeVal}'. Must be one of: Cash, Net Banking, Debit Card, Credit Card, Cheque, UPI.`;
+                                errorCount++;
+                                errorsList.push({ row: i + 2, error: rowError });
+                                errorRows.push({ ...row, 'Error Message': rowError });
+                                continue;
+                            }
+                        }
+
+                        const payload = {
+                            voucherDate: formattedDate,
+                            bankCashLedgerId: matchedBank.id,
+                            paymentMode: mode,
+                            narration: String(narrationVal).trim(),
+                            items: [{
+                                accountId: matchedAccount.id,
+                                amount: amt,
+                                accountType: matchedAccount.accountType || (activeSubTab === 'Receipts' ? 'CUSTOMER' : 'SUPPLIER'),
+                                settlements: []
+                            }]
+                        };
+
+                        try {
+                            if (activeSubTab === 'Receipts') {
+                                await voucherService.createReceiptVoucher(payload);
+                            } else if (activeSubTab === 'Payments') {
+                                await voucherService.createPaymentVoucher(payload);
+                            } else if (activeSubTab === 'JV') {
+                                await voucherService.createJournalVoucher(payload);
+                            } else if (activeSubTab === 'Contra') {
+                                await voucherService.createContraVoucher(payload);
+                            } else {
+                                throw new Error(`Unsupported tab for import: ${activeSubTab}`);
+                            }
+                            successCount++;
+                            successRows.push(row);
+                        } catch (err) {
+                            errorCount++;
+                            const errMsg = err.response?.data?.message || err.message;
+                            const finalMsg = Array.isArray(errMsg) ? errMsg[0] : errMsg;
+                            errorsList.push({ row: i + 2, error: finalMsg });
+                            errorRows.push({ ...row, 'Error Message': finalMsg });
+                        }
+                    }
+
+                    const createBase64Excel = (dataList) => {
+                        if (dataList.length === 0) return null;
+                        const ws = XLSX.utils.json_to_sheet(dataList);
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, "Report");
+                        return XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+                    };
+
+                    fetchVouchers(); // Refresh list
+
+                    resolve({
+                        summary: {
+                            totalRows: json.length,
+                            successful: successCount,
+                            failed: errorCount
+                        },
+                        errors: errorsList,
+                        errorFile: createBase64Excel(errorRows),
+                        successFile: createBase64Excel(successRows)
+                    });
+
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            reader.readAsBinaryString(file);
+        });
     };
 
     return (
@@ -1703,8 +1868,7 @@ const Finance = () => {
 
                                     const allData = activeMainTab === 'Ledger' 
                                         ? (summaryData && summaryData.length > 0 ? summaryData : filteredMainData)
-                                        : filteredMainData;
-
+                                        : (filteredMainData && filteredMainData.length > 0 ? filteredMainData : currentRows);
                                     const grandOpening = allData.reduce((sum, item) => sum + Number(item.openingBalance || 0), 0);
                                     const grandDebit = allData.reduce((sum, item) => sum + Number(item.debit || 0), 0);
                                     const grandCredit = allData.reduce((sum, item) => sum + Number(item.credit || 0), 0);
@@ -2081,6 +2245,15 @@ const Finance = () => {
                             </span>
                             <div className="flex items-center gap-2">
                                 <button 
+                                    title="First Page"
+                                    className="p-2 rounded-[10px] bg-white border border-[#E5E7EB] text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F9FAFB] hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-[#E5E7EB]"
+                                    onClick={() => setCurrentPage(1)}
+                                    disabled={currentPage === 1 || !filteredMainData || filteredMainData.length === 0}
+                                >
+                                    <ChevronsLeft size={18} strokeWidth={2.5} />
+                                </button>
+                                <button 
+                                    title="Previous Page"
                                     className="p-2 rounded-[10px] bg-white border border-[#E5E7EB] text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F9FAFB] hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-[#E5E7EB]"
                                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                                     disabled={currentPage === 1 || !filteredMainData || filteredMainData.length === 0}
@@ -2088,11 +2261,20 @@ const Finance = () => {
                                     <ChevronLeft size={18} strokeWidth={2.5} />
                                 </button>
                                 <button 
+                                    title="Next Page"
                                     className="p-2 rounded-[10px] bg-white border border-[#E5E7EB] text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F9FAFB] hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-[#E5E7EB]"
                                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                     disabled={currentPage === totalPages || !filteredMainData || filteredMainData.length === 0}
                                 >
                                     <ChevronRight size={18} strokeWidth={2.5} />
+                                </button>
+                                <button 
+                                    title="Last Page"
+                                    className="p-2 rounded-[10px] bg-white border border-[#E5E7EB] text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#F9FAFB] hover:border-gray-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-[#E5E7EB]"
+                                    onClick={() => setCurrentPage(totalPages)}
+                                    disabled={currentPage === totalPages || !filteredMainData || filteredMainData.length === 0}
+                                >
+                                    <ChevronsRight size={18} strokeWidth={2.5} />
                                 </button>
                             </div>
                         </div>
@@ -2496,6 +2678,15 @@ const Finance = () => {
                                         
                                         <div className="flex items-center gap-2">
                                             <button 
+                                                onClick={() => setDetailedCurrentPage(1)}
+                                                disabled={detailedCurrentPage === 1 || detailedLoading}
+                                                title="First Page"
+                                                className={`flex items-center justify-center w-[36px] h-[36px] rounded-[8px] border border-[#E5E7EB] text-[13px] font-bold transition-all shadow-sm ${detailedCurrentPage === 1 ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 active:scale-95'}`}
+                                            >
+                                                <ChevronsLeft size={16} />
+                                            </button>
+
+                                            <button 
                                                 onClick={() => setDetailedCurrentPage(prev => Math.max(1, prev - 1))}
                                                 disabled={detailedCurrentPage === 1 || detailedLoading}
                                                 className={`flex items-center gap-1 h-[36px] px-4 rounded-[8px] border border-[#E5E7EB] text-[13px] font-bold transition-all shadow-sm ${detailedCurrentPage === 1 ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 active:scale-95'}`}
@@ -2524,6 +2715,15 @@ const Finance = () => {
                                                 {t('common:next')}
                                                 <ChevronRight size={16} />
                                             </button>
+
+                                            <button 
+                                                onClick={() => setDetailedCurrentPage(detailedTotalPages)}
+                                                disabled={detailedCurrentPage === detailedTotalPages || detailedLoading}
+                                                title="Last Page"
+                                                className={`flex items-center justify-center w-[36px] h-[36px] rounded-[8px] border border-[#E5E7EB] text-[13px] font-bold transition-all shadow-sm ${detailedCurrentPage === detailedTotalPages ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50' : 'bg-white text-[#111827] hover:bg-gray-50 active:scale-95'}`}
+                                            >
+                                                <ChevronsRight size={16} />
+                                            </button>
                                         </div>
                                     </div>
                                 </>
@@ -2548,156 +2748,12 @@ const Finance = () => {
             )}
 
             {showImportModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-[16px] shadow-2xl w-full max-w-lg mx-4 flex flex-col animate-in slide-in-from-top-4 duration-300 overflow-hidden">
-                        {/* Modal Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-[#F3F4F6]">
-                            <h2 className="text-[20px] font-bold text-[#111827]">
-                                {t('common:import_data', 'Import Bank Reconciliation Data')} ({activeSubTab})
-                            </h2>
-                            <button 
-                                onClick={() => {
-                                    setShowImportModal(false);
-                                    setSelectedImportFile(null);
-                                    setImportResult(null);
-                                }}
-                                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors cursor-pointer"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        <div className="p-6 flex flex-col items-center gap-6 max-h-[80vh] overflow-y-auto">
-                            {/* Download Sample Button */}
-                            <button
-                                onClick={handleDownloadTemplate}
-                                className="flex items-center gap-3 px-6 h-[44px] bg-[#E8F5E9] text-[#0A3622] rounded-[10px] text-[14px] font-bold hover:bg-[#C8E6C9] transition-all shadow-sm w-max cursor-pointer"
-                            >
-                                <Download size={18} />
-                                {t('modules:download_sample', 'Download Sample Template')}
-                            </button>
-
-                            {/* Divider */}
-                            <div className="w-full h-px bg-[#F3F4F6]"></div>
-
-                            {/* Upload File Section */}
-                            <div className="w-full flex flex-col gap-4">
-                                <h3 className="text-center font-bold text-[#4B5563]">{t('modules:upload_file', 'Upload File')}</h3>
-
-                                <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
-                                    <span className="text-[14px] font-medium text-[#6B7280]">{t('common:select', 'Select File')}</span>
-                                    <div className="relative flex items-center w-full max-w-[280px]">
-                                        <input 
-                                            type="file" 
-                                            id="bank-rec-modal-file"
-                                            accept=".xlsx,.xls,.csv" 
-                                            onChange={(e) => {
-                                                if (e.target.files && e.target.files[0]) {
-                                                    setSelectedImportFile(e.target.files[0]);
-                                                    setImportResult(null);
-                                                }
-                                            }} 
-                                            className="hidden" 
-                                        />
-                                        <div 
-                                            className="flex items-center w-full border border-dashed border-[#D1D5DB] rounded-[8px] bg-[#F9FAFB] overflow-hidden group hover:border-[#0A3622] transition-colors cursor-pointer"
-                                            onClick={() => document.getElementById('bank-rec-modal-file').click()}
-                                        >
-                                            <div className="bg-[#F3F4F6] px-4 h-[42px] flex items-center justify-center border-r border-dashed border-[#D1D5DB] group-hover:border-[#0A3622] transition-colors">
-                                                <span className="text-[13px] font-bold text-[#4B5563] whitespace-nowrap">{t('modules:choose_file', 'Choose File')}</span>
-                                            </div>
-                                            <span className="flex-1 px-4 text-[#6B7280] truncate text-[13px]">
-                                                {selectedImportFile ? selectedImportFile.name : t('modules:no_file_chosen', 'No file chosen')}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Import Result Summary Card */}
-                            {importResult && (
-                                <div className="w-full p-5 bg-slate-50 border border-slate-200 rounded-[12px] flex flex-col gap-4 animate-in fade-in duration-200">
-                                    <div className="flex items-center justify-between">
-                                        <span className="font-bold text-[15px] text-gray-800">
-                                            {importResult.errorCount === 0 ? 'Import Completed' : 'Import Completed with Errors'}
-                                        </span>
-                                        <span className={`text-[12px] font-bold px-2.5 py-1 rounded-full ${importResult.errorCount === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                                            {importResult.errorCount === 0 ? '100% Success' : 'Partial Import'}
-                                        </span>
-                                    </div>
-
-                                    {/* Stats Grid */}
-                                    <div className="grid grid-cols-3 gap-3 text-center">
-                                        <div className="p-3 bg-white border border-gray-100 rounded-[8px] shadow-2xs">
-                                            <div className="text-[11px] font-medium text-gray-500 uppercase">Total Rows</div>
-                                            <div className="text-[18px] font-bold text-gray-800 mt-1">{importResult.totalRows}</div>
-                                        </div>
-                                        <div className="p-3 bg-emerald-50/60 border border-emerald-100 rounded-[8px]">
-                                            <div className="text-[11px] font-bold text-emerald-700 uppercase">Success</div>
-                                            <div className="text-[18px] font-bold text-emerald-700 mt-1">{importResult.successCount}</div>
-                                        </div>
-                                        <div className="p-3 bg-rose-50/60 border border-rose-100 rounded-[8px]">
-                                            <div className="text-[11px] font-bold text-rose-700 uppercase">Failed</div>
-                                            <div className="text-[18px] font-bold text-rose-700 mt-1">{importResult.errorCount}</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Actions to Download Result Files */}
-                                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full justify-center pt-2">
-                                        {importResult.successFile && (
-                                            <button
-                                                type="button"
-                                                onClick={() => downloadBase64File(importResult.successFile, `Bank_Reconciliation_${activeSubTab}_Success.xlsx`)}
-                                                className="flex-1 flex items-center justify-center gap-2 h-[38px] px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-bold rounded-[8px] transition-colors shadow-2xs cursor-pointer w-full"
-                                            >
-                                                <Download size={15} />
-                                                Download Success File
-                                            </button>
-                                        )}
-                                        {importResult.errorFile && (
-                                            <button
-                                                type="button"
-                                                onClick={() => downloadBase64File(importResult.errorFile, `Bank_Reconciliation_${activeSubTab}_Errors.xlsx`)}
-                                                className="flex-1 flex items-center justify-center gap-2 h-[38px] px-4 bg-rose-600 hover:bg-rose-700 text-white text-[13px] font-bold rounded-[8px] transition-colors shadow-2xs cursor-pointer w-full"
-                                            >
-                                                <Download size={15} />
-                                                Download Error File
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Modal Footer / Submit */}
-                        <div className="px-6 py-4 border-t border-[#F3F4F6] flex justify-center gap-4 bg-gray-50 rounded-b-[16px]">
-                            {importResult ? (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowImportModal(false);
-                                        setSelectedImportFile(null);
-                                        setImportResult(null);
-                                    }}
-                                    className="flex items-center justify-center gap-2 px-10 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] transition-all shadow-md cursor-pointer"
-                                >
-                                    Done
-                                </button>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={handleSubmitImport}
-                                    disabled={!selectedImportFile || loading}
-                                    className="flex items-center justify-center gap-2 px-10 h-[44px] bg-[#073318] text-white rounded-[10px] text-[15px] font-bold hover:bg-[#04200f] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md cursor-pointer"
-                                >
-                                    <UploadCloud size={18} />
-                                    {loading ? t('common:processing', 'Importing...') : t('common:submit', 'Submit')}
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
+<ImportModal
+                    isOpen={showImportModal}
+                    onClose={() => setShowImportModal(false)}
+                    onImport={handleSubmitImport}
+                    onDownloadSample={handleDownloadTemplate}
+                />
             )}
         </div>
     );

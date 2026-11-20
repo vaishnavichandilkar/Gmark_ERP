@@ -21,8 +21,6 @@ export const Placeholder = ({ title, subtitle }) => (
 
 // Redirect logic
 export const InitialRedirect = () => {
-  const isLanguageSelected =
-    localStorage.getItem("languageConfirmed") === "true";
   const token = localStorage.getItem("token");
   const refreshToken = localStorage.getItem("refreshToken");
   const user = getSafeUser();
@@ -45,10 +43,15 @@ export const InitialRedirect = () => {
     }
   }
 
-  if (isLanguageSelected) {
-    return <Navigate to="/landing" replace />;
+  // Ensure language defaults to English and is confirmed
+  if (!localStorage.getItem("languageConfirmed")) {
+    localStorage.setItem("languageConfirmed", "true");
   }
-  return <Navigate to="/language-selection" replace />;
+  if (!localStorage.getItem("selectedLanguage")) {
+    localStorage.setItem("selectedLanguage", "en");
+  }
+
+  return <Navigate to="/landing" replace />;
 };
 
 // Guard for pages that should ONLY be accessed if NOT logged in (Landing, Login, Signup)

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Search, Download, Upload, Plus, Filter, X, FileText, FileSpreadsheet, RefreshCw, AlertCircle } from 'lucide-react';
+import { Search, Download, Upload, Plus, Filter, X, FileText, FileSpreadsheet, RefreshCw, AlertCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
@@ -502,12 +502,20 @@ const HSNMasterPage = () => {
                                 </span>
                                 <div className="flex items-center gap-1">
                                     <button
+                                        onClick={() => handlePageChange(1)}
+                                        disabled={currentPage === 1}
+                                        title="First Page"
+                                        className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+                                    >
+                                        <ChevronsLeft size={16} />
+                                    </button>
+                                    <button
                                         onClick={() => handlePageChange(currentPage - 1)}
                                         disabled={currentPage === 1}
-                                        className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed rounded-lg"
+                                        title="Previous Page"
+                                        className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
                                     >
-                                        <X size={16} className="rotate-90 hidden" />
-                                        &larr;
+                                        <ChevronLeft size={16} />
                                     </button>
                                     <div className="hidden md:flex items-center gap-1.5 px-1">
                                         {getVisiblePages().map((pageNo) => (
@@ -527,9 +535,18 @@ const HSNMasterPage = () => {
                                     <button
                                         onClick={() => handlePageChange(currentPage + 1)}
                                         disabled={currentPage === totalPages || totalPages === 0}
-                                        className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed rounded-lg"
+                                        title="Next Page"
+                                        className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
                                     >
-                                        &rarr;
+                                        <ChevronRight size={16} />
+                                    </button>
+                                    <button
+                                        onClick={() => handlePageChange(totalPages)}
+                                        disabled={currentPage === totalPages || totalPages === 0}
+                                        title="Last Page"
+                                        className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+                                    >
+                                        <ChevronsRight size={16} />
                                     </button>
                                 </div>
                             </div>

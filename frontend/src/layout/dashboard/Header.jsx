@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getSafeUser } from '../../utils/user';
 import { Menu, User, Globe, ChevronDown, LayoutDashboard, FileBarChart, Database, ShoppingCart, TrendingUp, Settings as SettingsIcon, IndianRupee, Plus } from 'lucide-react';
-import logo from '../../assets/images/ERP_Logo2.png';
+import logo from '../../assets/images/bizdrona_logo.png';
 import ProfilePopup from '../../components/common/ProfilePopup';
 import LogoutModal from '../../components/common/LogoutModal';
 import StatusPopup from '../../components/common/StatusPopup';
@@ -292,13 +292,17 @@ const Header = ({ sidebarOpen, setSidebarOpen }) => {
                 onClose={() => setIsLogoutOpen(false)}
                 onConfirm={() => {
                     setIsLogoutOpen(false);
-                    // Clear tokens and user data
+                    // Clear tokens and user data (preserve chosen language)
                     localStorage.removeItem('token');
                     localStorage.removeItem('refreshToken');
                     localStorage.removeItem('user');
-                    localStorage.removeItem('languageConfirmed');
-                    // Redirect to landing page
-                    navigate('/');
+                    localStorage.removeItem('sessionId');
+                    localStorage.setItem('languageConfirmed', 'true');
+                    if (!localStorage.getItem('selectedLanguage')) {
+                        localStorage.setItem('selectedLanguage', 'en');
+                    }
+                    // Redirect directly to landing page
+                    navigate('/landing', { replace: true });
                 }}
             />
 

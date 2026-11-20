@@ -13,6 +13,8 @@ import {
   Eye,
   ArrowLeft,
   ArrowRight,
+  ChevronsLeft,
+  ChevronsRight,
   ChevronDown,
   RefreshCw,
   CheckCircle2,
@@ -644,8 +646,10 @@ const PurchaseOrder = () => {
           <div className="flex items-center gap-4">
             <span className="text-[#6B7280] text-[14px] font-bold lowercase">{totalItemsCount > 0 ? `${((currentPage - 1) * itemsPerPage) + 1}–${Math.min(currentPage * itemsPerPage, totalItemsCount)} of ${totalItemsCount}` : '0-0 of 0'}</span>
             <div className="flex items-center gap-2">
-              <button disabled={currentPage === 1} onClick={() => handlePageChange(currentPage - 1)} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowLeft size={18} /></button>
-              <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => handlePageChange(currentPage + 1)} className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowRight size={18} /></button>
+              <button disabled={currentPage === 1} onClick={() => handlePageChange(1)} title="First Page" className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ChevronsLeft size={18} /></button>
+              <button disabled={currentPage === 1} onClick={() => handlePageChange(currentPage - 1)} title="Previous Page" className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowLeft size={18} /></button>
+              <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => handlePageChange(currentPage + 1)} title="Next Page" className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ArrowRight size={18} /></button>
+              <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => handlePageChange(totalPages)} title="Last Page" className="w-[42px] h-[42px] border border-[#E5E7EB] rounded-[10px] bg-white flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition-all"><ChevronsRight size={18} /></button>
             </div>
           </div>
         </div>

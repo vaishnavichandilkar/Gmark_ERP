@@ -14,6 +14,8 @@ import {
   FileEdit,
   ArrowLeft,
   ArrowRight,
+  ChevronsLeft,
+  ChevronsRight,
   ChevronsUpDown,
   CheckCircle2,
   RefreshCw,
@@ -871,8 +873,17 @@ const ProductMaster = () => {
                 </span>
                 <div className="flex items-center gap-1">
                   <button
+                    onClick={() => handlePageChange(1)}
+                    disabled={currentPage === 1}
+                    title="First Page"
+                    className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+                  >
+                    <ChevronsLeft size={16} />
+                  </button>
+                  <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
+                    title="Previous Page"
                     className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
                   >
                     <ArrowLeft size={16} />
@@ -895,9 +906,18 @@ const ProductMaster = () => {
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages || totalPages === 0}
+                    title="Next Page"
                     className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
                   >
                     <ArrowRight size={16} />
+                  </button>
+                  <button
+                    onClick={() => handlePageChange(totalPages)}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    title="Last Page"
+                    className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+                  >
+                    <ChevronsRight size={16} />
                   </button>
                 </div>
               </div>

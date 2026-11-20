@@ -728,7 +728,7 @@ export class ProductMasterService {
             const row = worksheet.getRow(r);
             let foundHeaders = false;
             row.eachCell((cell, colNumber) => {
-                const val = String(cell.value || '').trim().toLowerCase();
+                const val = String(cell.value || '').trim().toLowerCase().replace(/[*]/g, '');
                 if (val.includes('product name') || val.includes('service name')) { colMap['prodName'] = colNumber; foundHeaders = true; }
                 else if (val.includes('type') || val.includes('product type')) colMap['type'] = colNumber;
                 else if (val.includes('uom') || val.includes('unit')) colMap['uom'] = colNumber;

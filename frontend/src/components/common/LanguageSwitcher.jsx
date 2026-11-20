@@ -20,6 +20,7 @@ const LanguageSwitcher = () => {
         i18n.changeLanguage(lng);
         localStorage.setItem('i18nextLng', lng);
         localStorage.setItem('selectedLanguage', lng);
+        localStorage.setItem('languageConfirmed', 'true');
     };
 
     useEffect(() => {

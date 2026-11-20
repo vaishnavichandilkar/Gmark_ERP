@@ -12,7 +12,7 @@ import {
     X,
     ShieldCheck
 } from 'lucide-react';
-import logo from '../../assets/images/ERP_Logo2.png';
+import logo from '../../assets/images/bizdrona_logo.png';
 
 const SuperAdminLayout = () => {
     // Default sidebar to closed on mobile viewports, open on desktop
@@ -29,8 +29,12 @@ const SuperAdminLayout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
-        localStorage.removeItem('languageConfirmed');
-        navigate('/login', { replace: true });
+        localStorage.removeItem('sessionId');
+        localStorage.setItem('languageConfirmed', 'true');
+        if (!localStorage.getItem('selectedLanguage')) {
+            localStorage.setItem('selectedLanguage', 'en');
+        }
+        navigate('/landing', { replace: true });
     };
 
     const handleNavigation = (path) => {

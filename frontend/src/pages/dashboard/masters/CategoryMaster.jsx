@@ -25,6 +25,8 @@ import {
   Loader2,
   ArrowLeft as LeftIcon,
   ArrowRight as RightIcon,
+  ChevronsLeft,
+  ChevronsRight,
   ChevronsUpDown,
   Trash2,
 } from "lucide-react";
@@ -1279,8 +1281,17 @@ const CategoryMaster = () => {
             </span>
             <div className="flex items-center gap-1">
               <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                title="First Page"
+                className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+              >
+                <ChevronsLeft size={16} />
+              </button>
+              <button
                 onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
+                title="Previous Page"
                 className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
               >
                 <LeftIcon size={16} />
@@ -1302,9 +1313,18 @@ const CategoryMaster = () => {
                   setCurrentPage((prev) => Math.min(prev + 1, totalPages))
                 }
                 disabled={currentPage === totalPages || totalPages === 0}
+                title="Next Page"
                 className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
               >
                 <RightIcon size={16} />
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages || totalPages === 0}
+                title="Last Page"
+                className="w-8 h-8 flex items-center justify-center text-[#6B7280] hover:bg-gray-50 hover:text-[#111827] disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-lg"
+              >
+                <ChevronsRight size={16} />
               </button>
             </div>
           </div>

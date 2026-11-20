@@ -45,6 +45,15 @@ export class AuthService {
         }
 
         // 3. Strict Verification & Status Checks
+        if (roleType === 'SELLER') {
+            if (!user.verified) {
+                await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: { verified: true }
+                });
+                user.verified = true;
+            }
+        }
         this.verifyUserLoginStatus(user, roleType);
 
         // Cleanup OTP after success

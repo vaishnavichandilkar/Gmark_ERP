@@ -18,15 +18,20 @@ async function bootstrap() {
     const app = await NestFactory.create(AppModule);
 
     // Static Assets
-    app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
+    app.use('/uploads', (req, res, next) => {
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        next();
+    }, express.static(join(process.cwd(), 'uploads')));
 
     // Secure HTTP Headers
     app.use(helmet({
         crossOriginEmbedderPolicy: false,
+        crossOriginResourcePolicy: { policy: "cross-origin" },
         contentSecurityPolicy: false, // Turn off CSP if swagger docs are served
     }));
 
-    // Global Config
+    // Global Prefix
     app.setGlobalPrefix('api/v1');
     
     // Secure CORS
@@ -45,9 +50,9 @@ async function bootstrap() {
             }
             callback(null, true);
         },
-        credentials: true,
         methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
         allowedHeaders: 'Content-Type,Accept,Authorization,x-session-id,ngrok-skip-browser-warning',
+        credentials: true,
     });
 
     app.use((req, res, next) => {
@@ -74,7 +79,7 @@ async function bootstrap() {
 
     const configService = app.get(ConfigService);
     const port = configService.get('PORT') || configService.get('port') || 3003;
-    await app.listen(port);
+    await app.listen(port, '0.0.0.0');
     console.log(`Application is running on: http://localhost:${port}`);
     console.log(`Swagger Docs available at: http://localhost:${port}${process.env.SWAGGER_PATH || '/api/docs'}`);
 }

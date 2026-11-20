@@ -1,12 +1,15 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, Image as ImageIcon, Edit2 } from 'lucide-react';
 import html2pdf from "html2pdf.js";
 import { toast } from 'react-hot-toast';
 import axiosInstance from '@/services/axiosInstance';
 import { getStandardGstUom } from '@/utils/uomUtils';
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '@/utils/dateUtils';
+import CustomizeLogoModal from '@/components/common/CustomizeLogoModal';
+import { getImageUrl } from '@/utils/url';
+import { getLocalLogoSettings, getFixedCompanyLogo, setFixedCompanyLogo, saveLocalLogoSettings } from '@/services/businessService';
 
 const SIPrintPreview = () => {
     const { t } = useTranslation(['modules', 'common']);
@@ -16,6 +19,8 @@ const SIPrintPreview = () => {
     const printRef = useRef(null);
     const [isDownloading, setIsDownloading] = useState(false);
     const [sellerInfo, setSellerInfo] = useState(null);
+    const [isLogoModalOpen, setIsLogoModalOpen] = useState(false);
+    const [logoSettings, setLogoSettings] = useState(getLocalLogoSettings());
 
     const getStateName = (gstin) => {
         if (!gstin || gstin.length < 2) return t('common:not_available', "Not Available");
@@ -33,13 +38,50 @@ const SIPrintPreview = () => {
         return states[code] || t('common:not_available', "Not Available");
     };
 
+    const invoiceKey = useMemo(() => {
+        return invoiceData?.invoiceNumber || invoiceData?.customerInvoiceNumber || invoiceData?.invoice_number || invoiceData?._id || invoiceData?.id || 'current_invoice';
+    }, [invoiceData]);
+
     useEffect(() => {
         const fetchSellerInfo = async () => {
             try {
+                // Check if this invoice has a session-specific logo override
+                let docOverride = null;
+                if (invoiceKey && typeof window !== 'undefined') {
+                    try {
+                        const saved = sessionStorage.getItem(`doc_logo_${invoiceKey}`);
+                        if (saved) {
+                            docOverride = JSON.parse(saved);
+                        }
+                    } catch (e) {
+                        console.warn('Failed to parse doc_logo from sessionStorage', e);
+                    }
+                }
+
                 const response = await axiosInstance.get('/business/profile');
                 if (response.data) {
-                    const { shopDetail, phone, email, websiteUrl, gstNumber } = response.data;
+                    const { shopDetail, phone, email, websiteUrl, gstNumber, logoUrl: serverLogoUrl, logoSettings: serverSettings } = response.data;
                     const fullGst = gstNumber || shopDetail?.gstNumber || "";
+                    const rawLogo = serverLogoUrl || getFixedCompanyLogo() || null;
+                    const finalLogo = rawLogo ? (rawLogo.startsWith('data:') ? rawLogo : getImageUrl(rawLogo)) : null;
+
+                    if (finalLogo) {
+                        setFixedCompanyLogo(finalLogo);
+                        // Preload logo image
+                        const img = new Image();
+                        img.src = finalLogo;
+                    }
+                    if (serverSettings) {
+                        setLogoSettings(serverSettings);
+                        saveLocalLogoSettings(serverSettings);
+                    }
+
+                    // If invoice-specific logo exists, override for this invoice
+                    const activeLogo = docOverride?.logoUrl || finalLogo;
+                    if (docOverride?.settings) {
+                        setLogoSettings(docOverride.settings);
+                    }
+
                     setSellerInfo({
                         shopName: shopDetail?.shopName || "ARDHYA AGRO SERVICE",
                         address: shopDetail ? `${shopDetail.address}, ${shopDetail.village || ''}, ${shopDetail.district}, ${shopDetail.state} - ${shopDetail.pinCode}` : "Near Mahalaxmi Temple, Hitani",
@@ -48,15 +90,43 @@ const SIPrintPreview = () => {
                         website: websiteUrl || "",
                         gstNumber: fullGst || t('common:not_available', "Not Available"),
                         panNumber: fullGst.length >= 12 ? fullGst.substring(2, 12) : t('common:not_available', "Not Available"),
-                        stateInfo: fullGst.length >= 2 ? `${fullGst.substring(0, 2)} - ${getStateName(fullGst)}` : t('common:not_available', "Not Available")
+                        stateInfo: fullGst.length >= 2 ? `${fullGst.substring(0, 2)} - ${getStateName(fullGst)}` : t('common:not_available', "Not Available"),
+                        logoUrl: activeLogo
                     });
                 }
             } catch (error) {
                 console.error("Error fetching seller profile:", error);
+                const cachedLogo = getFixedCompanyLogo();
+                if (cachedLogo) {
+                    setSellerInfo(prev => prev ? { ...prev, logoUrl: cachedLogo.startsWith('data:') ? cachedLogo : getImageUrl(cachedLogo) } : prev);
+                }
             }
         };
         fetchSellerInfo();
-    }, []);
+    }, [invoiceKey]);
+
+    const handleLogoUpdated = (data) => {
+        const resolved = data.logoUrl ? (data.logoUrl.startsWith('data:') ? data.logoUrl : getImageUrl(data.logoUrl)) : null;
+        setSellerInfo(prev => ({
+            ...prev,
+            logoUrl: resolved
+        }));
+        if (data.settings) {
+            setLogoSettings(data.settings);
+        }
+        if (!data.isPermanent && invoiceKey) {
+            try {
+                sessionStorage.setItem(`doc_logo_${invoiceKey}`, JSON.stringify({
+                    logoUrl: resolved,
+                    settings: data.settings
+                }));
+            } catch (e) {
+                console.warn('Failed to save doc logo to sessionStorage:', e);
+            }
+        } else if (data.isPermanent && invoiceKey) {
+            sessionStorage.removeItem(`doc_logo_${invoiceKey}`);
+        }
+    };
 
     if (!invoiceData) {
         return (
@@ -470,6 +540,14 @@ const SIPrintPreview = () => {
                     <span className="text-[#073318] uppercase">{t('common:preview', 'PREVIEW')}</span>
                 </div>
                 <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => setIsLogoModalOpen(true)}
+                        className="px-4 h-[40px] bg-white border border-[#073318] text-[#073318] hover:bg-emerald-50 rounded-[10px] font-bold text-[13px] flex items-center justify-center gap-2 transition-colors shadow-sm"
+                        title="Customize your company logo"
+                    >
+                        <ImageIcon size={16} />
+                        {sellerInfo?.logoUrl ? 'Customize Logo' : 'Add Logo'}
+                    </button>
                     <button onClick={handleDownloadPDF} disabled={isDownloading} className="px-6 h-[40px] bg-[#073318] text-white rounded-[10px] font-bold text-[14px] flex items-center justify-center transition-colors disabled:opacity-70 disabled:cursor-not-allowed">
                         {isDownloading ? t('modules:downloading', 'Downloading...') : t('modules:download_pdf', 'Download PDF')}
                     </button>
@@ -509,7 +587,37 @@ const SIPrintPreview = () => {
                                 {page.showHeader && (
                                     <>
                                         <div className="border-b border-black p-4 py-3 flex items-center justify-center relative min-h-[85px]">
-                                            <div className="absolute left-6 w-14 h-14 bg-[#014A36] rounded-full"></div>
+                                            <div 
+                                                onClick={() => !isDownloading && setIsLogoModalOpen(true)}
+                                                className={`absolute left-6 flex items-center justify-center ${!isDownloading ? 'cursor-pointer group' : ''}`}
+                                                title={!isDownloading ? "Click to customize logo" : undefined}
+                                            >
+                                                {sellerInfo?.logoUrl ? (
+                                                    <div className={`flex items-center justify-center transition-all ${
+                                                        logoSettings?.size === 'sm' ? 'w-[44px] h-[44px]' : logoSettings?.size === 'lg' ? 'w-[68px] h-[68px]' : 'w-[56px] h-[56px]'
+                                                    } ${
+                                                        logoSettings?.shape === 'circle' ? 'rounded-full overflow-hidden border border-gray-300 bg-white' : 
+                                                        logoSettings?.shape === 'rounded' ? 'rounded-xl overflow-hidden border border-gray-300 bg-white' : 
+                                                        'bg-transparent'
+                                                    }`}>
+                                                        <img 
+                                                            src={sellerInfo.logoUrl} 
+                                                            alt="Logo" 
+                                                            className={`w-full h-full ${logoSettings?.shape === 'contain' ? 'object-contain' : 'object-cover'}`}
+                                                            crossOrigin="anonymous"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-14 h-14 bg-[#014A36] rounded-full flex items-center justify-center text-white text-[11px] font-black uppercase shadow-inner">
+                                                        LOGO
+                                                    </div>
+                                                )}
+                                                {!isDownloading && (
+                                                    <span className="no-print absolute -bottom-1 -right-1 w-5 h-5 bg-[#073318] text-white rounded-full flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Edit2 size={10} />
+                                                    </span>
+                                                )}
+                                            </div>
                                             <h1 className="text-[26px] font-black uppercase text-center">{sellerInfo?.shopName || "ARDHYA AGRO SERVICE"}</h1>
                                         </div>
                                         <div className="border-b border-black py-2.5 text-center text-[12.5px] font-semibold">
@@ -696,6 +804,17 @@ const SIPrintPreview = () => {
                     </div>
                 ))}
             </div>
+
+            <CustomizeLogoModal
+                isOpen={isLogoModalOpen}
+                onClose={() => setIsLogoModalOpen(false)}
+                currentLogoUrl={sellerInfo?.logoUrl}
+                shopName={sellerInfo?.shopName}
+                onLogoUpdated={handleLogoUpdated}
+                documentType="Invoice"
+                documentId={invoiceKey}
+                allowSingleDocument={true}
+            />
         </div>
     );
 };

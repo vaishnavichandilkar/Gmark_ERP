@@ -10,6 +10,7 @@ import accountService from '@/services/accountService';
 import productService from '@/services/productService';
 import { getProfileApi } from '@/services/authService';
 import { determinePurchaseGst } from '@/utils/gstUtils';
+import { toIsoDate } from '@/utils/dateUtils';
 import { useTranslation } from 'react-i18next';
 
 import GRNForm from './components/GRNForm';
@@ -423,7 +424,8 @@ const AddGRN = () => {
                 toast.error("MSME supplier payment terms cannot exceed 45 days as per MSME compliance rules.", { id: "msme-supplier-error" });
             }
         }
-        if (!formData.document_date) {
+        const isoDocDate = formData.document_date ? (formData.document_date.includes('/') ? toIsoDate(formData.document_date) : formData.document_date) : '';
+        if (!isoDocDate) {
             newErrors.document_date = "Challan date is required";
         } else {
             const today = new Date().toISOString().split('T')[0];
@@ -434,7 +436,7 @@ const AddGRN = () => {
                 // Allowed: PO Date to Today
                 // Validation Message: Supplier Challan Date must be between PO Date and Current Date.
                 const poDate = formData.po_date;
-                if (formData.document_date > today || (poDate && formData.document_date < poDate)) {
+                if (isoDocDate > today || (poDate && isoDocDate < poDate)) {
                     newErrors.document_date = "Supplier Challan Date must be between PO Date and Current Date.";
                 }
             } else {
@@ -442,7 +444,7 @@ const AddGRN = () => {
                 // Allowed: Financial Year Start Date to Today
                 // Validation Message: Supplier Challan Date must be between Financial Year Start and Current Date.
                 const fyStart = getFinancialYearStart();
-                if (formData.document_date > today || formData.document_date < fyStart) {
+                if (isoDocDate > today || isoDocDate < fyStart) {
                     newErrors.document_date = "Supplier Challan Date must be between Financial Year Start and Current Date.";
                 }
             }
@@ -559,8 +561,8 @@ const AddGRN = () => {
                 supplierName: formData.supplier_name,
                 address: formData.address,
                 challanNumber: formData.supplier_challan_number,
-                grnDate: formData.document_date,
-                bookingDate: formData.booking_date,
+                grnDate: toIsoDate(formData.document_date),
+                bookingDate: toIsoDate(formData.booking_date),
                 creditDays: parseInt(formData.credit_days),
                 poId: formData.po_id ? parseInt(formData.po_id) : undefined,
                 poNumber: formData.po_number || undefined,

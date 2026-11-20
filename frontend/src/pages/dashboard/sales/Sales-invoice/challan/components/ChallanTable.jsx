@@ -86,16 +86,6 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
         const totalSO   = parseFloat(field === 'totalSoQty'     ? finalValue : item.totalSoQty)      || 0;
         const givenSO   = parseFloat(item.givenSoQty)                                           || 0;
 
-        const maxAllowed = totalSO - givenSO;
-        if (totalSO > 0 && qty > maxAllowed) {
-            toast.error(`Quantity cannot exceed remaining SO quantity of ${maxAllowed}`);
-            qty = Math.max(0, maxAllowed);
-            if (field === 'quantity') {
-                finalValue = qty;
-            }
-            item.quantity = qty;
-        }
-
         // Recalculate if any dependent field changed
         if (['quantity', 'rate', 'taxPercent', 'discountPercent', 'discountAmount', 'totalSoQty'].includes(field)) {
             const baseAmount = qty * rate;
@@ -171,13 +161,6 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
         }
 
         let qty = 1;
-        if (soQty > 0) {
-            const maxAllowed = soQty - givenCount;
-            if (qty > maxAllowed) {
-                qty = Math.max(0, maxAllowed);
-                toast.error(`Quantity adjusted to remaining SO quantity of ${qty}`);
-            }
-        }
 
         const baseAmount = qty * rate;
         const isApplicable = gstType?.applicable !== false;
@@ -421,7 +404,7 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    value={item.quantity === 0 ? '0' : item.quantity}
+                                                    value={item.quantity === 0 || item.quantity === '0' ? '' : (item.quantity ?? '')}
                                                     onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                                                     className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
                                                 />
@@ -436,7 +419,7 @@ const ChallanTable = ({ items, setItems, products, errors, handleAddNewProduct, 
                                             <input
                                                 type="number"
                                                 min="0"
-                                                value={item.quantity === 0 ? '0' : item.quantity}
+                                                value={item.quantity === 0 || item.quantity === '0' ? '' : (item.quantity ?? '')}
                                                 onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                                                 className={`w-full h-[36px] bg-white border rounded-[8px] px-2 text-[13px] font-bold text-right outline-none focus:border-[#073318] transition-all shadow-sm ${errors?.itemErrors?.[index]?.quantity ? 'border-red-500 shadow-red-50' : 'border-[#E5E7EB]'}`}
                                             />

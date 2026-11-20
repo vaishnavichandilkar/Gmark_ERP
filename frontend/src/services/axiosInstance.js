@@ -105,13 +105,16 @@ axiosInstance.interceptors.response.use(
             return axiosInstance(originalRequest);
         }
 
-        // 2. Token refresh / 401 handling (only for protected routes, skip auth requests)
-        const requestUrl = originalRequest.url || '';
-        const isAuthRequest = requestUrl.includes('/auth/login') || 
-                              requestUrl.includes('/auth/send-login-otp') || 
-                              requestUrl.includes('/auth/resend-otp');
+        // 2. Token refresh / 401 handling
+        const isAuthRequest = originalRequest.url && (
+            originalRequest.url.includes('/auth/login') ||
+            originalRequest.url.includes('/auth/send-login-otp') ||
+            originalRequest.url.includes('/auth/resend-otp') ||
+            originalRequest.url.includes('/auth/refresh-token') ||
+            originalRequest.url.includes('/onboarding/step')
+        );
 
-        if (error.response && error.response.status === 401 && !originalRequest._retry && !isAuthRequest) {
+        if (!isAuthRequest && error.response && error.response.status === 401 && !originalRequest._retry) {
             if (isRefreshing) {
                 return new Promise((resolve, reject) => {
                     failedQueue.push({ resolve, reject });
@@ -148,7 +151,7 @@ axiosInstance.interceptors.response.use(
                     }
                 } catch (refreshError) {
                     processQueue(refreshError, null);
-                    // Clear session data (preserve language setting)
+                    // Clear user session data (keep languageConfirmed)
                     localStorage.removeItem('token');
                     localStorage.removeItem('refreshToken');
                     localStorage.removeItem('user');
@@ -159,7 +162,7 @@ axiosInstance.interceptors.response.use(
                     isRefreshing = false;
                 }
             } else {
-                // No refresh token available, clear session data and redirect (preserve language setting)
+                // No refresh token available, clear session data and redirect to login
                 localStorage.removeItem('token');
                 localStorage.removeItem('refreshToken');
                 localStorage.removeItem('user');
